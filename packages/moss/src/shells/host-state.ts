@@ -1,4 +1,4 @@
-import type { ActionDefinition, ActionFragment, LayoutNode, Shell } from '@niscorp/nova';
+import type { ActionDefinition, ActionFragment, FunctionHandler, LayoutNode, Shell } from '@niscorp/nova';
 import type { SeedEntry, SeedMutation } from '@niscorp/vex';
 import type { Emit } from '../runtime';
 import type { DraftState } from './draft';
@@ -21,6 +21,19 @@ export const withLayoutInPlace = (definition: ActionDefinition, store: Shell['la
   return layout === undefined || typeof layout === 'string' ? definition : { ...definition, layout: store.resolveReferences(layout) };
 };
 
+// `held` is the map nova calls into, by reference: what a shell may call
+// follows the roles an adopt answers, as its actions do.
+export type ShellFunctions = { all: Readonly<Record<string, FunctionHandler>>; held: Record<string, FunctionHandler> };
+
+export const holdGranted = (functions: ShellFunctions, granted: ShellComposition['grantedFunctions']): void => {
+  const callable = granted(Object.keys(functions.all));
+  for (const name of Object.keys(functions.held)) if (!callable.has(name)) Reflect.deleteProperty(functions.held, name);
+  for (const name of callable) {
+    const handler = functions.all[name];
+    if (handler !== undefined) functions.held[name] = handler;
+  }
+};
+
 export type Live = {
   shell: Shell;
   sessionShell: Shell;
@@ -28,6 +41,7 @@ export type Live = {
   entries: ReadonlyMap<string, SeedEntry | SeedMutation> | undefined;
   layouts: ShellLayouts;
   slottedCanvases: ReadonlySet<string>;
+  functions: ShellFunctions;
   draft: DraftState;
   connections: Set<ShellConnection>;
   sentByCanvas: Map<string, string>;

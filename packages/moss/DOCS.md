@@ -101,7 +101,33 @@ Every field is an artifact (authored data) except the code seams — `scope`,
 - `functions(session)` — the handlers behind `fn:` endpoints. Called once for
   each shell that is built: the app's, a page's, and the one a reset builds.
   Like `onSession`, it runs before the shell finishes building, so it must
-  not touch `session.shell` synchronously.
+  not touch `session.shell` synchronously. **A shell holds only the functions
+  its principal's roles grant**, in the charter's `functions` part (names or
+  globs, with `extends` and `deny`, as `actions`): a role with none may call
+  none, and an `fn:` endpoint to one it does not grant fails when it is called.
+  What a living shell holds follows the roles an adopt answers, as its actions
+  do.
+  - **The boot is refused** where somebody holds an action that calls a
+    function their roles do not grant. It reads the `fn:` endpoints of the
+    actions held by each role on its own, each combination `wearable` or
+    `assignments` lists, and `public`, and of the fragments the shells ship,
+    and lists every call that is missing: `"member" hold "chrome.topbar",
+    which calls "auth.leave": their functions do not grant it`. A name with a
+    template in it (`fn: '{{$.saveFn}}'`) is worked out when it is called, and
+    the shell's map decides then.
+  - **`functions: ['*']`** grants every function, as an app had before this
+    part existed. The boot says so for each role that has it: `role "member"
+    allows every function ('*'): the generated actions of the people who hold
+    it, or a role that extends it, may call any it does not deny`. Grant each
+    role the functions it calls.
+  - **A grant that names no function** is said at the first shell a process
+    builds, when the names of the app's functions are known, with the
+    charter's own checks: `[moss] charter: role "member" allows "notes.ad"
+    (functions) which matches nothing`, a deny that matches nothing, and a
+    function no role grants. They are read against the names that shell's
+    `functions(session)` returned: an app whose functions differ by who the
+    session is for may see a grant reported that another session's names
+    would match.
 - `onSession(session)` — called once per living app shell, for session code
   that is not an endpoint (an observer, a roster). It runs before the shell
   finishes building, so it must not touch `session.shell` synchronously. Its
@@ -261,6 +287,7 @@ type FunctionSession = {
     asked: { intent: string; shape: unknown; context?: Record<string, unknown> },
   ) => Promise<QueryResponse>;
   recordRun: (run: Omit<RunRecord, 'at' | 'principal' | 'shellId'>) => void;
+  functions: () => readonly string[]; // the names of the app's functions this session may call: what its roles' `functions` grant
 };
 ```
 
@@ -397,12 +424,15 @@ functions: (session) => ({
   opens it in the same call finds it not there yet. One that is to be seen at
   once is put into the draft (`session.draft`, below), which answers when the
   shell has it.
-- **What it defines only reads.** Each endpoint it defines is a `POST` to the
-  app's vex route (`/api/vex`, or `/api/<resource>/vex`) whose `request` names
-  one fingerprint, written out. That fingerprint is a read the app ships or
+- **What it defines replays reads, and calls the functions its owner's roles
+  grant.** An `fn:` endpoint names a function its owner's roles grant in the
+  charter's `functions` (`session.functions()` names them, for the model that
+  writes it); one they do not grant is refused. Every other endpoint is a
+  `POST` to the app's vex route (`/api/vex`, or `/api/<resource>/vex`) whose
+  `request` names one fingerprint, written out. That fingerprint is a read the app ships or
   was handed (`replaceEntries`) that its owner's policy may replay, or a read
-  vex wrote that its owner saved (below). Refused, with a sentence: a `fn:`
-  endpoint, a write, a read its owner may not replay, any other fingerprint (a
+  vex wrote that its owner saved (below). Refused, with a sentence: a function
+  its owner's roles do not grant, a write, a read its owner may not replay, any other fingerprint (a
   query a model wrote that nobody saved, `fp_…`, among them), a fingerprint
   that is computed, an address with a template in it, and every other
   address.

@@ -6,7 +6,7 @@ import type { BuildRequest } from './build';
 import { SHELL_GONE, draftedIn } from './draft';
 import type { DraftState } from './draft';
 import type { OwnedShellHost, ShellComposition, ShellHost, ShellHostConfig, ShellReport } from './types';
-import { endShell, layoutsOf } from './host-state';
+import { endShell, holdGranted, layoutsOf } from './host-state';
 import type { Cell, HostState, Live } from './host-state';
 import { sessionOn } from './sessions';
 import { DEFAULT_SNAPSHOT_WAIT_MS, needOf, read, settle } from './snapshot';
@@ -94,6 +94,7 @@ const takeComposition = (live: Live, made: ShellComposition): void => {
   live.entries = made.entries;
   takeLayouts(live, made);
   takeCanvases(live, made);
+  holdGranted(live.functions, made.grantedFunctions);
 };
 
 // For the one shell whose draft is to change, and awaited by whoever changes

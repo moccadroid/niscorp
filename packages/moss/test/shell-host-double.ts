@@ -40,6 +40,8 @@ export const hostConfig = (setup: HostSetup): ShellHostConfig => {
         actions: held.actions,
         components: shellComponents({ actions: actions(), layouts: app.layouts }, shell),
         ...named,
+        // Its catalog is handed over, not read off the charter: so are the functions it may call, all of them.
+        grantedFunctions: (names) => new Set(names),
         layoutStore: { ...shell.layoutStore, ...ofShell, ...held.layouts },
         ...(shell.fragments !== undefined ? { fragments: shell.fragments } : {}),
         ...(setup.entries !== undefined ? { entries: setup.entries } : {}),

@@ -200,6 +200,49 @@ describe('shells — the session app code is handed', () => {
   const writers = { generateDsl: async () => ({ from: ['notes'] }), mapToShape: async () => ({ ir: {}, transformed: null }) } as unknown as Parameters<FunctionSession['answerIntent']>[0];
   const asked = { intent: 'every note', shape: [] };
 
+  it('holds the functions its principal’s roles grant, and names them; the shell is handed those alone', async () => {
+    const seen: { session?: FunctionSession } = {};
+    const withFunctions = {
+      ...app,
+      functions: (session: FunctionSession) => {
+        seen.session = session;
+        return { 'notes.list': async () => ['a note'], 'notes.delete': async () => undefined };
+      },
+    } as unknown as NiscApp;
+    const config = hostConfig({ ...ctx, app: withFunctions });
+    await standHost({
+      ...config,
+      composition: async (principal) => ({ ...(await config.composition(principal)), grantedFunctions: (names) => new Set(names.filter((name) => name === 'notes.list')) }),
+    }).session('t', 'usr_1');
+
+    expect(seen.session?.functions()).toEqual(['notes.list']);
+  });
+
+  it('the functions it holds follow the roles an adopt answers, as its actions do', async () => {
+    const seen: { session?: FunctionSession } = {};
+    const withFunctions = {
+      ...app,
+      functions: (session: FunctionSession) => {
+        seen.session = session;
+        return { 'notes.list': async () => ['a note'], 'notes.delete': async () => undefined };
+      },
+    } as unknown as NiscApp;
+    const config = hostConfig({ ...ctx, app: withFunctions });
+    const granting = { names: ['notes.list'] };
+    const host = standHost({
+      ...config,
+      composition: async (principal) => ({ ...(await config.composition(principal)), grantedFunctions: (names) => new Set(names.filter((name) => granting.names.includes(name))) }),
+    });
+    await host.session('t', 'usr_1');
+    expect(seen.session?.functions()).toEqual(['notes.list']);
+
+    granting.names = ['notes.delete'];
+    host.adopt();
+    for (let i = 0; i < 4; i += 1) await tick();
+
+    expect(seen.session?.functions()).toEqual(['notes.delete']);
+  });
+
   it('an intent is answered as the session’s own principal, whoever the app code names', async () => {
     const calls: { principal: string | null; intent: string }[] = [];
     const answerIntent: HostSetup['answerIntent'] = async (principal, _writers, intent) => {

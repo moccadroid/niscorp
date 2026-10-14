@@ -128,6 +128,8 @@ export type FunctionSession = {
     asked: { intent: string; shape: unknown; context?: Record<string, unknown> },
   ) => Promise<QueryResponse>;
   recordRun: (run: Omit<RunRecord, 'at' | 'principal' | 'shellId'>) => void;
+  // The names of the app's functions this session may call: those its roles' `functions` grant.
+  functions: () => readonly string[];
 };
 
 export type CanvasSeed = string | { action: string; input?: Record<string, unknown>; with?: string[] };

@@ -1,4 +1,4 @@
-import { resolvePrincipal, verifyCharter } from '@niscorp/charter';
+import { normalizeRole, resolvePrincipal, verifyCharter } from '@niscorp/charter';
 import type { Charter, ClosureAuditor, VerifyReport } from '@niscorp/charter';
 import { ActionDefinitionSchema, auditAction, collectChannels } from '@niscorp/nova';
 import type { ActionDefinition, LayoutNode } from '@niscorp/nova';
@@ -16,6 +16,8 @@ export type ManifestCandidate = {
   actions: Readonly<Record<string, ActionDefinition>>;
   layouts: Readonly<Record<string, LayoutVariant>>;
   fragmentIds: ReadonlySet<string>;
+  // The functions each fragment the shells ship calls: two shells may ship one under one id.
+  fragmentCalls: readonly { id: string; calls: readonly string[] }[];
   wearable: readonly (readonly string[])[];
   grants: readonly string[];
   entries: readonly (SeedEntry | SeedMutation)[];
@@ -29,13 +31,16 @@ export const candidateOf = (shipped: ShippedManifest, inForce: Pick<ManifestCand
   actions: inForce.actions,
   layouts: shipped.layouts ?? {},
   fragmentIds: new Set([shipped.shell, ...Object.values(shipped.pages ?? {})].flatMap((shell) => Object.keys(shell?.fragments ?? {}))),
+  fragmentCalls: [shipped.shell, ...Object.values(shipped.pages ?? {})].flatMap((shell) =>
+    Object.entries(shell?.fragments ?? {}).map(([id, fragment]) => ({ id, calls: functionsCalledBy(fragment) })),
+  ),
   wearable: wearableOf(shipped),
   grants,
   entries: inForce.entries,
   profiles: scopeProfiles(shipped.behaviors ?? {}),
 });
 
-export type ManifestCheck = 'actions' | 'charter' | 'reach' | 'variants';
+export type ManifestCheck = 'actions' | 'charter' | 'functions' | 'reach' | 'variants';
 
 export type ManifestReport = {
   errors: readonly { check: ManifestCheck; detail: string }[];
@@ -95,6 +100,49 @@ const reachErrors = (entries: ManifestCandidate['entries'], profiles: ReadonlySe
   return unknown.length === 0 ? [] : [...unknown, `known profiles: ${[...profiles].join(', ') || '(none)'}`];
 };
 
+// A name with a template in it is worked out when it is called, from the action's data.
+const functionsCalledBy = (definition: Pick<ActionDefinition, 'endpoints'>): string[] =>
+  Object.values(definition.endpoints ?? {}).flatMap((endpoint) => ('fn' in endpoint && !endpoint.fn.includes('{{') ? [endpoint.fn] : []));
+
+// Who may wear what, as the variant check reads it: each role on its own, each
+// combination the app declares, and `public`.
+const combinationsOf = (candidate: Pick<ManifestCandidate, 'charter' | 'wearable'>): readonly (readonly string[])[] => {
+  const combinations = new Map<string, readonly string[]>();
+  for (const roles of [...Object.keys(candidate.charter).map((role) => [role]), ...candidate.wearable, ['public']]) combinations.set([...roles].sort().join('\0'), roles);
+  return [...combinations.values()];
+};
+
+// A function an action calls is one its holder's roles grant, or the call fails when it is made.
+const functionGrantErrors = (candidate: Pick<ManifestCandidate, 'charter' | 'actions' | 'fragmentCalls' | 'wearable'>): string[] => {
+  const errors = new Set<string>();
+  for (const roles of combinationsOf(candidate)) {
+    let held: ReadonlySet<string>;
+    try {
+      held = resolvePrincipal(candidate.charter, Object.keys(candidate.actions), roles, 'actions');
+    } catch {
+      continue;
+    }
+    if (held.size === 0) continue;
+    const calls = [
+      ...[...held].flatMap((id) => functionsCalledBy(candidate.actions[id] ?? {}).map((fn) => ({ by: `"${id}"`, fn }))),
+      ...candidate.fragmentCalls.flatMap(({ id, calls: fns }) => fns.map((fn) => ({ by: `the fragment "${id}", which any of them may wear`, fn }))),
+    ];
+    const granted = resolvePrincipal(candidate.charter, calls.map((call) => call.fn), roles, 'functions');
+    const who = roles.map((role) => `"${role}"`).join(', ');
+    for (const call of calls) {
+      if (!granted.has(call.fn)) errors.add(`${who} hold ${call.by}, which calls "${call.fn}": their functions do not grant it`);
+    }
+  }
+  return [...errors];
+};
+
+const everyFunctionGranted = (charter: Charter): string[] =>
+  Object.entries(charter).flatMap(([role, def]) =>
+    normalizeRole(def, 'functions').allow.includes('*')
+      ? [`role "${role}" allows every function ('*'): the generated actions of the people who hold it, or a role that extends it, may call any it does not deny`]
+      : [],
+  );
+
 export type EndlessChain = { path: string; through: readonly string[] };
 
 export const endlessChains = (actions: Readonly<Record<string, ActionDefinition>>): EndlessChain[] =>
@@ -121,10 +169,14 @@ export const verifyManifest = (candidate: ManifestCandidate): ManifestReport => 
       ...found('actions', generatedIdErrors(read.actions)),
       ...found('actions', fragmentIdErrors(read.actions, read.fragmentIds)),
       ...found('charter', charter.errors.map((error) => `${error.rule}: ${error.detail}`)),
+      ...found('functions', functionGrantErrors(read)),
       ...found('reach', reachErrors(read.entries, read.profiles)),
       ...found('variants', verifyVariants(read)),
     ],
-    said: endlessChains(read.actions).map((chain) => `a chain of steps that never ends: ${chain.path} — nova stops it at its budget when it runs (RUNAWAY_CHAIN)`),
+    said: [
+      ...endlessChains(read.actions).map((chain) => `a chain of steps that never ends: ${chain.path} — nova stops it at its budget when it runs (RUNAWAY_CHAIN)`),
+      ...everyFunctionGranted(read.charter),
+    ],
     charter,
   };
 };
@@ -136,12 +188,14 @@ const HEADLINES = {
   boot: {
     actions: 'Actions are not ones nova reads — refusing to serve:',
     charter: 'Charter is incoherent — refusing to serve:',
+    functions: 'Roles hold actions that call functions their charter does not grant — refusing to serve:',
     reach: 'Entries declare a reach no table offers — refusing to serve:',
     variants: 'Layout variants are incoherent — refusing to serve:',
   },
   refresh: {
     actions: 'Refresh refused — actions nova does not read:',
     charter: 'Refresh refused — charter incoherent over the new artifacts:',
+    functions: 'Refresh refused — roles hold actions that call functions their charter does not grant:',
     reach: 'Refresh refused — entries declare a reach no table offers:',
     variants: 'Refresh refused — layout variants incoherent:',
   },

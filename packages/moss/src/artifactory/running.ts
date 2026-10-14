@@ -1,3 +1,4 @@
+import { resolvePrincipal, verifyCharter } from '@niscorp/charter';
 import type { ActionDefinition } from '@niscorp/nova';
 import type { CacheEntry, SeedEntry, SeedMutation } from '@niscorp/vex';
 import { NOBODY_USER_ID } from '../identity';
@@ -201,12 +202,31 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
     };
   };
   const { reads: readSources } = config;
+  // The names of the app's functions are known only once a session is: the
+  // charter's checks of its `functions` are run at the first shell this process
+  // builds, and what they find is said, as the boot cannot refuse it any more.
+  let functionsChecked = false;
+  const sayFunctionGrants = (names: readonly string[]): void => {
+    functionsChecked = true;
+    const universes = { actions: Object.keys(inForce), data: config.grants, layouts: Object.keys(shipped.layouts ?? {}) };
+    const before = verifyCharter(shipped.charter, universes);
+    const known = new Set([...before.errors, ...before.warnings].map((issue) => issue.detail));
+    const after = verifyCharter(shipped.charter, { ...universes, functions: names });
+    for (const issue of [...after.errors, ...after.warnings]) if (!known.has(issue.detail)) console.warn(`[moss] charter: ${issue.detail}`);
+  };
+  const grantedFunctionsOf =
+    (roles: readonly string[]) =>
+    (names: readonly string[]): ReadonlySet<string> => {
+      if (!functionsChecked) sayFunctionGrants(names);
+      return resolvePrincipal(shipped.charter, names, roles, 'functions');
+    };
   const readsHeldTo: ReadHeldTo | undefined =
     readSources === undefined ? undefined : { isAppEntry: (fingerprint) => entries.byFingerprint().has(fingerprint), sources: readSources };
   // What somebody generated and has in force is laid beside what their roles
   // hold: an action of theirs may open either, and a layout of theirs may be for
   // either. `whose`: as a line says it of one that is left out. Absent: nothing is said.
-  const heldWithGenerated = async (held: StoredLayouts, versions: readonly SavedVersion[], who: Pick<RolesHeld, 'replayable'>, shell?: ShellManifest, whose?: string) => {
+  // `roles`: whose roles the functions a generated action calls are held to. Absent: it may call none.
+  const heldWithGenerated = async (held: StoredLayouts, versions: readonly SavedVersion[], who: Partial<Pick<RolesHeld, 'replayable' | 'roles'>>, shell?: ShellManifest, whose?: string) => {
     let replayable: Promise<ReadonlySet<string>> | undefined;
     let catalog: ReturnType<GeneratedHeldTo['catalog']> | undefined;
     const reads = readsHeldTo === undefined ? new Map<string, SavedRead>() : await readsInForce(versions, readsHeldTo, whose);
@@ -217,6 +237,7 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
         return entries.byFingerprint().get(fingerprint) ?? (read === undefined ? undefined : seedOf(fingerprint, read));
       },
       replayable: () => (replayable ??= (async () => new Set([...((await who.replayable?.()) ?? []), ...reads.keys()]))()),
+      mayCall: (name) => who.roles !== undefined && resolvePrincipal(shipped.charter, [name], who.roles, 'functions').has(name),
       catalog: () => (catalog ??= [...Object.values(held.actions).map((action) => ({ id: action.id, input: action.input ?? {} })), ...catalogOfGenerated(versions)]),
     };
     const passed = await generatedInForce(versions, checks, whose);
@@ -364,7 +385,7 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
       // Asked of the rows at every shell: what somebody saved in another process is theirs here too.
       const versions = saved === undefined || principal === null ? [] : laidOver(await saved.inForce(), drafted);
       const whose = `of ${principal ?? 'nobody'}`;
-      const theirOwn = await heldWithGenerated(roleMemo.storedLayoutsFor(roles, installed), versions, { replayable }, shell, whose);
+      const theirOwn = await heldWithGenerated(roleMemo.storedLayoutsFor(roles, installed), versions, { replayable, roles }, shell, whose);
       const drawable = theirOwn.heldTo.layouts;
       const theirs = layoutsInUse(versions, { whose, heldTo: drawable });
       // The layout variant of their roles is over what is published: under one, nothing published is loaded.
@@ -378,6 +399,7 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
         actions: theirOwn.all.actions,
         ...named,
         slottedCanvases: slottedCanvases(shell.canvases, [...Object.values(layoutStore), ...Object.values(fragments ?? {}).map((fragment) => fragment.layout)]),
+        grantedFunctions: grantedFunctionsOf(roles),
         layoutStore,
         ...(fragments !== undefined ? { fragments } : {}),
         entries: entries.byFingerprint(),

@@ -22,7 +22,7 @@ const salaries: SeedEntry = { fingerprint: 'salaries/all', dsl: { from: ['salari
 const SHELL: ShellManifest = { canvases: [{ id: 'main', initial: 'home' }], components: { Button: {} }, fragments: { sheet: { kind: 'fragment', id: 'sheet', layout: { component: 'Stack', children: [{ slot: 'body' }] } } } };
 
 const app: NiscApp = {
-  charter: { public: ['home'], member: { actions: ['home'] }, lead: { extends: ['member'], actions: ['desk'] } },
+  charter: { public: ['home'], member: { actions: ['home'], functions: ['deals.export'] }, lead: { extends: ['member'], actions: ['desk'] } },
   actions: { home, desk },
   entries: [openDeals, closeDeal, salaries],
   shell: SHELL,
@@ -190,8 +190,24 @@ describe('what is refused of a generated action, in a sentence, with nothing wri
     await refused('an action', /^moss: the action is refused: /);
   });
 
-  it('a function', () =>
-    refused(calling({ fn: 'deals.close', target: 'rows' }), 'moss: the action is refused: endpoint "load" calls the function "deals.close", and what is generated calls no function'));
+  it('a function whose name is worked out when it is called', () =>
+    refused(calling({ fn: '{{$.which}}', target: 'rows' }), 'moss: the action is refused: endpoint "load" names a function that is worked out when it is called, and what is generated names one written out'));
+
+  it('a function its owner’s roles do not grant', () =>
+    refused(calling({ fn: 'deals.close', target: 'rows' }), 'moss: the action is refused: endpoint "load" calls the function "deals.close", which its owner’s roles do not grant'));
+
+  it('a function its owner’s roles grant may be called, by them and by whoever extends their role, and is in their shell', async () => {
+    const { of, shellOf } = world();
+    await expect(of('ada').save([{ kind: 'action', body: calling({ fn: 'deals.export', target: 'rows' }) }])).resolves.toBeDefined();
+    await expect(of('ben', ['lead']).save([{ kind: 'action', body: calling({ fn: 'deals.export', target: 'rows' }) }])).resolves.toBeDefined();
+    const saved = await of('ada').save([{ kind: 'action', body: calling({ fn: 'deals.export', target: 'rows' }) }]);
+    expect(Object.keys((await shellOf('ada')).actions)).toContain(saved.artifacts[0]?.id);
+    // Once its owner's roles no longer grant the function, it is left out of their shell.
+    await saidWhile(async () => expect(Object.keys((await shellOf('ada', ['public'])).actions)).not.toContain(saved.artifacts[0]?.id));
+    await expect(of('cy', ['public']).save([{ kind: 'action', body: calling({ fn: 'deals.export', target: 'rows' }) }])).rejects.toThrow(
+      'moss: the action is refused: endpoint "load" calls the function "deals.export", which its owner’s roles do not grant',
+    );
+  });
 
   it('a write', () => refused(reading('deals/close'), 'moss: the action is refused: endpoint "load" replays "deals/close", which is a write, and what is generated only reads'));
 
@@ -319,7 +335,7 @@ describe('a generated fragment', () => {
 
     await expect(refusedOf({ ...chrome, id: 'sheet' })).rejects.toThrow('moss: the fragment is refused: it names the id "sheet". Moss gives what is generated its id: leave it out.');
     await expect(refusedOf({ ...chrome, endpoints: { close: { fn: 'deals.close' } } })).rejects.toThrow(
-      'moss: the fragment is refused: endpoint "close" calls the function "deals.close", and what is generated calls no function',
+      'moss: the fragment is refused: endpoint "close" calls the function "deals.close", which its owner’s roles do not grant',
     );
     await expect(refusedOf({ kind: 'fragment', layout: { component: 'Carousel' } })).rejects.toThrow('moss: the fragment is refused: layout uses "Carousel", which this app has no component for');
     await expect(refusedOf({ layout: saying('no kind') })).resolves.toBeDefined();

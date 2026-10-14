@@ -617,3 +617,49 @@ describe('watch — the pointer the other processes poll', () => {
     expect(told).not.toHaveBeenCalled();
   });
 });
+
+describe('the functions a principal’s shell may call', () => {
+  const functionsApp: ShippedManifest = {
+    charter: { public: ['home'], member: { actions: ['home'], functions: { allow: ['notes.*', 'notes.ad'], deny: ['zz.*'] } }, lead: { extends: ['member'], functions: ['publish'] } },
+    actions: { home },
+  };
+
+  it('are the ones their roles grant, of the names the app’s functions hold', async () => {
+    const manifest = running(functionsApp);
+    const said = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      const names = ['notes.add', 'notes.list', 'publish', 'auth.leave'];
+      expect([...(await manifest.artifactsFor(SHELL, nobody(['member']))).grantedFunctions(names)].sort()).toEqual(['notes.add', 'notes.list']);
+      expect([...(await manifest.artifactsFor(SHELL, nobody(['lead']))).grantedFunctions(names)].sort()).toEqual(['notes.add', 'notes.list', 'publish']);
+      expect([...(await manifest.artifactsFor(SHELL, nobody(['public']))).grantedFunctions(names)]).toEqual([]);
+    } finally {
+      said.mockRestore();
+    }
+  });
+
+  it('a set of actions handed over that calls a function its holders’ roles do not grant is refused, with the list', () => {
+    const manifest = running(functionsApp);
+    expect(() => manifest.replace('bundles', { 'notes.purge': { id: 'notes.purge', endpoints: { purge: { fn: 'notes.purge.all' } } } })).not.toThrow();
+    expect(() => manifest.replace('bundles', { home: { id: 'home', endpoints: { leave: { fn: 'auth.leave' } } } })).toThrow(
+      'Refresh refused — roles hold actions that call functions their charter does not grant:\n  "public" hold "home", which calls "auth.leave": their functions do not grant it',
+    );
+  });
+
+  it('at the first shell a process builds, the charter’s checks of its functions are said, once', async () => {
+    const manifest = running(functionsApp);
+    const said = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      (await manifest.artifactsFor(SHELL, nobody(['member']))).grantedFunctions(['notes.add', 'notes.list', 'auth.leave']);
+      (await manifest.artifactsFor(SHELL, nobody(['member']))).grantedFunctions(['notes.add']);
+
+      expect(said.mock.calls.map((call) => call[0])).toEqual([
+        '[moss] charter: role "member" denies "zz.*" (functions) which matches nothing — silent means unprotected',
+        '[moss] charter: role "member" allows "notes.ad" (functions) which matches nothing',
+        '[moss] charter: role "lead" allows "publish" (functions) which matches nothing',
+        '[moss] charter: function "auth.leave" is granted by no role — deployed but unreachable',
+      ]);
+    } finally {
+      said.mockRestore();
+    }
+  });
+});

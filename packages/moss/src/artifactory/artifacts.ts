@@ -13,6 +13,8 @@ export type ShellArtifacts = {
   frame?: string;
   // The canvases its layouts hold a slot for and its manifest does not declare.
   slottedCanvases: readonly string[];
+  // Of these names of the app's functions, the ones its principal's roles grant.
+  grantedFunctions: (names: readonly string[]) => ReadonlySet<string>;
   layoutStore: Readonly<Record<string, LayoutNode>>;
   fragments?: Readonly<Record<string, ActionFragment>>;
   entries: ReadonlyMap<string, SeedEntry | SeedMutation>;

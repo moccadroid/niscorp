@@ -19,6 +19,7 @@ const coherent: ManifestCandidate = {
   actions: { home, 'admin.panel': panel },
   layouts: {},
   fragmentIds: new Set(),
+  fragmentCalls: [],
   wearable: [['admin']],
   grants: scopeGrants(['deals']),
   entries: [{ fingerprint: 'deals/mine', dsl: { from: ['deals'], fields: ['deals.id'] }, reach: 'own' }],
@@ -128,6 +129,70 @@ describe('verifyManifest — may this be served', () => {
     const deep = unread(`{"id":"home","layout":${'{"component":"Stack","children":['.repeat(5000)}"x"${']}'.repeat(5000)}}`);
     const report = verifyManifest({ ...coherent, actions: { ...coherent.actions, home: deep } });
     expect(report.errors[0]).toEqual({ check: 'actions', detail: expect.stringMatching(/^"home" is not an action nova reads: /) });
+  });
+});
+
+describe('verifyManifest — a function an action calls is one its holder’s roles grant', () => {
+  const closing: ActionDefinition = { id: 'deals.close', endpoints: { close: { fn: 'deals.close' } } };
+  const exporting: ActionDefinition = { id: 'deals.export', endpoints: { run: { fn: 'deals.export' } } };
+  const errorsOf = (app: ShippedManifest): string[] => verifyApp(app, []).errors.filter((error) => error.check === 'functions').map((error) => error.detail);
+  const app = (charter: ShippedManifest['charter'], more: Partial<ShippedManifest> = {}): ShippedManifest => ({
+    charter,
+    actions: { 'deals.close': closing, 'deals.export': exporting },
+    wearable: [['member'], ['member', 'auditor']],
+    ...more,
+  });
+
+  it('refuses the boot, and lists per combination of roles somebody wears each call their functions do not grant', () => {
+    expect(errorsOf(app({ member: { actions: ['deals.*'], functions: ['deals.export'] }, auditor: { actions: [] } }))).toEqual([
+      '"member" hold "deals.close", which calls "deals.close": their functions do not grant it',
+      '"member", "auditor" hold "deals.close", which calls "deals.close": their functions do not grant it',
+    ]);
+  });
+
+  it('a call one role of a combination grants is granted to the combination, and each role is checked on its own too, as the variant check reads it', () => {
+    expect(errorsOf(app({ member: { actions: ['deals.*'], functions: ['deals.export'] }, auditor: { actions: [], functions: ['deals.close'] } }, { wearable: [['member', 'auditor']] }))).toEqual([
+      '"member" hold "deals.close", which calls "deals.close": their functions do not grant it',
+    ]);
+  });
+
+  it('a function whose name is worked out when it is called, from the action’s data, is not read at boot: the shell’s map decides', () => {
+    const saving: ActionDefinition = { id: 'deals.save', data: { saveFn: 'deals.export' }, endpoints: { save: { fn: '{{$.saveFn}}' } } };
+    expect(errorsOf(app({ member: { actions: ['deals.*'], functions: ['deals.*'] } }, { wearable: [['member']], actions: { 'deals.save': saving } }))).toEqual([]);
+  });
+
+  it('two shells that ship a fragment under one id are each read', () => {
+    const sheet = (fn: string) => ({ kind: 'fragment' as const, id: 'sheet', layout: { slot: 'body' }, endpoints: { close: { fn } } });
+    expect(
+      errorsOf(app({ member: { actions: ['deals.export'], functions: ['deals.export'] } }, {
+        wearable: [['member']],
+        shell: { canvases: [], fragments: { sheet: sheet('a.close') } },
+        pages: { about: { path: '/about', canvases: [], fragments: { sheet: sheet('b.close') } } },
+      })),
+    ).toEqual([
+      '"member" hold the fragment "sheet", which any of them may wear, which calls "a.close": their functions do not grant it',
+      '"member" hold the fragment "sheet", which any of them may wear, which calls "b.close": their functions do not grant it',
+    ]);
+  });
+
+  it('a glob grants as it does for the other sections, and `*` allows every function, which is said', () => {
+    expect(errorsOf(app({ member: { actions: ['deals.*'], functions: ['deals.*'] }, auditor: { actions: [] } }))).toEqual([]);
+    const report = verifyApp(app({ member: { actions: ['deals.*'], functions: ['*'] }, auditor: { actions: [] } }), []);
+    expect(report.errors).toEqual([]);
+    expect(report.said).toContain(`role "member" allows every function ('*'): the generated actions of the people who hold it, or a role that extends it, may call any it does not deny`);
+  });
+
+  it('the roles somebody nobody assigned holds are checked too: `public`', () => {
+    expect(errorsOf(app({ public: ['deals.export'], member: { actions: ['deals.*'], functions: ['deals.*'] } }, { wearable: [['member']] }))).toEqual([
+      '"public" hold "deals.export", which calls "deals.export": their functions do not grant it',
+    ]);
+  });
+
+  it('a fragment a shell ships may be worn by any action, so its calls are held to every combination that holds one', () => {
+    const shell = { canvases: [], fragments: { sheet: { kind: 'fragment' as const, id: 'sheet', layout: { slot: 'body' }, endpoints: { close: { fn: 'sheet.close' } } } } };
+    expect(errorsOf(app({ member: { actions: ['deals.export'], functions: ['deals.export'] } }, { wearable: [['member']], shell }))).toEqual([
+      '"member" hold the fragment "sheet", which any of them may wear, which calls "sheet.close": their functions do not grant it',
+    ]);
   });
 });
 

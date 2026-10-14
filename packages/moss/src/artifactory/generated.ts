@@ -17,6 +17,7 @@ export type GeneratedHeldTo = {
   replayable: () => Promise<ReadonlySet<string>>;
   // The actions its owner holds, their own generated ones among them.
   catalog: () => readonly AuditCatalogEntry[];
+  mayCall: (name: string) => boolean;
 };
 
 type Read<Body> = { body: Body } | { refusal: string };
@@ -28,7 +29,8 @@ const endpointRefusals = async (endpoints: ActionDefinition['endpoints'], heldTo
   const refusals: string[] = [];
   for (const [name, endpoint] of Object.entries(endpoints ?? {})) {
     if ('fn' in endpoint) {
-      refusals.push(`endpoint "${name}" calls the function "${endpoint.fn}", and what is generated calls no function`);
+      if (endpoint.fn.includes('{{')) refusals.push(`endpoint "${name}" names a function that is worked out when it is called, and what is generated names one written out`);
+      else if (!heldTo.mayCall(endpoint.fn)) refusals.push(`endpoint "${name}" calls the function "${endpoint.fn}", which its owner’s roles do not grant`);
       continue;
     }
     if (endpoint.method !== 'POST' || !VEX_ROUTE.test(endpoint.url)) {

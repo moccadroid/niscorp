@@ -6,8 +6,8 @@ import { spanClock } from '../runtime';
 import { noDraft } from './draft';
 import { functionSessionFor, instrumentFunctions } from './sessions';
 import type { ShellRef } from './sessions';
-import { layoutsOf, withLayoutInPlace } from './host-state';
-import type { HostState, Live } from './host-state';
+import { holdGranted, layoutsOf, withLayoutInPlace } from './host-state';
+import type { HostState, Live, ShellFunctions } from './host-state';
 import { follow } from './stream';
 import type { ShellOpening } from './types';
 
@@ -156,8 +156,9 @@ export const buildShell = async (host: HostState, asked: BuildRequest): Promise<
   // No await between here and `shellRef.shell = shell`: app code defers its
   // first touch of `session.shell` by a microtask, which has to find the shell
   // there and still land before the shell's mount calls answer.
-  const rawFunctions = hooks.functions?.(session) ?? {};
-  const functions = emit === undefined ? rawFunctions : instrumentFunctions(rawFunctions, emit, principal);
+  const written = hooks.functions?.(session) ?? {};
+  const functions: ShellFunctions = { all: emit === undefined ? written : instrumentFunctions(written, emit, principal), held: {} };
+  holdGranted(functions, made.grantedFunctions);
   if (kept) hooks.onSession?.(session);
 
   const layoutStore = createLayoutStore();
@@ -179,7 +180,7 @@ export const buildShell = async (host: HostState, asked: BuildRequest): Promise<
     transform: (config, source) =>
       evaluate(config, source !== null && typeof source === 'object' && !Array.isArray(source) ? { ...source, userId, today: today() } : source),
     fetch: wire,
-    functions,
+    functions: functions.held,
     ...(config.limits?.endpointTimeoutMs === undefined ? {} : { endpointTimeoutMs: config.limits.endpointTimeoutMs }),
     // An empty book is withheld: nova runs its phrase pass whenever one is given.
     ...(Object.keys(phrases).length === 0 ? {} : { phrases }),
@@ -196,6 +197,7 @@ export const buildShell = async (host: HostState, asked: BuildRequest): Promise<
     entries: made.entries,
     layouts: layoutsOf(made),
     slottedCanvases: new Set(made.slottedCanvases),
+    functions,
     draft: noDraft(),
     connections: new Set(),
     sentByCanvas: new Map(),

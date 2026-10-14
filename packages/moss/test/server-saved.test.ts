@@ -251,7 +251,7 @@ describe('a layout saved from a function’s session', () => {
   it('a session a shell host was given nothing to save with says so', async () => {
     const sessions: FunctionSession[] = [];
     const made = createShellHost({
-      composition: async () => ({ roles: [], scope: {}, actions: { words }, canvases: shell.canvases, components: {} }),
+      composition: async () => ({ roles: [], scope: {}, actions: { words }, canvases: shell.canvases, components: {}, grantedFunctions: () => new Set<string>() }),
       hooks: { functions: (session) => (sessions.push(session), {}) },
       wire: () => async () => ({ ok: true, status: 200, json: async () => ({}), text: async () => '{}' }),
     });

@@ -104,6 +104,7 @@ export const functionSessionFor = (
     recordRun: (run) => {
       config.hooks.runs?.({ ...run, at: Date.now(), principal, shellId: shellRef.shell?.id ?? '' }, session);
     },
+    functions: () => Object.keys(shellRef.live?.functions.held ?? {}),
   };
   return session;
 };

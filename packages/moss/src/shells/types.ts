@@ -14,6 +14,8 @@ export type ShellComposition = {
   frame?: string;
   // The canvases the shell's layouts hold a slot for, beside `canvases`.
   slottedCanvases?: readonly string[];
+  // Of these names of the app's functions, the ones its principal's roles grant.
+  grantedFunctions: (names: readonly string[]) => ReadonlySet<string>;
   layoutStore?: Readonly<Record<string, LayoutNode>>;
   fragments?: Readonly<Record<string, ActionFragment>>;
   entries?: ReadonlyMap<string, SeedEntry | SeedMutation>;
