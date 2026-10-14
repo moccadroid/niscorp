@@ -4,6 +4,7 @@ export const CHARTER: Charter = {
   public: [],
 
   operator: {
+    functions: ['encore.director', 'encore.intent', 'encore.newThread', 'encore.promote', 'encore.run', 'encore.step', 'encore.story', 'encore.thread', 'encore.warm'],
     actions: ['intent.*', 'assist.*', 'site.*', 'stage.*', 'lineup.*', 'act.*', 'weather.*', 'crowd.*', 'attendance.*', 'situation.*', 'incident.*', 'move.*', 'attention.*', 'director.*', 'sales.*', 'slot.*', 'set.*', 'push.*'],
     data: [
       'acts.read',
@@ -38,6 +39,7 @@ export const CHARTER: Charter = {
   },
 
   'vendor-liaison': {
+    functions: ['encore.intent', 'encore.newThread', 'encore.promote', 'encore.run', 'encore.step', 'encore.story', 'encore.thread', 'encore.warm'],
     // Not theirs, deliberately: `situation.now` and `incident.feed`. Both read
     // `incidents`: medical and security reports. `attendance.now` is theirs: it
     // reads `zones` and `zone_counts`, the two tables behind the gauge they hold.

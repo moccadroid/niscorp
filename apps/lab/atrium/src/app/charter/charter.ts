@@ -1,9 +1,10 @@
 import type { Charter } from '@niscorp/charter';
 
 export const CHARTER: Charter = {
-  public: ['auth.login', 'about.page'],
+  public: { actions: ['auth.login', 'about.page'], functions: ['auth.enter'] },
 
   guest: {
+    functions: ['assistant.nudge', 'assistant.profile', 'assistant.send', 'auth.leave', 'connector.issueKey'],
     // `ext.guest.*` is the bundle namespace: every guest action an integration
     // ships arrives under it.
     actions: ['chrome.guest', 'concierge', 'assistant', 'stay.*', 'ext.guest.*', 'about.*'],
@@ -51,6 +52,7 @@ export const CHARTER: Charter = {
   },
 
   staff: {
+    functions: ['assistant.nudge', 'assistant.profile', 'assistant.send', 'auth.leave', 'auth.switchProperty'],
     actions: ['chrome.staff', 'assistant', 'staff.*', 'about.*'],
     // `staff.write.update` is narrow twice over: the row behavior pins it to the
     // caller's own row, and mutations are replay-only, with only
@@ -59,6 +61,7 @@ export const CHARTER: Charter = {
   },
 
   desk: {
+    functions: ['connector.issueKey'],
     extends: ['staff'],
     actions: ['desk.*', 'ext.desk.*'],
     data: [
@@ -98,6 +101,7 @@ export const CHARTER: Charter = {
   },
 
   ops: {
+    functions: ['connector.resync'],
     extends: ['staff'],
     actions: ['ops.*', 'ext.ops.*'],
     data: ['property_capabilities.read', 'property_capabilities.write.update', 'rooms.write.update', 'issues.write.update', 'property_connectors.read', 'connector_capabilities.read'],
@@ -106,6 +110,7 @@ export const CHARTER: Charter = {
   // The integrator takes `chrome.staff` for the top bar but not
   // `extends: ['staff']`: that would grant the staff data reads.
   vendor: {
+    functions: ['assistant.nudge', 'assistant.profile', 'assistant.send', 'auth.leave', 'auth.switchProperty', 'connector.resync'],
     actions: ['chrome.staff', 'assistant', 'deploy.*', 'about.*'],
     data: ['connectors.read', 'connectors.write.update', 'connector_capabilities.read', 'connector_capabilities.write.update', 'capabilities.read', 'properties.read', 'property_connectors.read', 'property_slots.read', 'surface_slots.read', 'assistants.read', 'assistant_turns.read', 'assistant_turns.write.insert', 'assistant_runs.write.insert'],
   },

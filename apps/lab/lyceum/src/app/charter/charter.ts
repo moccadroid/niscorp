@@ -13,25 +13,25 @@ const RESETTING = ['members.write.delete', 'questions.write.delete', 'queries.wr
 export const CHARTER: Charter = {
   // The one write is the row that makes them a member: their own, and the
   // engine stamps whose.
-  public: { actions: ['door.*'], data: ['members.write.insert', ...LOOK] },
+  public: { functions: ['door.enter', 'door.names'], actions: ['door.*'], data: ['members.write.insert', ...LOOK] },
 
   member: { actions: ['member.*', 'query.*', 'ext.member.*'], data: [...MEMBERS_READ, ...QUERYING, ...QUESTIONING, ...CONVERSING, ...LOOK] },
 
-  speaker: { scoping: 'room', actions: ['speaker.*', 'tools.*', 'assistant.*', 'ext.speaker.*'], data: [...MEMBERS_READ, ...DECK_READS, ...LOOK, 'renderers.write.update', 'grants.read', 'grants.write.insert', 'grants.write.delete', 'slide_notes.read', 'slide_tools.read', 'deck.write.update', 'timers.read', 'timers.write.insert', 'questions.read', 'question_verdicts.read', ...CONVERSING, ...RESETTING] },
+  speaker: { functions: ['assistant.intro', 'assistant.turn', 'button.pick', 'integrations.approve', 'integrations.install', 'integrations.remove', 'integrations.state', 'talk.reset', 'timers.delete', 'timers.save'], scoping: 'room', actions: ['speaker.*', 'tools.*', 'assistant.*', 'ext.speaker.*'], data: [...MEMBERS_READ, ...DECK_READS, ...LOOK, 'renderers.write.update', 'grants.read', 'grants.write.insert', 'grants.write.delete', 'slide_notes.read', 'slide_tools.read', 'deck.write.update', 'timers.read', 'timers.write.insert', 'questions.read', 'question_verdicts.read', ...CONVERSING, ...RESETTING] },
   // The stage reads the moderator's verdicts at the `stage` reach, only those
   // that say fit to show, and no question itself: nothing unjudged or unfit
   // can reach the projector.
-  stage: { scoping: 'stage', actions: ['stage.*', 'slide.*', 'ext.stage.*'], data: [...MEMBERS_READ, ...DECK_READS, 'queries.read', 'timers.read', 'question_verdicts.read', 'presses.read', ...LOOK] },
+  stage: { functions: ['assistant.mirror', 'integrations.state', 'room.address', 'room.census', 'room.checks', 'room.timer'], scoping: 'stage', actions: ['stage.*', 'slide.*', 'ext.stage.*'], data: [...MEMBERS_READ, ...DECK_READS, 'queries.read', 'timers.read', 'question_verdicts.read', 'presses.read', ...LOOK] },
 
-  xray: { actions: ['xray.*'] },
+  xray: { functions: ['xray.document', 'xray.set'], actions: ['xray.*'] },
 
-  assistant: { actions: ['assistant.*'] },
+  assistant: { functions: ['assistant.intro', 'assistant.turn', 'timers.save'], actions: ['assistant.*'] },
 
   button: { actions: ['button.*'], data: ['presses.write.insert'] },
 
   kit: { actions: ['kit.*'] },
 
-  lectern: { actions: ['lectern.*'], data: [...LOOK] },
+  lectern: { functions: ['lectern.request'], actions: ['lectern.*'], data: [...LOOK] },
 
   moderator: { scoping: 'room', data: ['members.read', 'refused_names.write.insert', 'questions.read', 'question_verdicts.read', 'question_verdicts.write.insert'] },
 

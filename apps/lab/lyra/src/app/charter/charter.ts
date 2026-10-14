@@ -1,7 +1,7 @@
 import type { Charter } from '@niscorp/charter';
 
 export const CHARTER: Charter = {
-  public: ['auth.login'],
+  public: { actions: ['auth.login'], functions: ['auth.enter', 'auth.request'] },
 
   base: {
     actions: ['confirm'],
@@ -40,6 +40,7 @@ export const CHARTER: Charter = {
   // A sibling of the staff roles, not their base: a grant added here never
   // lands on the desk as a studio-wide read.
   member: {
+    functions: ['auth.leave', 'nav.context', 'nav.family', 'nav.identity'],
     extends: ['base'],
     scoping: 'personal',
     actions: ['chrome.member', 'home.member', 'me.*', 'confirm', 'ext.member.*'],
@@ -68,6 +69,7 @@ export const CHARTER: Charter = {
   },
 
   desk: {
+    functions: ['auth.leave', 'nav.attachments', 'nav.context', 'nav.identity'],
     extends: ['base'],
     actions: ['chrome.staff', 'home.desk', 'people.*', 'desk.*', 'schedule.*', 'ext.desk.*'],
     data: [
@@ -102,12 +104,14 @@ export const CHARTER: Charter = {
   },
 
   instructor: {
+    functions: ['auth.leave', 'nav.context', 'nav.identity'],
     extends: ['base'],
     actions: ['chrome.staff', 'home.classes', 'classes.*', 'roster.*', 'schedule.*', 'desk.*'],
     data: ['staff.read', 'studio_people.read', 'people.read', 'bookings.read', 'check_ins.read', 'check_ins.write.insert', 'enrolments.read'],
   },
 
   manager: {
+    functions: ['automations.audience', 'automations.preview', 'automations.run', 'automations.sendAgain', 'nav.identity', 'reports.window'],
     extends: ['instructor', 'desk'],
     actions: ['home.overview', 'plans.*', 'programs.*', 'courses.*', 'timetable.*', 'reports.*', 'automations.*', 'campaigns.*', 'hub.marketing', 'studio.addons'],
     data: [
@@ -158,6 +162,7 @@ export const CHARTER: Charter = {
   },
 
   owner: {
+    functions: ['mail.addDomain', 'mail.checkDomain', 'mail.sender', 'world.languages', 'world.refresh', 'world.relanguage'],
     extends: ['manager'],
     actions: ['studio.*', 'staff.*'],
     data: [
