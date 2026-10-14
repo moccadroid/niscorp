@@ -1,5 +1,106 @@
 # @niscorp/cli
 
+## 0.7.0
+
+### Minor Changes
+
+- e9b987e: Moss holds an app's entries itself, in memory, and copies none into `vex_cache`. `server.replaceEntries(source, entries)` hands a set of entries over while a server runs. **Breaking.**
+
+  BREAKING — approved by moccadroid, 2026-10-12: an app that runs a vex engine of its own over `runtime.cache` gives that engine the entries it replays (`seedCache(cache, entries)`), and an app that wrote an entry into that table for moss to serve hands it over with `server.replaceEntries(source, entries)`.
+  - **Where a fingerprint resolves.** The entries an app ships are read from the build at every boot and held by the running manifest, compiled as vex replays them. The engine asks it first, and the cache table (`vex_cache`, or what `runtime.cache` hands over) only for what vex wrote itself while the app runs, such as a query `session.answerIntent` wrote. A boot still refuses an entry vex cannot run.
+  - **Nothing is copied into the cache table, and a row in it that no request wrote is not replayed.** Until now every entry was written there at each boot, and a replay resolved in the table. Moss now answers from the table only for a row vex wrote for a request (it carries that request's hash). The rows an earlier release wrote stay where they are and are answered from no longer: an entry the app stopped shipping is refused (`cache_miss`), where it went on answering before. Moss deletes none of them.
+  - **`server.replaceEntries(source, entries)`** is new, and is to entries what `server.replaceActions` is to actions: a named set, replaced whole, checked before it is taken (the schema the manifest's entries are read by, vex's authoring lint for a write, the reach it declares), frozen, and this process's alone. An entry of a set is replayed in place of one the app shipped under the same fingerprint.
+  - **The list of fingerprints** a feature or a discovery is told of holds the entries in force and the queries vex wrote. An app whose `runtime.cache` could not list its rows (vex's tiered cache) was told of none; it is told of the entries in force now.
+  - **`nisc migrate`** is as it was. Its pass for an entry that already did not fit before a run asks the cache table for a copy of that entry. Moss writes no such copy from this release on, so in a database only moss writes to, an entry first shipped from now on gets no pass. A copy an earlier release wrote, or one the app writes itself for an engine of its own, still gives one.
+  - **What a discovery says of an entry of the app.** `createdAt` is when this process compiled it, and `lastUsedAt` is not said: a replay of an entry moss holds stamps nothing. Both came from the row in the table before.
+  - **The refusal for a set that is not the caller's** says `the set "…"` where it said `the set of actions "…"`: a set holds entries too.
+  - The CLI and `@niscorp/nisc` change in the moss they bring; `AGENTS.md` says where entries are held.
+
+- fc96c47: `functions(session)` returns a list of `FunctionDefinition`, `{ id, description, execute }`, and `session.functions()` lists each function a session may call with its description.
+
+  ```ts
+  functions: (session) => [
+    {
+      id: 'notes.archive',
+      description: 'Archives one of the person’s notes. Send { id }.',
+      execute: async ({ id }, signal) => archive(session, id, signal),
+    },
+  ],
+  ```
+
+  - **`id`** is what the charter's `functions` and every `fn:` endpoint name. **`execute`** is what an `fn:` endpoint calls, `(data, signal) => Promise<unknown>`, as a handler in the map was. **`description`** says what it does and what to send, for the model that writes a call to it: `session.functions()` answers `[{ id: 'notes.archive', description: '…' }]`.
+  - **Two functions under one id are refused** when a shell is built: `moss: functions(session) returned "auth.leave" twice.`
+  - **A map of handlers by id still works, and is deprecated.** The first shell a process builds says once what to change, read off what that session was given: `[moss] functions(session) returned a map of handlers, which is deprecated: return a list of { id, description, execute }.`, or, for a list, `[moss] functions with no description: auth.leave. Give each a description.` An empty description counts as none; such a function, and one given by a map, is listed by its id alone.
+  - `FunctionDefinition` is exported, for a helper that returns some of an app's functions.
+
+  For whoever upgrades an app, person or agent: turn the map into a list, one `{ id, description, execute }` for each handler, the id being its key; a helper that returns part of the map returns part of the list, and the parts are joined with `[...a, ...b]`. Write each description as what the function does and what to send.
+
+- 9e6a7c3: The charter decides which of an app's functions a principal may call. **Breaking.**
+
+  BREAKING — approved by moccadroid, 2026-10-14: give every role of the charter a `functions` part, the functions its actions call, or `functions: ['*']` to keep calling all of them; a role written as a list (`member: ['home', 'settings']`) becomes `member: { actions: ['home', 'settings'], functions: [...] }`.
+  - **A shell holds only the functions its principal's roles grant** (`functions`, beside `actions`, `data` and `layouts`, with the same globs, `extends` and `deny`). A role with no `functions` may call none. Before, every shell held every function. A living shell follows the roles an adopt answers, as its actions do.
+  - **The boot is refused, with the list of what to grant**, where a role on its own, a combination people wear, or `public` holds an action (or the shells ship a fragment) that calls a function its grants miss: `"member" hold "chrome.topbar", which calls "auth.leave": their functions do not grant it`. A name with a template in it is decided when it is called.
+  - **`'*'` is said at boot**: `role "member" allows every function ('*'): the generated actions of the people who hold it, or a role that extends it, may call any it does not deny`.
+  - **A grant that names no function** (a typo) is said at the first shell a process builds, with a deny that matches nothing and a function no role grants: the names of the app's functions are known once `functions(session)` has run, and are read as that first session's.
+  - **A generated action or fragment may call a function its owner's roles grant**, named written out; one they do not grant is refused when it is saved and left out when a shell is built. `session.functions()` lists the functions a session may call, `{ id, description? }`, for the model that writes one.
+  - `@niscorp/charter` has the `functions` section, and `verifyCharter` checks it where a `functions` universe is handed in.
+
+  For whoever upgrades an app, person or agent: boot it. The refusal lists, per role combination, each function an action calls that the charter does not grant. Add those names to the `functions` of the role that holds the action, or `['*']` to the roles whose people may call everything. This is the app's permissions table: write it deliberately, and do not generate it.
+
+- b7fabdb: Moss keeps every action's layout in the shell's layout store, under `action/<id>`. A layout that changes now reaches a screen that is already open. **Breaking.**
+
+  BREAKING — approved by moccadroid, 2026-10-12 (`action/`) and 2026-10-13 (`frame`, `canvas/`): a manifest's `layoutStore` declares no name beginning with `action/` or `canvas/` and not the name `frame`, no action's layout and no layout variant names one of those by ref, and code that takes the whole shell (`unverifiedShell(session)`) to read an action's layout off a definition reads it from the layout store (`shell.layoutStore.get('action/<id>')`).
+  - **An open screen follows a layout that changed, with its data kept.** A set of actions handed over with `server.replaceActions` used to reach only a screen opened afterwards: an instance that was open kept the layout it was opened with. What an open instance still keeps is the rest of its definition (its data's shape, its endpoints, its triggers).
+  - **Where the layout is kept does not show to an app.** An app writes an action's layout in its definition as before. `server.actions()` answers it as written, and so does a definition read off a session's shell (`session.shell.getRuntime(id).definition`), with the layout the screen is drawn with now in place. Inside nova's own shell, which `unverifiedShell(session)` hands out, the definition names its layout by `{ ref: 'action/<id>' }` and the store holds the layout, or the layout variant the person's roles hold. An action with no layout, or one whose `layout` is the name of a stored layout, is handed over as it is.
+  - **A session's shell hands out its layout store to read.** `set` and `delete` on `session.shell.layoutStore` throw, as `setLayout` does. They went through before.
+  - **`action/` is moss's in a layout store.** A manifest whose `layoutStore` declares a name beginning with it, in the app's shell or in a page, refuses the boot and says where. So does an action's layout or a layout variant that names one, at boot and when a set of actions is handed over: a layout cannot be drawn inside itself.
+  - **The layout of an action that leaves a shell is taken out of its store.**
+  - **The shell's own layout and a canvas's are kept in the store too**, under `frame` and `canvas/<id>`, and the shell draws each by that name. An app writes `layout` and a canvas's `actionLayout` as before, and a screen is drawn as before; one that is the name of a stored layout is handed over as it is. A manifest whose `layoutStore` declares `frame`, or a name beginning with `canvas/`, in the app's shell or in a page, refuses the boot and says where. So does an action's layout or a layout variant that names one of them, at boot and when a set of actions is handed over. A layout is named by a node that is `{ ref }` and nothing else: a `ref` a component carries, on its node or in its props, names none.
+  - **Whether a page can still do something is read through every ref.** A layout a screen names by `{ ref }` is read where the store holds it, so a two-way bound field in a stored layout the app names itself makes its page live. It was missed before, and such a page was reported as a file.
+  - The CLI and `@niscorp/nisc` change in the moss they bring.
+
+### Patch Changes
+
+- 4dc982a: Moss keeps what was generated while the app runs for the person who saved it (a layout, an action, a fragment), and a layout an app publishes for everybody.
+  - **`session.artifacts`, on the session an app's functions are handed.** `save`, `list`, `history`, `restore` and `reset`. A layout is saved for the action it is for (`{ kind: 'layout', body: { ref: 'action/<id>', layout, use? } }`). It is the session's principal's alone, gets its id from moss, and is drawn on their screens while it is marked `use: true`; their open screens follow at once, with their data kept. Who may save is the charter's: the function that calls it is the app's, and the charter says who holds the action that calls that function. A session nobody is signed in to saves nothing.
+  - **A row is its principal's, and vex keeps it so.** Moss reads and writes the two tables as the caller, under one row rule: a caller reads and writes only the rows whose `principal` is their `userId`, and a row they insert or update carries it. No call names whose rows are meant. The same rule is part of the policy an app's charter compiles to, so a role that is granted the tables, by name or by a wildcard, reaches its own rows there and nobody else's. A row of `artifact_saves` is moss's alone to make: an app's entry that inserts or updates one is refused. An app's `behaviors` that name `artifacts` or `artifact_saves` refuse the boot.
+  - **`server.defaults(publisher)`, on the server: what is published for everybody.** The same five calls and the same body. A published layout is drawn for everybody who holds its action; every living shell adopts it at once, and every other process follows the generation pointer, which a publish moves. It is kept as the rows of one principal no caller is (`*`), under the same row rule, with who published in `created_by`. No session can publish: only the app's own server code reaches the call, and the charter says who holds the action that makes it. One read of what is published answers every shell a process builds: a boot makes it, and the first shell after a publish there or a move of the pointer makes it again.
+  - **`session.artifacts` also keeps an action and a fragment** (`kind: 'action'`, `kind: 'fragment'`). Moss gives the id, `generated.` and a uuid; a body that names another is refused. It is its owner's alone: it is in the shells built for them and in nobody else's, and in no catalog. What it defines replays reads and calls the functions its owner's roles grant: each endpoint is a `POST` to the app's vex route naming one fingerprint of a read the app ships or was handed and its owner may replay, or of a read vex wrote that its owner saved, or an `fn:` endpoint to a function its owner's roles grant (see the charter's `functions`); a write, a query a model wrote that nobody saved and every other address are refused, and so is a generated action that opens an action its owner does not hold. Moss checks the artifact; once it is in a shell it is an action or a fragment like any other, on nova's channels and in nova's merge of a fragment into the action it is wrapped around. It is checked at the save and at every shell, and one that no longer passes is left out with a line. `session.actions`, and the `actions` the `inputs` and `seeds` hooks are handed, are the ids the shell was built with, so they hold a principal's generated actions too.
+  - **`session.draft`, on the same session: what is being generated in one shell, before it is saved.** `put` takes what `save` takes, runs the same check with the draft laid over what is in force and against what that one shell can draw, and answers when that shell has it, so a function puts an action and opens it on its next line. `list`, `remove` and `discard`; each put or removal is a numbered step, and `show(step)` has the shell show the draft as it was after it; `save` is one save of all of it under the ids it had. A draft is in no other shell, is saved nowhere, and is gone when its shell is.
+  - **An id beginning with `generated.` is moss's to give.** A boot and `replaceActions` refuse an action under one, and the manifest's parse refuses a shell's fragment under one.
+  - **No caller's `userId` is `*`, and no caller's scope carries `artifactSavedBy`.** For one whose sign-in or `scope` says either, no shell is built and `/api/vex` answers 500.
+  - **Under an action's ref a shell draws**, the first of these there is: the person's own layout marked in use, the layout variant their roles hold, the published layout marked in use, the build's.
+  - **Every save is a version, and moss changes and deletes none.** Going back to a version is a new save that holds a copy of it; a reset is a new save that says none is in force, and the layout under it is drawn again.
+  - **A layout is checked when it is saved and when a shell is built**: its shape, that the action it is for has a layout of its own and is held by whom it is saved for, its components against what the app's shells have, that it names no ref moss keeps a layout under (`action/…`, `canvas/…`, `frame`), and what nova's audit finds of its action with the layout in place and not of the action as it is built. A save is refused with a sentence. A saved layout that no longer passes is left out with a line in the log, and what is under it is drawn.
+  - **Two tables, in migration `nisc.moss/5`: `artifact_saves` and `artifacts`.** A deployment that boots with `migrations: 'verify'` runs `nisc migrate` first, as for every migration. An app whose database already has a table by either name renames its own before it takes this release.
+  - **The fabric carries one more message, `adopt`**: it names a principal and tells a process to bring the shells it holds for them level. A process that runs an earlier release drops it as a message it does not know, as it drops every such message.
+  - **The layouts of the app's own shell are saved the same way: its own under `ref: 'frame'`, a canvas's under `ref: 'canvas/<id>'`**, by a session for its principal and by `server.defaults` for everybody. The app's own shell draws the person's own in use, else the published one, else the one its manifest declares; their open screen follows at once. A page draws the layout it declares. A shell manifest with no `layout`, or a canvas with no `actionLayout` of its own, has none to take the place of, and a save for it is refused. It is checked as a layout for an action is, against the components of the app's own shell and without nova's audit. A frame that leaves a canvas of the shell out is saved as it is: that canvas is drawn nowhere.
+  - **A canvas that only a layout's slot draws goes when the slot goes.** Nova gives a shell a canvas when something is first pushed onto it. Where a layout in force for a principal holds a canvas slot with a written-out `canvasId` for a canvas their shell's manifest does not declare, and then no layout does (the saved layout was reset, the action left the shell), an open shell loses that canvas with what is mounted on it. It stayed before, drawn nowhere. The canvases a manifest declares are never taken out, and moss gives a shell none.
+  - **A read vex wrote is kept the same way** (`{ kind: 'read', id: 'fp_…' }`, no body): moss takes the query and the Prism config of its mapping from vex's table. It is answered to the person who saved it and to nobody else (never to a caller nobody is signed in for), held to vex's limits as a query vex wrote is, it survives a schema change that does not touch what it reads, and their generated actions may replay it. One whose query no longer runs is left out with a line, with the generated actions that replay it. Moss's data layer hands vex's table only what vex wrote for a request: a saved read vex replays is not copied into it.
+  - Not built yet: publishing an action, a fragment or a read; a layout of a page's shell.
+  - The CLI and `@niscorp/nisc` change in the moss they bring. `AGENTS.md` gains rule 7b: how a layout, an action or a fragment generated while the app runs is saved or kept in a draft, how a layout is published for everybody, and that the charter decides who may do either.
+
+- c7c4f9b: A nova shell keeps actions and fragments in one registry. **Breaking.**
+
+  BREAKING — approved by moccadroid, 2026-10-13: `shell.registerFragment` is gone, and an action and a fragment no longer share an id.
+  - **`shell.registerAction(definition)` takes an action or a fragment**, told apart by the fragment's `kind: 'fragment'`, and **`shell.removeAction(id)` takes either out**. There was no call to take a fragment out. Taken out, a fragment is unknown to a later `with: [...]`; an instance that was opened with it keeps the definition it was composed into, and `back` skips a position that was opened with it, as it skips one it cannot put back.
+  - **A fragment handed to `createShell` is validated**, as an action is: one that does not parse throws `DefinitionValidationError` at construction. Only `registerFragment` validated one before.
+  - **An id names an action or a fragment, never both.** `createShell` and `registerAction` throw `DefinitionValidationError` for an id that is already the other kind's.
+  - Opening a fragment by itself still throws `UnknownActionError`, and a `with: [...]` that names an action still throws `UnknownFragmentError`. `ShellConfig` keeps `actions` and `fragments`.
+  - **Moss:** a fragment that is no longer answered for a principal is taken out of their open shell, as an action is. A boot, and a set of actions handed over, refuse an action under the id of a fragment a shell ships. On a session's own shell, `registerAction` (refused there as before) is the one call that would take a fragment.
+
+  **What to change:** `shell.registerFragment(fragment)` becomes `shell.registerAction(fragment)`. Give an action and a fragment that share an id two ids.
+
+- Updated dependencies [0a7beae]
+- Updated dependencies [e9b987e]
+- Updated dependencies [fc96c47]
+- Updated dependencies [9e6a7c3]
+- Updated dependencies [b7fabdb]
+- Updated dependencies [4dc982a]
+- Updated dependencies [c7c4f9b]
+  - @niscorp/moss@0.7.0
+  - @niscorp/nova@0.4.0
+
 ## 0.6.0
 
 ### Minor Changes
