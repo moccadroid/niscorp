@@ -2,9 +2,8 @@
 
 **Status: Proposed (2026-10-12), ready to build from. What it has to do
 (part 2) and its ten design decisions (part 9) are the owner's and are
-settled. Steps 1 to 7 and step 9 of part 6 are built (2026-10-14), on the
-branch `worktree-artifactory`; nothing else is. Step 10 is struck
-(2026-10-14), which leaves step 8. Part 0 is for whoever builds it, part 6 is the
+settled. Steps 1 to 9 of part 6 are built (2026-10-14), on the branch
+`worktree-artifactory`. Step 10 is struck (2026-10-14). Part 0 is for whoever builds it, part 6 is the
 build, step by step, and part 7 is what needs the owner's word before it is
 touched.**
 
@@ -664,9 +663,12 @@ schema change that does not touch what it reads, and one saved under a shipped
 fingerprint is refused. As built: three changes in vex and the read kind in
 the artifactory (`artifactory/reads.ts`); part 8, "Step 7 as built".
 
-**Step 8. The declared functions and the charter's part.** Needs part 7's
-items for the manifest and for charter first. *Done when:* a generated action
-may call a function on its owner's roles' list and no other.
+**Step 8. The declared functions and the charter's part. Built
+(2026-10-14).** Needs part 7's items for the manifest and for charter first.
+*Done when:* a generated action may call a function on its owner's roles'
+list and no other. As built: the charter's `functions` part decides what every
+session may call, and a generated action holds its owner's; part 8, "Step 8 as
+built".
 
 **Step 9. Canvases through canvas slots. Built (2026-10-13).** An adopt adds a canvas a layout in
 force has a slot for, and takes out one no layout has a slot for any more
@@ -706,8 +708,8 @@ Ask with the concrete change, at the step that needs it.
 |---|---|---|
 | **vex:** its shape mapper hands back the prism config it compiled, beside the compiled form | a saved read has to be the entry as authored, and the config is kept nowhere today | 7, built |
 | **strata:** one stored kind, for a vex entry | a stored entry carries the stamp it was written at and is upgraded where it is read | 7, built: declared by vex (`@niscorp/vex/migrations`); strata needed nothing |
-| **moss, `NiscApp`:** functions declared by name with a description | today `functions(session)` is one map whose names are not known before a session | 8 |
-| **charter:** one part, which functions the generated actions of a role may call | the charter decides what a generated action may run | 8 |
+| **moss, `NiscApp`:** functions declared by name with a description | today `functions(session)` is one map whose names are not known before a session | 8, not built: nothing is added to `defineApp` |
+| **charter:** one part, which functions the generated actions of a role may call | the charter decides what a generated action may run | 8, built as the part that decides what every session may call |
 | **moss, the fabric:** one more message, "bring this principal's shells level" | a person's own save reaches their screens in another process; the message says what to do, and nothing about why | 4, built: `adopt` |
 | **moss, the function session:** the draft, and saving | the names are the owner's to hear before they are built | 4 built: `session.artifacts`; 6 built: `session.draft` |
 | **moss, `MossServer`:** `defaults(publisher)` | publishing is the app's own server code's, and no session's | 4b, built |
@@ -738,6 +740,43 @@ shell. On the whole shell (`unverifiedShell`) they see the ref.
   published is what can be generated. And a published default wins over a
   build that is deployed later, until it is taken back. Both follow from what
   is decided, and are said here so that nobody is surprised by them.
+
+**Step 8 as built** (the owner's go, 2026-10-14, for the list below).
+
+- **The charter's `functions` part means the same for every session**: the
+  app's functions a principal's shell holds. A role with none may call none
+  (the owner's: "from now on we encourage people to be deliberate"). The plan's
+  design had the part decide only what generated actions may call, beside a
+  declaration of functions with descriptions; neither was built. A generated
+  action holds what its owner's roles grant, as it does for the actions it
+  opens and the reads it replays.
+- **Nothing is added to `defineApp`.** `functions(session)` stays as it was.
+  What a function does is the app's to tell its model; `session.functions()`
+  names the ones a session may call.
+- **The boot refuses**, and lists per role combination people wear (and
+  `public`) each call of a held action, and of a fragment the shells ship,
+  that its grants miss. **`'*'` is said at boot. A grant that names nothing is
+  said at the first shell a process builds**, with the charter's own checks,
+  because the names of the app's functions are known only once a session is.
+- **The upgrade is the app's:** the changeset says what to add, and the boot
+  lists it. No codemod: a charter is the app's permissions table. The lab
+  apps' charters were given deliberate lists, read off the boot's refusal.
+- **A vex write a generated action names itself stays refused.** A function
+  the charter grants is the app's own code, and may write.
+- **From the review:** what a living shell holds follows the roles an adopt
+  answers, as its actions do (it was fixed at build, so a role gained while a
+  shell was open got its actions and not their functions); the boot check
+  reads each role on its own too, as the variant check does; a function name
+  with a template in it is decided when it is called (a generated one is
+  refused, as a templated address is); two shells that ship a fragment under
+  one id are each read; the `'*'` line says "allows" and names the roles that
+  extend it.
+- **The first-shell check reads that shell's names.** An app whose functions
+  differ by who the session is for may see a grant reported that another
+  session's names would match. Merging the names over later shells would be a
+  further mechanism; not built.
+- **Not built:** a switch that lets generated actions replay vex writes (the
+  owner floated it; not now, with no app that needs it).
 
 **Step 7 as built** (the owner's go, 2026-10-14).
 
