@@ -3,6 +3,7 @@
 '@niscorp/moss': patch
 '@niscorp/nisc': patch
 '@niscorp/cli': patch
+'@niscorp/loom': minor
 ---
 
 A nova shell keeps actions and fragments in one registry. **Breaking.**
