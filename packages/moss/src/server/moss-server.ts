@@ -17,6 +17,11 @@ export type MossServer = Hono<Env> & {
   principalOf: (token: string) => Promise<string | null>;
   page: (path: string) => { name: string; host: ShellHost; inputs: Record<string, Record<string, unknown>> } | undefined;
   pages: readonly { name: string; path: string }[];
+  // Builds nobody's shell once and drops it, and refuses as the boot does where the
+  // functions it was given are wrong. The app calls it once it holds the server and
+  // before it listens: a session hook may reach for the server, and it is here that
+  // one first runs.
+  checkFunctions: () => Promise<void>;
   refresh: () => void;
   replaceActions: (source: string, actions: Record<string, ActionDefinition>) => void;
   replaceEntries: (source: string, entries: readonly (SeedEntry | SeedMutation)[]) => Promise<void>;

@@ -641,25 +641,50 @@ describe('the functions a principal’s shell may call', () => {
     const manifest = running(functionsApp);
     expect(() => manifest.replace('bundles', { 'notes.purge': { id: 'notes.purge', endpoints: { purge: { fn: 'notes.purge.all' } } } })).not.toThrow();
     expect(() => manifest.replace('bundles', { home: { id: 'home', endpoints: { leave: { fn: 'auth.leave' } } } })).toThrow(
-      'Refresh refused — roles hold actions that call functions their charter does not grant:\n  "public" hold "home", which calls "auth.leave": their functions do not grant it',
+      'Refresh refused — actions call functions the app does not have, or that their holders’ charter does not grant:\n  "public" hold "home", which calls "auth.leave": their functions do not grant it',
     );
   });
 
-  it('at the first shell a process builds, the charter’s checks of its functions are said, once', async () => {
+  const written = (...ids: string[]) => ids.map((id) => ({ id, description: `${id}.`, execute: async () => undefined }));
+
+  it('the functions the first shell writes are checked once: a charter error over them refuses, and nothing is said again', () => {
     const manifest = running(functionsApp);
+    expect(() => manifest.functionsWritten(written('notes.add', 'notes.list', 'publish', 'auth.leave'))).toThrow(
+      'Charter is incoherent over the app’s functions — refusing to serve:\n  dead-deny: role "member" denies "zz.*" (functions) which matches nothing — silent means unprotected',
+    );
+  });
+
+  it('what the charter only warns of is said once, with the functions that have no description, and a later shell says nothing', async () => {
+    const warnable: ShippedManifest = { ...functionsApp, charter: { public: ['home'], member: { actions: ['home'], functions: ['notes.*', 'notes.ad'] }, lead: { extends: ['member'], functions: ['publish'] } } };
+    const manifest = running(warnable);
     const said = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     try {
-      (await manifest.artifactsFor(SHELL, nobody(['member']))).grantedFunctions(['notes.add', 'notes.list', 'auth.leave']);
+      manifest.functionsWritten([...written('notes.add', 'notes.list', 'auth.leave'), { id: 'notes.tag', description: '', execute: async () => undefined }]);
+      manifest.functionsWritten(written('notes.add'));
       (await manifest.artifactsFor(SHELL, nobody(['member']))).grantedFunctions(['notes.add']);
 
       expect(said.mock.calls.map((call) => call[0])).toEqual([
-        '[moss] charter: role "member" denies "zz.*" (functions) which matches nothing — silent means unprotected',
         '[moss] charter: role "member" allows "notes.ad" (functions) which matches nothing',
         '[moss] charter: role "lead" allows "publish" (functions) which matches nothing',
         '[moss] charter: function "auth.leave" is granted by no role — deployed but unreachable',
+        '[moss] functions with no description: notes.tag. Give each a description.',
       ]);
     } finally {
       said.mockRestore();
     }
+  });
+
+  it('an action in force that calls a function the app does not have refuses, and so does a set handed over later', () => {
+    const calling: ShippedManifest = { charter: { public: { actions: ['home'], functions: ['*'] } }, actions: { home: { id: 'home', endpoints: { leave: { fn: 'auth.leave' } } } } };
+    const manifest = running(calling);
+    expect(() => manifest.functionsWritten(written('auth.enter'))).toThrow(
+      'Actions call functions the app does not have, or that their holders’ charter does not grant — refusing to serve:\n  "home" calls "auth.leave", which the app has no function of',
+    );
+
+    const known = running(calling);
+    known.functionsWritten(written('auth.leave'));
+    expect(() => known.replace('bundles', { later: { id: 'later', endpoints: { go: { fn: 'auth.nope' } } } })).toThrow(
+      'Refresh refused — actions call functions the app does not have, or that their holders’ charter does not grant:\n  "later" calls "auth.nope", which the app has no function of',
+    );
   });
 });

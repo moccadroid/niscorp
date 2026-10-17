@@ -359,7 +359,7 @@ describe('the shell hosts — what each host is told', () => {
       { id: 'words.count', description: '', execute: async () => 3 },
       { id: 'words.tag', description: 'Tags a word.', execute: async () => undefined },
     ];
-    const hosts = buildShellHosts({ ...depsWith(shipped), app: { ...app, functions } });
+    const hosts = buildShellHosts({ ...depsWith(createRunningManifest({ shipped: app, grants: scopeGrants(['words']), shells: [] })), app: { ...app, functions } });
     const said = () => warned.mock.calls.filter(([line]) => String(line).startsWith('[moss] functions'));
     try {
       await hosts.pageAt('/docs')?.host.snapshot(null, null);
@@ -373,10 +373,40 @@ describe('the shell hosts — what each host is told', () => {
     }
   });
 
+  it('builds nobody’s shell once, on the app’s host, or on the first page’s where the app has no shell; an app with no `functions` has none, and no shell is built', async () => {
+    const asked: (string | null)[] = [];
+    const functions = (session: FunctionSession) => (asked.push(session.principal), [{ id: 'words.count', description: 'Counts.', execute: async () => 3 }]);
+    const hosts = buildShellHosts({ ...depsWith(createRunningManifest({ shipped: app, grants: scopeGrants(['words']), shells: [] })), app: { ...app, functions } });
+    try {
+      await hosts.buildForNobody();
+      expect(asked).toEqual([null]);
+    } finally {
+      hosts.stop();
+    }
+
+    const calling: NiscApp = { ...app, charter: { public: { actions: ['words'], functions: ['words.*'] } }, actions: { words: { ...words, endpoints: { ...words.endpoints, count: { fn: 'words.count' } } } } };
+    const unhooked = buildShellHosts({ ...depsWith(createRunningManifest({ shipped: calling, grants: scopeGrants(['words']), shells: [] })), app: calling });
+    try {
+      await expect(unhooked.buildForNobody()).rejects.toThrow('"words" calls "words.count", which the app has no function of');
+      expect(asked).toEqual([null]);
+    } finally {
+      unhooked.stop();
+    }
+
+    const { shell: _shell, ...pagesOnly } = app;
+    const paged = buildShellHosts({ ...depsWith(createRunningManifest({ shipped: pagesOnly, grants: scopeGrants(['words']), shells: [] })), app: { ...pagesOnly, functions } });
+    try {
+      await paged.buildForNobody();
+      expect(asked).toEqual([null, null]);
+    } finally {
+      paged.stop();
+    }
+  });
+
   it('a map of handlers still works, and is said once to be deprecated', async () => {
     const warned = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const functions = () => ({ 'words.count': async () => 3 });
-    const hosts = buildShellHosts({ ...depsWith(shipped), app: { ...app, functions } });
+    const hosts = buildShellHosts({ ...depsWith(createRunningManifest({ shipped: app, grants: scopeGrants(['words']), shells: [] })), app: { ...app, functions } });
     try {
       await hosts.shells?.session('t', 'usr_1');
       await hosts.shells?.session('t', 'usr_2');

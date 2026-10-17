@@ -75,6 +75,30 @@ describe('what a caller reads and writes of what was saved', () => {
   });
 });
 
+describe('the server, assembled — `checkFunctions` reads the app’s functions before anyone is served', () => {
+  const leaving = { charter: { public: { actions: ['home'], functions: ['auth.*'] } }, actions: { home: { id: 'home', endpoints: { leave: { fn: 'auth.leave' } } } } };
+
+  it('builds nobody’s shell once, and refuses an action that calls a function the app does not have', async () => {
+    const built: (string | null)[] = [];
+    const server = await assemble(appWith({ ...leaving, functions: (session) => (built.push(session.principal), [{ id: 'auth.enter', description: 'Signs the person in.', execute: async () => undefined }]) }));
+    try {
+      await expect(server.checkFunctions()).rejects.toThrow('"home" calls "auth.leave", which the app has no function of');
+      expect(built).toEqual([null]);
+    } finally {
+      server.close();
+    }
+  });
+
+  it('an app with no `functions` has none: an `fn:` endpoint in it is refused the same way, with no shell built', async () => {
+    const server = await assemble(appWith(leaving));
+    try {
+      await expect(server.checkFunctions()).rejects.toThrow('"home" calls "auth.leave", which the app has no function of');
+    } finally {
+      server.close();
+    }
+  });
+});
+
 describe('the server, assembled — a boot that fails stops what it started', () => {
   it('a feature that throws when it is started leaves no interval running', async () => {
     const failing = { name: 'failing', start: () => Promise.reject(new Error('the feature could not start')) };

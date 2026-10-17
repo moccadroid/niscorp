@@ -10,7 +10,7 @@ export type LayoutVariant = { action: string; layout: LayoutNode };
 
 export type FunctionDefinition = { id: string; description: string; execute: FunctionHandler };
 
-type WrittenFunctions = readonly FunctionDefinition[] | Record<string, FunctionHandler>;
+export type WrittenFunctions = readonly FunctionDefinition[] | Record<string, FunctionHandler>;
 
 // A handler is a map's value, keyed by its id; a list's values are definitions.
 export const functionsIn = (written: WrittenFunctions): readonly FunctionDefinition[] => {

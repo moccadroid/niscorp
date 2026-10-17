@@ -128,6 +128,7 @@ const assemble = async ({ app, runtime, session, revokeSessions, data }: ServerD
     principalOf: async (token: string) => session(token),
     page: hosts.pageAt,
     pages: hosts.pages,
+    checkFunctions: hosts.buildForNobody,
     ...(hosts.shells !== undefined ? { shells: hosts.shells } : {}),
     refresh: running.refresh,
     replaceActions: running.replace,

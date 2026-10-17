@@ -2,8 +2,8 @@ import { resolvePrincipal, verifyCharter } from '@niscorp/charter';
 import type { ActionDefinition } from '@niscorp/nova';
 import type { CacheEntry, SeedEntry, SeedMutation } from '@niscorp/vex';
 import { NOBODY_USER_ID } from '../identity';
-import { actionOfLayoutRef, candidateOf, entriesOf, entryMisfits, freezeDeep, refusalOf, verifyManifest } from '../manifest';
-import type { DraftArtifact, KitComponents, ManifestCandidate, ManifestReport, SessionArtifacts, ShellManifest, ShippedManifest } from '../manifest';
+import { actionOfLayoutRef, candidateOf, entriesOf, entryMisfits, freezeDeep, functionsIn, functionsWarning, refusalOf, verifyManifest } from '../manifest';
+import type { DraftArtifact, KitComponents, ManifestCandidate, ManifestReport, SessionArtifacts, ShellManifest, ShippedManifest, WrittenFunctions } from '../manifest';
 import type { ShellArtifacts } from './artifacts';
 import { shellComponents, shellWithStoredLayouts, slottedCanvases } from './artifacts';
 import { draftSaving, laidOver } from './draft';
@@ -62,6 +62,9 @@ export type RunningManifest = {
   report: () => ManifestReport;
   replace: (source: string, actions: Record<string, ActionDefinition>) => void;
   replaceEntries: (source: string, entries: readonly (SeedEntry | SeedMutation)[]) => Promise<void>;
+  // What the first shell's `functions(session)` returned. The app's functions are known
+  // only once a session is: this is when they are checked, and the boot refuses on them.
+  functionsWritten: (written: WrittenFunctions) => void;
   // `scope`: whose request asks. A read somebody saved is answered to them and to nobody else.
   cacheEntry: (fingerprint: string, scope?: Record<string, unknown>) => Promise<CacheEntry | undefined>;
   cacheEntries: () => Promise<{ key: string; entry: CacheEntry }[]>;
@@ -153,7 +156,11 @@ const createComponentNames = (read: (shell: ShellManifest) => ComponentNames): {
 export const createRunningManifest = (config: RunningManifestConfig): RunningManifest => {
   const { shipped } = config;
   const entries = createEntriesInForce(entriesOf(shipped));
-  const candidate = (actions: Actions, held = entries.list()): ManifestCandidate => candidateOf(shipped, { actions, entries: held }, config.grants);
+  let functionIds: ReadonlySet<string> | undefined;
+  const candidate = (actions: Actions, held = entries.list()): ManifestCandidate => ({
+    ...candidateOf(shipped, { actions, entries: held }, config.grants),
+    ...(functionIds === undefined ? {} : { functionIds }),
+  });
 
   const own: Actions = shipped.actions;
   const loaders = new Map<string, ActionLoader>();
@@ -202,24 +209,38 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
     };
   };
   const { reads: readSources } = config;
-  // The names of the app's functions are known only once a session is: the
-  // charter's checks of its `functions` are run at the first shell this process
-  // builds, and what they find is said, as the boot cannot refuse it any more.
-  let functionsChecked = false;
-  const sayFunctionGrants = (names: readonly string[]): void => {
-    functionsChecked = true;
+  // The charter's checks over the functions alone: what it found without them is already said.
+  const charterOverFunctions = (ids: readonly string[]): { errors: string[]; warnings: string[] } => {
     const universes = { actions: Object.keys(inForce), data: config.grants, layouts: Object.keys(shipped.layouts ?? {}) };
     const before = verifyCharter(shipped.charter, universes);
     const known = new Set([...before.errors, ...before.warnings].map((issue) => issue.detail));
-    const after = verifyCharter(shipped.charter, { ...universes, functions: names });
-    for (const issue of [...after.errors, ...after.warnings]) if (!known.has(issue.detail)) console.warn(`[moss] charter: ${issue.detail}`);
+    const after = verifyCharter(shipped.charter, { ...universes, functions: ids });
+    return {
+      errors: after.errors.flatMap((issue) => (known.has(issue.detail) ? [] : [`${issue.rule}: ${issue.detail}`])),
+      warnings: after.warnings.flatMap((issue) => (known.has(issue.detail) ? [] : [issue.detail])),
+    };
+  };
+  const functionsWritten = (written: WrittenFunctions): void => {
+    if (functionIds !== undefined) return;
+    const ids = functionsIn(written).map((definition) => definition.id);
+    const charter = charterOverFunctions(ids);
+    if (charter.errors.length > 0) throw new Error(`Charter is incoherent over the app’s functions — refusing to serve:\n  ${charter.errors.join('\n  ')}`);
+    functionIds = new Set(ids);
+    const verified = verifyManifest(candidate(inForce));
+    const refusal = refusalOf(verified, 'boot');
+    if (refusal !== undefined) {
+      functionIds = undefined;
+      throw new Error(refusal);
+    }
+    report = verified;
+    for (const warning of charter.warnings) console.warn(`[moss] charter: ${warning}`);
+    const warning = functionsWarning(written);
+    if (warning !== undefined) console.warn(warning);
   };
   const grantedFunctionsOf =
     (roles: readonly string[]) =>
-    (names: readonly string[]): ReadonlySet<string> => {
-      if (!functionsChecked) sayFunctionGrants(names);
-      return resolvePrincipal(shipped.charter, names, roles, 'functions');
-    };
+    (names: readonly string[]): ReadonlySet<string> =>
+      resolvePrincipal(shipped.charter, names, roles, 'functions');
   const readsHeldTo: ReadHeldTo | undefined =
     readSources === undefined ? undefined : { isAppEntry: (fingerprint) => entries.byFingerprint().has(fingerprint), sources: readSources };
   // What somebody generated and has in force is laid beside what their roles
@@ -365,6 +386,7 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
       };
     },
     refresh: () => applySets(new Map(), true),
+    functionsWritten,
     watch: () => {
       const where = config.pointer;
       if (pointer !== undefined || where === undefined) return;

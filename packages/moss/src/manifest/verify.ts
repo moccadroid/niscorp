@@ -18,6 +18,8 @@ export type ManifestCandidate = {
   fragmentIds: ReadonlySet<string>;
   // The functions each fragment the shells ship calls: two shells may ship one under one id.
   fragmentCalls: readonly { id: string; calls: readonly string[] }[];
+  // The app's functions, once a shell has been built and they are known.
+  functionIds?: ReadonlySet<string>;
   wearable: readonly (readonly string[])[];
   grants: readonly string[];
   entries: readonly (SeedEntry | SeedMutation)[];
@@ -136,6 +138,15 @@ const functionGrantErrors = (candidate: Pick<ManifestCandidate, 'charter' | 'act
   return [...errors];
 };
 
+const unknownFunctionErrors = (candidate: Pick<ManifestCandidate, 'actions' | 'fragmentCalls' | 'functionIds'>): string[] => {
+  const known = candidate.functionIds;
+  if (known === undefined) return [];
+  return [
+    ...Object.entries(candidate.actions).flatMap(([id, definition]) => functionsCalledBy(definition).map((fn) => ({ by: `"${id}"`, fn }))),
+    ...candidate.fragmentCalls.flatMap(({ id, calls }) => calls.map((fn) => ({ by: `the fragment "${id}"`, fn }))),
+  ].flatMap(({ by, fn }) => (known.has(fn) ? [] : [`${by} calls "${fn}", which the app has no function of`]));
+};
+
 const everyFunctionGranted = (charter: Charter): string[] =>
   Object.entries(charter).flatMap(([role, def]) =>
     normalizeRole(def, 'functions').allow.includes('*')
@@ -169,7 +180,7 @@ export const verifyManifest = (candidate: ManifestCandidate): ManifestReport => 
       ...found('actions', generatedIdErrors(read.actions)),
       ...found('actions', fragmentIdErrors(read.actions, read.fragmentIds)),
       ...found('charter', charter.errors.map((error) => `${error.rule}: ${error.detail}`)),
-      ...found('functions', functionGrantErrors(read)),
+      ...found('functions', [...unknownFunctionErrors(read), ...functionGrantErrors(read)]),
       ...found('reach', reachErrors(read.entries, read.profiles)),
       ...found('variants', verifyVariants(read)),
     ],
@@ -188,14 +199,14 @@ const HEADLINES = {
   boot: {
     actions: 'Actions are not ones nova reads — refusing to serve:',
     charter: 'Charter is incoherent — refusing to serve:',
-    functions: 'Roles hold actions that call functions their charter does not grant — refusing to serve:',
+    functions: 'Actions call functions the app does not have, or that their holders’ charter does not grant — refusing to serve:',
     reach: 'Entries declare a reach no table offers — refusing to serve:',
     variants: 'Layout variants are incoherent — refusing to serve:',
   },
   refresh: {
     actions: 'Refresh refused — actions nova does not read:',
     charter: 'Refresh refused — charter incoherent over the new artifacts:',
-    functions: 'Refresh refused — roles hold actions that call functions their charter does not grant:',
+    functions: 'Refresh refused — actions call functions the app does not have, or that their holders’ charter does not grant:',
     reach: 'Refresh refused — entries declare a reach no table offers:',
     variants: 'Refresh refused — layout variants incoherent:',
   },

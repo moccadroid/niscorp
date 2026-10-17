@@ -7,7 +7,6 @@ import { createWireFollower } from '../data';
 import type { Data } from '../data';
 import { createPageRouter } from '../documents';
 import type { Identity } from '../identity';
-import { functionsWarning } from '../manifest';
 import type { NiscApp, ShellManifest } from '../manifest';
 import type { NiscRuntime } from '../runtime';
 import { createShellHost } from '../shells';
@@ -18,7 +17,7 @@ export type ShellHostsDeps = {
   app: Pick<NiscApp, 'shell' | 'pages' | 'phrases' | 'functions' | 'onSession' | 'runs' | 'phraseKeys'>;
   runtime: Pick<NiscRuntime, 'telemetry' | 'shellIdleMs' | 'shellFrameDelta' | 'endpointTimeoutMs'>;
   identity: Pick<Identity, 'resolve' | 'composeScope'>;
-  running: Pick<RunningManifest, 'artifactsFor' | 'sessionArtifacts' | 'draftSavingFor'>;
+  running: Pick<RunningManifest, 'artifactsFor' | 'sessionArtifacts' | 'draftSavingFor' | 'functionsWritten'>;
   // What was saved, as the caller whose scope it is handed.
   savedAs: (scope: Record<string, unknown>) => SavedRows;
   data: Pick<Data, 'answerIntent' | 'fingerprintsFor'>;
@@ -31,6 +30,7 @@ export type Hosts = {
   shells: ShellHost | undefined;
   pageAt: MossServer['page'];
   pages: MossServer['pages'];
+  buildForNobody: () => Promise<void>;
   adopt: () => void;
   adoptFor: (principal: string) => void;
   reset: (principal: string) => boolean;
@@ -85,24 +85,21 @@ const hostConfig = (deps: ShellHostsDeps, shell: ShellManifest, kept: boolean): 
   };
 };
 
-// Said at the first shell any of the server's hosts builds: the app's
-// functions are known once a session is.
-const sayingWhatToFix = (functions: NonNullable<NiscApp['functions']>): NonNullable<NiscApp['functions']> => {
-  let said = false;
+const checkedOnce = (functions: NonNullable<NiscApp['functions']>, written: RunningManifest['functionsWritten']): NonNullable<NiscApp['functions']> => {
+  let checked = false;
   return (session) => {
-    const written = functions(session);
-    if (!said) {
-      said = true;
-      const warning = functionsWarning(written);
-      if (warning !== undefined) console.warn(warning);
+    const given = functions(session);
+    if (!checked) {
+      written(given);
+      checked = true;
     }
-    return written;
+    return given;
   };
 };
 
 export const buildShellHosts = (deps: ShellHostsDeps): Hosts => {
   const { app } = deps;
-  const wired = app.functions === undefined ? deps : { ...deps, app: { ...app, functions: sayingWhatToFix(app.functions) } };
+  const wired = app.functions === undefined ? deps : { ...deps, app: { ...app, functions: checkedOnce(app.functions, deps.running.functionsWritten) } };
   const pageManifests = app.pages ?? {};
   // The router refuses two pages that could answer one path. It is made before
   // any host: a host starts its idle sweep when it is made, and a refusal after
@@ -124,6 +121,13 @@ export const buildShellHosts = (deps: ShellHostsDeps): Hosts => {
       return { name: matched.name, host, inputs: manifest.params === undefined ? {} : { [manifest.params]: matched.params } };
     },
     pages: Object.entries(pageManifests).map(([name, manifest]) => ({ name, path: manifest.path })),
+    buildForNobody: async () => {
+      if (app.functions === undefined) {
+        deps.running.functionsWritten([]);
+        return;
+      }
+      await every[0]?.snapshot(null, null, { waitMs: 0 });
+    },
     adopt: () => {
       for (const made of owned) made.adopt();
     },

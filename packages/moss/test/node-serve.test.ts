@@ -10,6 +10,7 @@ import type { SocketAccept } from '../src/socket';
 const mossClosed = vi.fn();
 
 const said: { transport?: SocketAccept['transport'] } = {};
+const checked = vi.fn(async (): Promise<void> => undefined);
 
 vi.mock('../src/server/server', () => ({
   createServer: async (): Promise<MossServer> => {
@@ -19,7 +20,7 @@ vi.mock('../src/server/server', () => ({
       },
       { stop: (): void => {}, ...said },
     );
-    return Object.assign(new Hono(), { socket: accept, close: mossClosed }) as unknown as MossServer;
+    return Object.assign(new Hono(), { socket: accept, close: mossClosed, checkFunctions: checked }) as unknown as MossServer;
   },
 }));
 
@@ -68,10 +69,22 @@ const serving = async (runtime: Partial<NiscRuntime> = {}): Promise<{ server: Mo
 afterEach(() => {
   for (const server of served.splice(0)) server.close();
   mossClosed.mockClear();
+  checked.mockReset();
+  checked.mockImplementation(async () => undefined);
   delete said.transport;
 });
 
 describe('serve', () => {
+  it('checks the app’s functions before it listens, and a refusal closes what was built and is thrown', async () => {
+    checked.mockRejectedValueOnce(new Error('Actions call functions the app does not have — refusing to serve:'));
+    const port = await freePort();
+
+    await expect(serve({} as NiscApp, { port } as unknown as NiscRuntime)).rejects.toThrow('refusing to serve');
+
+    expect(mossClosed).toHaveBeenCalledTimes(1);
+    expect(await accepts(port)).toBe(false);
+  });
+
   it('what it started, the server it returns stops: its own timers, every connection, and the listener', async () => {
     const { server, port } = await serving();
     const client = await opened(`ws://127.0.0.1:${port}/socket`);

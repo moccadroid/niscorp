@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { scopeGrants } from '@niscorp/vex';
 import type { ActionDefinition, LayoutNode } from '@niscorp/nova';
-import { refusalOf, verifyApp, verifyManifest } from '../src/manifest/verify';
+import { candidateOf, refusalOf, verifyApp, verifyManifest } from '../src/manifest/verify';
 import type { ManifestCandidate, ShippedManifest } from '../src/manifest/verify';
 
 const home: ActionDefinition = {
@@ -153,6 +153,19 @@ describe('verifyManifest — a function an action calls is one its holder’s ro
   it('a call one role of a combination grants is granted to the combination, and each role is checked on its own too, as the variant check reads it', () => {
     expect(errorsOf(app({ member: { actions: ['deals.*'], functions: ['deals.export'] }, auditor: { actions: [], functions: ['deals.close'] } }, { wearable: [['member', 'auditor']] }))).toEqual([
       '"member" hold "deals.close", which calls "deals.close": their functions do not grant it',
+    ]);
+  });
+
+  it('once the app’s functions are known, a call to one it does not have is refused, in an action and in a fragment; a templated name is not read', () => {
+    const saving: ActionDefinition = { id: 'deals.save', data: { saveFn: 'deals.export' }, endpoints: { save: { fn: '{{$.saveFn}}' } } };
+    const sheet = { kind: 'fragment' as const, id: 'sheet', layout: { slot: 'body' }, endpoints: { close: { fn: 'sheet.close' } } };
+    const shipped = app({ member: { actions: ['deals.*'], functions: ['*'] } }, { wearable: [['member']], actions: { 'deals.close': closing, 'deals.save': saving }, shell: { canvases: [], fragments: { sheet } } });
+    const candidate = candidateOf(shipped, { actions: shipped.actions, entries: [] }, []);
+
+    expect(verifyManifest(candidate).errors.filter((error) => error.check === 'functions')).toEqual([]);
+    expect(verifyManifest({ ...candidate, functionIds: new Set(['deals.export']) }).errors.filter((error) => error.check === 'functions').map((error) => error.detail)).toEqual([
+      '"deals.close" calls "deals.close", which the app has no function of',
+      'the fragment "sheet" calls "sheet.close", which the app has no function of',
     ]);
   });
 

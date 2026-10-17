@@ -16,6 +16,7 @@ export type {
   SessionDraft,
   ShellCanvas,
   ShellManifest,
+  WrittenFunctions,
 } from './app';
 export { entryMisfits, freezeDeep, receiveManifest } from './schema';
 export { candidateOf, endlessChains, layoutMisfits, layoutNameRefusal, refusalOf, variantLayouts, verifyApp, verifyManifest, withVariants } from './verify';

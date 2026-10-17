@@ -107,40 +107,48 @@ Every field is an artifact (authored data) except the code seams — `scope`,
   endpoint name, `execute` is what an `fn:` endpoint calls, `(data, signal) =>
   Promise<unknown>`, and `description` says what it does and what to send, for
   the model that writes a call to it (`session.functions()` lists it). Two
-  under one id are refused when a shell is built: `moss: functions(session)
-  returned "auth.leave" twice.` A map of handlers by id still works and is
-  deprecated. The first shell a process builds says once what to change, read
-  off what that first session's `functions(session)` returned: `[moss]
-  functions(session) returned a map of handlers, which is deprecated: return a
-  list of { id, description, execute }.`, or `[moss] functions with no
-  description: auth.leave. Give each a description.` An empty description
-  counts as none, and a function given by a map has none. **A shell holds only the functions
+  under one id are refused: `moss: functions(session) returned "auth.leave"
+  twice.` A map of handlers by id still works and is deprecated.
+  **`server.checkFunctions()`** builds nobody's shell once, drops it, and reads
+  what its `functions(session)` returned, so what is wrong with the functions
+  is refused or said before anyone is served. The app calls it once it holds
+  the server and before it listens, as a session hook may reach for the
+  server: `serve` of `@niscorp/moss/node` does, and so do `nisc dev`, `nisc
+  build`, `nisc check` and `nisc start` after the project's `boot`. It says: `[moss] functions(session)
+  returned a map of handlers, which is deprecated: return a list of { id,
+  description, execute }.`, or `[moss] functions with no description:
+  auth.leave. Give each a description.` An empty description counts as none,
+  and a function given by a map has none. **A shell holds only the functions
   its principal's roles grant**, in the charter's `functions` part (names or
   globs, with `extends` and `deny`, as `actions`): a role with none may call
   none, and an `fn:` endpoint to one it does not grant fails when it is called.
   What a living shell holds follows the roles an adopt answers, as its actions
   do.
   - **The boot is refused** where somebody holds an action that calls a
-    function their roles do not grant. It reads the `fn:` endpoints of the
-    actions held by each role on its own, each combination `wearable` or
+    function their roles do not grant, and **`server.checkFunctions()` refuses**
+    where an action, or a fragment the shells ship, calls a function the app
+    does not have (`"home" calls "auth.leave", which the app has no function
+    of`); an app with no `functions` has none. It reads the `fn:` endpoints of
+    the actions held by each role on its own, each combination `wearable` or
     `assignments` lists, and `public`, and of the fragments the shells ship,
     and lists every call that is missing: `"member" hold "chrome.topbar",
-    which calls "auth.leave": their functions do not grant it`. A name with a
-    template in it (`fn: '{{$.saveFn}}'`) is worked out when it is called, and
-    the shell's map decides then.
+    which calls "auth.leave": their functions do not grant it`. A set handed
+    over while the app runs is held to the same. A name with a template in it
+    (`fn: '{{$.saveFn}}'`) is worked out when it is called, and the shell's map
+    decides then.
   - **`functions: ['*']`** grants every function, as an app had before this
     part existed. The boot says so for each role that has it: `role "member"
     allows every function ('*'): the generated actions of the people who hold
     it, or a role that extends it, may call any it does not deny`. Grant each
     role the functions it calls.
-  - **A grant that names no function** is said at the first shell a process
-    builds, when the names of the app's functions are known, with the
-    charter's own checks: `[moss] charter: role "member" allows "notes.ad"
-    (functions) which matches nothing`, a deny that matches nothing, and a
-    function no role grants. They are read against the names that shell's
-    `functions(session)` returned: an app whose functions differ by who the
-    session is for may see a grant reported that another session's names
-    would match.
+  - **The charter's own checks over the functions run in `checkFunctions`
+    too**, against what nobody's shell was given: a deny that matches nothing
+    refuses (`Charter is incoherent over the app’s functions — refusing to
+    serve:`), and a grant that names no function or a function no role grants
+    is said (`[moss] charter: role "member" allows "notes.ad" (functions)
+    which matches nothing`). Every check reads nobody's functions: an app that
+    hands a function only to signed-in sessions is refused where an action
+    calls it, and a later session that adds one is not read again.
 - `onSession(session)` — called once per living app shell, for session code
   that is not an endpoint (an observer, a roster). It runs before the shell
   finishes building, so it must not touch `session.shell` synchronously. Its

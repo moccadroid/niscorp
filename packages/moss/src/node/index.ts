@@ -63,6 +63,12 @@ export const mountSite = (server: MossServer, config: SiteConfig): void => {
 
 export const serve = async (app: NiscApp, runtime: NiscRuntime & { port?: number }): Promise<MossServer> => {
   const server = await createServer(app, runtime);
+  try {
+    await server.checkFunctions();
+  } catch (error) {
+    server.close();
+    throw error;
+  }
   const port = runtime.port ?? 8787;
   const httpServer = listen({ fetch: server.fetch, port });
   const sockets = attachSocket(httpServer, server.socket);
