@@ -81,6 +81,7 @@ const survey = async (options: CommandOptions, project: NiscMossProject): Promis
   const { exportDocuments } = await import('@niscorp/moss');
   const booted = await project.boot();
   try {
+    await booted.server.checkFunctions();
     const paths = project.paths === undefined ? defaultPaths(booted.server.pages) : await project.paths(booted.server);
     return await exportDocuments({
       server: booted.server,
@@ -179,6 +180,12 @@ export const start = async (options: CommandOptions): Promise<{ url: string; clo
   }
   const { attachSocket, mountSite, MOSS_PATHS } = await import('@niscorp/moss/node');
   const booted = await project.boot();
+  try {
+    await booted.server.checkFunctions();
+  } catch (error) {
+    await booted.close?.();
+    throw error;
+  }
   await project.routes?.(booted.server);
   mountSite(booted.server, {
     dist,

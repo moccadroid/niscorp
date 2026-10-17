@@ -47,6 +47,12 @@ const mossPlugin = async (configFile: string, dev: NiscMossProject['dev']): Prom
       const project: unknown = Reflect.get(loaded, 'project');
       if (!isProject(project) || isShellProject(project)) throw new Error(`nisc: ${configFile} no longer describes an app behind moss.`);
       const booted = await project.boot();
+      try {
+        await booted.server.checkFunctions();
+      } catch (error) {
+        await booted.close?.();
+        throw error;
+      }
       const signIn = project.dev?.signIn;
       return {
         server: booted.server,
