@@ -478,9 +478,8 @@ such hash and is not an entry any more, and neither is a row an app put there
 by hand. The schema fingerprint is not the mark: an app's cache may strip it
 (relay's does). What vex writes goes to its own table. Listing the keys
 answers both. Nothing is copied at boot. A generated read keeps the
-fingerprint vex gave it. Saving one under a fingerprint a shipped or published
-entry has is refused, so a generated read can never answer in place of a
-shipped one. A replay runs under the policy of whoever calls it, whoever saved
+fingerprint vex gave it. Saving one under a fingerprint a shipped entry has is
+refused, so a generated read can never answer in place of a shipped one. A replay runs under the policy of whoever calls it, whoever saved
 the entry.
 
 When everything is held by the artifactory and every app is moved, `vex_cache`
@@ -778,6 +777,32 @@ reads nobody's functions. Declaring functions statically, which would have
 made all of this a boot check with no shell, was proposed and struck by the
 owner.
 
+**Publishing every kind, as built** (the owner's go, 2026-10-17, after the
+owner asked why only layouts were published: step 5's list had left it to be
+proposed on its own, and it never was). As part 5 decides: whoever publishes
+an action or a fragment gives it its id (`save([{ kind: 'action', id, body }])`,
+one without an id refused, `generated.` refused), the charter grants it by
+that id, and one under a shipped id replaces the build's for everybody until
+it is reset. A read is published under its fingerprint and answered to
+everybody, nobody signed in included, after the caller's own; one under a
+shipped entry's fingerprint is refused (the owner's "okay... go" to that
+recommendation: a shipped entry is reviewed, and `replaceEntries` replaces
+one). What is published is checked at the publish as a generated artifact is,
+as the publisher, then as a manifest (`Publish refused — …`); when the rows
+are read it is checked again and what fails is left out with a line, the
+build's copies standing; `artifactory/published.ts` holds the check,
+`artifactory/sets.ts` the set owners that moved out of `running.ts` for room.
+`publishedArtifacts(saved, publisher)` takes who publishes, and the server
+resolves the publisher's roles and reads. **From the review:** the rows are
+read at boot before the functions are known, so `functionsWritten` verifies
+the build alone and has them read again (`checkFunctions` does it): a
+published action calling a function a new build dropped is left out there,
+and the boot is not refused; a published fragment is held to each shell's kit
+when the shell is built, as a person's is; sets that change under the
+read-time check are checked again. **Not built:** a publish of a
+generated action by its own id (a person's `generated.<uuid>` copied as a
+default): the publisher names a new id and hands the body over.
+
 **Step 8 as built** (the owner's go, 2026-10-14, for the list below).
 
 - **The charter's `functions` part means the same for every session**: the
@@ -856,8 +881,8 @@ owner.
 - **Loom moves with nova and vex.** It depends on both, and the changeset
   check refuses a breaking release whose dependents do not move. The nova
   changeset missed it since that change.
-- **Not built:** publishing a read, and relay's assistant moving onto saved
-  reads.
+- **Not built:** relay's assistant moving onto saved reads. Publishing a read
+  was built on 2026-10-17 (below).
 
 **Step 9 as built.** The builder's recommendations, built on the owner's go
 (2026-10-13).
