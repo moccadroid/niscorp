@@ -747,16 +747,36 @@ shell. On the whole shell (`unverifiedShell`) they see the ref.
   (`FunctionDefinition`, exported): a function carries its id, which the
   charter's `functions` and every `fn:` endpoint name. `session.functions()`
   answers `{ id, description? }` for each function a session may call. Two
-  under one id are refused when a shell is built: the boot cannot see them,
-  as a session's functions are known only once it is.
-- **A map of handlers still works, and is deprecated.** The first shell a
-  process builds says once what to change: the map, or the functions with no
-  description (an empty one counts as none).
+  under one id are refused.
+- **A map of handlers still works, and is deprecated.** `checkFunctions`
+  says once what to change: the map, or the functions with no description (an
+  empty one counts as none).
 - **In moss only.** Nova's `createShell` keeps a name and a handler; moss hands
   it each `execute`. Nobody but the listing reads a description, and the
   listing is moss's.
 - **Not built:** an `input` schema on a function. It is the next field when an
   app's model needs to know what to send.
+
+**The functions are read before anyone is served: `server.checkFunctions()`**
+(the owner's go, 2026-10-17: "shortly after boot when everything is available
+is also fine, as long as we don't let the user interact and then fail"). It
+builds nobody's shell once and drops it; what its `functions(session)` returned
+is checked there. It refuses an action or a shipped fragment that calls a
+function the app does not have (before, the person's click failed; an app with
+no `functions` has none), a charter deny over functions that matches nothing,
+and two functions under one id; the charter's warnings, the functions with no
+description and a map of handlers are said there, once. A set handed over at a
+refresh is held to the same. **Why the app calls it, and not the boot:** built
+inside `createServer`, it ran lyra's shell `inputs` hook, which reads the
+dev-login roster through `server.executeAs`, before lyra held the server
+("boot: the server is not up yet"); a session hook may reach for the server,
+so the moment is the app's, once it holds the server and before it listens.
+`serve` of `@niscorp/moss/node` calls it; so do `nisc dev`, `nisc build`,
+`nisc check` and `nisc start` after the project's boot, and the `serve.ts` of
+lyra, lyceum and relay. Cost: one anonymous shell build. Limit: every check
+reads nobody's functions. Declaring functions statically, which would have
+made all of this a boot check with no shell, was proposed and struck by the
+owner.
 
 **Step 8 as built** (the owner's go, 2026-10-14, for the list below).
 
@@ -772,9 +792,10 @@ shell. On the whole shell (`unverifiedShell`) they see the ref.
   model. Descriptions came after it (above).
 - **The boot refuses**, and lists per role combination people wear (and
   `public`) each call of a held action, and of a fragment the shells ship,
-  that its grants miss. **`'*'` is said at boot. A grant that names nothing is
-  said at the first shell a process builds**, with the charter's own checks,
-  because the names of the app's functions are known only once a session is.
+  that its grants miss. **`'*'` is said at boot. A grant that names nothing
+  was said at the first shell a process builds**, because the names of the
+  app's functions are known only once a session is; since 2026-10-17
+  `server.checkFunctions()` builds that shell (above).
 - **The upgrade is the app's:** the changeset says what to add, and the boot
   lists it. No codemod: a charter is the app's permissions table. The lab
   apps' charters were given deliberate lists, read off the boot's refusal.
@@ -788,10 +809,10 @@ shell. On the whole shell (`unverifiedShell`) they see the ref.
   refused, as a templated address is); two shells that ship a fragment under
   one id are each read; the `'*'` line says "allows" and names the roles that
   extend it.
-- **The first-shell check reads that shell's names.** An app whose functions
-  differ by who the session is for may see a grant reported that another
-  session's names would match. Merging the names over later shells would be a
-  further mechanism; not built.
+- **The check reads nobody's names.** An app whose functions differ by who
+  the session is for may see a grant reported that another session's names
+  would match. Merging the names over later shells would be a further
+  mechanism; not built.
 - **Not built:** a switch that lets generated actions replay vex writes (the
   owner floated it; not now, with no app that needs it).
 
