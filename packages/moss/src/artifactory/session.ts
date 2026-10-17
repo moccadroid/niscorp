@@ -24,6 +24,10 @@ export type SavedArtifactsDeps = {
   whose: string;
   kinds: readonly ArtifactKind[];
   written: () => void;
+  // Present where what is saved is a default for everybody: whoever saves an action or a
+  // fragment names its id, a new one included, and the set is verified as the manifest is
+  // before it is written.
+  defaults?: { verify: (versions: readonly (Written & { kind: ArtifactKind })[], inForce: readonly SavedVersion[]) => Promise<void> };
 };
 
 const SaveIdSchema = z.uuid();
@@ -102,7 +106,7 @@ const unmarked = (versions: readonly Written[], inForce: readonly SavedVersion[]
 export const idsOf = (versions: readonly (Written & { kind: ArtifactKind })[]): { kind: ArtifactKind; id: string }[] => versions.map(({ kind, id }) => ({ kind, id }));
 
 // `nobody`: what is said where nobody is signed in.
-export const savingFor = ({ holder, whose, kinds, written }: SavedArtifactsDeps, nobody: string) => {
+export const savingFor = ({ holder, whose, kinds, written, defaults }: SavedArtifactsDeps, nobody: string) => {
   // Everybody nobody is signed in for shares one `userId`: what one of them saved would be all of theirs.
   const requireHolder = (): (() => Promise<Holder>) => {
     if (holder === undefined) throw new Error(nobody);
@@ -125,11 +129,13 @@ export const savingFor = ({ holder, whose, kinds, written }: SavedArtifactsDeps,
   const checkedEach = async (asked: ReturnType<typeof askedOf>, inForce: readonly SavedVersion[], held: HeldTo): Promise<(Written & { kind: ArtifactKind })[]> => {
     const versions: (Written & { kind: ArtifactKind })[] = [];
     for (const { kind, id: named, body } of asked) {
+      if (defaults !== undefined && named === undefined && kind !== 'layout' && kind !== 'read') throw new Error(`moss: a published ${kind} is given its id by whoever publishes it: name it.`);
       const id = named ?? NEW_ID[kind]();
       if (kind === 'read' && body !== undefined) throw new Error(`moss: the read "${id}" is refused: it is what vex wrote for the request. Leave the body out.`);
       versions.push({ kind, id, body: await checked(kind, id, body, held), copiedFrom: null });
     }
-    const notTheirs = asked.find(({ kind, id }) => id !== undefined && kind !== 'read' && !inForce.some((version) => version.kind === kind && version.id === id));
+    const named = (kind: ArtifactKind): boolean => kind !== 'read' && (defaults === undefined || kind === 'layout');
+    const notTheirs = asked.find(({ kind, id }) => id !== undefined && named(kind) && !inForce.some((version) => version.kind === kind && version.id === id));
     if (notTheirs !== undefined) {
       throw new Error(`moss: there is no ${notTheirs.kind} "${notTheirs.id}" ${whose}. Leave the id out, and moss gives a new ${notTheirs.kind} its id.`);
     }
@@ -149,7 +155,7 @@ export const savingFor = ({ holder, whose, kinds, written }: SavedArtifactsDeps,
 };
 
 export const savedArtifacts = (deps: SavedArtifactsDeps): SessionArtifacts => {
-  const { holder, whose, kinds } = deps;
+  const { holder, whose, kinds, defaults } = deps;
   const { requireHolder, ofKind, askedOf, checkedEach, write } = savingFor(deps, 'moss: nobody is signed in to this session, and a save is somebody’s.');
 
   return {
@@ -159,6 +165,7 @@ export const savedArtifacts = (deps: SavedArtifactsDeps): SessionArtifacts => {
       const { saved, heldTo } = await holderOf();
       const inForce = await saved.inForce();
       const versions = await checkedEach(asked, inForce, await heldTo(inForce));
+      await defaults?.verify(versions, inForce);
       return { save: await write(saved, versions, inForce), artifacts: idsOf(versions) };
     },
 
@@ -188,7 +195,9 @@ export const savedArtifacts = (deps: SavedArtifactsDeps): SessionArtifacts => {
       if (version.unread !== undefined) throw new Error(`moss: the ${known} "${id}" saved in "${save}" cannot be read: ${version.unread}`);
       const inForce = await saved.inForce();
       const body = version.body === null ? null : await checked(known, id, version.body, await heldTo(inForce));
-      return { save: await write(saved, [{ kind: known, id, body, copiedFrom: version.save }], inForce) };
+      const restored = { kind: known, id, body, copiedFrom: version.save };
+      await defaults?.verify([restored], inForce);
+      return { save: await write(saved, [restored], inForce) };
     },
 
     reset: async (kind, id) => {

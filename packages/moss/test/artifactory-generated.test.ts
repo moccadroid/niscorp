@@ -183,7 +183,7 @@ describe('what is refused of a generated action, in a sentence, with nothing wri
   const calling = (endpoint: unknown): unknown => ({ ...reading('deals/open'), endpoints: { load: endpoint } });
 
   it('an id of its own choosing', () =>
-    refused({ id: 'home', ...reading('deals/open') }, 'moss: the action is refused: it names the id "home". Moss gives what is generated its id: leave it out.'));
+    refused({ id: 'home', ...reading('deals/open') }, /^moss: the action is refused: it names the id "home", and is kept under "generated\.[0-9a-f-]{36}": leave the id out of the body\.$/));
 
   it('a body that is no action nova reads', async () => {
     await refused({ ...reading('deals/open'), triggers: 'none' }, /^moss: the action is refused: triggers: /);
@@ -333,7 +333,7 @@ describe('a generated fragment', () => {
     const { of, rows } = world();
     const refusedOf = (body: unknown): Promise<unknown> => of('ada').save([{ kind: 'fragment', body }]);
 
-    await expect(refusedOf({ ...chrome, id: 'sheet' })).rejects.toThrow('moss: the fragment is refused: it names the id "sheet". Moss gives what is generated its id: leave it out.');
+    await expect(refusedOf({ ...chrome, id: 'sheet' })).rejects.toThrow(/^moss: the fragment is refused: it names the id "sheet", and is kept under "generated\.[0-9a-f-]{36}": leave the id out of the body\.$/);
     await expect(refusedOf({ ...chrome, endpoints: { close: { fn: 'deals.close' } } })).rejects.toThrow(
       'moss: the fragment is refused: endpoint "close" calls the function "deals.close", which its owner’s roles do not grant',
     );
@@ -345,14 +345,14 @@ describe('a generated fragment', () => {
 });
 
 describe('what is published for everybody', () => {
-  it('is a layout and no other kind', async () => {
+  it('names what it publishes: an action or a fragment without an id is refused, and nothing is written', async () => {
     const rows = rowsDouble();
     const running = createRunningManifest({ shipped: app, grants: scopeGrants([]), shells: [SHELL], published: () => rows.as('*').inForce() });
-    const published = running.publishedArtifacts(rows.as('*'));
+    const published = running.publishedArtifacts(rows.as('*'), async () => ({ roles: ['public'], replayable: async () => [] }));
 
-    await expect(published.save([{ kind: 'action', body: reading('deals/open') }])).rejects.toThrow('moss: "action" is not a kind that is saved. The kinds: layout.');
-    await expect(published.save([{ kind: 'fragment', body: { kind: 'fragment' } }])).rejects.toThrow('moss: "fragment" is not a kind that is saved. The kinds: layout.');
-    await expect(published.list('action')).rejects.toThrow('moss: "action" is not a kind that is saved. The kinds: layout.');
+    await expect(published.save([{ kind: 'action', body: reading('deals/open') }])).rejects.toThrow('moss: a published action is given its id by whoever publishes it: name it.');
+    await expect(published.save([{ kind: 'fragment', body: { kind: 'fragment' } }])).rejects.toThrow('moss: a published fragment is given its id by whoever publishes it: name it.');
+    expect(await published.list('action')).toEqual([]);
     expect(rows.rows).toEqual([]);
   });
 });
@@ -385,16 +385,16 @@ describe('an action and a fragment a shell ships', () => {
     const shipping = (): unknown => createRunningManifest({ shipped: { ...app, actions: { ...app.actions, sheet: sheetAction } }, grants: scopeGrants([]), shells: [SHELL] });
     const said = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     try {
-      expect(shipping).toThrow('"sheet" is the id of an action and of a fragment a shell ships: an id names one of the two');
+      expect(shipping).toThrow('"sheet" is the id of an action and of a fragment: an id names one of the two');
       const onAPage = { ...app, shell: { canvases: SHELL.canvases }, pages: { docs: { ...SHELL, path: '/docs' } }, actions: { ...app.actions, sheet: sheetAction } };
-      expect(() => createRunningManifest({ shipped: onAPage, grants: scopeGrants([]), shells: [SHELL] })).toThrow('"sheet" is the id of an action and of a fragment a shell ships');
+      expect(() => createRunningManifest({ shipped: onAPage, grants: scopeGrants([]), shells: [SHELL] })).toThrow('"sheet" is the id of an action and of a fragment');
     } finally {
       said.mockRestore();
     }
 
     const { running } = world();
-    expect(() => running.replace('extras', { sheet: sheetAction })).toThrow('"sheet" is the id of an action and of a fragment a shell ships: an id names one of the two');
-    expect(() => running.replace('extras', { listedOtherwise: sheetAction })).toThrow('"sheet" is the id of an action and of a fragment a shell ships');
+    expect(() => running.replace('extras', { sheet: sheetAction })).toThrow('"sheet" is the id of an action and of a fragment: an id names one of the two');
+    expect(() => running.replace('extras', { listedOtherwise: sheetAction })).toThrow('"sheet" is the id of an action and of a fragment');
     expect(Object.keys(running.actions())).toEqual(['home', 'desk']);
   });
 });

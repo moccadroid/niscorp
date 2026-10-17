@@ -1,7 +1,7 @@
 import { normalizeRole, resolvePrincipal, verifyCharter } from '@niscorp/charter';
 import type { Charter, ClosureAuditor, VerifyReport } from '@niscorp/charter';
 import { ActionDefinitionSchema, auditAction, collectChannels } from '@niscorp/nova';
-import type { ActionDefinition, LayoutNode } from '@niscorp/nova';
+import type { ActionDefinition, ActionFragment, LayoutNode } from '@niscorp/nova';
 import { chainCycles, isRecord, walkNodes } from '@niscorp/nova/reflect';
 import { depthRefusal, exceedsDepth } from '@niscorp/strata';
 import { scopeProfiles } from '@niscorp/vex';
@@ -40,6 +40,13 @@ export const candidateOf = (shipped: ShippedManifest, inForce: Pick<ManifestCand
   grants,
   entries: inForce.entries,
   profiles: scopeProfiles(shipped.behaviors ?? {}),
+});
+
+// Fragments in force beside the ones the shells ship: what is published for everybody.
+export const withFragments = (candidate: ManifestCandidate, fragments: Readonly<Record<string, ActionFragment>>): ManifestCandidate => ({
+  ...candidate,
+  fragmentIds: new Set([...candidate.fragmentIds, ...Object.keys(fragments)]),
+  fragmentCalls: [...candidate.fragmentCalls, ...Object.entries(fragments).map(([id, fragment]) => ({ id, calls: functionsCalledBy(fragment) }))],
 });
 
 export type ManifestCheck = 'actions' | 'charter' | 'functions' | 'reach' | 'variants';
@@ -94,7 +101,7 @@ const generatedIdErrors = (actions: ManifestCandidate['actions']): string[] =>
 const fragmentIdErrors = (actions: ManifestCandidate['actions'], fragmentIds: ManifestCandidate['fragmentIds']): string[] =>
   Object.entries(actions).flatMap(([listed, definition]) => {
     const taken = [listed, definition.id].find((id) => fragmentIds.has(id));
-    return taken === undefined ? [] : [`"${taken}" is the id of an action and of a fragment a shell ships: an id names one of the two`];
+    return taken === undefined ? [] : [`"${taken}" is the id of an action and of a fragment: an id names one of the two`];
   });
 
 const reachErrors = (entries: ManifestCandidate['entries'], profiles: ReadonlySet<string>): string[] => {
@@ -192,6 +199,29 @@ export const verifyManifest = (candidate: ManifestCandidate): ManifestReport => 
   };
 };
 
+export const verifiedAtBoot = (candidate: ManifestCandidate): ManifestReport => {
+  const report = verifyManifest(candidate);
+  for (const line of report.said) console.error(`[moss] ${line}`);
+  const refused = refusalOf(report, 'boot');
+  if (refused !== undefined) throw new Error(refused);
+  return report;
+};
+
+// The charter's checks over the functions alone: what it finds without them is already said.
+export const charterOverFunctions = (
+  charter: Charter,
+  universes: { actions: readonly string[]; data: readonly string[]; layouts: readonly string[] },
+  ids: readonly string[],
+): { errors: string[]; warnings: string[] } => {
+  const before = verifyCharter(charter, universes);
+  const known = new Set([...before.errors, ...before.warnings].map((issue) => issue.detail));
+  const after = verifyCharter(charter, { ...universes, functions: ids });
+  return {
+    errors: after.errors.flatMap((issue) => (known.has(issue.detail) ? [] : [`${issue.rule}: ${issue.detail}`])),
+    warnings: after.warnings.flatMap((issue) => (known.has(issue.detail) ? [] : [issue.detail])),
+  };
+};
+
 export const verifyApp = (app: ShippedManifest, grants: readonly string[]): ManifestReport =>
   verifyManifest(candidateOf(app, { actions: app.actions, entries: entriesOf(app) }, grants));
 
@@ -202,6 +232,13 @@ const HEADLINES = {
     functions: 'Actions call functions the app does not have, or that their holders’ charter does not grant — refusing to serve:',
     reach: 'Entries declare a reach no table offers — refusing to serve:',
     variants: 'Layout variants are incoherent — refusing to serve:',
+  },
+  publish: {
+    actions: 'Publish refused — actions nova does not read:',
+    charter: 'Publish refused — charter incoherent over what is published:',
+    functions: 'Publish refused — actions call functions the app does not have, or that their holders’ charter does not grant:',
+    reach: 'Publish refused — entries declare a reach no table offers:',
+    variants: 'Publish refused — layout variants incoherent:',
   },
   refresh: {
     actions: 'Refresh refused — actions nova does not read:',

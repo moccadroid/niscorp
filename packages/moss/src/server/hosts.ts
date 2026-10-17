@@ -17,7 +17,7 @@ export type ShellHostsDeps = {
   app: Pick<NiscApp, 'shell' | 'pages' | 'phrases' | 'functions' | 'onSession' | 'runs' | 'phraseKeys'>;
   runtime: Pick<NiscRuntime, 'telemetry' | 'shellIdleMs' | 'shellFrameDelta' | 'endpointTimeoutMs'>;
   identity: Pick<Identity, 'resolve' | 'composeScope'>;
-  running: Pick<RunningManifest, 'artifactsFor' | 'sessionArtifacts' | 'draftSavingFor' | 'functionsWritten'>;
+  running: Pick<RunningManifest, 'artifactsFor' | 'sessionArtifacts' | 'draftSavingFor' | 'functionsWritten' | 'readPublished'>;
   // What was saved, as the caller whose scope it is handed.
   savedAs: (scope: Record<string, unknown>) => SavedRows;
   data: Pick<Data, 'answerIntent' | 'fingerprintsFor'>;
@@ -122,11 +122,10 @@ export const buildShellHosts = (deps: ShellHostsDeps): Hosts => {
     },
     pages: Object.entries(pageManifests).map(([name, manifest]) => ({ name, path: manifest.path })),
     buildForNobody: async () => {
-      if (app.functions === undefined) {
-        deps.running.functionsWritten([]);
-        return;
-      }
-      await every[0]?.snapshot(null, null, { waitMs: 0 });
+      if (app.functions === undefined) deps.running.functionsWritten([]);
+      else await every[0]?.snapshot(null, null, { waitMs: 0 });
+      // Read again now that the functions are known: a default that calls one the app lacks is left out here, not at a person's shell.
+      await deps.running.readPublished();
     },
     adopt: () => {
       for (const made of owned) made.adopt();

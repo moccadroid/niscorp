@@ -54,7 +54,7 @@ const parsedUnder = <Schema extends z.ZodType>(schema: Schema, body: unknown, id
   // First: the schema recurses, and a deep enough body overflows the stack.
   if (exceedsDepth(body)) return { refusal: depthRefusal() };
   if (isRecord(body) && body['id'] !== undefined && body['id'] !== id) {
-    return { refusal: `it names the id "${String(body['id'])}". Moss gives what is generated its id: leave it out.` };
+    return { refusal: `it names the id "${String(body['id'])}", and is kept under "${id}": leave the id out of the body.` };
   }
   const parsed = schema.safeParse(isRecord(body) ? { ...more, ...body, id } : body);
   if (parsed.success) return { body: parsed.data };

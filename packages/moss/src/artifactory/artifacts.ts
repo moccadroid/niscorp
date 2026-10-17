@@ -78,3 +78,20 @@ export const shellComponents = (manifest: Pick<NiscApp, 'actions' | 'layouts'>, 
   for (const name of Object.keys(contracts)) names.add(name);
   return Object.freeze(Object.fromEntries([...names].map((name) => [name, contracts[name] ?? {}])));
 };
+
+type ComponentNames = ReturnType<typeof shellComponents>;
+export const createComponentNames = (read: (shell: ShellManifest) => ComponentNames): { of: (shell: ShellManifest) => ComponentNames; drop: () => void } => {
+  let components = new WeakMap<ShellManifest, ComponentNames>();
+  return {
+    of: (shell) => {
+      const kept = components.get(shell);
+      if (kept !== undefined) return kept;
+      const names = read(shell);
+      components.set(shell, names);
+      return names;
+    },
+    drop: () => {
+      components = new WeakMap();
+    },
+  };
+};

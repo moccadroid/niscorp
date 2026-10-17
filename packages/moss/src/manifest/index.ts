@@ -19,5 +19,18 @@ export type {
   WrittenFunctions,
 } from './app';
 export { entryMisfits, freezeDeep, receiveManifest } from './schema';
-export { candidateOf, endlessChains, layoutMisfits, layoutNameRefusal, refusalOf, variantLayouts, verifyApp, verifyManifest, withVariants } from './verify';
+export {
+  candidateOf,
+  charterOverFunctions,
+  endlessChains,
+  layoutMisfits,
+  layoutNameRefusal,
+  refusalOf,
+  variantLayouts,
+  verifiedAtBoot,
+  verifyApp,
+  verifyManifest,
+  withFragments,
+  withVariants,
+} from './verify';
 export type { KitComponents, ManifestCandidate, ManifestReport, ShippedManifest } from './verify';

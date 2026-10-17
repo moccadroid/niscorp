@@ -376,10 +376,13 @@ describe('the shell hosts — what each host is told', () => {
   it('builds nobody’s shell once, on the app’s host, or on the first page’s where the app has no shell; an app with no `functions` has none, and no shell is built', async () => {
     const asked: (string | null)[] = [];
     const functions = (session: FunctionSession) => (asked.push(session.principal), [{ id: 'words.count', description: 'Counts.', execute: async () => 3 }]);
-    const hosts = buildShellHosts({ ...depsWith(createRunningManifest({ shipped: app, grants: scopeGrants(['words']), shells: [] })), app: { ...app, functions } });
+    const manifest = createRunningManifest({ shipped: app, grants: scopeGrants(['words']), shells: [] });
+    const reread = vi.spyOn(manifest, 'readPublished');
+    const hosts = buildShellHosts({ ...depsWith(manifest), app: { ...app, functions } });
     try {
       await hosts.buildForNobody();
       expect(asked).toEqual([null]);
+      expect(reread).toHaveBeenCalledTimes(1);
     } finally {
       hosts.stop();
     }

@@ -1,26 +1,42 @@
-import { resolvePrincipal, verifyCharter } from '@niscorp/charter';
+import { resolvePrincipal } from '@niscorp/charter';
 import type { ActionDefinition } from '@niscorp/nova';
 import type { CacheEntry, SeedEntry, SeedMutation } from '@niscorp/vex';
 import { NOBODY_USER_ID } from '../identity';
-import { actionOfLayoutRef, candidateOf, entriesOf, entryMisfits, freezeDeep, functionsIn, functionsWarning, refusalOf, verifyManifest } from '../manifest';
+import {
+  actionOfLayoutRef,
+  candidateOf,
+  charterOverFunctions,
+  entriesOf,
+  entryMisfits,
+  freezeDeep,
+  functionsIn,
+  functionsWarning,
+  refusalOf,
+  verifiedAtBoot,
+  verifyManifest,
+  withFragments,
+} from '../manifest';
 import type { DraftArtifact, KitComponents, ManifestCandidate, ManifestReport, SessionArtifacts, ShellManifest, ShippedManifest, WrittenFunctions } from '../manifest';
 import type { ShellArtifacts } from './artifacts';
-import { shellComponents, shellWithStoredLayouts, slottedCanvases } from './artifacts';
+import { createComponentNames, shellComponents, shellWithStoredLayouts, slottedCanvases } from './artifacts';
 import { draftSaving, laidOver } from './draft';
-import { answeredRead, readsInForce, seedOf } from './reads';
+import { answeredRead, compiledRead, readsInForce, seedOf } from './reads';
 import type { ReadHeldTo, ReadSources, SavedRead } from './reads';
 import { compileEntries, createEntriesInForce } from './entries';
 import { createGeneration } from './generation';
 import type { Generation, Pointer } from './generation';
 import { catalogOfGenerated, generatedInForce } from './generated';
 import type { GeneratedHeldTo } from './generated';
-import { layoutsInUse } from './layouts';
+import { actionAtRef, layoutsInUse } from './layouts';
+import { NO_DEFAULTS, checkedDefaults, createPublishedMemo, drawableIn, hasDefaults } from './published';
+import type { Defaults, DefaultsHeldTo } from './published';
 import type { LayoutHeldTo } from './layouts';
 import { actionsWithStoredLayouts, createRoleMemo, narrowedBy } from './roles';
 import type { Catalog, CatalogFilter, StoredLayouts } from './roles';
 import type { SavedRows, SavedVersion } from './saves';
 import { savedArtifacts } from './session';
-import type { HeldTo, SavedArtifactsDeps } from './session';
+import type { HeldTo, SavedArtifactsDeps, Written } from './session';
+import { createSetOwners } from './sets';
 
 type Actions = Readonly<Record<string, ActionDefinition>>;
 
@@ -78,8 +94,8 @@ export type RunningManifest = {
   sessionArtifacts: (principal: string | null, callerOf: () => Promise<Caller>) => SessionArtifacts;
   // `shell`: the one the draft is in. What is put into it is held to what that shell can draw.
   draftSavingFor: (shell: ShellManifest, principal: string | null, callerOf: () => Promise<Caller>) => ReturnType<typeof draftSaving>;
-  // `saved`: the rows of what is published, with whoever publishes.
-  publishedArtifacts: (saved: SavedRows) => SessionArtifacts;
+  // `saved`: the rows of what is published. `publisher`: whose roles and reads a publish is held to.
+  publishedArtifacts: (saved: SavedRows, publisher: () => Promise<Pick<RolesHeld, 'roles' | 'replayable'>>) => SessionArtifacts;
   // Asks the rows what is published, so that a boot that cannot read it fails.
   // One answer serves every shell until this process publishes or the pointer
   // moves: the next shell then asks again.
@@ -89,8 +105,8 @@ export type RunningManifest = {
   stop: () => void;
 };
 
-const mergedActions = (own: Actions, sets: ReadonlyMap<string, Actions>): Actions =>
-  Object.freeze([...sets.values()].reduce<Record<string, ActionDefinition>>((all, set) => ({ ...all, ...set }), { ...own }));
+const mergedActions = (own: Actions, sets: ReadonlyMap<string, Actions>, over: Actions = {}): Actions =>
+  Object.freeze([...sets.values(), over].reduce<Record<string, ActionDefinition>>((all, set) => ({ ...all, ...set }), { ...own }));
 
 const tell = <Told extends unknown[]>(listener: (...told: Told) => void, ...told: Told): void => {
   try {
@@ -100,67 +116,13 @@ const tell = <Told extends unknown[]>(listener: (...told: Told) => void, ...told
   }
 };
 
-type SetOwners = {
-  claim: (source: string, owner: string, handedOver: boolean) => void;
-  ownerRefusalOf: (source: string) => string | undefined;
-  assertAppOwned: (source: string) => string;
-};
-
-const createSetOwners = (): SetOwners => {
-  const owners = new Map<string, string>();
-  const ownerRefusalOf = (source: string): string | undefined => {
-    const owner = owners.get(source);
-    return owner === undefined ? undefined : `the set "${source}" is ${owner}'s, and only its owner replaces it. An app hands a set over under a name of its own.`;
-  };
-  return {
-    ownerRefusalOf,
-    claim: (source, owner, handedOver) => {
-      const held = owners.get(source);
-      if (held !== undefined) throw new Error(`moss: the set "${source}" is ${held}'s, and ${owner} claims it too. A set has one writer.`);
-      if (handedOver) throw new Error(`moss: the set "${source}" was handed over by the app, and ${owner} claims it. A set has one writer.`);
-      owners.set(source, owner);
-    },
-    assertAppOwned: (source) => {
-      const refusal = ownerRefusalOf(source);
-      if (refusal !== undefined) throw new Error(`moss: ${refusal}`);
-      return source;
-    },
-  };
-};
-
-const verifiedAtBoot = (candidate: ManifestCandidate): ReturnType<typeof verifyManifest> => {
-  const report = verifyManifest(candidate);
-  for (const line of report.said) console.error(`[moss] ${line}`);
-  const refused = refusalOf(report, 'boot');
-  if (refused !== undefined) throw new Error(refused);
-  return report;
-};
-
-type ComponentNames = ReturnType<typeof shellComponents>;
-const createComponentNames = (read: (shell: ShellManifest) => ComponentNames): { of: (shell: ShellManifest) => ComponentNames; drop: () => void } => {
-  let components = new WeakMap<ShellManifest, ComponentNames>();
-  return {
-    of: (shell) => {
-      const kept = components.get(shell);
-      if (kept !== undefined) return kept;
-      const names = read(shell);
-      components.set(shell, names);
-      return names;
-    },
-    drop: () => {
-      components = new WeakMap();
-    },
-  };
-};
-
 export const createRunningManifest = (config: RunningManifestConfig): RunningManifest => {
   const { shipped } = config;
   const entries = createEntriesInForce(entriesOf(shipped));
+  let defaults: Defaults = NO_DEFAULTS;
   let functionIds: ReadonlySet<string> | undefined;
-  const candidate = (actions: Actions, held = entries.list()): ManifestCandidate => ({
-    ...candidateOf(shipped, { actions, entries: held }, config.grants),
-    ...(functionIds === undefined ? {} : { functionIds }),
-  });
+  const candidate = (actions: Actions, held = entries.list(), fragments = defaults.fragments): ManifestCandidate =>
+    withFragments({ ...candidateOf(shipped, { actions, entries: held }, config.grants), ...(functionIds === undefined ? {} : { functionIds }) }, fragments);
 
   const own: Actions = shipped.actions;
   const loaders = new Map<string, ActionLoader>();
@@ -182,6 +144,11 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
   };
   // Read again when what is in force changes.
   let ofTheApp: KitComponents | undefined;
+  const dropMemos = (): void => {
+    roleMemo.drop();
+    components.drop();
+    ofTheApp = undefined;
+  };
 
   const catalogFilters: CatalogFilter[] = config.installedOnly === undefined ? [] : [config.installedOnly];
   const roleMemo = createRoleMemo({
@@ -200,39 +167,29 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
       kit,
       // A layout saved for the frame or a canvas is the app's own shell's, whichever shell it is saved from.
       ...(ownShell !== undefined && (shell === undefined || shell === ownShell) ? { ownShell: { refs: ownShellRefs, kit: shell === ownShell ? kit : kitOf(ownShell) } } : {}),
-      actionAt: (ref) => {
-        const id = actionOfLayoutRef(ref);
-        const action = id !== undefined && Object.hasOwn(actions, id) ? actions[id] : undefined;
-        const layout = Object.hasOwn(layouts, ref) ? layouts[ref] : undefined;
-        return action === undefined || layout === undefined ? undefined : { ...action, layout };
-      },
+      actionAt: actionAtRef(actions, layouts),
     };
   };
   const { reads: readSources } = config;
-  // The charter's checks over the functions alone: what it found without them is already said.
-  const charterOverFunctions = (ids: readonly string[]): { errors: string[]; warnings: string[] } => {
-    const universes = { actions: Object.keys(inForce), data: config.grants, layouts: Object.keys(shipped.layouts ?? {}) };
-    const before = verifyCharter(shipped.charter, universes);
-    const known = new Set([...before.errors, ...before.warnings].map((issue) => issue.detail));
-    const after = verifyCharter(shipped.charter, { ...universes, functions: ids });
-    return {
-      errors: after.errors.flatMap((issue) => (known.has(issue.detail) ? [] : [`${issue.rule}: ${issue.detail}`])),
-      warnings: after.warnings.flatMap((issue) => (known.has(issue.detail) ? [] : [issue.detail])),
-    };
-  };
   const functionsWritten = (written: WrittenFunctions): void => {
     if (functionIds !== undefined) return;
     const ids = functionsIn(written).map((definition) => definition.id);
-    const charter = charterOverFunctions(ids);
+    const charter = charterOverFunctions(shipped.charter, { actions: Object.keys(inForce), data: config.grants, layouts: Object.keys(shipped.layouts ?? {}) }, ids);
     if (charter.errors.length > 0) throw new Error(`Charter is incoherent over the app’s functions — refusing to serve:\n  ${charter.errors.join('\n  ')}`);
     functionIds = new Set(ids);
-    const verified = verifyManifest(candidate(inForce));
+    const built = mergedActions(own, sets);
+    const verified = verifyManifest(candidate(built, entries.list(), {}));
     const refusal = refusalOf(verified, 'boot');
     if (refusal !== undefined) {
       functionIds = undefined;
       throw new Error(refusal);
     }
     report = verified;
+    // What is published was read before the functions were known: it is read again against them.
+    defaults = NO_DEFAULTS;
+    inForce = built;
+    dropMemos();
+    memo.drop();
     for (const warning of charter.warnings) console.warn(`[moss] charter: ${warning}`);
     const warning = functionsWarning(written);
     if (warning !== undefined) console.warn(warning);
@@ -250,7 +207,7 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
   const heldWithGenerated = async (held: StoredLayouts, versions: readonly SavedVersion[], who: Partial<Pick<RolesHeld, 'replayable' | 'roles'>>, shell?: ShellManifest, whose?: string) => {
     let replayable: Promise<ReadonlySet<string>> | undefined;
     let catalog: ReturnType<GeneratedHeldTo['catalog']> | undefined;
-    const reads = readsHeldTo === undefined ? new Map<string, SavedRead>() : await readsInForce(versions, readsHeldTo, whose);
+    const reads = new Map([...defaults.reads, ...(readsHeldTo === undefined ? [] : await readsInForce(versions, readsHeldTo, whose))]);
     const checks: GeneratedHeldTo = {
       kit: kitOf(shell),
       entryOf: (fingerprint) => {
@@ -269,13 +226,15 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
   };
   const listeners = new Set<() => void>();
   const listenersFor = new Set<(principal: string) => void>();
+  const kinds: SavedArtifactsDeps['kinds'] = readSources === undefined ? ['layout', 'action', 'fragment'] : ['layout', 'action', 'fragment', 'read'];
   const sessionDeps = (principal: string | null, callerOf: () => Promise<Caller>, shell?: ShellManifest): SavedArtifactsDeps => ({
     whose: 'of yours',
-    kinds: readSources === undefined ? ['layout', 'action', 'fragment'] : ['layout', 'action', 'fragment', 'read'],
+    kinds,
     holder:
       principal === null
         ? undefined
         : async () => {
+            await publishedNow();
             const caller = await callerOf();
             const held = roleMemo.storedLayoutsFor(caller.roles, caller.installed);
             return { saved: caller.saved, heldTo: async (inForce) => (await heldWithGenerated(held, inForce, caller, shell)).heldTo };
@@ -286,30 +245,45 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
   });
   let pointer: Generation | undefined;
 
-  let published: Promise<readonly SavedVersion[]> | undefined;
-  // The line of one that is left out is said once for each read of the rows, and not at every shell.
-  let saidOfPublished = new Set<string>();
-  const dropPublished = (): void => {
-    published = undefined;
-    saidOfPublished = new Set();
+  const memo = createPublishedMemo();
+  const defaultsHeldTo = (): DefaultsHeldTo => ({
+    kit: kitOf(),
+    entryOf: (fingerprint) => entries.byFingerprint().get(fingerprint),
+    fingerprints: () => entries.byFingerprint().keys(),
+    reads: readsHeldTo,
+    built: mergedActions(own, sets),
+    candidate: (actions, fragments) => candidate(actions, entries.list(), fragments),
+  });
+  const applyPublished = async (versions: readonly SavedVersion[]): Promise<void> => {
+    const over = sets;
+    const { passed, reads, verified } = await checkedDefaults(versions, defaultsHeldTo(), 'published for everybody');
+    if (sets !== over) return applyPublished(versions);
+    const refusal = refusalOf(verified, 'boot');
+    if (refusal !== undefined) memo.sayOnce(`[moss] what is published for everybody is left out, and the build’s copies stand: ${refusal}`);
+    const next: Defaults = refusal === undefined ? { actions: passed.actions, fragments: passed.fragments, reads } : { ...NO_DEFAULTS, reads };
+    if (!hasDefaults(next) && !hasDefaults(defaults)) return;
+    defaults = next;
+    if (refusal === undefined) report = verified;
+    inForce = mergedActions(own, sets, defaults.actions);
+    dropMemos();
   };
   const publishedNow = (): Promise<readonly SavedVersion[]> => {
-    if (published !== undefined) return published;
-    const read = (async () => (await config.published?.()) ?? [])();
-    published = read;
+    const held = memo.held();
+    if (held !== undefined) return held;
+    const read = (async () => {
+      const versions = (await config.published?.()) ?? [];
+      await applyPublished(versions);
+      return versions;
+    })();
+    memo.keep(read);
     // A read that failed is made again by the next shell.
-    read.catch(dropPublished);
+    read.catch(memo.drop);
     return read;
-  };
-  const sayOnce = (line: string): void => {
-    if (saidOfPublished.has(line)) return;
-    saidOfPublished.add(line);
-    console.error(line);
   };
 
   const applySets = (arrived: ReadonlyMap<string, Actions>, announce: boolean): void => {
     const next = new Map([...sets, ...arrived]);
-    const actions = mergedActions(own, next);
+    const actions = mergedActions(own, next, defaults.actions);
     const verified = verifyManifest(candidate(actions));
     const refusal = refusalOf(verified, 'refresh');
     if (refusal !== undefined) throw new Error(refusal);
@@ -317,9 +291,7 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
     sets = next;
     inForce = actions;
     report = verified;
-    roleMemo.drop();
-    components.drop();
-    ofTheApp = undefined;
+    dropMemos();
     for (const listener of [...listeners]) tell(listener);
     if (announce) pointer?.bump();
   };
@@ -329,7 +301,7 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
   const reload = async (): Promise<void> => {
     const read: [string, Actions][] = [];
     for (const [source, load] of loaders) read.push([source, await load()]);
-    dropPublished();
+    memo.drop();
     applySets(new Map(read), false);
   };
 
@@ -364,13 +336,17 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
     },
     cacheEntry: async (fingerprint, scope) => {
       const shippedEntry = (await entries.compiled()).get(fingerprint);
-      const userId = scope?.['userId'];
-      // Nothing saved is answered to a caller nobody is signed in for.
-      if (shippedEntry !== undefined || readSources === undefined || scope === undefined || typeof userId !== 'string' || userId === NOBODY_USER_ID) return shippedEntry;
-      // The newest version is the one in force: a reset writes one with no body.
-      const newest = (await readSources.savedOf(scope).history('read', fingerprint))[0];
-      if (newest === undefined || newest.body === null || newest.unread !== undefined) return undefined;
-      return answeredRead(fingerprint, newest.body);
+      if (shippedEntry !== undefined || readSources === undefined || scope === undefined) return shippedEntry;
+      const userId = scope['userId'];
+      // What a caller saved is theirs alone; a caller nobody is signed in for saved nothing.
+      if (typeof userId === 'string' && userId !== NOBODY_USER_ID) {
+        // The newest version is the one in force: a reset writes one with no body, and what is published is then theirs too.
+        const newest = (await readSources.savedOf(scope).history('read', fingerprint))[0];
+        if (newest !== undefined && newest.body !== null && newest.unread === undefined) return answeredRead(fingerprint, newest.body);
+      }
+      await publishedNow();
+      const everybodys = defaults.reads.get(fingerprint);
+      return everybodys === undefined ? undefined : compiledRead(fingerprint, everybodys);
     },
     cacheEntries: async () => [...(await entries.compiled())].map(([key, entry]) => ({ key, entry })),
     claim: (source, owner) => {
@@ -406,6 +382,7 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
     artifactsFor: async (shell, { principal, roles, installed, saved, replayable, drafted }) => {
       // Asked of the rows at every shell: what somebody saved in another process is theirs here too.
       const versions = saved === undefined || principal === null ? [] : laidOver(await saved.inForce(), drafted);
+      const everybodysVersions = await publishedNow();
       const whose = `of ${principal ?? 'nobody'}`;
       const theirOwn = await heldWithGenerated(roleMemo.storedLayoutsFor(roles, installed), versions, { replayable, roles }, shell, whose);
       const drawable = theirOwn.heldTo.layouts;
@@ -413,8 +390,9 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
       // The layout variant of their roles is over what is published: under one, nothing published is loaded.
       const variants = roleMemo.variantsFor(roles);
       const underVariants: LayoutHeldTo = { ...drawable, actionAt: (ref) => (variants.has(actionOfLayoutRef(ref) ?? '') ? undefined : drawable.actionAt(ref)) };
-      const everybodys = layoutsInUse(await publishedNow(), { whose: 'published for everybody', heldTo: underVariants, say: sayOnce });
-      const fragments = Object.keys(theirOwn.fragments).length === 0 ? shell.fragments : { ...shell.fragments, ...theirOwn.fragments };
+      const everybodys = layoutsInUse(everybodysVersions, { whose: 'published for everybody', heldTo: underVariants, say: memo.sayOnce });
+      const laidOverShell = { ...drawableIn(defaults.fragments, kitOf(shell), memo.sayOnce), ...theirOwn.fragments };
+      const fragments = Object.keys(laidOverShell).length === 0 ? shell.fragments : { ...shell.fragments, ...laidOverShell };
       const { layouts: ofShell, ...named } = shellWithStoredLayouts(shell);
       const layoutStore = { ...shell.layoutStore, ...ofShell, ...theirOwn.all.layouts, ...everybodys, ...theirs };
       return {
@@ -432,19 +410,30 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
     draftSavingFor: (shell, principal, callerOf) => draftSaving(sessionDeps(principal, callerOf, shell)),
     // Held to every action in force with the layout it is built with: who holds
     // which is asked when a shell is built for them.
-    publishedArtifacts: (saved) =>
+    publishedArtifacts: (saved, publisher) =>
       savedArtifacts({
         whose: 'published for everybody',
-        kinds: ['layout'],
-        holder: async () => ({ saved, heldTo: async () => (await heldWithGenerated(actionsWithStoredLayouts(inForce), [], {})).heldTo }),
+        kinds,
+        holder: async () => {
+          const who = await publisher();
+          return { saved, heldTo: async (inForce) => (await heldWithGenerated(actionsWithStoredLayouts(mergedActions(own, sets)), inForce, who)).heldTo };
+        },
+        defaults: {
+          verify: async (versions, inForce) => {
+            const kept = inForce.filter((held) => !versions.some((version) => version.kind === held.kind && version.id === held.id));
+            const asked: SavedVersion[] = versions.map((version: Written) => ({ ...version, save: '', createdAt: '' }));
+            const refusal = refusalOf((await checkedDefaults([...kept, ...asked], defaultsHeldTo(), undefined)).verified, 'publish');
+            if (refusal !== undefined) throw new Error(refusal);
+          },
+        },
         written: () => {
-          dropPublished();
+          memo.drop();
           for (const listener of [...listeners]) tell(listener);
           pointer?.bump();
         },
       }),
     readPublished: async () => {
-      dropPublished();
+      memo.drop();
       await publishedNow();
     },
     onChangeFor: (listener) => {

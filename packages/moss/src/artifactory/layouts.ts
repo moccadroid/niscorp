@@ -4,7 +4,7 @@ import { isRecord } from '@niscorp/nova/reflect';
 import { depthRefusal, exceedsDepth } from '@niscorp/strata';
 import type { Upgrader } from '@niscorp/strata';
 import { z } from 'zod';
-import { layoutMisfits, layoutNameRefusal } from '../manifest';
+import { actionOfLayoutRef, layoutMisfits, layoutNameRefusal } from '../manifest';
 import type { KitComponents } from '../manifest';
 import type { SavedVersion } from './saves';
 
@@ -15,6 +15,15 @@ export type SavedLayout = z.infer<typeof SavedLayoutSchema>;
 
 export const upgradedLayoutBody = (upgrader: Upgrader, body: unknown, stamp: Readonly<Record<string, number>>): unknown =>
   isRecord(body) && body['layout'] !== undefined ? { ...body, layout: upgrader.upgrade(body['layout'], { kind: 'nisc.nova/layout', stamp }).document } : body;
+
+export const actionAtRef =
+  (actions: Readonly<Record<string, ActionDefinition>>, layouts: Readonly<Record<string, LayoutNode>>) =>
+  (ref: string): ActionDefinition | undefined => {
+    const id = actionOfLayoutRef(ref);
+    const action = id !== undefined && Object.hasOwn(actions, id) ? actions[id] : undefined;
+    const layout = Object.hasOwn(layouts, ref) ? layouts[ref] : undefined;
+    return action === undefined || layout === undefined ? undefined : { ...action, layout };
+  };
 
 export type LayoutHeldTo = {
   // The action whose layout the store of whoever the layout is for keeps under

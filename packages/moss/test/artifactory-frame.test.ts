@@ -32,7 +32,7 @@ const world = (shell: ShellManifest = SHELL) => {
     running.artifactsFor(of, { principal, roles, installed: undefined, ...(principal === null ? {} : { saved: rows.as(principal) }) });
   return {
     running,
-    published: running.publishedArtifacts(rows.as('*')),
+    published: running.publishedArtifacts(rows.as('*'), async () => ({ roles: ['public'], replayable: async () => [] })),
     of: (principal: string, roles: readonly string[] = ['public']): SessionArtifacts => running.sessionArtifacts(principal, callerOf(principal, roles)),
     draftOn: (of: ShellManifest, principal: string) => running.draftSavingFor(of, principal, callerOf(principal, ['public'])),
     madeFor,

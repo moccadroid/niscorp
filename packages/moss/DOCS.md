@@ -1257,17 +1257,24 @@ It's a Hono app — mount it, extend it, or hand it to a listener.
   a set changes through `replaceActions`.
 - `defaults(publisher): SessionArtifacts` — what is published for everybody,
   with the five calls a session's `artifacts` has (`save`, `list`, `history`,
-  `restore`, `reset`) and the same body: `server.defaults(who).save([{ kind:
-  'layout', body: { ref: 'action/<id>', layout, use: true } }])` publishes a
-  layout for an action, and every shell draws it under that action's ref
-  unless its principal has a layout of their own in use or their roles hold a
-  layout variant. With `ref: 'frame'` it publishes the layout of the app's own
-  shell, and with `ref: 'canvas/<id>'` that of one of its canvases: each is
-  drawn for everybody who has none of their own in use. Several may be kept for one ref and the one marked `use:
-  true` is drawn; every publish is a version; a `reset` shows the build's
-  again. A layout is the one kind that is published: an action or a fragment
-  is refused here. `publisher` is who the publish is made by, and is kept with the save
-  (`artifact_saves.created_by`); an empty one is refused.
+  `restore`, `reset`), the same kinds and the same bodies. A published default
+  is drawn, opened or replayed by everybody, nobody signed in included, under
+  what a person has of their own; every publish is a version, and a `reset`
+  shows the build's again. **A layout:** `server.defaults(who).save([{ kind:
+  'layout', body: { ref: 'action/<id>', layout, use: true } }])` is drawn under
+  that action's ref unless its principal has a layout of their own in use or
+  their roles hold a layout variant; `ref: 'frame'` and `ref: 'canvas/<id>'`
+  publish the layouts of the app's own shell. **An action or a fragment** is
+  given its id by whoever publishes it, as a shipped one has one: `save([{
+  kind: 'action', id: 'promo', body }])`; one without an id is refused, and so
+  is one under `generated.`. The charter grants it by that id, so a new id
+  needs a grant and one that is a shipped action's or fragment's replaces the
+  build's for everybody until it is reset. **A read** vex wrote is published
+  under its fingerprint, `save([{ kind: 'read', id: '<fingerprint>' }])`, and is
+  answered to everybody after what the caller saved themselves; one under the
+  fingerprint of a shipped entry is refused. `publisher` is who the publish is
+  made by, kept with the save (`artifact_saves.created_by`); an empty one is
+  refused.
   **No session can publish.** The rows are those of one principal no caller
   is (`*`), and every write a session makes carries its own `userId`: vex's
   row rule, the one a person's own rows are under. Only the app's own code on
@@ -1276,20 +1283,33 @@ It's a Hono app — mount it, extend it, or hand it to a listener.
   the session's principal as `publisher`, and grants the action that calls
   that function to the roles that may. A function is declared before the
   server exists, so the app keeps the server where its functions can reach it.
-  A layout is checked when it is published as one is when it is saved, held to
-  every action in force with the layout it is built with: a ref no such action
-  keeps a layout under is refused, and so is what a save refuses. When a shell
-  is built it is checked again for that shell and that principal: one for an
-  action they do not hold is not loaded, and one that no longer passes is left
-  out with a line (`[moss] the layout "…" published for everybody is left out:
-  …`, said once for each time the rows are read, not at every shell).
-  One read of the rows answers every shell a process builds. A boot makes it,
-  and fails if it cannot. The first shell built after this process publishes,
-  or after the generation pointer moves, makes it again, and a read that fails
-  fails that shell and is made again by the next. A publish has every living
-  shell adopt, as `refresh` does, and moves the pointer, whether or not the
-  rows can be read back: every other process on the same database follows
-  within one poll ([Many processes](#many-processes)).
+  **What is published is checked three times.** At the publish, as a person's
+  save is: a layout against every action in force and every shell's kit, an
+  action or a fragment as a generated one is, as the publisher (its `fn:`
+  calls are ones the publisher's roles grant, its reads ones they may replay,
+  no write), and then the whole as a manifest, as a set handed over is:
+  `Publish refused — actions call functions the app does not have, or that
+  their holders’ charter does not grant:` lists a holder whose roles do not
+  grant a call. When the rows are read, the same again, and what does not pass
+  any more is left out with a line, said once for each read of the rows: a
+  layout, an action or a fragment on its own where its own check refuses it
+  (`[moss] the action "…" published for everybody is left out: …`), and the
+  actions and fragments all together where the manifest refuses them (`[moss]
+  what is published for everybody is left out, and the build’s copies stand:
+  …`). Once `checkFunctions` has read the app's functions, the rows are read
+  again against them: a published action calling a function a new build
+  dropped is left out, and the boot is not refused. When a shell is built, for
+  that shell and that principal: a layout for an action they do not hold is
+  not loaded, and a published fragment a shell cannot draw is left out of that
+  shell (`[moss] the fragment "…" published for everybody is left out of a
+  shell that cannot draw it: …`).
+  One read of the rows answers every shell a process builds, and every save a
+  session makes. A boot makes it, and fails if it cannot. The first shell built
+  after this process publishes, or after the generation pointer moves, makes it
+  again, and a read that fails fails that shell and is made again by the next.
+  A publish has every living shell adopt, as `refresh` does, and moves the
+  pointer, whether or not the rows can be read back: every other process on
+  the same database follows the pointer and reads them.
 - `catalogOf(principal): Promise<{ ids, hash }>` — what a principal holds of the
   actions in force: `{ ids, hash }`, the granted action ids sorted, with a
   content-hash version token (equal hash, equal application). The principal is

@@ -138,7 +138,10 @@ const assemble = async ({ app, runtime, session, revokeSessions, data }: ServerD
       if (typeof publisher !== 'string' || publisher === '') {
         throw new Error('moss: `defaults` is handed who publishes. What is published is everybody’s, and who published it is kept with it.');
       }
-      return running.publishedArtifacts(saved.published(publisher));
+      return running.publishedArtifacts(saved.published(publisher), async () => {
+        const resolved = await identity.resolve(publisher);
+        return { roles: resolved.roles, replayable: () => data.fingerprintsFor(resolved) };
+      });
     },
     catalogOf: async (principal: string | null) => {
       const resolved = await identity.resolve(principal);

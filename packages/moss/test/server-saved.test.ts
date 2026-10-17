@@ -68,7 +68,7 @@ const processOn = (rows: RowsDouble, fabric?: Fabric, userIdOf: (principal: stri
   running.onChangeFor(signals.adopt);
   return {
     hosts,
-    published: running.publishedArtifacts(rows.as('*')),
+    published: running.publishedArtifacts(rows.as('*'), async () => ({ roles: ['public'], replayable: async () => [] })),
     sessionOf: (principal) => {
       const session = sessions.get(principal);
       if (session === undefined) throw new Error(`no session was built for ${principal}`);

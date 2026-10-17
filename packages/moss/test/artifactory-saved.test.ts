@@ -56,7 +56,7 @@ const world = (more: Partial<RunningManifestConfig> = {}, rows: RowsDouble = row
   return {
     running,
     rows,
-    published: running.publishedArtifacts(rows.as('*')),
+    published: running.publishedArtifacts(rows.as('*'), async () => ({ roles: ['public'], replayable: async () => [] })),
     of: (principal, roles = ['member']) => running.sessionArtifacts(principal, async () => ({ roles, installed: undefined, saved: rows.as(principal ?? 'nobody') })),
     storeOf: async (principal, roles = ['member']) =>
       (await running.artifactsFor(SHELL, { principal, roles, installed: undefined, ...(principal === null ? {} : { saved: rows.as(principal) }) })).layoutStore,
@@ -536,10 +536,11 @@ describe('a layout published for everybody', () => {
     await expect(of('ada').save([{ ...mine('x', true), id }])).rejects.toThrow(`moss: there is no layout "${id}" of yours.`);
     expect(rows.rows).toHaveLength(1);
 
+    expect(rows.asked).toContain('*');
     rows.asked.length = 0;
     await storeOf('ben');
     await storeOf('cy');
-    expect(rows.asked).toEqual(['ben', '*', 'cy']);
+    expect(rows.asked).toEqual(['ben', 'cy']);
   });
 
   it('has the calls a person’s has: several are kept and one is in use, each publish is a version, and a reset shows the build’s again', async () => {
