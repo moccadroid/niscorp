@@ -7,6 +7,7 @@ process.env['LYRA_DEV_LOGIN'] = 'on';
 
 const main = async (): Promise<void> => {
   const { server } = await bootDevServer();
+  await server.checkFunctions();
   const port = Number(process.env['PORT'] ?? 8791);
   const httpServer = serve({ fetch: server.fetch, port });
   attachSocket(httpServer, server.socket);

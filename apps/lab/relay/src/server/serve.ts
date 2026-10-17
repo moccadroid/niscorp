@@ -15,6 +15,7 @@ const consoleRoute = (): Response => {
 
 const main = async (): Promise<void> => {
   const { server } = await boot();
+  await server.checkFunctions();
   const port = Number(process.env['PORT'] ?? 8787);
   const fetch = (request: Request, ...rest: unknown[]): Response | Promise<Response> =>
     new URL(request.url).pathname === '/console.js' ? consoleRoute() : (server.fetch as (...args: unknown[]) => Response | Promise<Response>)(request, ...rest);

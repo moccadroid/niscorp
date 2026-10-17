@@ -29,6 +29,7 @@ const main = async (): Promise<void> => {
   const port = Number(process.env['PORT'] ?? 8796);
   const publicUrl = process.env['PUBLIC_URL'] ?? `http://localhost:${port}`;
   const { server, close } = await bootOn(runtime, { publicUrl, sshAddress: process.env['LYCEUM_SSH_ADDRESS'] ?? '' });
+  await server.checkFunctions();
 
   mountLogin(server, runtime.pool);
   if (existsSync(dist)) mountSite(server, dist);
