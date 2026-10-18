@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { SignalClient } from '@niscorp/cortex';
+import { routeResponse, type StepRequest, type StepResult } from '@niscorp/signal';
 import { createShapeMapper, rowsFitShape } from '../../src/agent/index.js';
 
 describe('rowsFitShape', () => {
@@ -36,6 +37,50 @@ describe('createShapeMapper', () => {
     throw new Error('the model was called');
   };
   const untouchable: SignalClient = { step: called, stepStream: called, count: called, describe: called };
+
+  it('writes the mapping again, told why, when the first one does not run on the rows', async () => {
+    const answers = ['{"data":{"$ref":"$.nowhere"}}', '{"data":{"$ref":"$.result"}}'];
+    const asked: string[] = [];
+    const answer = (request: StepRequest): StepResult => {
+      asked.push(JSON.stringify(request));
+      const base: StepResult = { content: answers[asked.length - 1] ?? '', toolCalls: [], usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2, reported: true }, finishReason: 'stop', raw: null };
+      if (request.output === undefined) return base;
+      const routed = routeResponse({ content: base.content, toolCalls: [], declared: new Set(), accept: request.output.accept, responseStrategies: [] });
+      return { ...base, outcome: routed.outcome, wire: routed.wire };
+    };
+    const llm: SignalClient = {
+      step: async (request) => answer(request),
+      stepStream: (request) => {
+        const result = answer(request);
+        return (async function* () {
+          yield { type: 'text' as const, text: result.content };
+          yield { type: 'done' as const, result };
+        })();
+      },
+      count: async () => 1,
+      describe: () => ({
+        provider: 'stub',
+        model: 'stub-model',
+        kind: 'chat',
+        modelKnown: false,
+        capabilities: {
+          nativeTools: true,
+          nativeJsonSchema: false,
+          nativeJsonMode: true,
+          toolsWithStructuredOutput: false,
+          validatesToolArgs: true,
+          manglesNestedToolArgs: false,
+          multimodal: false,
+          supportsEmbedding: false,
+        },
+      }),
+    };
+    const rows = [{ name: 'Ada' }];
+    const { transformed } = await createShapeMapper(llm)(rows, [{ name: '' }], 'every name');
+    expect(transformed).toEqual(rows);
+    expect(asked).toHaveLength(2);
+    expect(asked[1]).toContain('Your last config failed on these rows');
+  });
 
   it('hands the mapping model the request the rows answer', async () => {
     const asked: string[] = [];

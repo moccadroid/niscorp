@@ -88,22 +88,30 @@ export const rowsFitShape = (rows: readonly Record<string, unknown>[], shape: un
   });
 };
 
+const MAPPING_ATTEMPTS = 3;
+
 export const createShapeMapper = (llm: SignalClient): MapToShape => {
   return async (rows, shape, intent) => {
     // `result` must match the envelope engine/runtime.ts replays the IR against.
     const single = !Array.isArray(shape);
     const envelope = { result: single ? (rows[0] ?? null) : rows } as unknown as JsonObject;
 
-    const result = await mappingAgent.run(
-      { sampleInput: envelope, targetShape: shape, ...(intent !== undefined ? { notes: `The request these rows answer: ${intent}` } : {}) },
-      { llm },
-    ).result;
-
-    if (!result.ok) throw new VexError('agent_failed', `${result.error.code}: ${result.error.message}`);
-
-    const config = result.output.data;
-    const ir = await compile(config);
-    const transformed = execute(ir, envelope);
-    return { ir, config, transformed };
+    let failed: string | undefined;
+    for (let attempt = 1; attempt <= MAPPING_ATTEMPTS; attempt += 1) {
+      const notes = [
+        ...(intent !== undefined ? [`The request these rows answer: ${intent}`] : []),
+        ...(failed !== undefined ? [`Your last config failed on these rows: ${failed}. Write one that runs on them.`] : []),
+      ].join('\n');
+      const result = await mappingAgent.run({ sampleInput: envelope, targetShape: shape, ...(notes !== '' ? { notes } : {}) }, { llm }).result;
+      if (!result.ok) throw new VexError('agent_failed', `${result.error.code}: ${result.error.message}`);
+      const config = result.output.data;
+      try {
+        const ir = await compile(config);
+        return { ir, config, transformed: execute(ir, envelope) };
+      } catch (error) {
+        failed = error instanceof Error ? error.message : String(error);
+      }
+    }
+    throw new VexError('agent_failed', `the mapping did not run on the rows it was written for: ${failed ?? 'no reason given'}`);
   };
 };
