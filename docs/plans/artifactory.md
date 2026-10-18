@@ -838,10 +838,11 @@ every action the app ships. Seven were nova's `auditAction` reporting what it
 cannot see through: a loop variable bound as `$.col`, and the refs a Table
 dispatches from inside its `menu` prop. The harness tells those apart with
 nova's `classifyAudit`, as the devtools audit does, and fails on what is to
-address. Left for a go of its own: `collectInteractive` tracks the loop scope
-and does not use it for `$.key`, and reads refs one prop deep where `refsOf`
-reads every depth — made precise, `classifyAudit` would have nothing to
-downgrade. Nova's `ShellConfig.functions` is still a map of handlers.
+address. On the owner's go the same day, `collectInteractive` was made
+precise — what an enclosing `for`/`as` binds (its variable, `index`, `items`)
+is no bound key, and a ref is read at every depth inside props — and
+`classifyAudit(issue)` keeps one downgrade, a push to a `{{…}}` target.
+Nova's `ShellConfig.functions` is still a map of handlers.
 
 **Publishing every kind, as built** (the owner's go, 2026-10-17, after the
 owner asked why only layouts were published: step 5's list had left it to be
