@@ -778,6 +778,16 @@ reads nobody's functions. Declaring functions statically, which would have
 made all of this a boot check with no shell, was proposed and struck by the
 owner.
 
+**The running manifest's members, grouped** (the owner's: "what is
+RunningManifest and why does it have 22 members?"; 2026-10-18). It is the
+artifactory's one handle inside moss, which apps never see; each step had added
+the member the server, the shells or the data layer needed. Its type is now
+three named groups composed into one: `InForce` (what is in force and how it
+changes; the server wires these), `ForShells` (what a shell is made of and what
+a session saves; the shell hosts ask these), `ForReads` (what the data layer
+asks before vex's table). No member moved and nothing runs differently; each
+caller still names the members it uses.
+
 **Aging** (the owner's: "keep a list of used actions and age them out of the
 pool over time if not used for x time, specifically the generated ones;
 shipped ones always stay; this should probably be an artifactory setting";
