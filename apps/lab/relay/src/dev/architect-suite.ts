@@ -116,7 +116,7 @@ const main = async (): Promise<void> => {
   mkdirSync(outDir, { recursive: true });
   console.log(`suite → ${outDir}\n`);
 
-  const ray = devRayContext({ shell, roles: ['sales', 'dev'] });
+  const ray = devRayContext({ shell, roles: ['sales', 'dev'], runtime });
 
   const rows: RunRow[] = [];
   for (const [id, intent] of Object.entries(INTENTS)) {

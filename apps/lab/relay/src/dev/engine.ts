@@ -82,10 +82,12 @@ const notHere =
 // What ray asks of a session, answered by the dev engine instead: the wire and
 // the intent writer run a query the way the server's routes would, and the
 // draft and the saves are not here.
-export const devRayContext = (options: { shell?: Shell; userId?: string; roles?: readonly string[]; wire?: FetchFn } = {}): RayContext => {
+// `runtime`: the database the queries are proved in, when a script has a server on its own
+// (check-shell): a query the builder wrote is then the one that server's screen replays.
+export const devRayContext = (options: { shell?: Shell; userId?: string; roles?: readonly string[]; wire?: FetchFn; runtime?: DevRuntime } = {}): RayContext => {
   const userId = options.userId ?? 'usr_001';
   const policy = options.roles === undefined ? systemPolicy : policyOf(options.roles);
-  const engineOf = async (): Promise<RayEngine> => rayEngine(await sharedRuntime(), policy);
+  const engineOf = async (): Promise<RayEngine> => rayEngine(options.runtime ?? (await sharedRuntime()), policy);
   // Mirrors moss's session wire, which unwraps a vex reply before the endpoint sees it.
   const unwrap = (status: number, body: unknown): Awaited<ReturnType<FetchFn>> => {
     const result = status < 400 && body !== null && typeof body === 'object' && 'result' in body ? (body as Record<string, unknown>)['result'] : body;
