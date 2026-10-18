@@ -220,9 +220,8 @@ export const runAction = async (
     }
     return issue;
   };
-  // The audit reports what it cannot see through — a loop variable bound as `$.row`, a ref a component
-  // dispatches from inside its props — beside what is broken; `classifyAudit` tells the two apart.
-  const toAddress = audit.issues.filter((issue) => classifyAudit(issue, parsed.data).kind === 'address');
+  // A push to a `{{…}}` template target is reported as not in the catalog; `classifyAudit` sets it aside.
+  const toAddress = audit.issues.filter((issue) => classifyAudit(issue).kind === 'address');
   if (toAddress.length > 0) return { ok: false, data: {}, loaded: {}, issues: toAddress.map(clarified) };
 
   const issues: string[] = [];

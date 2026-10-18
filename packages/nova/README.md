@@ -462,9 +462,10 @@ can perform their own final async work (e.g. telemetry flush).
   - `auditCatalog(definitions)` audits each definition against a catalog and
     a channel list built from the whole set, so the wiring between actions is
     checked. It returns a row `{ id, address, issues }` for each definition
-    that has findings: every issue is classified by `classifyAudit` as
-    `address` or `info`, the `address` ones first, and the rows are ordered by
-    how many `address` findings they hold, most first.
+    that has findings: every issue is classified by `classifyAudit(issue)` —
+    a push to a `{{…}}` template target is `info`, known only when it runs;
+    everything else is `address` — the `address` ones first, and the rows are
+    ordered by how many `address` findings they hold, most first.
   - `livenessOf(definition)`: `gestures` is true when the action has an
     `event` trigger or a component with a `model`. An HTTP endpoint also
     carries its `url` and `request` as authored (a template stays a template).
@@ -529,11 +530,12 @@ can perform their own final async work (e.g. telemetry flush).
     schema as draft-07 JSON Schema, left out when the component has none.
   - `collectInteractive(layout)` returns `{ refs, models, boundKeys,
     suspectBindings, componentCount }`. A ref's `via` is `'ref'` for a node's
-    own `ref`, or the prop name (`rowRef`) for a ref held in a `*Ref` prop. A
-    model's `path` is the binding as written (`'$.search'`).
-    `suspectBindings` lists each `$name.` whose `name` is not a loop variable
-    of an enclosing `for`/`as`; `auditAction` reports each one as a malformed
-    binding.
+    own `ref`, or the path of the prop that holds it, at any depth (`rowRef`,
+    `menu.items.0.ref`). A model's `path` is the binding as written
+    (`'$.search'`). `boundKeys` are the `$.key` roots, less what an enclosing
+    `for`/`as` binds (its variable, `index`, `items`). `suspectBindings` lists
+    each `$name.` whose `name` is not a loop variable of an enclosing
+    `for`/`as`; `auditAction` reports each one as a malformed binding.
 - **`@niscorp/nova/i18n`** — nova is language-blind: a host hands the shell a
   phrasebook (`phrases` on `ShellConfig`, `shell.setPhrases` at runtime) and
   nova swaps prose at render. The subpath holds the pieces around that:

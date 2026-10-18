@@ -30,6 +30,19 @@ describe('collectInteractive', () => {
     expect(surface.boundKeys).toEqual(['rows']);
   });
 
+  it('reads refs at every depth inside props, via the prop’s path', () => {
+    const layout = {
+      component: 'Table',
+      props: { rows: '$.rows', menu: { openRef: 'menu-open', items: [{ ref: 'row-open', label: 'Open' }] } },
+    };
+
+    const surface = collectInteractive(layout);
+    expect(surface.refs).toEqual([
+      { ref: 'menu-open', component: 'Table', via: 'menu.openRef' },
+      { ref: 'row-open', component: 'Table', via: 'menu.items.0.ref' },
+    ]);
+  });
+
   it('collects models as input bindings', () => {
     const layout = {
       component: 'Stack',
@@ -52,7 +65,7 @@ describe('collectInteractive', () => {
         {
           for: '$.rows',
           as: 'row',
-          do: { component: 'Chip', ref: 'pick', children: '{{$row.name}}' },
+          do: { component: 'Chip', ref: 'pick', children: '{{$row.name}} · {{$.row.name}} · {{$.index}} of {{$.items.length}}' },
         },
       ],
     };

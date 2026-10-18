@@ -102,7 +102,7 @@ export const describeInstance = (shell: Shell, instanceId: string): InstanceMode
   const definition: ActionDefinition = runtime.definition;
   const layout = definition.layout;
   const layoutNode = typeof layout === 'string' ? shell.layoutStore.get(layout) : layout;
-  const issues = auditAction(definition).issues.map((issue): ClassifiedIssue => ({ issue, ...classifyAudit(issue, definition) }));
+  const issues = auditAction(definition).issues.map((issue): ClassifiedIssue => ({ issue, ...classifyAudit(issue) }));
 
   return {
     id: definition.id,

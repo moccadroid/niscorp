@@ -54,15 +54,9 @@ describe('reflect — the action graph', () => {
 });
 
 describe('reflect — audit classification', () => {
-  const def: ActionDefinition = {
-    id: 'x',
-    data: {},
-    layout: { component: 'Grid', for: '$.rows', as: 'row', do: { component: 'Text', children: '$.row.name' } },
-  };
-  it('a loop-var binding is info, a template push is info, an unexplained break is address', () => {
-    expect(classifyAudit('layout binds "$.row.name" but data has no "row" default', def).kind).toBe('info');
-    expect(classifyAudit('step pushes action "{{$.id}}" which is not in the catalog', def).kind).toBe('info');
-    expect(classifyAudit('layout ref "save" has no trigger — dead chrome', def).kind).toBe('address');
+  it('a template push is info, an unexplained break is address', () => {
+    expect(classifyAudit('step pushes action "{{$.id}}" which is not in the catalog').kind).toBe('info');
+    expect(classifyAudit('layout ref "save" has no trigger — dead chrome').kind).toBe('address');
   });
 
   it('auditCatalog classifies and sorts address-first', () => {

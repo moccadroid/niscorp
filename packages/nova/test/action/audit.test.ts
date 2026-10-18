@@ -113,7 +113,7 @@ describe('auditAction', () => {
     expect(result.issues).toEqual([]);
   });
 
-  it('flags a malformed binding ($name without a loop) but accepts loop variables', () => {
+  it('flags a malformed binding ($name without a loop) but accepts loop variables, bound either way', () => {
     const def: ActionDefinition = {
       ...sound,
       triggers: [],
@@ -121,13 +121,29 @@ describe('auditAction', () => {
         component: 'Stack',
         children: [
           { component: 'Text', children: '{{$kpi.count}} open' },
-          { for: '$.rows', as: 'row', do: { component: 'Text', children: '{{$row.title}}' } },
+          { for: '$.rows', as: 'row', do: { component: 'Text', children: '{{$row.title}} {{$.row.title}} {{$.index}}' } },
         ],
       },
     };
     const result = auditAction(def);
     expect(result.issues.some((issue) => issue.includes('$kpi.') && issue.includes('malformed'))).toBe(true);
     expect(result.issues.some((issue) => issue.includes('$row'))).toBe(false);
+    expect(result.issues.some((issue) => issue.includes('"row"') || issue.includes('"index"'))).toBe(false);
+  });
+
+  it('a ref a component dispatches from inside its props carries its trigger', () => {
+    const def: ActionDefinition = {
+      ...sound,
+      triggers: [...(sound.triggers ?? []), { event: 'ui:click', ref: 'row-open', do: [{ call: 'load' }] }],
+      layout: {
+        component: 'Stack',
+        children: [
+          { component: 'Input', ref: 'search', model: '$.search' },
+          { component: 'Table', ref: 'row', props: { rows: '$.rows', loading: '$.loading', menu: { items: [{ ref: 'row-open' }] } } },
+        ],
+      },
+    };
+    expect(auditAction(def).issues).toEqual([]);
   });
 
   it('checks message channels against the provided vocabulary (own emits/listens count)', () => {
