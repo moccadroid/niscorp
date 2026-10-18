@@ -271,25 +271,6 @@ export const settingsLayout: LayoutNode = {
               component: 'Row',
               props: { justify: 'between', align: 'center', gap: 12 },
               children: [
-                { component: 'Stack', props: { gap: 2 }, children: [{ component: 'Text', props: { weight: 500 }, children: 'Screen reviewer' }, { component: 'Text', props: { size: 'sm', color: 'mute' }, children: 'Reads a built screen against what was asked for, and writes the repair' }] },
-                {
-                  component: 'Row',
-                  props: { gap: 8, align: 'center' },
-                  children: [
-                    { component: 'Box', props: { width: 240 }, children: { component: 'Select', ref: 'model-validator', model: '$.models.assignments.validator.model', props: { options: '$.models.options' } } },
-                    { component: 'Box', props: { width: 140 }, children: { component: 'Select', ref: 'effort-validator', model: '$.models.assignments.validator.effort', props: { options: '$.models.efforts.validator' } } },
-                  ],
-                },
-              ],
-            },
-          },
-          {
-            component: 'Box',
-            props: { px: 18, py: 14, border: 'bottom' },
-            children: {
-              component: 'Row',
-              props: { justify: 'between', align: 'center', gap: 12 },
-              children: [
                 { component: 'Stack', props: { gap: 2 }, children: [{ component: 'Text', props: { weight: 500 }, children: 'Transform writer' }, { component: 'Text', props: { size: 'sm', color: 'mute' }, children: 'Writes the config that maps one shape into another' }] },
                 {
                   component: 'Row',

@@ -14,7 +14,7 @@ import { listDealsPrism } from '@relay/app/actions/domains/deal';
 import { catalogIds, VIZ_COMPONENTS, VIZ_OMIT_PROPS } from './catalog';
 import { styleGuide } from './knowledge';
 import { llmFor } from '@relay/server/llm';
-import type { ScreenTools } from './architect';
+import type { ScreenTools } from './screens';
 
 export type Turn = {
   lastResult?: { result: unknown; shape: unknown; intent: string };

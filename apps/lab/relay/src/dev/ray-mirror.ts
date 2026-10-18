@@ -7,7 +7,7 @@ import { offerToken, PROTOCOL } from '@niscorp/moss/protocol';
 import { shell, server } from './check-shell';
 import { mintToken } from '../server/users';
 import { rayAgent } from '@relay/server/functions/ray/agent';
-import { makeScreenTools } from '@relay/server/functions/ray/architect';
+import { makeScreenTools } from '@relay/server/functions/ray/screens';
 import { makeTools, type Turn } from '@relay/server/functions/ray/tools';
 import { traceWiring, type TraceStep } from '@relay/server/functions/ray/trace';
 import { RAY_STEP_CHANNEL } from '@relay/server/functions/ray/run';

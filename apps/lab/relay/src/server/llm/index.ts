@@ -84,7 +84,7 @@ export const MODELS: Record<ModelId, ModelEntry> = {
 export const effortOptionsFor = (model: ModelId): { value: string; label: string }[] =>
   MODELS[model].efforts.map((effort) => ({ value: effort, label: EFFORT_LABELS[effort] }));
 
-export type AgentRole = 'chat' | 'architect' | 'validator' | 'layout' | 'mapping' | 'query' | 'shape';
+export type AgentRole = 'chat' | 'architect' | 'layout' | 'mapping' | 'query' | 'shape';
 
 export type AgentEntry = { label: string; runsOn: ModelId; effort?: ReasoningEffort };
 
@@ -94,7 +94,6 @@ export const AGENTS: Record<AgentRole, AgentEntry> = {
   chat: { label: 'Chat', runsOn: 'groq-120b' },
   layout: { label: 'Chat visualiser', runsOn: 'groq-120b' },
   architect: { label: 'Screen builder', runsOn: 'qwen-27b' },
-  validator: { label: 'Screen reviewer', runsOn: 'qwen-27b' },
   // The three below stay on 120b on purpose: Groq's 250k tokens/minute is per
   // model, and with them on qwen too one build runs past it into 429s.
   mapping: { label: 'Transform writer', runsOn: 'groq-120b' },
@@ -125,7 +124,6 @@ export const assignments = (): Record<AgentRole, Assignment> => ({
   chat: assignmentOf('chat'),
   layout: assignmentOf('layout'),
   architect: assignmentOf('architect'),
-  validator: assignmentOf('validator'),
   mapping: assignmentOf('mapping'),
   query: assignmentOf('query'),
   shape: assignmentOf('shape'),

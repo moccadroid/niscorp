@@ -1,5 +1,7 @@
 import { shell, runtime } from './check-shell';
-import { architectLlms, runActionArchitect } from '@relay/server/functions/ray/architect';
+import { buildScreen, replays } from '@relay/screen-builder';
+import { screenSetup } from '@relay/server/functions/ray/screens';
+import { llmFor } from '@relay/server/llm';
 import { devRayContext, rayEngine, policyOf } from './engine';
 
 const BUILD_INTENT =
@@ -46,21 +48,21 @@ const mountRows = async (action: { id: string }): Promise<number> => {
 };
 
 const main = async (): Promise<void> => {
-  const llms = architectLlms();
-  if ('error' in llms) { console.error(llms.error); process.exit(2); }
-  const ray = devRayContext({ shell, roles: ['sales', 'dev'] });
+  const llm = llmFor('architect');
+  if ('error' in llm) { console.error(llm.error); process.exit(2); }
+  const setup = screenSetup(devRayContext({ shell, roles: ['sales', 'dev'], runtime }));
 
   console.log('── build ──');
   const t0 = Date.now();
-  const built = await runActionArchitect(ray, llms.agent, llms.support, BUILD_INTENT, {});
+  const built = await buildScreen(BUILD_INTENT, setup, { llm: llm.llm });
   if (!built.ok) { console.error('build failed:', built.error); process.exit(1); }
   const baseRows = await mountRows(built.action);
   console.log(`built in ${Math.round((Date.now() - t0) / 1000)}s — live renders ${baseRows} rows`);
 
   console.log('── edit: add September ──');
   const t1 = Date.now();
-  const edited = await runActionArchitect(ray, llms.agent, llms.support, EDIT_INTENT, { base: built.action });
-  if (!edited.ok) { console.error('edit failed:', edited.error, edited.issues ?? ''); process.exit(1); }
+  const edited = await buildScreen(EDIT_INTENT, setup, { llm: llm.llm, base: built.action });
+  if (!edited.ok) { console.error('edit failed:', edited.error, edited.findings.map((finding) => finding.message).join('; ')); process.exit(1); }
   console.log(`edited in ${Math.round((Date.now() - t1) / 1000)}s`);
 
   const editedJson = JSON.stringify(edited.action);
@@ -70,7 +72,7 @@ const main = async (): Promise<void> => {
   const sepEndBad = editedJson.includes('2026-09-31');
   console.log(`1. change landed   : September=${hasSeptember} start-ok=${sepStart} end-ok=${sepEndOk}${sepEndBad ? '  END 2026-09-31 DOES NOT EXIST' : ''}`);
 
-  const fp = /"(fp_[0-9a-f]{16})"/.exec(editedJson)?.[1];
+  const fp = replays(edited.action, '/api/vex')[0];
   let sepVerdict = 'no fp found';
   if (fp !== undefined) {
     const { engine } = await rayEngine(runtime, policyOf(['sales', 'dev']));

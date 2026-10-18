@@ -2,7 +2,7 @@ import type { FunctionHandler } from '@niscorp/nova';
 import type { FunctionDefinition, FunctionSession } from '@niscorp/moss';
 import type { Message } from '@niscorp/signal';
 import { makeTools, type Turn } from './tools';
-import { makeScreenTools } from './architect';
+import { makeScreenTools } from './screens';
 import { rayAgent } from './agent';
 import { llmFor } from '@relay/server/llm';
 import { traceWiring, type TraceStep } from './trace';

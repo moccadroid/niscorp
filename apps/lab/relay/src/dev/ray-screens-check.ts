@@ -1,6 +1,6 @@
 import type { ActionDefinition } from '@niscorp/nova';
 import type { ToolContext } from '@niscorp/cortex';
-import { makeScreenTools, placeScreen } from '@relay/server/functions/ray/architect';
+import { makeScreenTools, placeScreen } from '@relay/server/functions/ray/screens';
 import type { RayContext } from '@relay/server/functions/ray';
 
 // The screen tools against a session double, with no model: what a built
@@ -68,13 +68,13 @@ const main = async (): Promise<void> => {
     layout: { component: 'Text', children: 'deals' },
   };
 
-  const id = await placeScreen(ray, built, undefined, true);
+  const id = await placeScreen(ray, built, undefined);
   checks.push([`a new screen's reads are added first, then the screen without an id, in two adds (got ${JSON.stringify(adds.map((one) => one.map((a) => [a.kind, a.id ?? '-'])))})`,
     adds.length === 2 && adds[0]?.length === 1 && adds[0][0]?.kind === 'read' && adds[0][0]?.id === 'fp_0123456789abcdef' && adds[0][0]?.body === undefined && adds[1]?.length === 1 && adds[1][0]?.kind === 'action' && adds[1][0]?.id === undefined && !('id' in (adds[1][0]?.body as object))]);
   checks.push([`the id moss gave is what is pushed on main (got ${pushed.join(',')})`, id === 'generated.1' && pushed.join(',') === 'main:generated.1']);
 
-  const edited = await placeScreen(ray, { ...built, id, name: 'Top deals, edited' }, id, false);
-  checks.push([`an edit is added under the same id and is not placed when it failed review (got ${edited}, pushed ${pushed.length})`, edited === id && adds[3]?.[0]?.id === id && pushed.length === 1]);
+  const edited = await placeScreen(ray, { ...built, id, name: 'Top deals, edited' }, id);
+  checks.push([`an edit is added under the same id and placed again (got ${edited}, pushed ${pushed.join(',')})`, edited === id && adds[3]?.[0]?.id === id && pushed.join(',') === 'main:generated.1,main:generated.1']);
 
   const tools = makeScreenTools(ray);
   await new Promise((r) => setTimeout(r, 0));
