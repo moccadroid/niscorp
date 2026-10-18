@@ -58,10 +58,65 @@ const requestContextKeys = (request: unknown): string[] => {
   return context !== null && typeof context === 'object' ? Object.keys(context) : [];
 };
 
-type RenderedNode = { type?: string; name?: string; props?: Record<string, unknown>; children?: RenderedNode[] };
+type RenderedNode = { type?: string; name?: string; ref?: string; props?: Record<string, unknown>; children?: RenderedNode[] };
 
-const tablesIn = (nodes: readonly RenderedNode[]): RenderedNode[] =>
-  nodes.flatMap((node) => [...(node.type === 'component' && node.name === 'Table' ? [node] : []), ...tablesIn(node.children ?? [])]);
+const nodesIn = (nodes: readonly RenderedNode[]): RenderedNode[] => nodes.flatMap((node) => [node, ...nodesIn(node.children ?? [])]);
+
+const tablesIn = (nodes: readonly RenderedNode[]): RenderedNode[] => nodesIn(nodes).filter((node) => node.type === 'component' && node.name === 'Table');
+
+// The data key a layout node with this ref writes (`model: "$.month"` → "month").
+const modelKeyOf = (layout: unknown, ref: string): string | undefined => {
+  if (Array.isArray(layout)) return layout.map((item) => modelKeyOf(item, ref)).find((key) => key !== undefined);
+  if (layout === null || typeof layout !== 'object') return undefined;
+  const node = layout as Record<string, unknown>;
+  if (node['ref'] === ref && typeof node['model'] === 'string') return node['model'].replace(/^\$\./, '').split('.')[0];
+  return Object.values(node).map((value) => modelKeyOf(value, ref)).find((key) => key !== undefined);
+};
+
+type Triggerish = { event?: string; ref?: string; do?: unknown[] };
+
+// A choice that reloads the screen must change what loads: another option of a select-type control
+// giving the same rows means the choice never reaches the query.
+const choicesThatChangeNothing = async (
+  shell: ReturnType<typeof createShell>,
+  rt: PublicActionRuntime,
+  definition: { endpoints?: Record<string, Endpointish>; triggers?: Triggerish[]; layout?: unknown },
+): Promise<string[]> => {
+  const found: string[] = [];
+  for (const trigger of definition.triggers ?? []) {
+    if (trigger.event !== 'ui:model' || trigger.ref === undefined) continue;
+    const ref = trigger.ref;
+    const called = (trigger.do ?? []).flatMap((step) => {
+      const call = step !== null && typeof step === 'object' ? (step as Record<string, unknown>)['call'] : undefined;
+      return typeof call === 'string' ? [call] : [];
+    });
+    const targets = called.map((name) => definition.endpoints?.[name]?.target).filter((target): target is string => typeof target === 'string');
+    if (targets.length === 0) continue;
+    const control = nodesIn(shell.flattenRenderTree(shell.getCanvasRenderTree('main')) as RenderedNode[]).find((node) => node.ref === ref);
+    const options = control?.props?.['options'];
+    if (!Array.isArray(options) || options.length < 2) continue;
+    const key = modelKeyOf(definition.layout, ref);
+    const current = key === undefined ? undefined : rt.getData()[key];
+    const other = options.map((option) => (option !== null && typeof option === 'object' ? (option as Record<string, unknown>)['value'] : option)).find((value) => value !== undefined && value !== current);
+    if (other === undefined) continue;
+    const before = JSON.stringify(targets.map((target) => rt.getData()[target]));
+    const reloaded = new Promise<void>((resolve) => {
+      const done = (): void => {
+        clearTimeout(timer);
+        off();
+        resolve();
+      };
+      const off = shell.onEndpoint(done);
+      const timer = setTimeout(done, 10_000);
+    });
+    shell.dispatch({ type: 'ui:model', ref, payload: other });
+    await reloaded;
+    if (JSON.stringify(targets.map((target) => rt.getData()[target])) === before) {
+      found.push(`picking "${String(other)}" in "${ref}" loads the same rows as before: the choice does not reach the query — bind it in the endpoint request's context`);
+    }
+  }
+  return found;
+};
 
 // Loaded rows a Table does not show: the screen mounts over its data and draws none of it.
 const unshownRows = (shell: ReturnType<typeof createShell>, definition: { endpoints?: Record<string, Endpointish> }, data: Record<string, unknown>): string[] => {
@@ -246,7 +301,10 @@ export const runAction = async (
     try {
       return transform(config, source);
     } catch (error) {
-      issues.push(`an endpoint transform failed: ${error instanceof Error ? error.message : String(error)} — in ${JSON.stringify(config).slice(0, 240)}`);
+      const found = (error as { context?: { details?: { issues?: { path: string; message: string }[] } } }).context?.details?.issues ?? [];
+      const why = found.length > 0 ? found.map((issue) => `${issue.path}: ${issue.message}`).join('; ') : error instanceof Error ? error.message : String(error);
+      const reshapeOnly = Array.isArray(source) ? ' An endpoint response reshapes the rows it is given; limiting, sorting and filtering them belong in the query.' : '';
+      issues.push(`an endpoint transform failed: ${why} — in ${JSON.stringify(config).slice(0, 240)}.${reshapeOnly}`);
       throw error;
     }
   };
@@ -276,6 +334,7 @@ export const runAction = async (
     const report = loadReport(parsed.data, data, proofs);
     issues.push(...report.issues);
     issues.push(...unshownRows(shell, parsed.data, data));
+    if (issues.length === 0) issues.push(...(await choicesThatChangeNothing(shell, rt, parsed.data)));
     return { ok: issues.length === 0, data, issues, loaded: report.loaded };
   } finally {
     offEndpoint();

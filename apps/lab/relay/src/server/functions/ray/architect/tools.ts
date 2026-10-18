@@ -29,7 +29,7 @@ const parseMaybeJson = (value: string): unknown => {
   }
 };
 
-type Answered = { result: unknown; meta: { cache: { fingerprint?: string }; context: Record<string, { kind: string }>; missingContext?: string[]; warnings?: string[] } };
+type Answered = { result: unknown; meta: { cache: { fingerprint?: string }; context: Record<string, { kind: string; type?: string }>; missingContext?: string[]; warnings?: string[] } };
 
 // Asked of vex through the session, as the caller: a replay and an intent both come back
 // with what vex knows of the query, a replay's missing context included.
@@ -62,6 +62,16 @@ export const makeArchitectTools = (supportLlm: SignalClient, ray: RayContext): A
   // intent+shape → the fingerprint it minted and the context last sent with it: models
   // re-send a proven intent with new context instead of replaying the fingerprint, and vex regenerates it.
   const provenRequests = new Map<string, { fingerprint: string; context: string }>();
+
+  // A replay that fails names the context its query takes, read from vex by asking it with none.
+  const withTheContextItTakes = async (error: unknown, replaying: string | undefined): Promise<unknown> => {
+    if (replaying === undefined) return error;
+    const bare = await answered(ray, replaying, undefined, undefined, {}).catch(() => undefined);
+    const keys = Object.entries(bare?.meta.context ?? {}).filter(([, meta]) => meta.kind === 'context');
+    if (keys.length === 0) return error;
+    const message = error instanceof Error ? error.message : String(error);
+    return new Error(`${message} — the context this query takes: ${keys.map(([key, meta]) => `"${key}" (${meta.type ?? 'a value'})`).join(', ')}`);
+  };
 
   const discover = defineTool({
     id: 'action.discover',
@@ -194,7 +204,9 @@ export const makeArchitectTools = (supportLlm: SignalClient, ray: RayContext): A
       // attach them anyway, and vex's named-slot posture (fingerprint + intent +
       // shape) 409s on a protected entry and silently replaces an unprotected one.
       const replaying = memoFp ?? (replayFingerprint == null ? undefined : (replayFingerprint as string));
-      const asked = await answered(ray, replaying, intent ?? undefined, shape, ctx);
+      const asked = await answered(ray, replaying, intent ?? undefined, shape, ctx).catch(async (error: unknown) => {
+        throw await withTheContextItTakes(error, replaying);
+      });
       // The model cannot know the signed-in user: a query that binds the values the runtime folds into
       // every endpoint's source is proved again with them.
       const ambient: Record<string, unknown> = { userId: ray.userId, today: todayStr() };
