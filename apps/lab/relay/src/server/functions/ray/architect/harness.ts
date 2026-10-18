@@ -194,25 +194,6 @@ export const runAction = async (
   scanOptions((parsed.data as { data?: unknown }).data ?? {}, 'data');
   if (badOptions.length > 0) return { ok: false, data: {}, loaded: {}, issues: badOptions };
 
-  const raceIssues: string[] = [];
-  const triggers = (parsed.data as { triggers?: { event?: string; ref?: string; do?: unknown[] }[] }).triggers ?? [];
-  triggers.forEach((trigger, i) => {
-    if (trigger.event !== 'ui:model' || !Array.isArray(trigger.do)) return;
-    let setFromPayload = false;
-    for (const step of trigger.do) {
-      const record = step as Record<string, unknown> | null;
-      if (record === null || typeof record !== 'object') continue;
-      if (typeof record['set'] === 'string' && (record['value'] === '@event.payload' || (typeof record['value'] === 'string' && (record['value'] as string).startsWith('@event.payload')))) setFromPayload = true;
-      if ('call' in record && !setFromPayload) {
-        raceIssues.push(
-          `triggers.${i} (ui:model "${trigger.ref ?? ''}") calls "${String(record['call'])}" without first setting the bound key from @event.payload — the model write and the trigger RACE, so the call reads the PREVIOUS value and the screen lags one choice behind. Put { "set": "<bound key>", "value": "@event.payload" } before the call.`,
-        );
-        break;
-      }
-    }
-  });
-  if (raceIssues.length > 0) return { ok: false, data: {}, loaded: {}, issues: raceIssues };
-
   const clarified = (issue: string): string => {
     const m = /step "set: \$\.([\w.]+)" writes a key with no default in data/.exec(issue);
     if (m !== null && m[1] !== undefined && Object.hasOwn(parsed.data.data ?? {}, m[1].split('.')[0] ?? '')) {

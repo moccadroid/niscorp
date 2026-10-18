@@ -20,7 +20,6 @@ const INSTRUCTIONS = [
   '  - LAYOUT bindings are STRING paths or moustache — rows: "$.deals", loading: "$.loading", children: "{{$.deals.length}} deals". Prism nodes ({"$ref"}, {"$case"}, {"$join"}, …) belong ONLY inside endpoint request/response; in layout props they do not resolve and the component renders empty over loaded data.',
   '  - A request value that must follow screen state (a search text, a picked filter, a sort) is a transform binding over the data — never a frozen literal.',
   '  - Select/option VALUES must be plain strings (the DOM coerces them; an object value reaches your trigger as an EMPTY string and the screen dies silently). Structured per-option data rides the endpoint request instead: key a $case on the string value, or look the value up in a data map.',
-  '  - A `ui:model` trigger that calls an endpoint must FIRST `set` the bound key from `@event.payload`, then `call` — the model write and the trigger race, and a call that skips the set reads the PREVIOUS value (the screen lags one choice behind). Example: [{ "set": "month", "value": "@event.payload" }, { "call": "loadDeals" }].',
   '  - A `push` targets a catalog id, seeding only keys from that action\'s input contract.',
   '  - The screen loads its data on mount and clears its loading flags.',
   'You can check any candidate with `run_action` — it mounts the definition for real and returns what loaded and what broke. The same check judges your final answer.',
