@@ -258,18 +258,18 @@ const CHECKS: Record<string, () => Promise<string[]>> = {
   },
   stageDrill: async () => {
     const open = await candidates("SELECT id AS label, value::float8 AS amount FROM deals WHERE status = 'open'");
-    // Deal rows name their stage too: the stage table is the smaller of the clickable ones.
-    const stages = tables()
-      .filter((table) => rowsOf(table).some((row) => asText(row).includes('Qualified')) && typeof table.props?.['rowRef'] === 'string')
-      .sort((a, b) => rowsOf(a).length - rowsOf(b).length)[0];
-    const deals = tables().find((table) => table !== stages);
-    if (stages === undefined || deals === undefined) return ['FAIL no clickable stage table above a deals table'];
-    const found = [`before a click: ${judge(rowsOf(deals), open)}`];
-    const row = rowsOf(stages).find((one) => asText(one).includes('Qualified')) ?? {};
-    const key = String(stages.props?.['clickKey'] ?? stages.props?.['rowKey'] ?? 'id');
-    await click(String(stages.props?.['rowRef']), row[key]);
-    const after = tables().find((table) => table !== stages && rowsOf(table) !== rowsOf(stages)) ?? deals;
-    found.push(`Qualified clicked: ${judge(rowsOf(after), await candidates("SELECT d.id AS label, d.value::float8 AS amount FROM deals d JOIN stages s ON s.id = d.stage_id WHERE d.status = 'open' AND s.name = 'Qualified'"))}`);
+    // The render tree is read anew on every call, so the two tables are told apart by position. Deal rows name their
+    // stage too: the stage table is the smaller of the clickable ones.
+    const before = tables();
+    const clickable = before.map((table, at) => ({ table, at })).filter(({ table }) => rowsOf(table).some((row) => asText(row).includes('Qualified')) && typeof table.props?.['rowRef'] === 'string');
+    const stages = clickable.sort((a, b) => rowsOf(a.table).length - rowsOf(b.table).length)[0];
+    const dealsAt = before.findIndex((_, at) => at !== stages?.at);
+    if (stages === undefined || dealsAt < 0) return ['FAIL no clickable stage table beside a deals table'];
+    const found = [`before a click: ${judge(rowsOf(before[dealsAt]), open)}`];
+    const row = rowsOf(stages.table).find((one) => asText(one).includes('Qualified')) ?? {};
+    const key = String(stages.table.props?.['clickKey'] ?? stages.table.props?.['rowKey'] ?? 'id');
+    await click(String(stages.table.props?.['rowRef']), row[key]);
+    found.push(`Qualified clicked: ${judge(rowsOf(tables()[dealsAt]), await candidates("SELECT d.id AS label, d.value::float8 AS amount FROM deals d JOIN stages s ON s.id = d.stage_id WHERE d.status = 'open' AND s.name = 'Qualified'"))}`);
     return found;
   },
 };
