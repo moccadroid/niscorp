@@ -1,7 +1,7 @@
 ---
-'@niscorp/moss': minor
-'@niscorp/nisc': minor
-'@niscorp/cli': minor
+'@niscorp/moss': patch
+'@niscorp/nisc': patch
+'@niscorp/cli': patch
 ---
 
 `server.defaults(publisher)` publishes every kind a person saves: an action, a fragment and a read, beside a layout.

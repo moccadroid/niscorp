@@ -1,7 +1,7 @@
 ---
-'@niscorp/moss': minor
-'@niscorp/nisc': minor
-'@niscorp/cli': minor
+'@niscorp/moss': patch
+'@niscorp/nisc': patch
+'@niscorp/cli': patch
 ---
 
 `functions(session)` returns a list of `FunctionDefinition`, `{ id, description, execute }`, and `session.functions()` lists each function a session may call with its description.

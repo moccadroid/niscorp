@@ -4,7 +4,9 @@
 '@niscorp/cli': minor
 ---
 
-`server.checkFunctions()` reads the app's functions and refuses what is wrong with them before anyone is served.
+`server.checkFunctions()` reads the app's functions and refuses what is wrong with them before anyone is served. **Breaking.**
+
+BREAKING — approved by moccadroid, 2026-10-18: `serve` of `@niscorp/moss/node`, and `nisc dev`, `nisc build`, `nisc check` and `nisc start`, refuse to come up on an action that calls a function the app has no function of, a charter `functions` deny that matches nothing, or two functions under one id. An app that hands a function only to signed-in sessions, with a shipped action calling it, hands it to every session (the function refuses whom it must), or is refused.
 
 An app's functions are known only once a session is: `functions(session)` is called for each shell, and a session hook may reach for the server object, which the app holds only once `createServer` has answered. So the check is the app's to call, once it holds the server and before it listens; `serve` of `@niscorp/moss/node` calls it, and so do `nisc dev`, `nisc build`, `nisc check` and `nisc start` after the project's `boot`; each closes what it built where it refuses. It builds nobody's shell once, after everything is in force, and drops it. What that call returned is checked, and it refuses on:
 

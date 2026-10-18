@@ -1,7 +1,7 @@
 ---
-'@niscorp/moss': minor
-'@niscorp/nisc': minor
-'@niscorp/cli': minor
+'@niscorp/moss': patch
+'@niscorp/nisc': patch
+'@niscorp/cli': patch
 ---
 
 What a person generated and nobody has used for long enough is deleted, with `runtime.artifactsUnusedMs`.
