@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { compile, execute } from '@niscorp/prism';
 import { PGlite } from '@electric-sql/pglite';
 import type { SignalClient } from '@niscorp/cortex';
 import { createPglitePool } from '../../src/adapters/pglite/index.js';
@@ -19,8 +20,14 @@ const called = (): never => {
   throw new Error('the model was called');
 };
 const noModel: SignalClient = { step: called, stepStream: called, count: called, describe: called };
+// The mapping a model would write for rows that already have the shape, with no model.
+const asTheyAre: MapToShape = async (rows, wanted) => {
+  const config = { $ref: '$.result' };
+  const ir = await compile(config);
+  return { ir, config, transformed: execute(ir, { result: JSON.parse(JSON.stringify(Array.isArray(wanted) ? rows : (rows[0] ?? null))) }) };
+};
 
-const world = async (cacheOf: (db: PGlite) => Promise<CacheBackend> = async () => createMemoryCache(), mapToShape: MapToShape = createShapeMapper(noModel)) => {
+const world = async (cacheOf: (db: PGlite) => Promise<CacheBackend> = async () => createMemoryCache(), mapToShape: MapToShape = asTheyAre) => {
   const db = new PGlite();
   await db.exec(`CREATE TABLE people (id serial PRIMARY KEY, name text NOT NULL); INSERT INTO people (name) VALUES ('Ada'), ('Ben');`);
   const asked: { key: string; scope: ScopeValues | undefined }[] = [];
@@ -48,7 +55,7 @@ describe('a query vex writes for a request', () => {
     const intents: (string | undefined)[] = [];
     const { engine } = await world(undefined, async (rows, wanted, intent) => {
       intents.push(intent);
-      return createShapeMapper(noModel)(rows, wanted, intent);
+      return asTheyAre(rows, wanted, intent);
     });
     await engine.execute({ intent: 'everybody, by name', shape: [{ id: 0, name: '' }], context: {} });
     expect(intents).toEqual(['everybody, by name']);

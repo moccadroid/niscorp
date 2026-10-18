@@ -611,7 +611,8 @@ exported from the `@niscorp/vex/agent` subpath — `createQueryDsl` (fills
   builds the same envelope the runtime replays against — `{ result: rows }` for an
   array shape, `{ result: rows[0] ?? null }` for an object shape — runs the agent
   once, with the intent as its `notes`, to get a transform config, compiles it to IR, and applies the IR once over
-  that envelope (the identity, with no model call, when the rows already fit).
+  that envelope. It asks the agent even when the rows already have the shape's keys: a column can fit the shape
+  and still not have the form the intent asks for (a raw timestamp where it asks for `2h ago`).
 
 > The reference agents are a separate concern from the deterministic core: they
 > live behind the `@niscorp/vex/agent` subpath, so `@niscorp/cortex` (and

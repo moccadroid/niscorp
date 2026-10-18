@@ -37,14 +37,6 @@ describe('createShapeMapper', () => {
   };
   const untouchable: SignalClient = { step: called, stepStream: called, count: called, describe: called };
 
-  it('returns the identity for fitting rows without calling the model', async () => {
-    const mapper = createShapeMapper(untouchable);
-    const rows = [{ name: 'Ada', count: 3 }, { name: 'Ben', count: 1 }];
-    const { transformed, config } = await mapper(rows, [{ name: '', count: 0 }]);
-    expect(transformed).toEqual(rows);
-    expect(config).toEqual({ $ref: '$.result' });
-  });
-
   it('hands the mapping model the request the rows answer', async () => {
     const asked: string[] = [];
     const recording = (request: unknown): never => {
@@ -75,11 +67,11 @@ describe('createShapeMapper', () => {
     await expect(createShapeMapper(llm)([{ value: 247000 }], [{ value_display: '' }], 'value formatted as money, like $247K')).rejects.toThrow();
     expect(asked.length).toBeGreaterThan(0);
     expect(asked[0]).toContain('value formatted as money, like $247K');
+
+    asked.length = 0;
+    const fitting = [{ when: '2026-10-18 13:00:00+01' }];
+    await expect(createShapeMapper(llm)(fitting, [{ when: '' }], 'when it happened, like 2h ago')).rejects.toThrow();
+    expect(asked[0]).toContain('when it happened, like 2h ago');
   });
 
-  it('returns the single row for a fitting single shape', async () => {
-    const mapper = createShapeMapper(untouchable);
-    const { transformed } = await mapper([{ value: 40 }], { value: 0 });
-    expect(transformed).toEqual({ value: 40 });
-  });
 });
