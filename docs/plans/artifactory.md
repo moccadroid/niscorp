@@ -720,8 +720,9 @@ shell. On the whole shell (`unverifiedShell`) they see the ref.
 
 ## 8. Open
 
-- How many versions of one artifact are kept, how large a body may be, and
-  when pruning runs. Measure before proposing a number.
+- How large a body may be: no limit yet. How long what a person generated is
+  kept: `runtime.artifactsUnusedMs` since 2026-10-18 (below, "Aging"). How
+  many versions of one artifact: every one, until the artifact ages out.
 - What lyceum shows with the draft. The owner's to say, and to build in a
   session of lyceum's own.
 - Relay's assistant ran an engine of its own over `vex_cache` for the queries
@@ -776,6 +777,22 @@ lyra, lyceum and relay. Cost: one anonymous shell build. Limit: every check
 reads nobody's functions. Declaring functions statically, which would have
 made all of this a boot check with no shell, was proposed and struck by the
 owner.
+
+**Aging** (the owner's: "keep a list of used actions and age them out of the
+pool over time if not used for x time, specifically the generated ones;
+shipped ones always stay; this should probably be an artifactory setting";
+go 2026-10-18). `runtime.artifactsUnusedMs`: a person's artifacts in force are
+stamped as used when a shell is built for them (`artifacts.last_used_at`,
+migration 6, through the save's own entries and row rule, once an hour at
+most: `artifactory/usage.ts`), and a sweep (`data/aging.ts`) as the server
+comes up and then hourly deletes every version of a person's artifact whose
+newest version was neither saved nor used within the limit, and the saves left
+empty. Published never ages; shipped is not a row; no setting deletes nothing;
+`0` or less refuses the boot. **The sweep is raw SQL** in moss, in the raw-SQL
+ledger with its reason: vex keeps every statement to one principal's rows, and
+the sweep crosses them all — the one way to reach abandoned principals (a
+per-principal sweep at their next shell would miss them). A body size limit is
+not built.
 
 **Relay on the artifactory** (the owner's go, 2026-10-18: "make sure that the
 assistant works even better than before"). Ray's functions are
