@@ -1,8 +1,10 @@
 import type { Producer } from '@niscorp/cortex';
 import { collectChannels } from '@niscorp/nova';
+import type { AuditCatalogEntry } from '@niscorp/nova';
 import { getConfigJsonSchema } from '@niscorp/prism';
 import { todayStr } from '@relay/lib/date';
 import { ACTIONS } from '@relay/app/action-catalog';
+import { catalogEntries } from './catalog';
 
 export const today = ((): string =>
   `Today's date is ${todayStr()}. The demo data is generated relative to this date — resolve date-relative requests ("overdue", "due this week") against it.`) satisfies Producer;
@@ -27,6 +29,13 @@ export const knownChannels = (): string[] => {
     for (const channel of [...found.emits, ...found.listens]) channels.add(channel);
   }
   return [...channels].sort();
+};
+
+// What a step may push: a screen the assistant may place is held to its input contract; every other action the app ships is known by id.
+export const pushTargets = (): AuditCatalogEntry[] => {
+  const placeable: AuditCatalogEntry[] = catalogEntries().map((entry) => ({ id: entry.id, input: entry.input }));
+  const known = new Set(placeable.map((entry) => entry.id));
+  return [...placeable, ...Object.keys(ACTIONS).filter((id) => !known.has(id)).map((id) => ({ id }))];
 };
 
 export const channels = ((): string =>

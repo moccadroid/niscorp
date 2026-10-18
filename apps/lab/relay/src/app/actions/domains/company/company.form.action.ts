@@ -34,5 +34,7 @@ export const companyFormInputSchema = z.toJSONSchema(
     industry: z.string().optional(),
     size: z.string().optional(),
     id: z.string().optional(),
+    modalTitle: z.string().optional().describe('modal heading, e.g. "Edit company"'),
+    confirmLabel: z.string().optional().describe('confirm button label, e.g. "Save"'),
   }),
 );

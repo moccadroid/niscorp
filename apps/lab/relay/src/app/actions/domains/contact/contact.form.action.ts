@@ -40,5 +40,7 @@ export const contactFormInputSchema = z.toJSONSchema(
     title: z.string().optional(),
     company: z.string().optional().describe('company id'),
     id: z.string().optional(),
+    modalTitle: z.string().optional().describe('modal heading, e.g. "Edit contact"'),
+    confirmLabel: z.string().optional().describe('confirm button label, e.g. "Save"'),
   }),
 );

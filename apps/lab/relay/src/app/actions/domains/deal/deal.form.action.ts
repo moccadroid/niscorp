@@ -39,5 +39,7 @@ export const dealFormInputSchema = z.toJSONSchema(
     value: z.number().optional(),
     close_date: z.string().optional().describe('ISO date'),
     id: z.string().optional().describe('deal id when editing'),
+    modalTitle: z.string().optional().describe('modal heading, e.g. "Edit deal"'),
+    confirmLabel: z.string().optional().describe('confirm button label, e.g. "Save"'),
   }),
 );

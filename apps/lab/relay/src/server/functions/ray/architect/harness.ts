@@ -1,11 +1,11 @@
 import { createShell, ActionDefinitionSchema, auditAction, type PublicActionRuntime } from '@niscorp/nova';
+import { classifyAudit } from '@niscorp/nova/reflect';
 import { flattenSchemaIssues } from '@niscorp/cortex';
 import { evaluate } from '@niscorp/prism';
 import { buildRegistry } from '@relay/ui';
 import type { RayContext } from '../seams';
 import { todayStr } from '@relay/lib/date';
-import { catalogEntries } from '../catalog';
-import { knownChannels } from '../knowledge';
+import { knownChannels, pushTargets } from '../knowledge';
 
 export type RunResult = {
   ok: boolean;
@@ -146,7 +146,7 @@ export const runAction = async (
   }
 
   const audit = auditAction(parsed.data, {
-    catalog: catalogEntries().map((entry) => ({ id: entry.id, input: entry.input })),
+    catalog: pushTargets(),
     channels: knownChannels(),
   });
   // The binding resolver knows string paths, moustache and the directives below.
@@ -220,7 +220,10 @@ export const runAction = async (
     }
     return issue;
   };
-  if (!audit.ok) return { ok: false, data: {}, loaded: {}, issues: audit.issues.map(clarified) };
+  // The audit reports what it cannot see through — a loop variable bound as `$.row`, a ref a component
+  // dispatches from inside its props — beside what is broken; `classifyAudit` tells the two apart.
+  const toAddress = audit.issues.filter((issue) => classifyAudit(issue, parsed.data).kind === 'address');
+  if (toAddress.length > 0) return { ok: false, data: {}, loaded: {}, issues: toAddress.map(clarified) };
 
   const issues: string[] = [];
   // The session's wire: what an endpoint of this screen calls when it runs for real, as the caller.
