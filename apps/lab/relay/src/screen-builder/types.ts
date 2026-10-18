@@ -61,6 +61,7 @@ export type FindingCode =
   | 'ignored-context'
   | 'empty-pattern'
   | 'dead-trigger'
+  | 'empty-optional'
   | 'no-data'
   | 'endpoint'
   | 'transform'

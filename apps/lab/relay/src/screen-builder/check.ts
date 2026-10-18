@@ -184,6 +184,20 @@ const unshownRows = (components: readonly RenderComponentNode[], definition: Act
     }));
 };
 
+// An optional key sent as "" filters on an empty value; null leaves the filter out.
+const emptyOptionals = (sent: readonly unknown[], proofs: ReadonlyMap<string, Proof>): Finding[] => {
+  const found = new Map<string, Finding>();
+  for (const body of sent) {
+    if (!isRecord(body) || typeof body['fingerprint'] !== 'string' || !isRecord(body['context'])) continue;
+    const proof = proofs.get(body['fingerprint']);
+    for (const [key, value] of Object.entries(body['context'])) {
+      if (value !== '' || proof?.context[key]?.optional !== true) continue;
+      found.set(key, { code: 'empty-optional', message: `a request sent "${key}": "", and "${key}" is optional: "" filters on an empty value, so nothing matches. Send null to leave the filter out: { "$case": { "branches": [ { "when": <the value>, "then": <the value> } ] } } has no else, and gives null.` });
+    }
+  }
+  return [...found.values()];
+};
+
 // A ui:model trigger on a component that never sends one never fires.
 const deadTriggers = (definition: ActionDefinition, components: readonly RenderComponentNode[], setup: ScreenSetup): Finding[] => {
   const inputs = setup.kit.inputs;
@@ -259,6 +273,7 @@ export const checkScreen = async (candidate: unknown, setup: ScreenSetup, option
       ...unshownRows(components, definition, data, setup),
       ...emptyColumns(components, setup),
       ...deadTriggers(definition, components, setup),
+      ...emptyOptionals(mounted.sent, options.proofs ?? new Map()),
     ];
     if (found.length > 0) return { ok: false, findings: found, loaded };
   } finally {

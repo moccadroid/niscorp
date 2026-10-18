@@ -97,6 +97,7 @@ export const makeTools = (setup: ScreenSetup, state: BuildState): ToolDefinition
       'SHOWING WHAT YOU PROVED — an endpoint replays the fingerprint, and the reply is the rows themselves:\n' +
       `{ "url": "${setup.vex.endpoint}", "method": "POST", "request": { "fingerprint": "<from prove>", "context": { … } }, "target": "<data key>" }\n` +
       '- The request context sends every key of kind "context": a value that follows the screen is a binding over its data ({ "$ref": "$.month" }); keys of kind "scope" are filled by the server.\n' +
+      '- A key marked optional is left out by sending null: { "$case": { "branches": [ { "when": { "$ref": "$.stage" }, "then": { "$ref": "$.stage" } } ] } } sends the stage once one is picked and null before. "" is a value, and filters on it.\n' +
       '- A proof takes literal values, the ones the screen would send. To see the rows for another value, replay the fingerprint with it.\n' +
       '- Copy a fingerprint from a prove result, character for character.',
     input: z.object({

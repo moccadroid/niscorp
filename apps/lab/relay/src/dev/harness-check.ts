@@ -176,6 +176,13 @@ const main = async (): Promise<void> => {
   );
   checks.push([`a ui:model trigger on tabs, which are clicked, is reported (${said(modelTabs)})`, !modelTabs.ok && codes(modelTabs).includes('dead-trigger')]);
 
+  const emptyOptional = await checkScreen(
+    screen((definition) => ({ ...definition, endpoints: { load: { url: '/api/vex', method: 'POST', request: { fingerprint: 'deals/list', context: { q: { $ref: '$.search' } } }, target: 'rows' } } })),
+    setup,
+    { probes: PROBES, proofs: new Map([['deals/list', { count: 120, context: { q: { kind: 'context', type: 'string', optional: true } } }]]) },
+  );
+  checks.push([`an optional key sent as "" is reported (${said(emptyOptional)})`, !emptyOptional.ok && codes(emptyOptional).includes('empty-optional')]);
+
   const invalid = await checkScreen({ id: 123, endpoints: 'nope' }, setup);
   checks.push([`a definition that is not one is refused (${said(invalid)})`, !invalid.ok && codes(invalid).includes('schema')]);
 

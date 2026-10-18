@@ -8,8 +8,8 @@ const pickedMonth: Example = {
   intent: 'Deals closing in a month picked from June, July and August; picking one reloads the table; clicking a row opens the deal.',
   prove: [
     {
-      intent: 'deals whose close date is on or after start and on or before end, with title, company name, stage, the value, in whole dollars, as money ("$185K", "$1.2M") and the close date as a short date ("Jun 7"), ordered by close date',
-      shape: [{ id: '', title: '', company: '', stage: '', value_display: '', close_date_display: '' }],
+      intent: 'deals whose close date is on or after start and on or before end, with title, company name, stage, the value and the close date as a short date ("Jun 7"), ordered by close date',
+      shape: [{ id: '', title: '', company: '', stage: '', value: 0, close_date_display: '' }],
       context: { start: '2026-06-01', end: '2026-06-30' },
     },
   ],
@@ -41,7 +41,7 @@ const pickedMonth: Example = {
               { label: 'Title', cell: { kind: 'primary', key: 'title' } },
               { label: 'Company', hideNarrow: true, cell: { kind: 'text', key: 'company' } },
               { label: 'Stage', hideNarrow: true, cell: { kind: 'badge', key: 'stage' } },
-              { label: 'Value', align: 'end', cell: { kind: 'text', key: 'value_display', mono: true } },
+              { label: 'Value', align: 'end', cell: { kind: 'text', key: 'value', mono: true } },
               { label: 'Close date', cell: { kind: 'text', key: 'close_date_display' } },
             ],
           },
@@ -134,8 +134,8 @@ const dateRange: Example = {
   intent: 'Deals closing between two dates the person picks; changing either date reloads the table.',
   prove: [
     {
-      intent: 'deals whose close date is on or after start and on or before end, with title, the value, in whole dollars, as money ("$185K", "$1.2M") and the close date as a short date ("Jun 7"), ordered by close date',
-      shape: [{ id: '', title: '', value_display: '', close_date_display: '' }],
+      intent: 'deals whose close date is on or after start and on or before end, with title, the value and the close date as a short date ("Jun 7"), ordered by close date',
+      shape: [{ id: '', title: '', value: 0, close_date_display: '' }],
       context: { start: '2026-06-01', end: '2026-08-31' },
     },
   ],
@@ -163,7 +163,7 @@ const dateRange: Example = {
             rowKey: 'id',
             columns: [
               { label: 'Title', cell: { kind: 'primary', key: 'title' } },
-              { label: 'Value', align: 'end', cell: { kind: 'text', key: 'value_display', mono: true } },
+              { label: 'Value', align: 'end', cell: { kind: 'text', key: 'value', mono: true } },
               { label: 'Close date', cell: { kind: 'text', key: 'close_date_display' } },
             ],
           },
@@ -194,8 +194,8 @@ const dateRange: Example = {
 const headlineAndList: Example = {
   intent: 'The total value of open deals as a headline number, the five biggest open deals below it, and a button that opens the form for a new deal.',
   prove: [
-    { intent: 'the total value of all open deals, in whole dollars, as money ("$8.9M")', shape: { total_display: '' } },
-    { intent: 'the five open deals with the highest value, with title and the value, in whole dollars, as money ("$185K", "$1.2M"), highest first', shape: [{ id: '', title: '', value_display: '' }] },
+    { intent: 'the total value of all open deals', shape: { total: 0 } },
+    { intent: 'the five open deals with the highest value, with title and value, highest first', shape: [{ id: '', title: '', value: 0 }] },
   ],
   action: {
     id: 'deals.headline',
@@ -209,7 +209,7 @@ const headlineAndList: Example = {
           component: 'Row',
           props: { justify: 'space-between', align: 'center' },
           children: [
-            { component: 'Stat', props: { label: 'Open pipeline' }, children: '{{$.summary.total_display}}' },
+            { component: 'Stat', props: { label: 'Open pipeline' }, children: '{{$.summary.total}}' },
             { component: 'Button', ref: 'newDeal', props: { variant: 'primary' }, children: 'New deal' },
           ],
         },
@@ -221,7 +221,7 @@ const headlineAndList: Example = {
             rowKey: 'id',
             columns: [
               { label: 'Title', cell: { kind: 'primary', key: 'title' } },
-              { label: 'Value', align: 'end', cell: { kind: 'text', key: 'value_display', mono: true } },
+              { label: 'Value', align: 'end', cell: { kind: 'text', key: 'value', mono: true } },
             ],
           },
         },
