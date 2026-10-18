@@ -46,11 +46,11 @@ export const sessionDraftOn = ({ saving, liveOf, adopt }: DraftDeps): SessionDra
   };
 
   return {
-    put: (artifacts) =>
+    add: (artifacts) =>
       inTurn(async () => {
         const live = standing();
-        const answered = await savingOrRefuse().put(artifacts, draftedIn(live.draft));
-        return { step: await stepped(live, answered.drafted), artifacts: answered.put };
+        const answered = await savingOrRefuse().add(artifacts, draftedIn(live.draft));
+        return { step: await stepped(live, answered.drafted), artifacts: answered.added };
       }),
     list: () => draftedIn(standing().draft),
     remove: (kind, id) =>

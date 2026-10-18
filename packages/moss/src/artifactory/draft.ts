@@ -17,27 +17,27 @@ export const laidOver = (inForce: readonly SavedVersion[], drafted: readonly Dra
         ...drafted.map((one): SavedVersion => ({ ...one, save: 'draft', copiedFrom: null, createdAt: LATER_THAN_ANY_SAVE })),
       ];
 
-// A shell keeps its draft. What is put into one is checked here, and a draft is saved here, by what a session's save is made of.
+// A shell keeps its draft. What is added to one is checked here, and a draft is saved here, by what a session's save is made of.
 export const draftSaving = (deps: SavedArtifactsDeps) => {
   const { requireHolder, ofKind, askedOf, checkedEach, write } = savingFor(deps, 'moss: nobody is signed in to this session, and a draft is somebody’s to save.');
   return {
-    // The draft with these put into it. Each is checked beside what is in force for its holder with the draft laid over.
-    put: async (artifacts: unknown, drafted: readonly DraftArtifact[]): Promise<{ drafted: DraftArtifact[]; put: { kind: ArtifactKind; id: string }[] }> => {
+    // The draft with these added to it. Each is checked beside what is in force for its holder with the draft laid over.
+    add: async (artifacts: unknown, drafted: readonly DraftArtifact[]): Promise<{ drafted: DraftArtifact[]; added: { kind: ArtifactKind; id: string }[] }> => {
       const holderOf = requireHolder();
       const asked = askedOf(artifacts);
       const { saved, heldTo } = await holderOf();
       const inForce = laidOver(await saved.inForce(), drafted);
       const versions = await checkedEach(asked, inForce, await heldTo(inForce));
-      const put = versions.map(({ kind, id, body }): DraftArtifact => ({ kind, id, body }));
+      const added = versions.map(({ kind, id, body }): DraftArtifact => ({ kind, id, body }));
       // As a save does: marking one in use for a ref takes the mark off the others for it.
-      const marked = new Set(markedRefs(put));
+      const marked = new Set(markedRefs(added));
       const kept = drafted.flatMap((one): DraftArtifact[] => {
-        if (put.some((other) => other.kind === one.kind && other.id === one.id)) return [];
+        if (added.some((other) => other.kind === one.kind && other.id === one.id)) return [];
         const ref = refOf(one.body);
         const loses = one.kind === 'layout' && isRecord(one.body) && one.body['use'] === true && ref !== undefined && marked.has(ref);
         return [loses && isRecord(one.body) ? { ...one, body: withoutMark(one.body) } : one];
       });
-      return { drafted: [...kept, ...put], put: idsOf(versions) };
+      return { drafted: [...kept, ...added], added: idsOf(versions) };
     },
 
     save: async (drafted: readonly DraftArtifact[]): Promise<{ save: string; artifacts: { kind: ArtifactKind; id: string }[] }> => {

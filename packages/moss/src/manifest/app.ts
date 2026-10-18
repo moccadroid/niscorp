@@ -122,11 +122,11 @@ export type SessionArtifacts = {
 
 export type DraftArtifact = { kind: ArtifactKind; id: string; body: unknown };
 
-// What is being generated in this one shell, before it is saved. A put is in
-// the shell when it answers. Nothing of it is kept anywhere else, and it is
+// What is being generated in this one shell, before it is saved. What is added
+// is in the shell when the add answers. Nothing of it is kept anywhere else, and it is
 // gone when the shell is.
 export type SessionDraft = {
-  put: (artifacts: readonly { kind: ArtifactKind; id?: string; body: unknown }[]) => Promise<{ step: number; artifacts: readonly { kind: ArtifactKind; id: string }[] }>;
+  add: (artifacts: readonly { kind: ArtifactKind; id?: string; body: unknown }[]) => Promise<{ step: number; artifacts: readonly { kind: ArtifactKind; id: string }[] }>;
   list: () => readonly DraftArtifact[];
   remove: (kind: ArtifactKind, id: string) => Promise<{ step: number }>;
   // `0`: none of it.

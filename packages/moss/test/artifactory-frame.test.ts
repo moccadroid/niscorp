@@ -91,10 +91,10 @@ describe('the layout of the app’s own shell, saved from a session', () => {
 
   it('a draft of the app’s own shell takes one, and a draft of a page’s does not', async () => {
     const { draftOn } = world();
-    const put = await draftOn(SHELL, 'ada').put([frame(framed('as ada drafts it'))], []);
-    expect(put.drafted.map((one) => one.body)).toEqual([{ ref: 'frame', layout: framed('as ada drafts it'), use: true }]);
+    const added = await draftOn(SHELL, 'ada').add([frame(framed('as ada drafts it'))], []);
+    expect(added.drafted.map((one) => one.body)).toEqual([{ ref: 'frame', layout: framed('as ada drafts it'), use: true }]);
 
-    await expect(draftOn(ABOUT, 'ada').put([frame(framed('for the page'))], [])).rejects.toThrow(nothingUnder('frame'));
+    await expect(draftOn(ABOUT, 'ada').add([frame(framed('for the page'))], [])).rejects.toThrow(nothingUnder('frame'));
   });
 });
 
@@ -169,10 +169,10 @@ describe('the layout of a canvas of the app’s own shell, saved from a session'
 
   it('a draft of the app’s own shell takes one, and a draft of a page’s does not', async () => {
     const { draftOn } = world();
-    const put = await draftOn(SHELL, 'ada').put([forSide(saying('each, as ada drafts it'))], []);
-    expect(put.drafted.map((one) => one.body)).toEqual([{ ref: 'canvas/side', layout: saying('each, as ada drafts it'), use: true }]);
+    const added = await draftOn(SHELL, 'ada').add([forSide(saying('each, as ada drafts it'))], []);
+    expect(added.drafted.map((one) => one.body)).toEqual([{ ref: 'canvas/side', layout: saying('each, as ada drafts it'), use: true }]);
 
-    await expect(draftOn(ABOUT, 'ada').put([forSide(saying('for the page'))], [])).rejects.toThrow(nothingUnder('canvas/side'));
+    await expect(draftOn(ABOUT, 'ada').add([forSide(saying('for the page'))], [])).rejects.toThrow(nothingUnder('canvas/side'));
   });
 
   it('is refused for a canvas that has no layout of its own, one that names a stored layout, and one the shell does not have', async () => {

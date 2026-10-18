@@ -123,7 +123,7 @@ const generated = (text: string): { kind: 'action'; body: unknown } => ({ kind: 
 const GENERATED = /^generated\.[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 describe('the draft of a function’s session', () => {
-  it('what is put is in that shell when the put answers: it is opened on the next line, nothing was saved, and no other shell has it, another of the same person’s included', async () => {
+  it('what is added is in that shell when the add answers: it is opened on the next line, nothing was saved, and no other shell has it, another of the same person’s included', async () => {
     const here = process();
     await stopping(here, async () => {
       const ada = await here.sessionOf('ada');
@@ -131,12 +131,12 @@ describe('the draft of a function’s session', () => {
       const adasPage = await here.onThePage('ada');
       await settle();
 
-      const put = await ada.session.draft.put([generated('what the assistant drafted')]);
-      const id = put.artifacts[0]?.id ?? '';
+      const added = await ada.session.draft.add([generated('what the assistant drafted')]);
+      const id = added.artifacts[0]?.id ?? '';
       ada.session.shell.push('main', id);
       await settle();
 
-      expect(put).toEqual({ step: 1, artifacts: [{ kind: 'action', id: expect.stringMatching(GENERATED) }] });
+      expect(added).toEqual({ step: 1, artifacts: [{ kind: 'action', id: expect.stringMatching(GENERATED) }] });
       expect(ada.drawn()).toContain('what the assistant drafted');
       expect(() => ben.session.shell.push('main', id)).toThrow();
       expect(() => adasPage.shell.push('main', id)).toThrow();
@@ -159,7 +159,7 @@ describe('the draft of a function’s session', () => {
 
       const open = ada.session.shell.getCanvasState('main').stack.at(-1)?.id ?? '';
       ada.session.shell.getRuntime(open)?.setData({ title: 'Typed since' });
-      await ada.session.draft.put([{ kind: 'layout', body: { ref: 'action/words', layout: { component: 'Heading', children: '$.title' }, use: true } }]);
+      await ada.session.draft.add([{ kind: 'layout', body: { ref: 'action/words', layout: { component: 'Heading', children: '$.title' }, use: true } }]);
       await settle();
       expect(ada.drawn()).toContain('"name":"Heading"');
       expect(ada.drawn()).toContain('Typed since');
@@ -172,7 +172,7 @@ describe('the draft of a function’s session', () => {
     });
   });
 
-  it('a put that names one the person saved is a new take of it in the draft: the saved one stands until the draft is saved, and is back when it is discarded', async () => {
+  it('an add that names one the person saved is a new take of it in the draft: the saved one stands until the draft is saved, and is back when it is discarded', async () => {
     const here = process();
     await stopping(here, async () => {
       const ada = await here.sessionOf('ada');
@@ -181,7 +181,7 @@ describe('the draft of a function’s session', () => {
       const id = saved.artifacts[0]?.id ?? '';
       const take = { kind: 'layout' as const, id, body: { ref: 'action/words', layout: saying('a new take of it'), use: true } };
 
-      await ada.session.draft.put([take]);
+      await ada.session.draft.add([take]);
       await settle();
       expect(ada.drawn()).toContain('a new take of it');
       expect((await ada.session.artifacts.history('layout', id)).map((version) => version.save)).toEqual([saved.save]);
@@ -190,7 +190,7 @@ describe('the draft of a function’s session', () => {
       await settle();
       expect(ada.drawn()).toContain('as ada saved it');
 
-      await ada.session.draft.put([take]);
+      await ada.session.draft.add([take]);
       const kept = await ada.session.draft.save();
       await settle();
       expect(ada.drawn()).toContain('a new take of it');
@@ -207,23 +207,23 @@ describe('the draft of a function’s session', () => {
       await settle();
 
       const gone = 'moss: this session’s shell is gone, and its draft with it.';
-      await expect(ada.session.draft.put([generated('too late')])).rejects.toThrow(gone);
+      await expect(ada.session.draft.add([generated('too late')])).rejects.toThrow(gone);
       await expect(ada.session.draft.save()).rejects.toThrow(gone);
       await expect(ada.session.draft.discard()).rejects.toThrow(gone);
       expect(() => ada.session.draft.list()).toThrow(gone);
     });
   });
 
-  it('a put that is being taken when its shell is replaced says the shell is gone', async () => {
+  it('an add that is being taken when its shell is replaced says the shell is gone', async () => {
     const here = process();
     await stopping(here, async () => {
       const ada = await here.sessionOf('ada');
       await settle();
 
-      // The put is checked, and the shell asks for itself with the draft and waits.
+      // The add is checked, and the shell asks for itself with the draft and waits.
       here.identityAsked.next = ['answers', 'waits'];
-      const putting = ada.session.draft.put([generated('put into a shell that is replaced meanwhile')]);
-      const refused = expect(putting).rejects.toThrow('moss: this session’s shell is gone, and its draft with it.');
+      const adding = ada.session.draft.add([generated('added to a shell that is replaced meanwhile')]);
+      const refused = expect(adding).rejects.toThrow('moss: this session’s shell is gone, and its draft with it.');
       await settle();
       here.hosts.reset('ada');
       await settle();
@@ -238,7 +238,7 @@ describe('the draft of a function’s session', () => {
     await stopping(here, async () => {
       const ada = await here.sessionOf('ada');
       await settle();
-      await ada.session.draft.put([generated('drafted, then the shell was replaced')]);
+      await ada.session.draft.add([generated('drafted, then the shell was replaced')]);
       here.hosts.reset('ada');
       await settle();
 
@@ -252,7 +252,7 @@ describe('the draft of a function’s session', () => {
     await stopping(here, async () => {
       const ada = await here.sessionOf('ada');
       await settle();
-      const put = await ada.session.draft.put([generated('drafted in the old shell')]);
+      const added = await ada.session.draft.add([generated('drafted in the old shell')]);
 
       // The build of the new shell waits. An adopt asks for the old shell, with its draft, and waits too.
       here.identityAsked.next = ['waits'];
@@ -271,88 +271,88 @@ describe('the draft of a function’s session', () => {
       await settle();
       const again = await here.sessionOf('ada');
 
-      expect(() => again.session.shell.push('main', put.artifacts[0]?.id ?? '')).toThrow();
+      expect(() => again.session.shell.push('main', added.artifacts[0]?.id ?? '')).toThrow();
       expect(again.session.draft.list()).toEqual([]);
     });
   });
 
-  it('a change that is asked for while a put is taken and answered after it is asked for again with the draft: the put stays', async () => {
+  it('a change that is asked for while an add is taken and answered after it is asked for again with the draft: the add stays', async () => {
     const here = process();
     await stopping(here, async () => {
       const ada = await here.sessionOf('ada');
       await settle();
 
-      // The put is checked, and the shell asks for itself with the draft and waits.
+      // The add is checked, and the shell asks for itself with the draft and waits.
       here.identityAsked.next = ['answers', 'waits'];
-      const putting = ada.session.draft.put([generated('put while the app changed')]);
+      const adding = ada.session.draft.add([generated('added while the app changed')]);
       await settle();
       // A change to the app is asked for meanwhile, with the draft as it still is, and waits too.
       here.identityAsked.next = ['waits'];
       here.adoptAll();
       here.identityAsked.letGo(1);
-      const put = await putting;
+      const added = await adding;
       here.identityAsked.letGo();
       await settle();
 
-      expect(() => ada.session.shell.push('main', put.artifacts[0]?.id ?? '')).not.toThrow();
+      expect(() => ada.session.shell.push('main', added.artifacts[0]?.id ?? '')).not.toThrow();
     });
   });
 
-  it('a put that was composed before a change the shell has adopted since is composed again: the shell keeps the change and has the put', async () => {
+  it('an add that was composed before a change the shell has adopted since is composed again: the shell keeps the change and has the add', async () => {
     const here = process();
     await stopping(here, async () => {
       const ada = await here.sessionOf('ada');
       await settle();
-      const notes: ActionDefinition = { id: 'ext.notes', layout: saying('handed over while the put was taken') };
+      const notes: ActionDefinition = { id: 'ext.notes', layout: saying('handed over while the add was taken') };
 
-      // What the shell is made of with the put is composed, and held back.
+      // What the shell is made of with the add is composed, and held back.
       here.composed.next = ['held'];
-      const putting = ada.session.draft.put([generated('put before the app changed')]);
+      const adding = ada.session.draft.add([generated('added before the app changed')]);
       await settle();
       // The app changes, and the shell adopts that.
       here.running.replace('extras', { 'ext.notes': notes });
       await settle();
       here.composed.letGo();
-      const put = await putting;
+      const added = await adding;
       await settle();
 
       expect(() => ada.session.shell.push('main', 'ext.notes')).not.toThrow();
-      expect(() => ada.session.shell.push('main', put.artifacts[0]?.id ?? '')).not.toThrow();
+      expect(() => ada.session.shell.push('main', added.artifacts[0]?.id ?? '')).not.toThrow();
     });
   });
 
-  it('calls on one draft are taken in turn: two puts at once are two steps, and a put during a save is the first of a new draft', async () => {
+  it('calls on one draft are taken in turn: two adds at once are two steps, and an add during a save is the first of a new draft', async () => {
     const here = process();
     await stopping(here, async () => {
       const ada = await here.sessionOf('ada');
       await settle();
       const draft = ada.session.draft;
 
-      const [first, second] = await Promise.all([draft.put([generated('one')]), draft.put([generated('two')])]);
+      const [first, second] = await Promise.all([draft.add([generated('one')]), draft.add([generated('two')])]);
       expect([first.step, second.step]).toEqual([1, 2]);
       expect(draft.list().map((drafted) => drafted.id)).toEqual([first.artifacts[0]?.id, second.artifacts[0]?.id]);
       expect(() => ada.session.shell.push('main', first.artifacts[0]?.id ?? '')).not.toThrow();
 
-      const [saved, third] = await Promise.all([draft.save(), draft.put([generated('three')])]);
+      const [saved, third] = await Promise.all([draft.save(), draft.add([generated('three')])]);
       expect(saved.artifacts.map((artifact) => artifact.id)).toEqual([first.artifacts[0]?.id, second.artifacts[0]?.id]);
       expect(third.step).toBe(1);
       expect(draft.list().map((drafted) => drafted.id)).toEqual([third.artifacts[0]?.id]);
 
-      await draft.put([generated('four')]);
+      await draft.add([generated('four')]);
       await Promise.all([draft.show(2), draft.show(1)]);
       expect(draft.list().map((drafted) => drafted.id)).toEqual([third.artifacts[0]?.id]);
     });
   });
 
-  it('a put that marks a layout in use takes the mark off the draft’s others for that ref, as a save does', async () => {
+  it('an add that marks a layout in use takes the mark off the draft’s others for that ref, as a save does', async () => {
     const here = process();
     await stopping(here, async () => {
       const ada = await here.sessionOf('ada');
       await settle();
       const take = (text: string): { kind: 'layout'; body: unknown } => ({ kind: 'layout', body: { ref: 'action/words', layout: saying(text), use: true } });
 
-      const first = await ada.session.draft.put([take('the first take')]);
-      const second = await ada.session.draft.put([take('the second take')]);
+      const first = await ada.session.draft.add([take('the first take')]);
+      const second = await ada.session.draft.add([take('the second take')]);
       await settle();
 
       expect(ada.drawn()).toContain('the second take');
@@ -369,15 +369,15 @@ describe('the draft of a function’s session', () => {
       const ada = await here.sessionOf('ada');
       await settle();
 
-      const put = await ada.session.draft.put([{ kind: 'fragment', body: { layout: { component: 'Heading', children: [{ slot: 'body' }] } } }]);
-      ada.session.shell.push('main', 'words', undefined, [put.artifacts[0]?.id ?? '']);
+      const added = await ada.session.draft.add([{ kind: 'fragment', body: { layout: { component: 'Heading', children: [{ slot: 'body' }] } } }]);
+      ada.session.shell.push('main', 'words', undefined, [added.artifacts[0]?.id ?? '']);
       await settle();
 
       expect(ada.drawn()).toContain('"name":"Heading"');
     });
   });
 
-  it('each put or removal is a numbered step, the shell shows the draft as it was after a step, and a put after that goes on from there', async () => {
+  it('each add or removal is a numbered step, the shell shows the draft as it was after a step, and an add after that goes on from there', async () => {
     const here = process();
     await stopping(here, async () => {
       const ada = await here.sessionOf('ada');
@@ -389,9 +389,9 @@ describe('the draft of a function’s session', () => {
         body: { ref: 'action/words', layout: saying(text), use: true },
       });
 
-      const first = await draft.put([layout('the first take')]);
+      const first = await draft.add([layout('the first take')]);
       const id = first.artifacts[0]?.id ?? '';
-      const second = await draft.put([layout('the second take', id)]);
+      const second = await draft.add([layout('the second take', id)]);
       expect([first.step, second.step]).toEqual([1, 2]);
       expect(draft.list().map((drafted) => drafted.id)).toEqual([id]);
       await settle();
@@ -408,7 +408,7 @@ describe('the draft of a function’s session', () => {
       expect(draft.list()).toEqual([]);
 
       await draft.show(1);
-      const third = await draft.put([layout('the third take', id)]);
+      const third = await draft.add([layout('the third take', id)]);
       expect(third.step).toBe(2);
       await settle();
       expect(ada.drawn()).toContain('the third take');
@@ -428,9 +428,9 @@ describe('the draft of a function’s session', () => {
       const ada = await here.sessionOf('ada');
       const ben = await here.sessionOf('ben');
       await settle();
-      const action = await ada.session.draft.put([generated('a screen to keep')]);
+      const action = await ada.session.draft.add([generated('a screen to keep')]);
       const id = action.artifacts[0]?.id ?? '';
-      const layout = await ada.session.draft.put([{ kind: 'layout', body: { ref: `action/${id}`, layout: saying('and its layout, redone'), use: true } }]);
+      const layout = await ada.session.draft.add([{ kind: 'layout', body: { ref: `action/${id}`, layout: saying('and its layout, redone'), use: true } }]);
       ada.session.shell.push('main', id);
       await settle();
       expect(ada.drawn()).toContain('and its layout, redone');
@@ -459,8 +459,8 @@ describe('the draft of a function’s session', () => {
     await stopping(here, async () => {
       const ada = await here.sessionOf('ada');
       await settle();
-      const put = await ada.session.draft.put([generated('gone with the shell')]);
-      const id = put.artifacts[0]?.id ?? '';
+      const added = await ada.session.draft.add([generated('gone with the shell')]);
+      const id = added.artifacts[0]?.id ?? '';
 
       here.hosts.reset('ada');
       await settle();
@@ -471,24 +471,24 @@ describe('the draft of a function’s session', () => {
     });
   });
 
-  it('a change to what the app consists of leaves the draft in the shell: one asked for before a put and answered after it, and one after', async () => {
+  it('a change to what the app consists of leaves the draft in the shell: one asked for before an add and answered after it, and one after', async () => {
     const here = process();
     await stopping(here, async () => {
       const ada = await here.sessionOf('ada');
       await settle();
 
-      // The adopt asks who this is and waits; the put is asked for, checked and taken meanwhile.
+      // The adopt asks who this is and waits; the add is asked for, checked and taken meanwhile.
       here.identityAsked.next = ['waits'];
       here.adoptAll();
-      const put = await ada.session.draft.put([generated('still here')]);
+      const added = await ada.session.draft.add([generated('still here')]);
       here.identityAsked.letGo();
       await settle();
-      expect(() => ada.session.shell.push('main', put.artifacts[0]?.id ?? '')).not.toThrow();
+      expect(() => ada.session.shell.push('main', added.artifacts[0]?.id ?? '')).not.toThrow();
 
       ada.session.shell.pop('main');
       here.adoptAll();
       await settle();
-      expect(() => ada.session.shell.push('main', put.artifacts[0]?.id ?? '')).not.toThrow();
+      expect(() => ada.session.shell.push('main', added.artifacts[0]?.id ?? '')).not.toThrow();
     });
   });
 
@@ -501,7 +501,7 @@ describe('the draft of a function’s session', () => {
       await settle();
       expect(ada.drawn()).toContain('as ada saved it');
 
-      await ada.session.draft.put([{ kind: 'layout', id: saved.artifacts[0]?.id, body: { ref: 'action/words', layout: saying('as ada saved it') } }]);
+      await ada.session.draft.add([{ kind: 'layout', id: saved.artifacts[0]?.id, body: { ref: 'action/words', layout: saying('as ada saved it') } }]);
       await settle();
 
       expect(ada.drawn()).toContain('Hello');
@@ -511,27 +511,27 @@ describe('the draft of a function’s session', () => {
 });
 
 describe('what is refused of a draft, with the draft left as it was', () => {
-  it('what a save refuses: a kind, a body, an id that is neither in the draft nor the person’s, a write, two layouts of one put marked in use for one ref; and what this one shell cannot draw, though another of the app’s can', async () => {
+  it('what a save refuses: a kind, a body, an id that is neither in the draft nor the person’s, a write, two layouts of one add marked in use for one ref; and what this one shell cannot draw, though another of the app’s can', async () => {
     const here = process();
     await stopping(here, async () => {
       const ada = await here.sessionOf('ada');
       await settle();
       const draft = ada.session.draft;
-      const kept = await draft.put([generated('the one that stays')]);
+      const kept = await draft.add([generated('the one that stays')]);
 
-      await expect(draft.put([{ kind: 'entry' as 'action', body: {} }])).rejects.toThrow('moss: "entry" is not a kind that is saved. The kinds: layout, action, fragment.');
-      await expect(draft.put([{ kind: 'action', body: { layout: { component: 'Carousel' } } }])).rejects.toThrow(
+      await expect(draft.add([{ kind: 'entry' as 'action', body: {} }])).rejects.toThrow('moss: "entry" is not a kind that is saved. The kinds: layout, action, fragment.');
+      await expect(draft.add([{ kind: 'action', body: { layout: { component: 'Carousel' } } }])).rejects.toThrow(
         'moss: the action is refused: layout uses "Carousel", which this app has no component for',
       );
-      await expect(draft.put([{ kind: 'action', id: 'generated.somebody-elses', body: { layout: saying('x') } }])).rejects.toThrow(
+      await expect(draft.add([{ kind: 'action', id: 'generated.somebody-elses', body: { layout: saying('x') } }])).rejects.toThrow(
         'moss: there is no action "generated.somebody-elses" of yours. Leave the id out, and moss gives a new action its id.',
       );
       await expect(
-        draft.put([{ kind: 'action', body: { endpoints: { close: { url: '/api/vex', method: 'POST', request: { fingerprint: 'deals/close' } } }, layout: saying('x') } }]),
+        draft.add([{ kind: 'action', body: { endpoints: { close: { url: '/api/vex', method: 'POST', request: { fingerprint: 'deals/close' } } }, layout: saying('x') } }]),
       ).rejects.toThrow('moss: the action is refused: endpoint "close" replays "deals/close", which is a write, and what is generated only reads');
       const marked = (text: string): { kind: 'layout'; body: unknown } => ({ kind: 'layout', body: { ref: 'action/words', layout: saying(text), use: true } });
-      await expect(draft.put([marked('one'), marked('two')])).rejects.toThrow('moss: two layouts of one save are marked in use for "action/words". One is in use at a time.');
-      await expect(draft.put([{ kind: 'layout', body: { ref: 'action/words', layout: { component: 'Carousel' } } }])).rejects.toThrow(
+      await expect(draft.add([marked('one'), marked('two')])).rejects.toThrow('moss: two layouts of one save are marked in use for "action/words". One is in use at a time.');
+      await expect(draft.add([{ kind: 'layout', body: { ref: 'action/words', layout: { component: 'Carousel' } } }])).rejects.toThrow(
         'moss: the layout for "action/words" is refused: layout uses "Carousel", which this app has no component for',
       );
 
@@ -540,24 +540,24 @@ describe('what is refused of a draft, with the draft left as it was', () => {
     });
   });
 
-  it('a put the shell could not take: the draft is as it was, and nothing of the put reaches the screen, at once or at a later change', async () => {
+  it('an add the shell could not take: the draft is as it was, and nothing of the add reaches the screen, at once or at a later change', async () => {
     const said = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const here = process();
     await stopping(here, async () => {
       const ada = await here.sessionOf('ada');
       await settle();
-      const first = await ada.session.draft.put([generated('the first')]);
+      const first = await ada.session.draft.add([generated('the first')]);
 
-      // The check asks who this is and is answered; the shell, taking the put, asks again and is not.
+      // The check asks who this is and is answered; the shell, taking the add, asks again and is not.
       here.identityAsked.next = ['answers', 'fails'];
-      const refused = ada.session.draft.put([{ kind: 'layout', body: { ref: 'action/words', layout: saying('a look that was not taken'), use: true } }]);
+      const refused = ada.session.draft.add([{ kind: 'layout', body: { ref: 'action/words', layout: saying('a look that was not taken'), use: true } }]);
       await expect(refused).rejects.toThrow('who this is could not be asked');
       here.adoptAll();
       await settle();
 
       expect(ada.session.draft.list().map((drafted) => drafted.id)).toEqual([first.artifacts[0]?.id]);
       expect(ada.drawn()).not.toContain('a look that was not taken');
-      const next = await ada.session.draft.put([generated('the third')]);
+      const next = await ada.session.draft.add([generated('the third')]);
       expect(next.step).toBe(2);
     });
     said.mockRestore();
@@ -567,7 +567,7 @@ describe('what is refused of a draft, with the draft left as it was', () => {
     const here = process();
     await stopping(here, async () => {
       const nobody = await here.sessionOf(null);
-      await expect(nobody.session.draft.put([generated('anybody’s')])).rejects.toThrow('moss: nobody is signed in to this session, and a draft is somebody’s to save.');
+      await expect(nobody.session.draft.add([generated('anybody’s')])).rejects.toThrow('moss: nobody is signed in to this session, and a draft is somebody’s to save.');
       expect(nobody.session.draft.list()).toEqual([]);
     });
   });

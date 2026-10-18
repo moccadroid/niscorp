@@ -133,13 +133,13 @@ describe('a frame saved from a function’s session', () => {
     }
   });
 
-  it('put into a draft, it is in that one shell when the put answers, and gone with the draft, its canvas too', async () => {
+  it('added to a draft, it is in that one shell when the add answers, and gone with the draft, its canvas too', async () => {
     const here = standing();
     try {
       const ada = await here.screenOf('ada');
       await settle();
 
-      await here.sessionOf('ada').draft.put([inUse(framed('as ada drafts it', slot('notes')))]);
+      await here.sessionOf('ada').draft.add([inUse(framed('as ada drafts it', slot('notes')))]);
       ada.push('notes');
       await settle();
       expect(ada.frame()).toContain('"name":"as ada drafts it"');

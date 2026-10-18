@@ -451,7 +451,7 @@ functions: (session) => [
 - **It reaches its owner's open shells a moment after the save answers**, as a
   saved layout does, and not before: a function that saves an action and
   opens it in the same call finds it not there yet. One that is to be seen at
-  once is put into the draft (`session.draft`, below), which answers when the
+  once is added to the draft (`session.draft`, below), which answers when the
   shell has it.
 - **What it defines replays reads, and calls the functions its owner's roles
   grant.** An `fn:` endpoint names a function its owner's roles grant in the
@@ -552,7 +552,7 @@ its mapping, its shape and its intent.
   replay is refused, where one over such an entry the app ships is left out.
 - **A generated action may replay a read its owner saved**, as it may an entry
   the app ships that its owner may replay. A draft takes a read too, and an
-  action put into the same draft may replay it.
+  action added to the same draft may replay it.
 - **What is refused**, in a sentence: a read with no id, or with a body; one
   under the fingerprint of an entry the app ships or was handed; one vex did
   not write for a request; a write; one whose mapping vex kept no config for
@@ -689,7 +689,7 @@ is (a reset, an idle shell that was dropped, a restart).
 
 ```typescript
 type SessionDraft = {
-  put: (artifacts: readonly { kind: ArtifactKind; id?: string; body: unknown }[]) => Promise<{ step: number; artifacts: readonly { kind: ArtifactKind; id: string }[] }>;
+  add: (artifacts: readonly { kind: ArtifactKind; id?: string; body: unknown }[]) => Promise<{ step: number; artifacts: readonly { kind: ArtifactKind; id: string }[] }>;
   list: () => readonly { kind: ArtifactKind; id: string; body: unknown }[];
   remove: (kind: ArtifactKind, id: string) => Promise<{ step: number }>;
   show: (step: number) => Promise<void>;
@@ -704,37 +704,37 @@ functions: (session) => [
     id: 'screen.try',
     description: 'Shows an action the person is trying out, without keeping it. Send { action }.',
     execute: async ({ action }) => {
-      const put = await session.draft.put([{ kind: 'action', body: action }]);
-      session.shell.push('main', put.artifacts[0].id);
+      const added = await session.draft.add([{ kind: 'action', body: action }]);
+      session.shell.push('main', added.artifacts[0].id);
     },
   },
   { id: 'screen.keep', description: 'Keeps what the person is trying out.', execute: async () => session.draft.save() },
 ],
 ```
 
-- **`put` takes what `session.artifacts.save` takes and refuses what it
+- **`add` takes what `session.artifacts.save` takes and refuses what it
   refuses**, with the same sentences. Each artifact is checked beside what is
   in force for the principal with the draft laid over, so a layout may be for
   an action that is itself in the draft. A draft is one shell's, so what is
-  put into it is held to the components of that shell, where a save is held to
+  added to it is held to the components of that shell, where a save is held to
   those of any shell of the app. A new action or fragment gets its
   `generated.` id here, and keeps it when the draft is saved. An `id` names
   one in the draft, or one the principal saved: a new take of it, which stands
   in for the saved one in this shell until the draft is saved or the take is
-  taken out. A put that marks a layout `use: true` takes the mark off the
+  taken out. An add that marks a layout `use: true` takes the mark off the
   draft's others for that ref, as a save does.
-- **A put is in the shell when it answers.** The function that put an action
+- **What is added is in the shell when the add answers.** The function that added an action
   opens it on its next line. An open screen follows a drafted layout with what
-  was typed into it kept, as it follows a saved one. A put the shell could not
+  was typed into it kept, as it follows a saved one. An add the shell could not
   take rejects, and the draft is as it was.
 - **What the shell draws**: what is in the draft, then what `session.artifacts`
   would draw. A drafted layout marked `use: true` is drawn in place of a saved
   one that is marked for the same ref.
 - **`list`** answers what the draft holds, and **`remove`** takes one out of
   it; what is under it is drawn again. **`discard`** empties it.
-- **Each put or removal is a numbered step**, from 1. **`show(step)`** has the
+- **Each add or removal is a numbered step**, from 1. **`show(step)`** has the
   shell show the draft as it was after that step, and `show(0)` none of it. A
-  put or a removal while an earlier step is shown goes on from that step: the
+  add or a removal while an earlier step is shown goes on from that step: the
   steps after it are dropped. The steps are the draft's and are saved nowhere.
 - **`save`** is one save of what the draft holds, as the principal's own and
   under the ids it had, checked once more. The draft is then empty and the

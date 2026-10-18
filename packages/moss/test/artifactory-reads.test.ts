@@ -154,10 +154,10 @@ describe('a read vex wrote for a request, saved from a session', () => {
   it('a draft takes one, and an action in the same draft may replay it', async () => {
     const { running } = await world();
     const draft = running.draftSavingFor(SHELL, 'ada', async () => ({ roles: ['member'], installed: undefined, saved: rowsDouble().as('ada'), replayable: async () => ['deals/open'] }));
-    const put = await draft.put([read('fp_written')], []);
-    expect(put.put).toEqual([{ kind: 'read', id: 'fp_written' }]);
+    const added = await draft.add([read('fp_written')], []);
+    expect(added.added).toEqual([{ kind: 'read', id: 'fp_written' }]);
 
-    const both = await draft.put([replaying('fp_written')], put.drafted);
+    const both = await draft.add([replaying('fp_written')], added.drafted);
     await expect(draft.save(both.drafted)).resolves.toBeDefined();
   });
 });

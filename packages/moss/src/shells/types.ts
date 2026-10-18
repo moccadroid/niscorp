@@ -41,9 +41,9 @@ export type ShellLimits = {
   endpointTimeoutMs?: number;
 };
 
-// What a shell asks of whoever checks what is put into its draft, and saves it.
+// What a shell asks of whoever checks what is added to its draft, and saves it.
 export type DraftSaving = {
-  put: (artifacts: unknown, drafted: readonly DraftArtifact[]) => Promise<{ drafted: readonly DraftArtifact[]; put: readonly { kind: ArtifactKind; id: string }[] }>;
+  add: (artifacts: unknown, drafted: readonly DraftArtifact[]) => Promise<{ drafted: readonly DraftArtifact[]; added: readonly { kind: ArtifactKind; id: string }[] }>;
   save: (drafted: readonly DraftArtifact[]) => Promise<{ save: string; artifacts: readonly { kind: ArtifactKind; id: string }[] }>;
 };
 
