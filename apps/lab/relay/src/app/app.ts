@@ -18,6 +18,7 @@ import { USERS } from '@relay/server/users';
 import { authFunctions } from '@relay/server/functions/auth';
 import { rayFunctions } from '@relay/server/functions/ray';
 import { modelFunctions } from '@relay/server/functions/models';
+import { buildRegistry } from '@relay/ui';
 
 export const buildRelay = (): NiscApp => defineApp({
   charter: CHARTER,
@@ -45,6 +46,8 @@ export const buildRelay = (): NiscApp => defineApp({
       { id: DEVTOOLS_CANVAS },
     ],
     layout: frameLayout,
+    // The session renders only the components it is told of, or that a shipped screen uses: a generated screen may use any of relay's.
+    components: Object.fromEntries(buildRegistry().list().map((name) => [name, {}])),
     fragments: { modal: modalFragment, quickview: quickviewFragment, panel: panelFragment, dock: dockFragment },
     inputs: ({ principal, actions, roles }) => {
       const has = (id: string): boolean => actions.includes(id);
