@@ -14,7 +14,8 @@ import { settingsInputSchema } from '@relay/app/actions/surfaces/settings/settin
 
 export type CatalogEntry = { id: string; description: string; input: Record<string, unknown> };
 
-const SEED: CatalogEntry[] = [
+// The screens the app ships that the assistant may place. The ones a session built or kept are the session's own list.
+const SHIPPED: readonly CatalogEntry[] = [
   { id: 'home', description: 'Dashboard.', input: homeInputSchema },
   { id: 'crm.deals', description: 'Deals — table or pipeline board.', input: dealsInputSchema },
   { id: 'crm.contacts', description: 'Contacts list.', input: contactsInputSchema },
@@ -30,18 +31,10 @@ const SEED: CatalogEntry[] = [
   { id: 'tasks.form', description: 'Form to create or edit a task; the user submits it.', input: taskFormInputSchema },
 ];
 
-const LIVE: CatalogEntry[] = [...SEED];
-const IDS = new Set(LIVE.map((entry) => entry.id));
+const IDS: ReadonlySet<string> = new Set(SHIPPED.map((entry) => entry.id));
 
-export const catalogEntries = (): ReadonlyArray<CatalogEntry> => LIVE;
+export const catalogEntries = (): ReadonlyArray<CatalogEntry> => SHIPPED;
 export const catalogIds = (): ReadonlySet<string> => IDS;
-
-export const registerCatalogEntry = (entry: CatalogEntry): void => {
-  const index = LIVE.findIndex((candidate) => candidate.id === entry.id);
-  if (index >= 0) LIVE[index] = entry;
-  else LIVE.push(entry);
-  IDS.add(entry.id);
-};
 
 export const VIZ_COMPONENTS = ['Box', 'Stack', 'Row', 'Grid', 'Text', 'Badge', 'Avatar', 'Icon', 'Table'];
 

@@ -6,7 +6,7 @@ import { vexGuide } from '@niscorp/vex';
 import type { QueryRequest } from '@niscorp/vex';
 import { layoutAgent, paletteFromRegistry } from '@niscorp/nova/agent';
 import { buildRegistry } from '@relay/ui';
-import type { RayContext } from './engine';
+import type { RayContext } from './seams';
 import { todayStr } from '@relay/lib/date';
 import { listContactsPrism } from '@relay/app/actions/domains/contact';
 import { listCompaniesPrism } from '@relay/app/actions/domains/company';
@@ -14,11 +14,18 @@ import { listDealsPrism } from '@relay/app/actions/domains/deal';
 import { catalogIds, VIZ_COMPONENTS, VIZ_OMIT_PROPS } from './catalog';
 import { styleGuide } from './knowledge';
 import { llmFor } from '@relay/server/llm';
-import { makeBuildActionTool } from './architect';
+import type { ScreenTools } from './architect';
 
 export type Turn = {
   lastResult?: { result: unknown; shape: unknown; intent: string };
   pendingView?: { layout: unknown; data: unknown };
+};
+
+// A reply the session's wire has unwrapped is the rows; one another wire hands over whole is { result }.
+const unwrapped = (body: unknown): unknown => (body !== null && typeof body === 'object' && !Array.isArray(body) && 'result' in body ? (body as Record<string, unknown>)['result'] : body);
+const rowsOf = (body: unknown): Record<string, unknown>[] => {
+  const result = unwrapped(body);
+  return Array.isArray(result) ? (result as Record<string, unknown>[]) : [];
 };
 
 type Lookup = { prism: unknown; sortBy: string; idKey: string; labelKey: string };
@@ -41,7 +48,7 @@ const LOOKUPS: Record<string, Lookup> = {
 export const makeTools = (
   ray: RayContext,
   turn: Turn,
-  opts: { dataTools?: boolean; buildTool?: ToolDefinition } = {},
+  opts: { dataTools?: boolean; screens?: ScreenTools } = {},
 ): ToolDefinition[] => {
   const { shell, userId } = ray;
   const stackTool = defineTool({
@@ -82,7 +89,7 @@ export const makeTools = (
           return `clear ${canvas}.`;
         }
         if (action === undefined || action === '') return `${op} needs an \`action\`.`;
-        if (!catalogIds().has(action)) return `Unknown action "${action}". Use one from ACTIONS.`;
+        if (!catalogIds().has(action) && opts.screens?.has(action) !== true) return `Unknown action "${action}". Use one from ACTIONS.`;
         const data = (input ?? {}) as Record<string, unknown>;
         const fragments =
           canvas === 'modal' ? (action.endsWith('.form') ? ['modal'] : ['panel']) : undefined;
@@ -118,9 +125,9 @@ export const makeTools = (
         userId,
         today: todayStr(),
       }) as QueryRequest;
-      const rt = await ray.engine();
-      const res = await rt.engine.execute(request, { scope: { userId } });
-      const rows = (res.result ?? []) as Record<string, unknown>[];
+      const res = await ray.wire('/api/vex', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(request) });
+      if (!res.ok) return `find_records failed (${res.status}): ${(await res.text()).slice(0, 300)}`;
+      const rows = rowsOf(await res.json());
       return rows.slice(0, 5).map((r) => ({ id: r[cfg.idKey], label: r[cfg.labelKey] }));
     },
   });
@@ -158,21 +165,17 @@ export const makeTools = (
     }),
     execute: async ({ intent, shape, context, fingerprint }) => {
       try {
-        const rt = await ray.engine();
-        const res = await rt.engine.execute(
-          {
-            ...(intent !== undefined ? { intent } : {}),
-            ...(shape !== undefined ? { shape } : {}),
-            ...(fingerprint !== undefined ? { fingerprint } : {}),
-            context: (context ?? {}) as Record<string, unknown>,
-          },
-          { scope: { userId } },
-        );
-        turn.lastResult = {
-          result: res.result,
-          shape,
-          intent: intent ?? res.meta.cache.intent ?? '',
-        };
+        const ctx = (context ?? {}) as Record<string, unknown>;
+        if (fingerprint !== undefined) {
+          const res = await ray.wire('/api/vex', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ fingerprint, context: ctx }) });
+          if (!res.ok) return `query failed (${res.status}): ${(await res.text()).slice(0, 300)}`;
+          const result = unwrapped(await res.json());
+          turn.lastResult = { result, shape, intent: intent ?? '' };
+          return { result, meta: { cache: { fingerprint } } };
+        }
+        if (intent === undefined) return 'query needs an `intent` and a `shape`, or a `fingerprint` to replay.';
+        const res = await ray.answerIntent({ intent, shape, context: ctx });
+        turn.lastResult = { result: res.result, shape, intent };
         return res;
       } catch (e) {
         return `query failed: ${(e as Error).message}`;
@@ -237,10 +240,8 @@ export const makeTools = (
     },
   });
 
-  // The per-turn fallback forgets what it built, so it cannot edit in a later
-  // message: it is for the dev checks that build in one turn and exit.
-  const buildTool = opts.buildTool ?? makeBuildActionTool(ray);
+  const screens = opts.screens === undefined ? [] : [opts.screens.build, opts.screens.keep, opts.screens.discard];
   return opts.dataTools === false
-    ? [stackTool, queryTool, buildTool]
-    : [stackTool, queryTool, dataTool, visualizeTool, buildTool];
+    ? [stackTool, queryTool, ...screens]
+    : [stackTool, queryTool, dataTool, visualizeTool, ...screens];
 };

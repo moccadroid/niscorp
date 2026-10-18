@@ -1,14 +1,12 @@
-import { z } from 'zod';
-import { defineTool, type CortexEvent, type SignalClient, type ToolDefinition } from '@niscorp/cortex';
-import { ActionDefinitionSchema, type Shell, type ActionDefinition } from '@niscorp/nova';
+import type { CortexEvent, SignalClient } from '@niscorp/cortex';
+import { ActionDefinitionSchema, type ActionDefinition } from '@niscorp/nova';
 import { llmFor } from '@relay/server/llm';
-import { registerCatalogEntry } from '../catalog';
+import { ENTRIES } from '@relay/app/vex';
 import { makeArchitectTools, type QueryProof } from './tools';
 import { makeArchitectAgent } from './architect.agent';
-import type { RayContext } from '../engine';
+import type { RayContext } from '../seams';
 import { editingGuide } from './producers';
 import { validatorAgent, type ValidatorVerdict } from './validator.agent';
-import { runAction } from './harness';
 
 export type BuildLlms = { agent: SignalClient; support: SignalClient; validator: SignalClient };
 
@@ -89,38 +87,44 @@ export const runActionArchitect = async (
   };
 };
 
-// A generated id is forced into `view.*` so it cannot overwrite a
-// hand-authored screen: registerAction replaces silently.
-const namespaceActionId = (definition: ActionDefinition): ActionDefinition =>
-  definition.id.startsWith('view.') ? definition : { ...definition, id: `view.${definition.id}` };
+const intentOf = (body: unknown): string | undefined =>
+  body !== null && typeof body === 'object' && typeof (body as Record<string, unknown>)['intent'] === 'string' ? ((body as Record<string, unknown>)['intent'] as string) : undefined;
 
 // The validator needs each fingerprint's proven intent: ordering, limits and
-// filters live inside the query, invisible in the definition.
+// filters live inside the query, invisible in the definition. A query the app
+// ships says its intent in its entry; one vex wrote says it in the read that
+// was saved or put into the draft, or in the proof of this build, which is
+// where a query proved a moment ago is before the screen is placed.
 export const queryIntentsOf = async (
-  ray: RayContext,
+  ray: Pick<RayContext, 'artifacts' | 'draft'>,
   action: ActionDefinition,
+  proofs: ReadonlyMap<string, QueryProof> = new Map(),
 ): Promise<Record<string, string>> => {
-  const rt = await ray.engine();
-  const out: Record<string, string> = {};
   const serialized = JSON.stringify(action);
   const fps = new Set([...serialized.matchAll(/"((?:fp_[0-9a-f]{16})|(?:[a-z]+\/[A-Za-z]+))"/g)].map((m) => m[1] ?? ''));
-  for (const fp of fps) {
-    const entry = await rt.engine.cache.get(fp).catch(() => undefined);
-    if (entry !== undefined && entry.kind === 'ok' && entry.intent !== undefined) out[fp] = entry.intent;
+  const known = new Map<string, string>(ENTRIES.flatMap((entry) => (entry.intent === undefined ? [] : [[entry.fingerprint, entry.intent] as const])));
+  for (const version of [...(await ray.artifacts.list('read')), ...ray.draft.list().filter((artifact) => artifact.kind === 'read')]) {
+    const intent = intentOf(version.body);
+    if (intent !== undefined) known.set(version.id, intent);
   }
-  return out;
+  for (const [fingerprint, proof] of proofs) if (proof.intent !== undefined) known.set(fingerprint, proof.intent);
+  return Object.fromEntries([...fps].flatMap((fp) => {
+    const intent = known.get(fp);
+    return intent === undefined ? [] : [[fp, intent] as const];
+  }));
 };
 
-const review = async (
+export const review = async (
   ray: RayContext,
   llm: SignalClient,
   intent: string,
   action: ActionDefinition,
   report: { issues: string[]; loaded: Record<string, string> },
   opts: BuildOptions,
+  proofs: ReadonlyMap<string, QueryProof> = new Map(),
 ): Promise<ValidatorVerdict | undefined> => {
   const result = await validatorAgent.run(
-    { intent, action, report: { ...report, queries: await queryIntentsOf(ray, action) } },
+    { intent, action, report: { ...report, queries: await queryIntentsOf(ray, action, proofs) } },
     {
       llm,
       ...(opts.agentPath && { agentPath: opts.agentPath }),
@@ -128,124 +132,4 @@ const review = async (
     },
   ).result;
   return result.ok ? result.output.data : undefined;
-};
-
-export const makeBuildActionTool = (ray: RayContext): ToolDefinition => {
-  const builtActions = new Map<string, ActionDefinition>();
-
-  return defineTool({
-    id: 'ray.build',
-    name: 'build_action',
-    riskLevel: 'medium',
-    // Above the architect's 6-minute stop plus the review and repair round, so
-    // the agents' own bounds end a slow build, not this timeout.
-    timeoutMs: 12 * 60_000,
-    description:
-      'Design a NEW interactive screen (a real Nova action, built and verified by a design agent, placed on `main`) — ' +
-      'or, with `edit`, change a screen this tool built earlier.',
-    guide:
-      'Describe the data to show and EVERY interaction fully — e.g. "a table of the top 10 open deals by value ' +
-      'showing company, stage, value and close date; click a row to open the deal". To CHANGE a screen built ' +
-      'earlier, pass `edit` with its action id and describe only the change — never rebuild a working screen from ' +
-      'scratch. If a build fails, report the error — the builder already continued from its best attempt; do not ' +
-      're-call with the same intent. Never assemble a screen with other tools. ' +
-      'Do NOT use this to open an existing screen — use `stack` for that.',
-    input: z.object({
-      intent: z
-        .string()
-        .describe('A complete description of the screen: the data (records, filters, sorting) and every interaction. In edit mode: only the change.'),
-      // No transform to normalize null: tool inputs travel as JSON Schema and
-      // z.toJSONSchema throws on transforms.
-      edit: z
-        .string()
-        .nullish()
-        .describe('The id of a screen this tool built earlier (e.g. "view.task-command-center") — modify that screen instead of building a new one.'),
-    }),
-    execute: async ({ intent, edit }, ctx) => {
-      const llms = architectLlms();
-      if ('error' in llms) return llms.error;
-
-      // Models send `edit: null` for "not editing".
-      const editId = edit ?? undefined;
-      const base = editId !== undefined ? builtActions.get(editId) : undefined;
-      if (editId !== undefined && base === undefined) {
-        const known = [...builtActions.keys()].join(', ');
-        return `No action "${editId}" was built in this session${known.length > 0 ? ` — built: ${known}` : ''}. Build it fresh without \`edit\`.`;
-      }
-
-      const pipelineOpts: BuildOptions = { onEvent: ctx.forward, agentPath: ctx.agentPath };
-
-      let buildResult = await runActionArchitect(ray, llms.agent, llms.support, intent, {
-        ...pipelineOpts,
-        ...(base !== undefined && { base }),
-      });
-      if (!buildResult.ok && buildResult.candidate !== undefined) {
-        const problems = buildResult.issues?.length ? buildResult.issues.join('\n') : buildResult.error;
-        buildResult = await runActionArchitect(
-          ray,
-          llms.agent,
-          llms.support,
-          `Fix these problems. Keep everything else exactly as it is:\n${problems}`,
-          { ...pipelineOpts, base: buildResult.candidate },
-        );
-      }
-      if (!buildResult.ok) {
-        return `build failed: ${buildResult.error}${buildResult.issues && buildResult.issues.length > 0 ? ` — ${buildResult.issues.join('; ')}` : ''}`;
-      }
-      let builtAction =
-        base !== undefined
-          ? { ...namespaceActionId(buildResult.action), id: base.id }
-          : namespaceActionId(buildResult.action);
-
-      let report = await runAction(ray, builtAction, undefined, buildResult.proofs);
-      let verdict = await review(ray, llms.validator, intent, builtAction, { issues: report.issues, loaded: report.loaded }, pipelineOpts);
-      const blockers = (v: ValidatorVerdict | undefined): string[] =>
-        (v?.findings ?? []).filter((f) => f.severity === 'blocker').map((f) => `- ${f.fix} (intent: ${f.claim})`);
-      const firstBlockers = blockers(verdict);
-      if (firstBlockers.length > 0) {
-        const repairResult = await runActionArchitect(ray, llms.agent, llms.support, `Fix these findings:\n${firstBlockers.join('\n')}`, {
-          ...pipelineOpts,
-          base: builtAction,
-        });
-        if (repairResult.ok) {
-          builtAction = { ...namespaceActionId(repairResult.action), id: builtAction.id };
-          report = await runAction(ray, builtAction, undefined, repairResult.proofs);
-          verdict = await review(ray, llms.validator, intent, builtAction, { issues: report.issues, loaded: report.loaded }, pipelineOpts);
-        }
-      }
-
-      builtActions.set(builtAction.id, builtAction);
-      ray.shell.registerAction(builtAction);
-      registerCatalogEntry({
-        id: builtAction.id,
-        description: builtAction.description ?? builtAction.name ?? 'Generated screen.',
-        input: builtAction.input ?? {},
-      });
-      const remaining = blockers(verdict);
-      const reviewNote =
-        verdict === undefined
-          ? ' (review unavailable this run)'
-          : remaining.length > 0
-            ? ` UNRESOLVED after one repair: ${verdict.findings
-                .filter((f) => f.severity === 'blocker')
-                .map((f) => f.claim)
-                .join('; ')}.`
-            : verdict.findings.length > 0
-              ? ` Verified with minor warts: ${verdict.findings.map((f) => f.claim).join('; ')}.`
-              : ' Verified: does what was asked.';
-      // A screen that failed review is registered, so `edit` can repair it, but
-      // not placed.
-      const shipped = remaining.length === 0;
-      if (shipped) ray.shell.push('main', builtAction.id);
-
-      return {
-        forModel: shipped
-          ? `${base !== undefined ? 'Updated' : 'Built and placed'} "${builtAction.id}" on main.${reviewNote}${buildResult.reasoning ? ` ${buildResult.reasoning}` : ''}`
-          : `NOT PLACED — "${builtAction.id}" failed review and is NOT on the canvas.${reviewNote} ` +
-            'Report this to the user VERBATIM, including that the screen was not placed and what is unresolved. ' +
-            'Do not summarise it as success. To fix it, call build_action again with `edit` set to this id and the unresolved findings as the change request.',
-        forTrace: { action: builtAction, placed: shipped, ...(verdict !== undefined && { findings: verdict.findings }) },
-      };
-    },
-  });
 };

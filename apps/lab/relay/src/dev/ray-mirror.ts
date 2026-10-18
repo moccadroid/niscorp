@@ -4,20 +4,15 @@ import type { CortexEvent } from '@niscorp/cortex';
 import { createServer as createHttpServer } from 'node:http';
 import { attachSocket } from '@niscorp/moss/node';
 import { offerToken, PROTOCOL } from '@niscorp/moss/protocol';
-import { shell, runtime, server } from './check-shell';
+import { shell, server } from './check-shell';
 import { mintToken } from '../server/users';
 import { rayAgent } from '@relay/server/functions/ray/agent';
-import { makeBuildActionTool } from '@relay/server/functions/ray/architect';
+import { makeScreenTools } from '@relay/server/functions/ray/architect';
 import { makeTools, type Turn } from '@relay/server/functions/ray/tools';
 import { traceWiring, type TraceStep } from '@relay/server/functions/ray/trace';
 import { RAY_STEP_CHANNEL } from '@relay/server/functions/ray/run';
-import { rayEngine, type RayContext } from '@relay/server/functions/ray/engine';
+import { devRayContext } from './engine';
 import { llmFor, assign, isModelId } from '@relay/server/llm';
-import { createScopePolicy, scopeGrants } from '@niscorp/vex';
-import { resolvePrincipal } from '@niscorp/charter';
-import { CHARTER } from '@relay/app/charter';
-import { scopeBehaviors } from '@relay/app/vex/behaviors';
-import { TABLES } from '@relay/db/schema';
 
 const MESSAGE_REF = {
   value:
@@ -35,8 +30,8 @@ const main = async (): Promise<void> => {
   const direct = process.argv.includes('--direct');
   const attached = process.argv.includes('--attached');
 
-  const policy = createScopePolicy(resolvePrincipal(CHARTER, scopeGrants(TABLES), ['sales', 'dev'], 'data'), scopeBehaviors);
-  const ray: RayContext = { shell, userId: 'usr_001', policy, engine: () => rayEngine(runtime, policy) };
+  const ray = devRayContext({ shell, roles: ['sales', 'dev'] });
+  const screens = makeScreenTools(ray);
   const outDir = join(
     'C:/Users/manxx/AppData/Local/Temp/claude/C--Users-manxx-Development-niscorp/2dcaa551-d6ad-4235-a03c-dfd279d85e40/scratchpad',
     'ray-mirror', new Date().toISOString().replace(/[:.]/g, '-'),
@@ -80,7 +75,7 @@ const main = async (): Promise<void> => {
     const trace: TraceStep[] = [];
     let pending: TraceStep[] | undefined;
     let timer: ReturnType<typeof setTimeout> | undefined;
-    const wiring = traceWiring(makeTools(ray, turn), trace, (steps) => {
+    const wiring = traceWiring(makeTools(ray, turn, { screens }), trace, (steps) => {
       pending = steps;
       timer ??= setTimeout(() => { timer = undefined; if (pending) shell.publish(RAY_STEP_CHANNEL, pending); pending = undefined; }, 400);
     });
@@ -88,8 +83,8 @@ const main = async (): Promise<void> => {
     const t0 = Date.now();
     const result = await rayAgent.run([{ role: 'user', content: MESSAGE_REF.value }], {
       llm: chat.llm,
-      deps: { shell },
-      tools: makeTools(ray, turn),
+      deps: { shell, screens: screens.entries },
+      tools: makeTools(ray, turn, { screens }),
       onEvent: (e: CortexEvent) => { events++; wiring.onEvent(e); put({ ev: e.type, ...(e.type === 'tool-start' ? { tool: e.call.toolId, input: JSON.stringify(e.call.args).slice(0, 400) } : {}), ...(e.type === 'retry' ? { kind: e.kind, issues: String(e.issues).slice(0, 300) } : {}) }); },
       onToolResult: [wiring.onToolResult],
     }).result;
@@ -106,11 +101,11 @@ const main = async (): Promise<void> => {
     const trace: TraceStep[] = [];
     let pending: TraceStep[] | undefined;
     let timer: ReturnType<typeof setTimeout> | undefined;
-    const wiring = traceWiring(makeTools(ray, turn), trace, (steps) => {
+    const wiring = traceWiring(makeTools(ray, turn, { screens }), trace, (steps) => {
       pending = steps;
       timer ??= setTimeout(() => { timer = undefined; if (pending) shell.publish(RAY_STEP_CHANNEL, pending); pending = undefined; }, 400);
     });
-    const tool = makeBuildActionTool(ray);
+    const tool = screens.build;
     const t0 = Date.now();
     const out = await tool.config.execute(
       { intent: MESSAGE_REF.value },

@@ -1,14 +1,14 @@
 import type { FunctionHandler } from '@niscorp/nova';
-import type { FunctionSession } from '@niscorp/moss';
+import type { FunctionDefinition, FunctionSession } from '@niscorp/moss';
 import type { Message } from '@niscorp/signal';
 import { makeTools, type Turn } from './tools';
-import { makeBuildActionTool } from './architect';
+import { makeScreenTools } from './architect';
 import { rayAgent } from './agent';
 import { llmFor } from '@relay/server/llm';
 import { traceWiring, type TraceStep } from './trace';
 import { sessionStore, type ChatMessage } from './sessions';
-import { rayEngine, type RayContext, type RaySeams } from './engine';
-import { unverifiedShell } from '@niscorp/moss/unverified';
+import type { RayContext } from './seams';
+import { intentWriters } from './writers';
 
 // The assistant action names the same string in its trigger.
 export const RAY_STEP_CHANNEL = 'ray:step';
@@ -21,22 +21,22 @@ const toTranscript = (messages: ChatMessage[]): Message[] =>
     m.role === 'user' ? { role: 'user', content: m.text } : { role: 'assistant', content: m.text },
   );
 
-export const rayFunctions = (session: FunctionSession, seams: RaySeams): Record<string, FunctionHandler> => {
+export const rayFunctions = (session: FunctionSession): FunctionDefinition[] => {
   const userId = session.principal ?? 'anonymous';
   const store = sessionStore(userId);
   const ray: RayContext = {
     // A getter: moss hands the shell just after the session finishes building.
     get shell() {
-      return unverifiedShell(session);
+      return session.shell;
     },
     userId,
-    get policy() {
-      return seams.policyFor(session.roles);
-    },
-    engine: () => rayEngine(seams.runtime, seams.policyFor(session.roles)),
+    wire: session.wire,
+    answerIntent: (asked) => session.answerIntent(intentWriters(), asked),
+    draft: session.draft,
+    artifacts: session.artifacts,
   };
-  // One build tool for the session: its memory of built actions lets `edit` work in a later message.
-  const buildTool = makeBuildActionTool(ray);
+  // One set of screen tools for the session: its memory of the screens built lets `edit` work in a later message.
+  const screens = makeScreenTools(ray);
   let inFlight: AbortController | undefined;
 
   const run: FunctionHandler = async (data) => {
@@ -52,7 +52,7 @@ export const rayFunctions = (session: FunctionSession, seams: RaySeams): Record<
     const messages = messagesOf(data);
 
     const trace: TraceStep[] = [];
-    const tools = makeTools(ray, turn, { buildTool });
+    const tools = makeTools(ray, turn, { screens });
     // Throttled: publishing on every event re-renders and re-flushes the whole
     // chat frame inside the agent's event path, which starves the stream until
     // the provider rejects it. The flush after the run makes the last state exact.
@@ -74,7 +74,7 @@ export const rayFunctions = (session: FunctionSession, seams: RaySeams): Record<
     const wiring = traceWiring(tools, trace, announce);
     const result = await rayAgent.run(toTranscript(messages), {
       llm: chat.llm,
-      deps: { shell: ray.shell },
+      deps: { shell: ray.shell, screens: screens.entries },
       tools,
       onEvent: wiring.onEvent,
       onToolResult: [wiring.onToolResult],
@@ -100,42 +100,45 @@ export const rayFunctions = (session: FunctionSession, seams: RaySeams): Record<
     return { text, trace, ms, view };
   };
 
-  const load: FunctionHandler = async () => {
-    const current = store.ensureCurrent();
-    return { messages: current.messages, sessions: store.sessionList(), currentId: current.id, debug: store.getDebug() };
-  };
+  const chatOf = (session: { id: string; messages: ChatMessage[] }): Record<string, unknown> => ({
+    messages: session.messages,
+    sessions: store.sessionList(),
+    currentId: session.id,
+    debug: store.getDebug(),
+  });
 
-  const newSession: FunctionHandler = async () => {
-    const session = store.newSession();
-    return { messages: session.messages, sessions: store.sessionList(), currentId: session.id, debug: store.getDebug() };
-  };
-
-  const switchSession: FunctionHandler = async (data) => {
-    const id = String(data['currentId'] ?? '');
-    const session = store.switchTo(id);
-    return { messages: session.messages, sessions: store.sessionList(), currentId: session.id, debug: store.getDebug() };
-  };
-
-  return {
-    'ray.run': run,
-    'ray.load': load,
-    'ray.newSession': newSession,
-    'ray.switch': switchSession,
-    'ray.getDebug': async () => store.getDebug(),
-    'ray.setDebug': async (data) => {
-      store.setDebug(data['rayDebug'] === true);
-      return store.getDebug();
+  return [
+    { id: 'ray.run', description: 'Runs one turn of the assistant over the chat so far, and answers its reply with the steps it took. Send { messages }.', execute: run },
+    { id: 'ray.load', description: 'Answers the current chat, the list of chats and whether debug is on.', execute: async () => chatOf(store.ensureCurrent()) },
+    { id: 'ray.newSession', description: 'Starts a new chat and makes it the current one.', execute: async () => chatOf(store.newSession()) },
+    { id: 'ray.switch', description: 'Makes another chat the current one. Send { currentId }.', execute: async (data) => chatOf(store.switchTo(String(data['currentId'] ?? ''))) },
+    { id: 'ray.getDebug', description: 'Answers whether the assistant’s debug view is on.', execute: async () => store.getDebug() },
+    {
+      id: 'ray.setDebug',
+      description: 'Turns the assistant’s debug view on or off. Send { rayDebug }.',
+      execute: async (data) => {
+        store.setDebug(data['rayDebug'] === true);
+        return store.getDebug();
+      },
     },
-    'ray.stop': async () => {
-      const running = inFlight !== undefined;
-      inFlight?.abort();
-      inFlight = undefined;
-      return running ? 'stopped' : 'nothing running';
+    {
+      id: 'ray.stop',
+      description: 'Stops the turn that is running, if one is.',
+      execute: async () => {
+        const running = inFlight !== undefined;
+        inFlight?.abort();
+        inFlight = undefined;
+        return running ? 'stopped' : 'nothing running';
+      },
     },
-    'ray.storageSize': async () => store.estimate(),
-    'ray.clearSessions': async () => {
-      store.clear();
-      return 'cleared';
+    { id: 'ray.storageSize', description: 'Answers how much the chats of this person take up.', execute: async () => store.estimate() },
+    {
+      id: 'ray.clearSessions',
+      description: 'Deletes every chat of this person.',
+      execute: async () => {
+        store.clear();
+        return 'cleared';
+      },
     },
-  };
+  ];
 };

@@ -1,11 +1,6 @@
 import { shell, runtime } from './check-shell';
 import { architectLlms, runActionArchitect } from '@relay/server/functions/ray/architect';
-import { rayEngine, type RayContext } from '@relay/server/functions/ray/engine';
-import { createScopePolicy, scopeGrants } from '@niscorp/vex';
-import { resolvePrincipal } from '@niscorp/charter';
-import { CHARTER } from '@relay/app/charter';
-import { scopeBehaviors } from '@relay/app/vex/behaviors';
-import { TABLES } from '@relay/db/schema';
+import { devRayContext, rayEngine, policyOf } from './engine';
 
 const BUILD_INTENT =
   'A screen listing all deals whose close date falls in a selected month. A dropdown offers June, July and ' +
@@ -53,8 +48,7 @@ const mountRows = async (action: { id: string }): Promise<number> => {
 const main = async (): Promise<void> => {
   const llms = architectLlms();
   if ('error' in llms) { console.error(llms.error); process.exit(2); }
-  const policy = createScopePolicy(resolvePrincipal(CHARTER, scopeGrants(TABLES), ['sales', 'dev'], 'data'), scopeBehaviors);
-  const ray: RayContext = { shell, userId: 'usr_001', policy, engine: () => rayEngine(runtime, policy) };
+  const ray = devRayContext({ shell, roles: ['sales', 'dev'] });
 
   console.log('── build ──');
   const t0 = Date.now();
@@ -79,7 +73,7 @@ const main = async (): Promise<void> => {
   const fp = /"(fp_[0-9a-f]{16})"/.exec(editedJson)?.[1];
   let sepVerdict = 'no fp found';
   if (fp !== undefined) {
-    const { engine } = await rayEngine(runtime, policy);
+    const { engine } = await rayEngine(runtime, policyOf(['sales', 'dev']));
     try {
       const res = await engine.execute(
         { fingerprint: fp, context: { start: '2026-09-01', end: '2026-09-30' } },

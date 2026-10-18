@@ -1,16 +1,11 @@
 import { mkdirSync, appendFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { shell, runtime } from './check-shell';
+import { shell } from './check-shell';
 import { INTENTS } from './architect-suite';
 import { architectLlms, queryIntentsOf, runActionArchitect, validatorAgent } from '@relay/server/functions/ray/architect';
 import { runAction } from '@relay/server/functions/ray/architect/harness';
 import { llmFor } from '@relay/server/llm';
-import { rayEngine, type RayContext } from '@relay/server/functions/ray/engine';
-import { createScopePolicy, scopeGrants } from '@niscorp/vex';
-import { resolvePrincipal } from '@niscorp/charter';
-import { CHARTER } from '@relay/app/charter';
-import { scopeBehaviors } from '@relay/app/vex/behaviors';
-import { TABLES } from '@relay/db/schema';
+import { devRayContext } from './engine';
 
 const SUITE_DIR =
   'C:/Users/manxx/AppData/Local/Temp/claude/C--Users-manxx-Development-niscorp/2dcaa551-d6ad-4235-a03c-dfd279d85e40/scratchpad/architect-suite';
@@ -80,8 +75,7 @@ const MUTATIONS: Record<string, (a: Action) => Action | null> = { wrongPush, dro
 const main = async (): Promise<void> => {
   const llm = llmFor('validator');
   if ('error' in llm) { console.error(llm.error); process.exit(2); }
-  const policy = createScopePolicy(resolvePrincipal(CHARTER, scopeGrants(TABLES), ['sales', 'dev'], 'data'), scopeBehaviors);
-  const ray: RayContext = { shell, userId: 'usr_001', policy, engine: () => rayEngine(runtime, policy) };
+  const ray = devRayContext({ shell, roles: ['sales', 'dev'] });
 
   const outDir = join(SUITE_DIR, '..', 'validator-suite', new Date().toISOString().replace(/[:.]/g, '-'));
   mkdirSync(outDir, { recursive: true });

@@ -2,9 +2,7 @@ import { createShell, ActionDefinitionSchema, auditAction, type PublicActionRunt
 import { flattenSchemaIssues } from '@niscorp/cortex';
 import { evaluate } from '@niscorp/prism';
 import { buildRegistry } from '@relay/ui';
-import { handleQuery, handleDiscovery } from '@niscorp/vex';
-import { resourceEntities } from '@relay/app/vex/resources';
-import type { RayContext } from '../engine';
+import type { RayContext } from '../seams';
 import { todayStr } from '@relay/lib/date';
 import { catalogEntries } from '../catalog';
 import { knownChannels } from '../knowledge';
@@ -225,39 +223,8 @@ export const runAction = async (
   if (!audit.ok) return { ok: false, data: {}, loaded: {}, issues: audit.issues.map(clarified) };
 
   const issues: string[] = [];
-  type Init = { method?: string; headers?: Record<string, string>; body?: string };
-  type Resp = { ok: boolean; status: number; json: () => Promise<unknown>; text: () => Promise<string> };
-  const wrap = (status: number, body: unknown): Resp => ({
-    ok: status < 400,
-    status,
-    json: () => Promise.resolve(body),
-    text: () => Promise.resolve(JSON.stringify(body)),
-  });
-  // Mirrors moss's session wire, which unwraps a vex reply before the endpoint
-  // sees it: `{ result, meta }` becomes the bare result.
-  const unwrapVex = (status: number, body: unknown): Resp => {
-    if (status >= 400) return wrap(status, body);
-    const result =
-      body !== null && typeof body === 'object' && 'result' in (body as Record<string, unknown>)
-        ? (body as Record<string, unknown>)['result']
-        : body;
-    return wrap(status, result);
-  };
-  const rayFetch = async (url: string, init?: Init): Promise<Resp> => {
-    const parsed = new URL(url, 'http://relay.local');
-    const entities = resourceEntities(parsed.pathname);
-    const { engine, db } = await ray.engine();
-    if ((init?.method ?? 'GET').toUpperCase() === 'GET') {
-      return unwrapVex(200, await handleDiscovery({ engine, entities, scopePolicy: ray.policy }));
-    }
-    const body: unknown = init?.body !== undefined ? JSON.parse(init.body) : {};
-    const res = await handleQuery(
-      { engine, entities, locked: true, scopePolicy: ray.policy, mutations: { client: db, policy: ray.policy } },
-      body,
-      { userId: ray.userId },
-    );
-    return unwrapVex(res.status, res.body);
-  };
+  // The session's wire: what an endpoint of this screen calls when it runs for real, as the caller.
+  const rayFetch = ray.wire;
   const probeFetch: typeof rayFetch = async (url, init) => {
     const res = await rayFetch(url, init);
     if (!res.ok) {

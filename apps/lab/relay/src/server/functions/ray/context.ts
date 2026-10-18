@@ -1,7 +1,8 @@
 import type { Shell } from '@niscorp/nova';
-import { catalogEntries } from './catalog';
+import { catalogEntries, type CatalogEntry } from './catalog';
 
-export const buildContext = (shell: Shell): string => {
+// `screens`: the screens this session built or kept, beside the catalog the app ships.
+export const buildContext = (shell: Shell, screens: readonly CatalogEntry[] = []): string => {
   const state = shell.getState();
   const screen: string[] = [];
   for (const [canvasId, cs] of Object.entries(state.canvases)) {
@@ -18,7 +19,7 @@ export const buildContext = (shell: Shell): string => {
     screen.push(`    data: ${data}`);
   }
 
-  const actions = catalogEntries().map(
+  const actions = [...catalogEntries(), ...screens].map(
     (c) => `  ${c.id} — ${c.description}\n    input: ${JSON.stringify(c.input)}`,
   ).join('\n');
 

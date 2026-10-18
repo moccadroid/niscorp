@@ -2,10 +2,12 @@ import { z } from 'zod';
 import { defineTool, type SignalClient, type ToolDefinition } from '@niscorp/cortex';
 import { mappingAgent, MappingAgentInputSchema } from '@niscorp/prism/agent';
 import { vexGuide } from '@niscorp/vex';
-import type { RayContext } from '../engine';
+import { ENTRIES } from '@relay/app/vex';
+import type { RayContext } from '../seams';
 import { runAction } from './harness';
 
-export type QueryProof = { count: number; contextKeys: string[] };
+// `intent`: what the query answers, for the validator; a replay has none of its own.
+export type QueryProof = { count: number; contextKeys: string[]; intent?: string };
 
 export type ArchitectTools = {
   discover: ToolDefinition;
@@ -21,6 +23,31 @@ const parseMaybeJson = (value: string): unknown => {
   } catch {
     return value;
   }
+};
+
+type Answered = { result: unknown; meta: { cache: { fingerprint?: string }; context: Record<string, { kind: string }>; missingContext?: string[]; warnings?: string[] } };
+
+// A replay goes through the wire, as an action's endpoint does, and answers the rows alone;
+// an intent is answered by vex through the session, with everything it knows of the query.
+const answered = async (ray: RayContext, fingerprint: string | undefined, intent: string | undefined, shape: unknown, context: Record<string, unknown>): Promise<Answered> => {
+  if (fingerprint !== undefined) {
+    const res = await ray.wire('/api/vex', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ fingerprint, context }) });
+    if (!res.ok) throw new Error(`replay of ${fingerprint} failed (${res.status}): ${(await res.text()).slice(0, 300)}`);
+    const body = await res.json();
+    const result = body !== null && typeof body === 'object' && !Array.isArray(body) && 'result' in body ? (body as Record<string, unknown>)['result'] : body;
+    return { result, meta: { cache: { fingerprint }, context: Object.fromEntries(Object.keys(context).map((key) => [key, { kind: 'context' }])) } };
+  }
+  if (intent === undefined) throw new Error('a query needs an intent and a shape, or a fingerprint to replay');
+  const res = await ray.answerIntent({ intent, shape, context });
+  return {
+    result: res.result,
+    meta: {
+      cache: { fingerprint: res.meta.cache.fingerprint },
+      context: res.meta.context,
+      ...(res.meta.missingContext === undefined ? {} : { missingContext: res.meta.missingContext }),
+      ...(res.meta.warnings === undefined ? {} : { warnings: res.meta.warnings }),
+    },
+  };
 };
 
 const canonical = (v: unknown): unknown => {
@@ -51,17 +78,24 @@ export const makeArchitectTools = (supportLlm: SignalClient, ray: RayContext): A
       'replay its fingerprint instead of generating a twin.',
     input: z.object({}),
     execute: async () => {
-      const rt = await ray.engine();
-      const schema = rt.engine.getSchema();
-      if (schema === undefined) return { error: 'schema not introspected yet' };
-      const entities = schema.entities.map((entity) => ({
+      // What the app's vex route tells the caller: the entities their roles may read, with their fields.
+      const res = await ray.wire('/api/vex');
+      if (!res.ok) return { error: `discovery failed (${res.status})` };
+      const discovered = (await res.json()) as { entities?: { name: string; fields: { name: string; type?: string; normalizedType?: string }[] }[] };
+      const entities = (discovered.entities ?? []).map((entity) => ({
         entity: entity.name,
-        fields: entity.fields.map((field) => `${field.name}: ${field.normalizedType}`),
+        fields: entity.fields.map((field) => `${field.name}: ${field.normalizedType ?? field.type ?? ''}`),
       }));
-      const rows = rt.engine.cache.entries !== undefined ? await rt.engine.cache.entries() : [];
-      const queries = rows
-        .filter((row) => row.entry.kind === 'ok')
-        .map((row) => ({ fingerprint: row.key, intent: row.entry.intent ?? '' }));
+      // The queries that already exist: the ones the app ships, and the ones this person saved or put into the draft.
+      const saved = [...(await ray.artifacts.list('read')), ...ray.draft.list().filter((artifact) => artifact.kind === 'read')];
+      const queries = [
+        ...ENTRIES.flatMap((entry) => (entry.intent === undefined ? [] : [{ fingerprint: entry.fingerprint, intent: entry.intent }])),
+        ...saved.flatMap((version) => {
+          const body = version.body;
+          const intent = body !== null && typeof body === 'object' ? (body as Record<string, unknown>)['intent'] : undefined;
+          return typeof intent === 'string' ? [{ fingerprint: version.id, intent }] : [];
+        }),
+      ];
       return { entities, queries };
     },
   });
@@ -143,7 +177,6 @@ export const makeArchitectTools = (supportLlm: SignalClient, ray: RayContext): A
       const shape = typeof rawShape === 'string' ? parseMaybeJson(rawShape) : rawShape;
       // Failures throw: a returned `{ error }` makes a failed proof look like
       // a successful call in the trace.
-      const rt = await ray.engine();
       const ctx = (context ?? {}) as Record<string, unknown>;
       const identity =
         replayFingerprint == null && intent != null
@@ -153,18 +186,13 @@ export const makeArchitectTools = (supportLlm: SignalClient, ray: RayContext): A
       // A fingerprint means replay, so intent and shape are dropped with it: models
       // attach them anyway, and vex's named-slot posture (fingerprint + intent +
       // shape) 409s on a protected entry and silently replaces an unprotected one.
-      const res = await rt.engine.execute(
-        {
-          ...(memoFp !== undefined || replayFingerprint != null
-            ? { fingerprint: memoFp ?? (replayFingerprint as string) }
-            : {
-                ...(intent != null && { intent }),
-                ...(shape !== undefined && { shape }),
-              }),
-          context: ctx,
-        },
-        { scope: { userId: ray.userId } },
-      );
+      const replaying = memoFp ?? (replayFingerprint == null ? undefined : (replayFingerprint as string));
+      // The wire answers a replay's rows alone: a key a query proved in this build needs is checked here.
+      const needed = replaying === undefined ? [] : (proofs.get(replaying)?.contextKeys ?? []).filter((key) => !(key in ctx));
+      const res: Answered =
+        needed.length > 0
+          ? { result: [], meta: { cache: { fingerprint: replaying }, context: {}, missingContext: needed } }
+          : await answered(ray, replaying, intent ?? undefined, shape, ctx);
       if (identity !== undefined && memoFp === undefined && res.meta.cache.fingerprint !== undefined) {
         provenRequests.set(identity, res.meta.cache.fingerprint);
       }
@@ -177,7 +205,7 @@ export const makeArchitectTools = (supportLlm: SignalClient, ray: RayContext): A
         const requiredKeys = Object.entries(bindings)
           .filter(([, meta]) => meta.kind === 'context')
           .map(([key]) => key);
-        proofs.set(fingerprint, { count: Array.isArray(rows) ? rows.length : 1, contextKeys: requiredKeys });
+        proofs.set(fingerprint, { count: Array.isArray(rows) ? rows.length : 1, contextKeys: requiredKeys, ...(intent == null ? {} : { intent }) });
       }
       const shared = {
         ...(missing.length === 0 && { fingerprint }),

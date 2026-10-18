@@ -1,5 +1,5 @@
-import { shell } from './check-shell';
-import { getVexRuntime, systemPolicy } from './engine';
+import { shell, wire } from './check-shell';
+import { devRayContext, getVexRuntime } from './engine';
 import { makeTools } from '@relay/server/functions/ray/tools';
 import { buildContext } from '@relay/server/functions/ray/context';
 import type { ToolContext } from '@niscorp/cortex';
@@ -24,7 +24,7 @@ const main = async (): Promise<void> => {
     signal: new AbortController().signal,
     forward: () => undefined,
   };
-  const [stackTool, queryTool] = makeTools({ shell, userId: 'usr_001', policy: systemPolicy, engine: getVexRuntime }, {});
+  const [stackTool, queryTool] = makeTools(devRayContext({ shell, wire }), {});
   if (stackTool === undefined || queryTool === undefined) {
     console.error('makeTools returned fewer tools than expected');
     process.exit(1);

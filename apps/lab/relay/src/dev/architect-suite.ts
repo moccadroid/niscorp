@@ -2,14 +2,9 @@ import { mkdirSync, writeFileSync, appendFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { CortexEvent } from '@niscorp/cortex';
 import { shell, runtime } from './check-shell';
-import { architectLlms, makeBuildActionTool, runActionArchitect } from '@relay/server/functions/ray/architect';
+import { architectLlms, makeScreenTools, runActionArchitect } from '@relay/server/functions/ray/architect';
 import { assign, isModelId } from '@relay/server/llm';
-import { rayEngine, type RayContext } from '@relay/server/functions/ray/engine';
-import { createScopePolicy, scopeGrants } from '@niscorp/vex';
-import { resolvePrincipal } from '@niscorp/charter';
-import { CHARTER } from '@relay/app/charter';
-import { scopeBehaviors } from '@relay/app/vex/behaviors';
-import { TABLES } from '@relay/db/schema';
+import { devRayContext } from './engine';
 
 export const INTENTS: Record<string, string> = {
   top10:
@@ -121,8 +116,7 @@ const main = async (): Promise<void> => {
   mkdirSync(outDir, { recursive: true });
   console.log(`suite → ${outDir}\n`);
 
-  const policy = createScopePolicy(resolvePrincipal(CHARTER, scopeGrants(TABLES), ['sales', 'dev'], 'data'), scopeBehaviors);
-  const ray: RayContext = { shell, userId: 'usr_001', policy, engine: () => rayEngine(runtime, policy) };
+  const ray = devRayContext({ shell, roles: ['sales', 'dev'] });
 
   const rows: RunRow[] = [];
   for (const [id, intent] of Object.entries(INTENTS)) {
@@ -146,7 +140,7 @@ const main = async (): Promise<void> => {
       };
 
       const t0 = Date.now();
-      const buildTool = pipeline ? makeBuildActionTool(ray) : undefined;
+      const buildTool = pipeline ? makeScreenTools(ray).build : undefined;
       let built: Awaited<ReturnType<typeof runActionArchitect>>;
       let review = '';
       if (buildTool !== undefined) {

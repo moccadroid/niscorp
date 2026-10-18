@@ -1,4 +1,4 @@
-import type { FunctionHandler } from '@niscorp/nova';
+import type { FunctionDefinition } from '@niscorp/moss';
 import { MODELS, assign, assignments, effortOptionsFor, isEffort, isModelId, isRole } from '@relay/server/llm';
 
 const payload = (): Record<string, unknown> => {
@@ -10,19 +10,22 @@ const payload = (): Record<string, unknown> => {
   };
 };
 
-export const modelFunctions = (): Record<string, FunctionHandler> => ({
-  'models.load': async () => payload(),
-
-  'models.assign': async (data) => {
-    const next = (data['models'] as Record<string, unknown> | undefined)?.['assignments'];
-    if (next !== null && typeof next === 'object' && !Array.isArray(next)) {
-      for (const [role, value] of Object.entries(next)) {
-        if (!isRole(role) || value === null || typeof value !== 'object') continue;
-        const { model, effort } = value as { model?: unknown; effort?: unknown };
-        if (!isModelId(model)) continue;
-        assign(role, model, isEffort(effort) ? effort : undefined);
+export const modelFunctions = (): FunctionDefinition[] => [
+  { id: 'models.load', description: 'Answers the models on offer, which one each agent role uses, and the efforts each model takes.', execute: async () => payload() },
+  {
+    id: 'models.assign',
+    description: 'Assigns a model, and an effort, to agent roles. Send { models: { assignments: { <role>: { model, effort? } } } }.',
+    execute: async (data) => {
+      const next = (data['models'] as Record<string, unknown> | undefined)?.['assignments'];
+      if (next !== null && typeof next === 'object' && !Array.isArray(next)) {
+        for (const [role, value] of Object.entries(next)) {
+          if (!isRole(role) || value === null || typeof value !== 'object') continue;
+          const { model, effort } = value as { model?: unknown; effort?: unknown };
+          if (!isModelId(model)) continue;
+          assign(role, model, isEffort(effort) ? effort : undefined);
+        }
       }
-    }
-    return payload();
+      return payload();
+    },
   },
-});
+];

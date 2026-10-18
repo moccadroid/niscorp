@@ -1,7 +1,7 @@
 import { defineAgent, duration, outputRetries, stepCount, type AgentDefinition } from '@niscorp/cortex';
 import { ActionDefinitionSchema, type ActionDefinition } from '@niscorp/nova';
 import { styleGuide, today, ambientContext, channels } from '../knowledge';
-import type { RayContext } from '../engine';
+import type { RayContext } from '../seams';
 import { runAction } from './harness';
 import type { QueryProof } from './tools';
 import { componentPalette, actionCatalog, layoutComposition } from './producers';
