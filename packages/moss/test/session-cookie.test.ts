@@ -136,15 +136,19 @@ describe('a browser on the app’s own page', () => {
     await signIn(first, 'ada');
 
     const kept = page.jar.get(`nisc.token.${port}`);
-    expect(whoIs(decodeURIComponent(kept?.value ?? ''))).toBe('ada');
+    const token = decodeURIComponent(kept?.value ?? '');
+    expect(whoIs(token)).toBe('ada');
     expect(kept?.attributes).toEqual(expect.arrayContaining(['HttpOnly', 'SameSite=Lax', 'Path=/']));
     expect(Number(kept?.attributes.find((attribute) => attribute.startsWith('Max-Age='))?.slice(8))).toBeGreaterThan(50);
     expect(page.storage.size).toBe(0);
     expect(document.cookie).toBe(`nisc.token.${port}.held=1`);
-    for (const address of page.addresses) expect(address).not.toMatch(/st_|token=/);
+    for (const address of page.addresses) {
+      expect(address).not.toContain(token);
+      expect(address).not.toMatch(/token=/);
+    }
     const granted = page.handed.map((frame) => JSON.parse(frame) as Record<string, unknown>).find((frame) => frame['type'] === 'session');
     expect(Object.keys(granted ?? {})).toEqual(['type', 'sealed']);
-    expect(page.handed.join('')).not.toContain('st_');
+    expect(page.handed.join('')).not.toContain(token);
     expect(page.offers.flat().some((entry) => entry.startsWith('nisc.token.'))).toBe(false);
     expect(page.offers.flat()).toContain(`nisc.sealed.${String(granted?.['sealed'])}`);
     expect(page.jar.get('nisc.seal')?.attributes).toEqual(expect.arrayContaining(['HttpOnly', 'Path=/socket', 'SameSite=Lax']));
