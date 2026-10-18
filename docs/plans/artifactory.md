@@ -825,6 +825,24 @@ schema change deletes. The dev scripts keep an engine under `src/dev/engine.ts`
 are no model keys on this machine; typecheck, `ray-check`, `server-check` and
 the lab baseline are what was run.
 
+**Nova's devtools functions described, and the harness on nova's
+classification** (the owner's: "Fix nova as well, no bare maps, we need
+descriptions on functions"; 2026-10-18). `createDevtoolsFunctions` answers
+`FunctionDefinition[]`; the type is nova's, re-exported by moss, and relay
+spreads the list, its own map of descriptions gone. Relay's `harness-check` had
+failed on ten audit issues since before the port. Three were relay's: three
+forms were seeded `modalTitle` and `confirmLabel` their contracts did not
+declare (they do now, as the task form did), and `confirm-delete` was pushed
+but was no screen the assistant may place — a push is now checked against
+every action the app ships. Seven were nova's `auditAction` reporting what it
+cannot see through: a loop variable bound as `$.col`, and the refs a Table
+dispatches from inside its `menu` prop. The harness tells those apart with
+nova's `classifyAudit`, as the devtools audit does, and fails on what is to
+address. Left for a go of its own: `collectInteractive` tracks the loop scope
+and does not use it for `$.key`, and reads refs one prop deep where `refsOf`
+reads every depth — made precise, `classifyAudit` would have nothing to
+downgrade. Nova's `ShellConfig.functions` is still a map of handlers.
+
 **Publishing every kind, as built** (the owner's go, 2026-10-17, after the
 owner asked why only layouts were published: step 5's list had left it to be
 proposed on its own, and it never was). As part 5 decides: whoever publishes
