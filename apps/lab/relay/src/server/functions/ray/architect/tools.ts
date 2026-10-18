@@ -34,7 +34,7 @@ type Answered = { result: unknown; meta: { cache: { fingerprint?: string }; cont
 // Asked of vex through the session, as the caller: a replay and an intent both come back
 // with what vex knows of the query, a replay's missing context included.
 const answered = async (ray: RayContext, fingerprint: string | undefined, intent: string | undefined, shape: unknown, context: Record<string, unknown>): Promise<Answered> => {
-  if (fingerprint === undefined && intent === undefined) throw new Error('a query needs an intent and a shape, or a fingerprint to replay');
+  if (fingerprint === undefined && (intent === undefined || shape === undefined)) throw new Error('a query needs an intent and a shape, or a fingerprint to replay');
   const res = await ray.answerIntent(fingerprint !== undefined ? { fingerprint, context } : { intent: intent ?? '', shape, context });
   return {
     result: res.result,
@@ -156,8 +156,9 @@ export const makeArchitectTools = (supportLlm: SignalClient, ray: RayContext): A
         ),
       shape: z
         .unknown()
+        .optional()
         .describe(
-          'For a NEW query: a JSON example of what you want back, STRUCTURE ONLY. Placeholder values mean nothing ' +
+          'For a NEW query: a JSON example of what you want back, STRUCTURE ONLY. A replay takes none. Placeholder values mean nothing ' +
             'and never filter — every condition goes in the intent. ' +
             'An ARRAY with one example element ([{...}]) returns a LIST of rows; a plain OBJECT returns ONE record. ' +
             'Pass it as JSON DIRECTLY — never as a quoted string.',
@@ -176,6 +177,12 @@ export const makeArchitectTools = (supportLlm: SignalClient, ray: RayContext): A
       // Failures throw: a returned `{ error }` makes a failed proof look like
       // a successful call in the trace.
       const ctx = (context ?? {}) as Record<string, unknown>;
+      const bound = Object.entries(ctx).find(([, value]) => (typeof value === 'string' && value.includes('{{')) || (value !== null && typeof value === 'object' && Object.keys(value).some((key) => key.startsWith('$'))));
+      if (bound !== undefined) {
+        throw new Error(
+          `a proof takes literal values: "${bound[0]}" is ${JSON.stringify(bound[1])}. {{…}} and {"$ref": …} are endpoint bindings; here send the value itself (today is ${todayStr()}; the signed-in user is filled in for you).`,
+        );
+      }
       const identity =
         replayFingerprint == null && intent != null
           ? `${intent.trim()}|${JSON.stringify(canonical(shape))}`
