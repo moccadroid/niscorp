@@ -55,9 +55,9 @@ const canonical = (v: unknown): unknown => {
 
 export const makeArchitectTools = (supportLlm: SignalClient, ray: RayContext): ArchitectTools => {
   const proofs = new Map<string, QueryProof>();
-  // intent+shape → the fingerprint it minted: models re-send a proven intent
-  // with new context instead of replaying the fingerprint, and vex regenerates it.
-  const provenRequests = new Map<string, string>();
+  // intent+shape → the fingerprint it minted and the context last sent with it: models
+  // re-send a proven intent with new context instead of replaying the fingerprint, and vex regenerates it.
+  const provenRequests = new Map<string, { fingerprint: string; context: string }>();
 
   const discover = defineTool({
     id: 'action.discover',
@@ -176,14 +176,16 @@ export const makeArchitectTools = (supportLlm: SignalClient, ray: RayContext): A
         replayFingerprint == null && intent != null
           ? `${intent.trim()}|${JSON.stringify(canonical(shape))}`
           : undefined;
-      const memoFp = identity !== undefined ? provenRequests.get(identity) : undefined;
+      const sentContext = JSON.stringify(canonical(ctx));
+      const memo = identity !== undefined ? provenRequests.get(identity) : undefined;
+      const memoFp = memo?.fingerprint;
       // A fingerprint means replay, so intent and shape are dropped with it: models
       // attach them anyway, and vex's named-slot posture (fingerprint + intent +
       // shape) 409s on a protected entry and silently replaces an unprotected one.
       const replaying = memoFp ?? (replayFingerprint == null ? undefined : (replayFingerprint as string));
       const res = await answered(ray, replaying, intent ?? undefined, shape, ctx);
-      if (identity !== undefined && memoFp === undefined && res.meta.cache.fingerprint !== undefined) {
-        provenRequests.set(identity, res.meta.cache.fingerprint);
+      if (identity !== undefined && res.meta.cache.fingerprint !== undefined) {
+        provenRequests.set(identity, { fingerprint: memoFp ?? res.meta.cache.fingerprint, context: sentContext });
       }
       const fingerprint = res.meta.cache.fingerprint;
       const rows = res.result;
@@ -198,8 +200,11 @@ export const makeArchitectTools = (supportLlm: SignalClient, ray: RayContext): A
       }
       const shared = {
         ...(missing.length === 0 && { fingerprint }),
-        ...(memoFp !== undefined && {
-          note: `You already proved this exact query as ${memoFp} — replayed it with your context. Next time pass { "fingerprint": "${memoFp}", "context": { ... } } directly instead of re-sending the intent.`,
+        ...(memo !== undefined && {
+          note:
+            memo.context === sentContext
+              ? `Identical to a query you already ran (${memo.fingerprint}, same context): the answer will not change. Use it as it is, or change what you ask.`
+              : `You already proved this exact query as ${memo.fingerprint} — replayed it with your context. Next time pass { "fingerprint": "${memo.fingerprint}", "context": { ... } } directly instead of re-sending the intent.`,
         }),
         context: bindings,
         ...(missing.length > 0 && {
