@@ -99,7 +99,9 @@ export const createShapeMapper = (llm: SignalClient): MapToShape => {
     let failed: string | undefined;
     for (let attempt = 1; attempt <= MAPPING_ATTEMPTS; attempt += 1) {
       const notes = [
-        ...(intent !== undefined ? [`The request these rows answer: ${intent}`] : []),
+        ...(intent !== undefined
+          ? [`The request these rows answer: ${intent}. The rows already answer it: they are filtered, sorted and limited. Give each value the form the request names, and keep every row, in order.`]
+          : []),
         ...(failed !== undefined ? [`Your last config failed on these rows: ${failed}. Write one that runs on them.`] : []),
       ].join('\n');
       const result = await mappingAgent.run({ sampleInput: envelope, targetShape: shape, ...(notes !== '' ? { notes } : {}) }, { llm }).result;
