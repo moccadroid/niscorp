@@ -74,28 +74,33 @@ export type OwnedActions = {
   setLoader: (load: ActionLoader) => void;
 };
 
-export type RunningManifest = {
+// What is in force and how it changes: the server wires these, and a feature that hands sets over calls them.
+export type InForce = {
   actions: () => Actions;
   entries: () => readonly (SeedEntry | SeedMutation)[];
   verify: (actions: Actions) => ManifestReport;
   report: () => ManifestReport;
   replace: (source: string, actions: Record<string, ActionDefinition>) => void;
   replaceEntries: (source: string, entries: readonly (SeedEntry | SeedMutation)[]) => Promise<void>;
-  // What the first shell's `functions(session)` returned. The app's functions are known
-  // only once a session is: this is when they are checked, and the boot refuses on them.
-  functionsWritten: (written: WrittenFunctions) => void;
-  // `scope`: whose request asks. A read somebody saved is answered to them and to nobody else.
-  cacheEntry: (fingerprint: string, scope?: Record<string, unknown>) => Promise<CacheEntry | undefined>;
-  cacheEntries: () => Promise<{ key: string; entry: CacheEntry }[]>;
   claim: (source: string, owner: string) => OwnedActions;
   refresh: () => void;
   watch: () => void;
   onChange: (listener: () => void) => () => void;
+  onChangeFor: (listener: (principal: string) => void) => () => void;
+  generation: () => number;
   addCatalogFilter: (filter: CatalogFilter) => void;
   catalogFor: (roles: readonly string[], installed: readonly string[] | undefined) => Catalog;
+  stop: () => void;
+};
+
+// What a shell is made of for whoever asks, and what their session saves: the shell hosts ask these.
+export type ForShells = {
   artifactsFor: (shell: ShellManifest, who: Who) => Promise<ShellArtifacts>;
+  // What the first shell's `functions(session)` returned. The app's functions are known
+  // only once a session is: this is when they are checked, and the boot refuses on them.
+  functionsWritten: (written: WrittenFunctions) => void;
   sessionArtifacts: (principal: string | null, callerOf: () => Promise<Caller>) => SessionArtifacts;
-  // `shell`: the one the draft is in. What is put into it is held to what that shell can draw.
+  // `shell`: the one the draft is in. What is added to it is held to what that shell can draw.
   draftSavingFor: (shell: ShellManifest, principal: string | null, callerOf: () => Promise<Caller>) => ReturnType<typeof draftSaving>;
   // `saved`: the rows of what is published. `publisher`: whose roles and reads a publish is held to.
   publishedArtifacts: (saved: SavedRows, publisher: () => Promise<Pick<RolesHeld, 'roles' | 'replayable'>>) => SessionArtifacts;
@@ -103,10 +108,16 @@ export type RunningManifest = {
   // One answer serves every shell until this process publishes or the pointer
   // moves: the next shell then asks again.
   readPublished: () => Promise<void>;
-  onChangeFor: (listener: (principal: string) => void) => () => void;
-  generation: () => number;
-  stop: () => void;
 };
+
+// What the data layer asks before vex's own table.
+export type ForReads = {
+  // `scope`: whose request asks. A read somebody saved is answered to them and to nobody else.
+  cacheEntry: (fingerprint: string, scope?: Record<string, unknown>) => Promise<CacheEntry | undefined>;
+  cacheEntries: () => Promise<{ key: string; entry: CacheEntry }[]>;
+};
+
+export type RunningManifest = InForce & ForShells & ForReads;
 
 const mergedActions = (own: Actions, sets: ReadonlyMap<string, Actions>, over: Actions = {}): Actions =>
   Object.freeze([...sets.values(), over].reduce<Record<string, ActionDefinition>>((all, set) => ({ ...all, ...set }), { ...own }));
