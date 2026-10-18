@@ -1,6 +1,6 @@
 import { defineAgent, duration, outputRetries, repeatedCalls, stepCount, type AgentDefinition } from '@niscorp/cortex';
 import { ActionDefinitionSchema, type ActionDefinition } from '@niscorp/nova';
-import { styleGuide, today, ambientContext, channels } from '../knowledge';
+import { today, ambientContext } from '../knowledge';
 import type { RayContext } from '../seams';
 import { runAction } from './harness';
 import type { QueryProof } from './tools';
@@ -12,7 +12,7 @@ export type ActionAgentOutput = ActionDefinition;
 const INSTRUCTIONS = [
   'You are the action architect. From one intent you design ONE complete, interactive Nova action (a screen): its data, endpoints, layout, and triggers.',
   '',
-  'Everything you need is provided: the OUTPUT SCHEMA (the ActionDefinition contract — bindings, triggers, steps, endpoints are all documented there), the TRANSFORM DSL for endpoint request/response configs, the COMPONENTS palette, the ACTIONS catalog (the only legal push targets, each with its input contract), the HOUSE STYLE, and a TOOL GUIDE for each tool.',
+  'Everything you need is provided: the OUTPUT SCHEMA (the ActionDefinition contract — bindings, triggers, steps, endpoints are all documented there), a WORKED EXAMPLE, the COMPONENTS palette, LAYOUT COMPOSITION, the ACTIONS catalog (the only legal push targets, each with its input contract), and a TOOL GUIDE for each tool.',
   '',
   'Work however you like. What must be TRUE when you finish:',
   '  - Every dataset the screen shows was PROVEN with `query` against REAL fields (see `discover`) — never invent an endpoint or guess at data.',
@@ -37,7 +37,7 @@ export const makeArchitectAgent = (
   // The transform DSL is deliberately absent: Vex returns the exact shape a query
   // proves, the two request-binding idioms a screen needs ride the query tool's
   // guide, and with the full schema in context runs reach for transforms that fail.
-  context: [workedExample, componentPalette, layoutComposition, actionCatalog, styleGuide, today, ambientContext, channels],
+  context: [workedExample, componentPalette, layoutComposition, actionCatalog, today, ambientContext],
   output: {
     schema: ActionDefinitionSchema,
     validate: async (output) => {

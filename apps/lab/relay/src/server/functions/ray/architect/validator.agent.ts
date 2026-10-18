@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { defineAgent, duration, outputRetries, schemaDoc, stepCount, type AgentDefinition } from '@niscorp/cortex';
 import { ActionDefinitionSchema } from '@niscorp/nova';
-import { styleGuide, today, ambientContext, channels } from '../knowledge';
+import { today, ambientContext } from '../knowledge';
 import { componentPalette, actionCatalog } from './producers';
 import { workedExample } from './worked-example';
 
@@ -30,7 +30,6 @@ const INSTRUCTIONS = [
   '  - Every interaction the intent claims must be wired: find its layout node (ref/model), its trigger, and check the trigger DOES the claimed thing (the right endpoint re-called, the right action pushed with the right input keys, the right state set). Component props matter — a Table row click carries row[clickKey ?? rowKey]; check the RIGHT field rides the payload.',
   '  - Push targets: check against ACTIONS — the intent saying "opens the task form" wired to the tasks LIST is a blocker.',
   '  - Data flow: a typed input that should filter must reach the request (a binding in the endpoint request context); the report shows what actually loaded.',
-  '  - Style and conventions (HOUSE STYLE, channels) are warts unless the intent explicitly asked for them.',
   '',
   'Report ONLY real findings — pair each with the intent\'s own words (`claim`), the wiring you observed (`observed`), and a one-line change request (`fix`). An honest empty findings list is a pass; invented nitpicks poison the repair loop.',
 ].join('\n');
@@ -44,10 +43,8 @@ export const validatorAgent: AgentDefinition<ValidatorVerdict> = defineAgent<Val
     actionCatalog,
     componentPalette,
     () => `THE DEFINITION LANGUAGE you are reading:\n${schemaDoc(ActionDefinitionSchema)}`,
-    styleGuide,
     today,
     ambientContext,
-    channels,
   ],
   output: { schema: VerdictSchema },
   stopWhen: [stepCount(4), outputRetries(2), duration('2m')],
