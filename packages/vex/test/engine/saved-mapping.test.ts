@@ -11,6 +11,7 @@ import { handleQuery } from '../../src/handler.js';
 import type { CacheBackend } from '../../src/cache/cache.types.js';
 import type { Query } from '../../src/schemas/query.schema.js';
 import type { ScopeValues } from '../../src/scope/scope.types.js';
+import type { MapToShape } from '../../src/types.js';
 
 const named: Query = { from: ['people'], fields: ['people.id', 'people.name'], sort: [{ field: 'people.id', dir: 'asc' }] };
 const shape = [{ id: 0, name: '' }];
@@ -19,7 +20,7 @@ const called = (): never => {
 };
 const noModel: SignalClient = { step: called, stepStream: called, count: called, describe: called };
 
-const world = async (cacheOf: (db: PGlite) => Promise<CacheBackend> = async () => createMemoryCache()) => {
+const world = async (cacheOf: (db: PGlite) => Promise<CacheBackend> = async () => createMemoryCache(), mapToShape: MapToShape = createShapeMapper(noModel)) => {
   const db = new PGlite();
   await db.exec(`CREATE TABLE people (id serial PRIMARY KEY, name text NOT NULL); INSERT INTO people (name) VALUES ('Ada'), ('Ben');`);
   const asked: { key: string; scope: ScopeValues | undefined }[] = [];
@@ -31,7 +32,7 @@ const world = async (cacheOf: (db: PGlite) => Promise<CacheBackend> = async () =
       return inner.get(key, scope);
     },
   };
-  const engine = createQueryEngine({ adapter: createPostgresAdapter({ pool: createPglitePool(db) }), cache, generateDsl: async () => named, mapToShape: createShapeMapper(noModel) });
+  const engine = createQueryEngine({ adapter: createPostgresAdapter({ pool: createPglitePool(db) }), cache, generateDsl: async () => named, mapToShape });
   await engine.introspect();
   return { engine, inner, asked };
 };
@@ -43,6 +44,16 @@ const fingerprintOf = (meta: { cache: { fingerprint?: string } }): string => {
 };
 
 describe('a query vex writes for a request', () => {
+  it('hands the mapping the intent it was asked in', async () => {
+    const intents: (string | undefined)[] = [];
+    const { engine } = await world(undefined, async (rows, wanted, intent) => {
+      intents.push(intent);
+      return createShapeMapper(noModel)(rows, wanted, intent);
+    });
+    await engine.execute({ intent: 'everybody, by name', shape: [{ id: 0, name: '' }], context: {} });
+    expect(intents).toEqual(['everybody, by name']);
+  });
+
   it('keeps the prism config its mapping was compiled from, beside the compiled form', async () => {
     const { engine, inner } = await world();
     const written = await engine.execute({ intent: 'everybody, by name', shape, context: {} });

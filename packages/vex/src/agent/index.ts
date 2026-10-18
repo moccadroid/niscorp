@@ -91,7 +91,7 @@ export const rowsFitShape = (rows: readonly Record<string, unknown>[], shape: un
 const IDENTITY = { $ref: '$.result' };
 
 export const createShapeMapper = (llm: SignalClient): MapToShape => {
-  return async (rows, shape) => {
+  return async (rows, shape, intent) => {
     // `result` must match the envelope engine/runtime.ts replays the IR against.
     const single = !Array.isArray(shape);
     const envelope = { result: single ? (rows[0] ?? null) : rows } as unknown as JsonObject;
@@ -102,7 +102,7 @@ export const createShapeMapper = (llm: SignalClient): MapToShape => {
     }
 
     const result = await mappingAgent.run(
-      { sampleInput: envelope, targetShape: shape },
+      { sampleInput: envelope, targetShape: shape, ...(intent !== undefined ? { notes: `The request these rows answer: ${intent}` } : {}) },
       { llm },
     ).result;
 

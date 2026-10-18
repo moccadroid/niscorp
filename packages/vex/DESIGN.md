@@ -587,9 +587,11 @@ The engine takes two optional hooks:
   what the person asking could see — and it is keyed (single-flight, negative
   cache) by request AND policy, because two callers who see different tables
   are asking different agents.
-- `mapToShape(rows, shape) → { ir, config, transformed }` — raw rows → requested
+- `mapToShape(rows, shape, intent?) → { ir, config, transformed }` — raw rows → requested
   shape, returning a compiled Prism IR that is cached for reuse, and the Prism
-  config it was compiled from, which is kept beside it (`mapping`).
+  config it was compiled from, which is kept beside it (`mapping`). `intent` is
+  the request's own words, when it has them, so the mapping can give a value the
+  form they ask for (money as `$1.2M`, a date as `Apr 6`).
 
 This is the seam that keeps the core deterministic. Vex ships a reference
 implementation of both, built on `@niscorp/cortex` and `@niscorp/prism` and
@@ -608,7 +610,7 @@ exported from the `@niscorp/vex/agent` subpath — `createQueryDsl` (fills
 - The **mapping agent** is Prism's exported `mappingAgent`; `createShapeMapper`
   builds the same envelope the runtime replays against — `{ result: rows }` for an
   array shape, `{ result: rows[0] ?? null }` for an object shape — runs the agent
-  once to get a transform config, compiles it to IR, and applies the IR once over
+  once, with the intent as its `notes`, to get a transform config, compiles it to IR, and applies the IR once over
   that envelope (the identity, with no model call, when the rows already fit).
 
 > The reference agents are a separate concern from the deterministic core: they

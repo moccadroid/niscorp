@@ -45,6 +45,38 @@ describe('createShapeMapper', () => {
     expect(config).toEqual({ $ref: '$.result' });
   });
 
+  it('hands the mapping model the request the rows answer', async () => {
+    const asked: string[] = [];
+    const recording = (request: unknown): never => {
+      asked.push(JSON.stringify(request));
+      throw new Error('no answer here');
+    };
+    const llm: SignalClient = {
+      step: recording,
+      stepStream: recording,
+      count: called,
+      describe: () => ({
+        provider: 'stub',
+        model: 'stub-model',
+        kind: 'chat',
+        modelKnown: false,
+        capabilities: {
+          nativeTools: true,
+          nativeJsonSchema: false,
+          nativeJsonMode: true,
+          toolsWithStructuredOutput: false,
+          validatesToolArgs: false,
+          manglesNestedToolArgs: false,
+          multimodal: false,
+          supportsEmbedding: false,
+        },
+      }),
+    };
+    await expect(createShapeMapper(llm)([{ value: 247000 }], [{ value_display: '' }], 'value formatted as money, like $247K')).rejects.toThrow();
+    expect(asked.length).toBeGreaterThan(0);
+    expect(asked[0]).toContain('value formatted as money, like $247K');
+  });
+
   it('returns the single row for a fitting single shape', async () => {
     const mapper = createShapeMapper(untouchable);
     const { transformed } = await mapper([{ value: 40 }], { value: 0 });

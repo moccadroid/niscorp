@@ -400,7 +400,7 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
         mappingMs = Date.now() - mapStart;
       } else if (mapToShape !== undefined) {
         const mapStart = Date.now();
-        const mapped = await mapToShape(rows, validRequest.shape);
+        const mapped = await mapToShape(rows, validRequest.shape, validRequest.intent);
         mappingMs = Date.now() - mapStart;
         result = mapped.transformed;
         mappedIr = mapped.ir;
