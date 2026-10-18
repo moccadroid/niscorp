@@ -28,6 +28,7 @@ export type BuildOptions = {
   onEvent?: (event: CortexEvent) => void;
   agentPath?: ReadonlyArray<string>;
   base?: ActionDefinition;
+  signal?: AbortSignal;
 };
 
 export const runActionArchitect = async (
@@ -59,6 +60,7 @@ export const runActionArchitect = async (
     tools: [tools.discover, tools.query, tools.runAction],
     ...(opts.base !== undefined && { producers: [editingGuide] }),
     ...(opts.agentPath && { agentPath: opts.agentPath }),
+    ...(opts.signal && { signal: opts.signal }),
     onEvent: (event) => {
       if (event.type === 'retry' && event.kind !== 'provider') lastIssues = event.issues;
       opts.onEvent?.(event);
@@ -129,6 +131,7 @@ export const review = async (
       llm,
       ...(opts.agentPath && { agentPath: opts.agentPath }),
       ...(opts.onEvent && { onEvent: opts.onEvent }),
+      ...(opts.signal && { signal: opts.signal }),
     },
   ).result;
   return result.ok ? result.output.data : undefined;

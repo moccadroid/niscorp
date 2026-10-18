@@ -98,7 +98,7 @@ export const makeScreenTools = (ray: RayContext): ScreenTools => {
         return `No screen "${editId}" was built in this chat or kept${known.length > 0 ? ` — screens: ${known}` : ''}. Build it fresh without \`edit\`.`;
       }
 
-      const pipelineOpts: BuildOptions = { onEvent: ctx.forward, agentPath: ctx.agentPath };
+      const pipelineOpts: BuildOptions = { onEvent: ctx.forward, agentPath: ctx.agentPath, signal: ctx.signal };
 
       let buildResult = await runActionArchitect(ray, llms.agent, llms.support, intent, {
         ...pipelineOpts,

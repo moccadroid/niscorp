@@ -39,13 +39,14 @@ export const rayFunctions = (session: FunctionSession): FunctionDefinition[] => 
   const screens = makeScreenTools(ray);
   let inFlight: AbortController | undefined;
 
-  const run: FunctionHandler = async (data) => {
+  const run: FunctionHandler = async (data, signal) => {
     const chat = llmFor('chat');
     if ('error' in chat) return { text: chat.error, trace: [], ms: 0 };
 
     inFlight?.abort();
     const controller = new AbortController();
     inFlight = controller;
+    signal.addEventListener('abort', () => controller.abort(), { once: true });
 
     const startedAt = Date.now();
     const turn: Turn = {};

@@ -31,7 +31,8 @@ export const assistantAction: ActionDefinition = {
   data: { messages: [], draft: '', status: 'idle', reply: '', sessions: [], currentId: '', session: {}, debug: false, live: [] },
   layout: assistantLayout,
   endpoints: {
-    ask: { fn: 'ray.run', target: 'reply' },
+    // A minute above the assistant's own 15-minute bound (ray/agent.ts), so that bound ends a long turn, not this wait.
+    ask: { fn: 'ray.run', target: 'reply', timeoutMs: 16 * 60_000 },
     load: { fn: 'ray.load', target: 'session' },
     newSession: { fn: 'ray.newSession', target: 'session' },
     switchSession: { fn: 'ray.switch', target: 'session' },
