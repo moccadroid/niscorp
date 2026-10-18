@@ -55,23 +55,31 @@ export const runActionArchitect = async (
       : intent;
 
   let lastIssues: string | undefined;
+  // A refused final answer once a screen passed run_action ends the run, and the passing screen is the
+  // result (below): the model re-typing a screen that passed adds only typos.
+  const settled = new AbortController();
+  const signal = opts.signal === undefined ? settled.signal : AbortSignal.any([opts.signal, settled.signal]);
+  const ownDepth = (opts.agentPath?.length ?? 0) + 1;
   const result = await architectAgent.run({ intent: architectInput }, {
     llm: agentLlm,
     // `map` is left out deliberately: it is a trap for the architect.
     tools: [tools.discover, tools.query, tools.runAction],
     ...(opts.base !== undefined && { producers: [editingGuide] }),
     ...(opts.agentPath && { agentPath: opts.agentPath }),
-    ...(opts.signal && { signal: opts.signal }),
+    signal,
     onEvent: (event) => {
-      if (event.type === 'retry' && event.kind !== 'provider') lastIssues = event.issues;
+      if (event.type === 'retry' && event.kind !== 'provider') {
+        lastIssues = event.issues;
+        if (event.agentPath.length === ownDepth && tools.lastPassing() !== undefined) settled.abort();
+      }
       opts.onEvent?.(event);
     },
   }).result;
 
   if (!result.ok) {
-    // The run ended without an accepted answer (steps, refused answers, a repeated call): a screen
-    // run_action passed is the result, held to the same check again.
-    const passing = tools.lastPassing();
+    // The run ended without an accepted answer (steps, a refused answer, a repeated call): a screen
+    // run_action passed is the result, held to the same check again. Not when the person stopped it.
+    const passing = opts.signal?.aborted === true ? undefined : tools.lastPassing();
     if (passing !== undefined && (await runAction(ray, passing, undefined, tools.proofs)).ok) {
       return { ok: true, action: passing, proofs: tools.proofs, reasoning: `Taken from the last screen run_action passed; the run ended: ${result.error.message}` };
     }

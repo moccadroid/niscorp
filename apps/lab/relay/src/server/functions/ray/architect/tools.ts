@@ -5,6 +5,7 @@ import { vexGuide } from '@niscorp/vex';
 import { ENTRIES } from '@relay/app/vex';
 import type { RayContext } from '../seams';
 import type { ActionDefinition } from '@niscorp/nova';
+import { todayStr } from '@relay/lib/date';
 import { runAction } from './harness';
 
 // `intent`: what the query answers, for the validator; a replay has none of its own.
@@ -186,7 +187,15 @@ export const makeArchitectTools = (supportLlm: SignalClient, ray: RayContext): A
       // attach them anyway, and vex's named-slot posture (fingerprint + intent +
       // shape) 409s on a protected entry and silently replaces an unprotected one.
       const replaying = memoFp ?? (replayFingerprint == null ? undefined : (replayFingerprint as string));
-      const res = await answered(ray, replaying, intent ?? undefined, shape, ctx);
+      const asked = await answered(ray, replaying, intent ?? undefined, shape, ctx);
+      // The model cannot know the signed-in user: a query that binds the values the runtime folds into
+      // every endpoint's source is proved again with them.
+      const ambient: Record<string, unknown> = { userId: ray.userId, today: todayStr() };
+      const unfilled = (asked.meta.missingContext ?? []).filter((key, index, all) => key in ambient && !(key in ctx) && all.indexOf(key) === index);
+      const refilled = unfilled.length > 0 && asked.meta.cache.fingerprint !== undefined;
+      const res = refilled
+        ? await answered(ray, asked.meta.cache.fingerprint, undefined, shape, { ...ctx, ...Object.fromEntries(unfilled.map((key) => [key, ambient[key]])) })
+        : asked;
       if (identity !== undefined && res.meta.cache.fingerprint !== undefined) {
         provenRequests.set(identity, { fingerprint: memoFp ?? res.meta.cache.fingerprint, context: sentContext });
       }
@@ -214,6 +223,9 @@ export const makeArchitectTools = (supportLlm: SignalClient, ray: RayContext): A
             note: 'Your shape was not applied: a replay returns the query as it was written — its columns, order and form. For other columns, another order or another form, describe a new query with intent and shape.',
           }),
         context: bindings,
+        ...(refilled && {
+          ambient: `Filled in for this proof: ${unfilled.join(', ')}. Your endpoint sends ${unfilled.map((key) => `"${key}": { "$ref": "$.${key}" }`).join(' and ')} — the runtime folds them into every endpoint's source.`,
+        }),
         ...(missing.length > 0 && {
           missingContext: missing,
           note: 'NOT PROVEN — required context keys were missing, so this result is wrong and no usable fingerprint exists. Re-run this exact query with a real value for EVERY key in missingContext; that run returns the fingerprint to use.',

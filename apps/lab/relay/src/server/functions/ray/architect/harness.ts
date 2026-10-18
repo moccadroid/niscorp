@@ -240,12 +240,22 @@ export const runAction = async (
     }
     return res;
   };
+  // nova reports a transform that throws as an endpoint failure with status 0 and no reason: the reason is kept here.
+  const transform = transformAmbient(ray.userId);
+  const reportingTransform = (config: unknown, source: unknown): unknown => {
+    try {
+      return transform(config, source);
+    } catch (error) {
+      issues.push(`an endpoint transform failed: ${error instanceof Error ? error.message : String(error)} — in ${JSON.stringify(config).slice(0, 240)}`);
+      throw error;
+    }
+  };
   const shell = createShell({
     canvases: [{ id: 'main' }],
     registry: buildRegistry(),
     actions: { [parsed.data.id]: parsed.data },
     functions: {},
-    transform: transformAmbient(ray.userId),
+    transform: reportingTransform,
     fetch: probeFetch,
     onError: (e) => issues.push(`${e.code}: ${e.message}`),
   });
