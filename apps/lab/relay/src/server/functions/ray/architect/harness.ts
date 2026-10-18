@@ -58,6 +58,23 @@ const requestContextKeys = (request: unknown): string[] => {
   return context !== null && typeof context === 'object' ? Object.keys(context) : [];
 };
 
+type RenderedNode = { type?: string; name?: string; props?: Record<string, unknown>; children?: RenderedNode[] };
+
+const tablesIn = (nodes: readonly RenderedNode[]): RenderedNode[] =>
+  nodes.flatMap((node) => [...(node.type === 'component' && node.name === 'Table' ? [node] : []), ...tablesIn(node.children ?? [])]);
+
+// Loaded rows a Table does not show: the screen mounts over its data and draws none of it.
+const unshownRows = (shell: ReturnType<typeof createShell>, definition: { endpoints?: Record<string, Endpointish> }, data: Record<string, unknown>): string[] => {
+  const loaded = Object.values(definition.endpoints ?? {})
+    .map((endpoint) => endpoint.target)
+    .filter((target): target is string => typeof target === 'string' && Array.isArray(data[target]) && (data[target] as unknown[]).length > 0);
+  if (loaded.length === 0) return [];
+  const tables = tablesIn(shell.flattenRenderTree(shell.getCanvasRenderTree('main')) as RenderedNode[]);
+  return tables
+    .filter((table) => !Array.isArray(table.props?.['rows']) || (table.props?.['rows'] as unknown[]).length === 0)
+    .map(() => `a Table renders no rows while ${loaded.map((target) => `"${target}" holds ${(data[target] as unknown[]).length}`).join(', ')}: bind its rows (rows: "$.${loaded[0] ?? ''}")`);
+};
+
 const loadReport = (
   definition: { endpoints?: Record<string, Endpointish> },
   data: Record<string, unknown>,
@@ -248,6 +265,7 @@ export const runAction = async (
     const data = rt.getData();
     const report = loadReport(parsed.data, data, proofs);
     issues.push(...report.issues);
+    issues.push(...unshownRows(shell, parsed.data, data));
     return { ok: issues.length === 0, data, issues, loaded: report.loaded };
   } finally {
     offEndpoint();

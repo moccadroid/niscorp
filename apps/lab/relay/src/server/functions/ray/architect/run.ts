@@ -3,6 +3,7 @@ import { ActionDefinitionSchema, type ActionDefinition } from '@niscorp/nova';
 import { llmFor } from '@relay/server/llm';
 import { ENTRIES } from '@relay/app/vex';
 import { makeArchitectTools, type QueryProof } from './tools';
+import { runAction } from './harness';
 import { makeArchitectAgent } from './architect.agent';
 import type { RayContext } from '../seams';
 import { editingGuide } from './producers';
@@ -68,6 +69,12 @@ export const runActionArchitect = async (
   }).result;
 
   if (!result.ok) {
+    // The run ended without an accepted answer (steps, refused answers, a repeated call): a screen
+    // run_action passed is the result, held to the same check again.
+    const passing = tools.lastPassing();
+    if (passing !== undefined && (await runAction(ray, passing, undefined, tools.proofs)).ok) {
+      return { ok: true, action: passing, proofs: tools.proofs, reasoning: `Taken from the last screen run_action passed; the run ended: ${result.error.message}` };
+    }
     const raw = result.error.lastOutput;
     const attempt =
       raw !== null && typeof raw === 'object' && 'data' in (raw as Record<string, unknown>)

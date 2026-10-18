@@ -4,6 +4,7 @@ import { mappingAgent, MappingAgentInputSchema } from '@niscorp/prism/agent';
 import { vexGuide } from '@niscorp/vex';
 import { ENTRIES } from '@relay/app/vex';
 import type { RayContext } from '../seams';
+import type { ActionDefinition } from '@niscorp/nova';
 import { runAction } from './harness';
 
 // `intent`: what the query answers, for the validator; a replay has none of its own.
@@ -15,6 +16,8 @@ export type ArchitectTools = {
   runAction: ToolDefinition;
   map: ToolDefinition;
   proofs: Map<string, QueryProof>;
+  // The last definition run_action passed: the same check judges the final answer.
+  lastPassing: () => ActionDefinition | undefined;
 };
 
 const parseMaybeJson = (value: string): unknown => {
@@ -67,8 +70,8 @@ export const makeArchitectTools = (supportLlm: SignalClient, ray: RayContext): A
       'Inspect the data landscape: every entity with its real fields, and the named cached queries that already exist.',
     guide:
       'Call discover BEFORE writing query intents: filter and select on REAL fields only — a field it does not list does not exist ' +
-      '(action input names like "scope" are UI vocabulary, not columns). When an existing named query\'s intent already covers a need, ' +
-      'replay its fingerprint instead of generating a twin.',
+      '(action input names like "scope" are UI vocabulary, not columns). When an existing named query already returns what the screen needs — ' +
+      'its columns, its order and its form — replay its fingerprint instead of generating a twin; when it does not, describe a new query.',
     input: z.object({}),
     execute: async () => {
       // What the app's vex route tells the caller: the entities their roles may read, with their fields.
@@ -206,6 +209,10 @@ export const makeArchitectTools = (supportLlm: SignalClient, ray: RayContext): A
               ? `Identical to a query you already ran (${memo.fingerprint}, same context): the answer will not change. Use it as it is, or change what you ask.`
               : `You already proved this exact query as ${memo.fingerprint} — replayed it with your context. Next time pass { "fingerprint": "${memo.fingerprint}", "context": { ... } } directly instead of re-sending the intent.`,
         }),
+        ...(replayFingerprint != null &&
+          shape !== undefined && {
+            note: 'Your shape was not applied: a replay returns the query as it was written — its columns, order and form. For other columns, another order or another form, describe a new query with intent and shape.',
+          }),
         context: bindings,
         ...(missing.length > 0 && {
           missingContext: missing,
@@ -224,6 +231,8 @@ export const makeArchitectTools = (supportLlm: SignalClient, ray: RayContext): A
     },
   });
 
+  let passing: ActionDefinition | undefined;
+
   const runActionTool = defineTool({
     id: 'action.run',
     name: 'run_action',
@@ -240,6 +249,7 @@ export const makeArchitectTools = (supportLlm: SignalClient, ray: RayContext): A
     }),
     execute: async ({ action }) => {
       const check = await runAction(ray, action, undefined, proofs);
+      if (check.ok) passing = action as ActionDefinition;
       const data = Object.fromEntries(
         Object.entries(check.data).map(([key, value]) => [
           key,
@@ -274,5 +284,5 @@ export const makeArchitectTools = (supportLlm: SignalClient, ray: RayContext): A
     },
   });
 
-  return { discover, query, runAction: runActionTool, map, proofs };
+  return { discover, query, runAction: runActionTool, map, proofs, lastPassing: () => passing };
 };

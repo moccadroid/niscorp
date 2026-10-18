@@ -1,4 +1,4 @@
-import { defineAgent, duration, outputRetries, stepCount, type AgentDefinition } from '@niscorp/cortex';
+import { defineAgent, duration, outputRetries, repeatedCalls, stepCount, type AgentDefinition } from '@niscorp/cortex';
 import { ActionDefinitionSchema, type ActionDefinition } from '@niscorp/nova';
 import { styleGuide, today, ambientContext, channels } from '../knowledge';
 import type { RayContext } from '../seams';
@@ -48,5 +48,6 @@ export const makeArchitectAgent = (
   },
   // outputRetries 5: runs converge with a new mistake fixed per round, and 3
   // cuts them off mid-convergence.
-  stopWhen: [stepCount(20), outputRetries(5), duration('6m')],
+  // repeatedCalls: three identical calls answered alike end the run; its last passing screen is the result (run.ts).
+  stopWhen: [stepCount(20), outputRetries(5), duration('6m'), repeatedCalls(2)],
 });
