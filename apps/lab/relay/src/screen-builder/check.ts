@@ -1,5 +1,6 @@
 import { flattenSchemaIssues } from '@niscorp/cortex';
 import { ActionDefinitionSchema, auditAction, getPath, StepSchema, type ActionDefinition, type RenderComponentNode } from '@niscorp/nova';
+import { collectInteractive } from '@niscorp/nova/agent';
 import { classifyAudit } from '@niscorp/nova/reflect';
 import { mount } from './mount';
 import { coverage, runProbes } from './probes';
@@ -112,6 +113,18 @@ const unresolvedBindings = (components: readonly RenderComponentNode[]): Finding
     }),
   );
 
+// Loaded data the layout never binds: the screen draws none of it.
+const unbound = (definition: ActionDefinition, data: Record<string, unknown>): Finding[] => {
+  const bound = new Set(collectInteractive(definition.layout).boundKeys);
+  return httpEndpoints(definition).flatMap((endpoint): Finding[] => {
+    const target = endpoint.target;
+    if (target === undefined || target.length === 0) return [];
+    const value = getPath(data, target);
+    const root = target.split('.')[0] ?? target;
+    return isEmpty(value) || bound.has(root) ? [] : [{ code: 'unshown-rows', message: `"${target}" holds ${describeValue(value)} that nothing on the screen shows: bind it in the layout ("$.${target}")` }];
+  });
+};
+
 // A list that draws nothing while loaded rows appear in no list: it is bound to the wrong place.
 const unshownRows = (components: readonly RenderComponentNode[], definition: ActionDefinition, data: Record<string, unknown>, setup: ScreenSetup): Finding[] => {
   const lists = components.flatMap((node) => {
@@ -163,6 +176,7 @@ export const checkScreen = async (candidate: unknown, setup: ScreenSetup, option
       ...renderErrorsIn(tree).map((node): Finding => ({ code: 'mount', message: `a layout node did not render: ${node.code}: ${node.message}` })),
       ...report.findings,
       ...unresolvedBindings(components),
+      ...unbound(definition, data),
       ...unshownRows(components, definition, data, setup),
     ];
     if (found.length > 0) return { ok: false, findings: found, loaded };

@@ -67,7 +67,7 @@ export const makeTools = (setup: ScreenSetup, state: BuildState): ToolDefinition
     id: 'screen.discover',
     name: 'discover',
     riskLevel: 'low',
-    description: 'The data there is: every entity with its fields, and the queries that already exist, each with its intent and the context it takes.',
+    description: 'The data there is: every entity with its fields, and the queries that already exist, each with its intent and the context it takes (its type, the column it filters, and "pattern" for one matched like a search: "%text%").',
     input: z.object({}),
     execute: async () => {
       const found = await setup.vex.discover();
@@ -78,7 +78,7 @@ export const makeTools = (setup: ScreenSetup, state: BuildState): ToolDefinition
         queries: queries.flatMap((entry) =>
           entry.intent === undefined
             ? []
-            : [{ fingerprint: entry.fingerprint, intent: entry.intent, ...(entry.context !== undefined && Object.keys(entry.context).length > 0 ? { context: Object.fromEntries(Object.entries(entry.context).map(([key, field]) => [key, field.type])) } : {}) }],
+            : [{ fingerprint: entry.fingerprint, intent: entry.intent, ...(entry.context !== undefined && Object.keys(entry.context).length > 0 ? { context: entry.context } : {}) }],
         ),
       };
     },
@@ -177,8 +177,8 @@ export const makeTools = (setup: ScreenSetup, state: BuildState): ToolDefinition
       'Mount the screen for real, load its data, and run its probes. Answers what broke, or that it passes — and a screen that passes is the result: the work ends there.',
     guide:
       'A probe is what a person does on the screen and what must follow: { "do": [ { "set": "<ref>", "to": "<value>" } ], "changes": "<data key>" } or ' +
-      '{ "do": [ { "click": "<row or button ref>" } ], "opens": "<action id>" }. Every control or row whose trigger loads data or opens a screen needs one. ' +
-      'Pick values that must change what loads.',
+      '{ "do": [ { "click": "<row or button ref>" } ], "opens": "<action id>" }; a refresh button, which loads the same rows again: { "do": [ { "click": "<ref>" } ], "reloads": "<data key>" }. ' +
+      'Every control or row whose trigger loads data or opens a screen needs one. Pick values that must change what loads.',
     input: z.object({
       action: z.record(z.string(), z.unknown()).describe('The complete action definition.'),
       probes: z.array(ProbeSchema).optional().describe('What the screen must do when it is used.'),

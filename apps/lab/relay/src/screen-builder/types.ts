@@ -10,8 +10,9 @@ export type ListComponent = {
 
 export type ProbeStep = { set?: string; to?: string | number | boolean; click?: string };
 
-// What a person does on the screen, and what must follow: a data key whose content changes, or an action that opens.
-export type Probe = { do: ProbeStep[]; changes?: string; opens?: string };
+// What a person does on the screen, and what must follow: a data key whose content changes, an action that opens,
+// or — for a click alone, a refresh — a data key whose endpoint is called again.
+export type Probe = { do: ProbeStep[]; changes?: string; opens?: string; reloads?: string };
 
 export type Example = { intent: string; prove: Partial<QueryRequest>[]; action: ActionDefinition; probes: Probe[] };
 

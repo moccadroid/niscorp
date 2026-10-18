@@ -32,9 +32,13 @@ export const mount = async (definition: ActionDefinition, setup: ScreenSetup): P
   const sent: unknown[] = [];
 
   const wire: FetchFn = async (url, init) => {
-    if (url === setup.vex.endpoint && init?.body !== undefined) sent.push(parsed(init.body));
+    const body = init?.body === undefined ? undefined : parsed(init.body);
+    if (url === setup.vex.endpoint && body !== undefined) sent.push(body);
     const response = await setup.wire(url, init);
-    if (!response.ok) findings.push({ code: 'endpoint', message: `a call to ${url} failed (${response.status}): ${(await response.text()).slice(0, 300)}` });
+    if (!response.ok) {
+      const what = body === undefined ? '' : ` — it sent ${JSON.stringify(body).slice(0, 300)}`;
+      findings.push({ code: 'endpoint', message: `a call to ${url} failed (${response.status}): ${(await response.text()).slice(0, 300)}${what}` });
+    }
     return response;
   };
 

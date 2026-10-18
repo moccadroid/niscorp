@@ -18,6 +18,7 @@ export const ProbeSchema = z.object({
     .describe('What the person does, in order.'),
   changes: z.string().optional().describe('A data key whose content must be different afterwards.'),
   opens: z.string().optional().describe('An action id that must open afterwards.'),
+  reloads: z.string().optional().describe('For a probe that only clicks, such as a refresh: a data key whose endpoint must be called again.'),
 });
 
 const said = (step: ProbeStep): string => (step.set !== undefined ? `set "${step.set}" to ${JSON.stringify(step.to)}` : `click "${step.click ?? ''}"`);
@@ -25,7 +26,12 @@ const said = (step: ProbeStep): string => (step.set !== undefined ? `set "${step
 const malformed = (probe: Probe): string | undefined => {
   const step = probe.do.find((one) => (one.set === undefined) === (one.click === undefined) || (one.set !== undefined && one.to === undefined));
   if (step !== undefined) return `a probe step does one thing: { "set": ref, "to": value } or { "click": ref } — got ${JSON.stringify(step)}`;
-  if (probe.changes === undefined && probe.opens === undefined) return `the probe "${probe.do.map(said).join(', ')}" says nothing must follow: add "changes" (a data key) or "opens" (an action id)`;
+  if (probe.changes === undefined && probe.opens === undefined && probe.reloads === undefined) {
+    return `the probe "${probe.do.map(said).join(', ')}" says nothing must follow: add "changes" (a data key), "opens" (an action id) or, for a refresh, "reloads" (a data key)`;
+  }
+  if (probe.reloads !== undefined && probe.changes === undefined && probe.do.some((step) => step.set !== undefined)) {
+    return `the probe "${probe.do.map(said).join(', ')}" sets a value, so it says which data key "changes": "reloads" is for a click alone`;
+  }
   return undefined;
 };
 
@@ -41,7 +47,8 @@ export const coverage = (definition: ActionDefinition, probes: readonly Probe[])
     const typing = trigger.event === 'ui:model';
     if (probes.some((probe) => probe.do.some((step) => (typing ? step.set : step.click) === ref))) return [];
     const does = [...(calls.length > 0 ? [`calls ${calls.map((name) => `"${name}"`).join(', ')}`] : []), ...(opens.length > 0 ? [`opens ${opens.map((id) => `"${id}"`).join(', ')}`] : [])].join(' and ');
-    return [{ code: 'probe-missing', message: `no probe ${typing ? 'sets' : 'clicks'} "${ref}", which ${does}: add one, saying what ${opens.length > 0 ? 'opens' : 'changes'}` }];
+    const follows = opens.length > 0 ? 'what opens' : typing ? 'what changes' : 'what changes, or for a refresh what it reloads';
+    return [{ code: 'probe-missing', message: `no probe ${typing ? 'sets' : 'clicks'} "${ref}", which ${does}: add one, saying ${follows}` }];
   });
 
 const PROBE_WAIT_MS = 30_000;
@@ -94,18 +101,28 @@ const runProbe = async (definition: ActionDefinition, probe: Probe, setup: Scree
     const before = probe.changes === undefined ? undefined : JSON.stringify(getPath(mounted.runtime.getData(), probe.changes));
     const sentBefore = mounted.sent.length;
     const present = new Set(Object.values(mounted.shell.getState().canvases).flatMap((canvas) => canvas.stack.map((instance) => instance.id)));
+    const called: string[] = [];
+    const offEndpoint = mounted.shell.onEndpoint((event) => {
+      if (event.ok) called.push(event.name);
+    });
 
     for (const step of probe.do) {
       const missed = act(mounted, step, setup);
       if (missed !== undefined) return [{ code: 'probe', message: `${steps}: ${missed}` }];
       if (!(await mounted.idle(PROBE_WAIT_MS))) return [{ code: 'probe', message: `${steps}: the screen did not settle within ${PROBE_WAIT_MS / 1000} s` }];
     }
+    offEndpoint();
 
     const found: Finding[] = mounted.findings.slice(failedAtMount).map((finding) => ({ code: 'probe', message: `${steps}: ${finding.message}` }));
     if (probe.changes !== undefined) {
       const now = getPath(mounted.runtime.getData(), probe.changes);
       if (now === undefined) found.push({ code: 'probe', message: `${steps}: there is no data key "${probe.changes}"` });
       else if (JSON.stringify(now) === before) found.push({ code: 'probe', message: `${steps}: "${probe.changes}" holds the same as before. ${sameBecause(mounted, sentBefore)}` });
+    }
+    if (probe.reloads !== undefined) {
+      const filling = Object.entries(definition.endpoints ?? {}).filter(([, endpoint]) => endpoint.target === probe.reloads).map(([name]) => name);
+      if (filling.length === 0) found.push({ code: 'probe', message: `${steps}: no endpoint fills "${probe.reloads}"` });
+      else if (!filling.some((name) => called.includes(name))) found.push({ code: 'probe', message: `${steps}: "${probe.reloads}" was not loaded again: ${filling.map((name) => `"${name}"`).join(', ')} never ran` });
     }
     if (probe.opens !== undefined) {
       const opened = Object.values(mounted.shell.getState().canvases).flatMap((canvas) => canvas.stack.filter((instance) => !present.has(instance.id)));

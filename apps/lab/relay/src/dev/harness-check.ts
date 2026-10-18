@@ -65,6 +65,13 @@ const main = async (): Promise<void> => {
   );
   checks.push([`a table bound to the wrong key is reported (${said(unbound)})`, !unbound.ok && codes(unbound).includes('unshown-rows')]);
 
+  const nothingShown = await checkScreen(
+    screen((definition) => ({ ...definition, layout: { component: 'Stack', children: [{ component: 'Input', ref: 'search', model: '$.search' }, { component: 'Text', children: '{???}' }] }, triggers: [definition.triggers?.[0] as never] })),
+    setup,
+    { probes: [PROBES[0] as Probe] },
+  );
+  checks.push([`loaded rows the layout never binds are reported (${said(nothingShown)})`, !nothingShown.ok && nothingShown.findings.some((finding) => finding.message.includes('that nothing on the screen shows'))]);
+
   const emptySecond = await checkScreen(
     screen((definition) => ({
       ...definition,
@@ -83,6 +90,17 @@ const main = async (): Promise<void> => {
     { probes: PROBES },
   );
   checks.push([`a second table over a query that answers no rows is not blamed for the first one's rows (${said(emptySecond)})`, emptySecond.ok]);
+
+  const withRefresh = (definition: ActionDefinition): ActionDefinition => ({
+    ...definition,
+    layout: { component: 'Stack', children: [{ component: 'Button', ref: 'refresh', children: 'Refresh' }, ...((definition.layout as { children: unknown[] }).children as never[])] },
+    triggers: [...(definition.triggers ?? []), { event: 'ui:click', ref: 'refresh', do: [{ call: 'load' }] }],
+  });
+  const refreshed = await checkScreen(screen(withRefresh), setup, { probes: [...PROBES, { do: [{ click: 'refresh' }], reloads: 'rows' }] });
+  checks.push([`a refresh button is probed by what it reloads (${said(refreshed)})`, refreshed.ok]);
+
+  const dodged = await checkScreen(screen(withRefresh), setup, { probes: [{ do: [{ set: 'search', to: 'zzzz' }], reloads: 'rows' }, PROBES[1] as Probe, { do: [{ click: 'refresh' }], reloads: 'rows' }] });
+  checks.push([`a probe that sets a value cannot settle for "reloads" (${said(dodged)})`, !dodged.ok && dodged.findings.some((finding) => finding.message.includes('"reloads" is for a click alone'))]);
 
   const prismInLayout = await checkScreen(
     screen((definition) => ({ ...definition, layout: { component: 'Stack', children: [{ component: 'Input', ref: 'search', model: '$.search' }, { component: 'Text', children: 'x', props: { size: { $ref: '$.search' } } }, { component: 'Table', props: { rows: '$.rows', rowKey: 'deal_id', rowRef: 'dealRow', empty: 'None.', columns: [{ label: 'Title', cell: { kind: 'primary', key: 'title' } }] } }] } })),

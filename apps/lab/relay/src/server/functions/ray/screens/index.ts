@@ -40,7 +40,7 @@ const definitionOf = (version: { id: string; body: unknown }): ActionDefinition 
   version.body !== null && typeof version.body === 'object' && !Array.isArray(version.body) ? ({ ...(version.body as Record<string, unknown>), id: version.id } as ActionDefinition) : undefined;
 
 const saidProbe = (probe: Probe): string =>
-  `${probe.do.map((step) => (step.set !== undefined ? `setting ${step.set} to ${JSON.stringify(step.to)}` : `clicking ${step.click ?? ''}`)).join(' then ')} ${probe.changes !== undefined ? `changes ${probe.changes}` : `opens ${probe.opens ?? ''}`}`;
+  `${probe.do.map((step) => (step.set !== undefined ? `setting ${step.set} to ${JSON.stringify(step.to)}` : `clicking ${step.click ?? ''}`)).join(' then ')} ${probe.changes !== undefined ? `changes ${probe.changes}` : probe.opens !== undefined ? `opens ${probe.opens}` : `reloads ${probe.reloads ?? ''}`}`;
 
 export const makeScreenTools = (ray: RayContext): ScreenTools => {
   // The screens of this session, by the id moss gave them: built in this chat, or kept earlier.
