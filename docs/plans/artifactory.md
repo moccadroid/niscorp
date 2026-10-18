@@ -821,9 +821,11 @@ is checked by moss before it is shown (the refusal reaches the model
 verbatim), and a model-written query is a kept read, not a `vex_cache` row a
 schema change deletes. The dev scripts keep an engine under `src/dev/engine.ts`
 (`devRayContext`); `ray-screens-check` proves the placing with no model.
-**Not verified here:** the paths that run a model (building, chatting): there
-are no model keys on this machine; typecheck, `ray-check`, `server-check` and
-the lab baseline are what was run.
+Chatting was run on 2026-10-18 in the browser, signed in as alex: "how many
+deals are in negotiation?" was answered 15, as the board shows. **Not run by
+me:** building a screen with a model. (The keys were there all along, in the
+main checkout's `apps/lab/relay/.env`; git leaves an ignored file out of a
+worktree, and `boot.ts` loads `.env` from where the server runs.)
 
 **Nova's devtools functions described, and the harness on nova's
 classification** (the owner's: "Fix nova as well, no bare maps, we need
