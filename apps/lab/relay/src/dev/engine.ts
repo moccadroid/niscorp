@@ -43,7 +43,7 @@ const boot = async (runtime: NiscRuntime, policy: ScopePolicy): Promise<RayEngin
     cache,
     generateDsl: (request, schema, caller) =>
       createQueryDsl({ llm: buildLlm('query'), queryJsonSchema: dslJsonSchema })(request, schema, caller),
-    mapToShape: (rows, shape) => createShapeMapper(buildLlm('shape'))(rows, shape),
+    mapToShape: (rows, shape, intent) => createShapeMapper(buildLlm('shape'))(rows, shape, intent),
   });
   await engine.introspect();
   return { engine, db: runtime.db };

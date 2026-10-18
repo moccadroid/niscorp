@@ -16,5 +16,5 @@ const llmOf = (role: AgentRole): SignalClient => {
 // Resolved at each call, so the model assigned in Settings is the one that answers.
 export const intentWriters = (): Parameters<FunctionSession['answerIntent']>[0] => ({
   generateDsl: (request, schema, caller) => createQueryDsl({ llm: llmOf('query'), queryJsonSchema: DSL_SCHEMA })(request, schema, caller),
-  mapToShape: (rows, shape) => createShapeMapper(llmOf('shape'))(rows, shape),
+  mapToShape: (rows, shape, intent) => createShapeMapper(llmOf('shape'))(rows, shape, intent),
 });
