@@ -1,14 +1,14 @@
 import type { Sequence } from '@niscorp/strata';
 import type { GenerateDsl, MapToShape, QueryResponse, ScopeBehaviors, SeedEntry, SeedMutation } from '@niscorp/vex';
 import type { Charter } from '@niscorp/charter';
-import type { ActionDefinition, ActionFragment, CanvasConfig, FetchFn, FunctionHandler, LayoutNode, Shell } from '@niscorp/nova';
+import type { ActionDefinition, ActionFragment, CanvasConfig, FetchFn, FunctionDefinition, FunctionHandler, LayoutNode, Shell } from '@niscorp/nova';
 import type { PhraseKeys, Phrasebook } from '@niscorp/nova/i18n';
 import type { Feature } from '../feature';
 import type { IdentityRecord } from '../identity';
 
 export type LayoutVariant = { action: string; layout: LayoutNode };
 
-export type FunctionDefinition = { id: string; description: string; execute: FunctionHandler };
+export type { FunctionDefinition };
 
 export type WrittenFunctions = readonly FunctionDefinition[] | Record<string, FunctionHandler>;
 

@@ -42,6 +42,7 @@ export type {
   FetchInit,
   FetchResponse,
   FunctionHandler,
+  FunctionDefinition,
   NavigationEffect,
   NavigateHandler,
   EndpointEvent,

@@ -490,10 +490,10 @@ can perform their own final async work (e.g. telemetry flush).
 - **`@niscorp/nova/devtools`** — a shell inspector built as pure nova:
   `devtoolsActions` (`devtools.dock`, `devtools.inspect` — plain
   ActionDefinitions over generic primitives), `DEVTOOLS_CANVAS`, and
-  `createDevtoolsFunctions` serving the `devtools.*` fns (the endpoint
+  `createDevtoolsFunctions` answering the `devtools.*` functions as `{ id, description, execute }` (the endpoint
   timeline is a ring buffer fed by `shell.onEndpoint`). An app opts in by
   granting `devtools.*` to a dev role, adding the canvas plus a frame
-  slot, and spreading the fns into its `functions(session)`.
+  slot, and spreading the definitions into the list its `functions(session)` answers.
   - `createDevtoolsFunctions({ shell, definitions })`: `definitions` is the
     app's catalog (a record or an array) and is what the audit tab checks;
     without it the audit is empty.

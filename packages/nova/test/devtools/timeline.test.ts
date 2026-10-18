@@ -6,6 +6,12 @@ import { createShell } from '@shell';
 import type { Shell } from '@shell';
 import { createDevtoolsFunctions, DEVTOOLS_CANVAS, type TimelineEntry } from '../../src/devtools';
 
+const timelineOf = (fns: ReturnType<typeof createDevtoolsFunctions>) => {
+  const found = fns.find((fn) => fn.id === 'devtools.timeline');
+  if (found === undefined) throw new Error('no devtools.timeline');
+  return found.execute;
+};
+
 const tick = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
 const signal = (): AbortSignal => new AbortController().signal;
 
@@ -34,7 +40,7 @@ describe('devtools — endpoint timeline (fed by shell.onEndpoint telemetry)', (
     shell.push(DEVTOOLS_CANVAS, 'Probe');
     await tick();
 
-    const result = (await fns['devtools.timeline']!({}, signal())) as { rows: TimelineEntry[]; count: number };
+    const result = (await timelineOf(fns)({}, signal())) as { rows: TimelineEntry[]; count: number };
     expect(result.count).toBe(1);
     const row = result.rows[0];
     expect(row?.name).toBe('go');
@@ -60,7 +66,7 @@ describe('devtools — endpoint timeline (fed by shell.onEndpoint telemetry)', (
     shell.push('main', 'Probe');
     await tick();
 
-    const result = (await fns['devtools.timeline']!({}, signal())) as { rows: TimelineEntry[]; count: number };
+    const result = (await timelineOf(fns)({}, signal())) as { rows: TimelineEntry[]; count: number };
     expect(result.count).toBe(3);
     expect(result.rows[0]?.seq).toBeGreaterThan(result.rows[1]?.seq ?? Infinity);
   });

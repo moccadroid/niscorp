@@ -1,5 +1,5 @@
 import { defineApp } from '@niscorp/moss';
-import type { FunctionDefinition, FunctionSession, NiscApp } from '@niscorp/moss';
+import type { NiscApp } from '@niscorp/moss';
 import { CHARTER } from './charter/charter';
 import { ASSIGNMENTS } from './charter/assignments';
 import { CATALOG_DEFINITIONS } from '@relay/app/action-catalog';
@@ -19,19 +19,6 @@ import { authFunctions } from '@relay/server/functions/auth';
 import { rayFunctions } from '@relay/server/functions/ray';
 import { modelFunctions } from '@relay/server/functions/models';
 
-const DEVTOOLS: Readonly<Record<string, string>> = {
-  'devtools.enabled': 'Answers whether the devtools are on.',
-  'devtools.setEnabled': 'Turns the devtools on or off. Send { devtools: true | false }.',
-  'devtools.shellState': 'Answers every canvas of the shell with its stack.',
-  'devtools.audit': 'Audits the shell’s actions against the catalog.',
-  'devtools.pop': 'Pops the top of a canvas. Send { popCanvas }.',
-  'devtools.timeline': 'Answers the endpoint calls the shell recorded, newest first.',
-  'devtools.describe': 'Describes a mounted instance: its data and layout. Send { instanceId }.',
-};
-
-const devtoolsFunctions = (session: FunctionSession): FunctionDefinition[] =>
-  Object.entries(createDevtoolsFunctions({ shell: () => session.shell, definitions: CATALOG_DEFINITIONS })).map(([id, execute]) => ({ id, description: DEVTOOLS[id] ?? 'A devtools function.', execute }));
-
 export const buildRelay = (): NiscApp => defineApp({
   charter: CHARTER,
   assignments: ASSIGNMENTS,
@@ -40,7 +27,12 @@ export const buildRelay = (): NiscApp => defineApp({
   entries: [...ENTRIES, ...MUTATION_ENTRIES],
   behaviors: scopeBehaviors,
   resources: RESOURCES,
-  functions: (session) => [...rayFunctions(session), ...authFunctions(session), ...modelFunctions(), ...devtoolsFunctions(session)],
+  functions: (session) => [
+    ...rayFunctions(session),
+    ...authFunctions(session),
+    ...modelFunctions(),
+    ...createDevtoolsFunctions({ shell: () => session.shell, definitions: CATALOG_DEFINITIONS }),
+  ],
   shell: {
     canvases: [
       { id: 'sidebar', initial: { action: 'chrome.sidebar' } },

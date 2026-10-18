@@ -29,6 +29,10 @@ export type FunctionHandler = (
   signal: AbortSignal,
 ) => Promise<unknown>;
 
+// A function an app hands over: `execute` is what an `fn:` endpoint calls, and
+// `description` says what it does and what to send, for whoever writes a call to it.
+export type FunctionDefinition = { id: string; description: string; execute: FunctionHandler };
+
 export type FetchInit = {
   method?: string;
   headers?: Record<string, string>;

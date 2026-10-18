@@ -1,4 +1,4 @@
-import type { EndpointEvent, FunctionHandler, ActionDefinition } from '@action';
+import type { EndpointEvent, FunctionDefinition, ActionDefinition } from '@action';
 import type { Shell } from '@shell';
 import { snapshotShell, describeInstance, auditCatalog } from '../reflect';
 
@@ -23,7 +23,7 @@ export type DevtoolsConfig = {
   definitions?: Record<string, ActionDefinition> | readonly ActionDefinition[];
 };
 
-export const createDevtoolsFunctions = (config: DevtoolsConfig): Record<string, FunctionHandler> => {
+export const createDevtoolsFunctions = (config: DevtoolsConfig): FunctionDefinition[] => {
   const { shell, definitions = {} } = config;
 
   const timeline: TimelineEntry[] = [];
@@ -59,41 +59,60 @@ export const createDevtoolsFunctions = (config: DevtoolsConfig): Record<string, 
     }
   });
 
-  return {
-    'devtools.enabled': async () => {
-      try {
-        return shell().getCanvasState(DEVTOOLS_CANVAS).stack.length > 0;
-      } catch {
-        return false;
-      }
+  return [
+    {
+      id: 'devtools.enabled',
+      description: 'Answers whether the devtools are on: whether the dock is on its canvas.',
+      execute: async () => {
+        try {
+          return shell().getCanvasState(DEVTOOLS_CANVAS).stack.length > 0;
+        } catch {
+          return false;
+        }
+      },
     },
-    'devtools.setEnabled': async (data) => {
-      const on = data['devtools'] === true;
-      try {
-        const live = shell();
-        const occupied = live.getCanvasState(DEVTOOLS_CANVAS).stack.length > 0;
-        if (on && !occupied) live.push(DEVTOOLS_CANVAS, 'devtools.dock');
-        else if (!on && occupied) live.clear(DEVTOOLS_CANVAS);
-      } catch {
-        /* the principal does not hold the dock, or there is no shell */
-      }
-      return on;
+    {
+      id: 'devtools.setEnabled',
+      description: 'Turns the devtools on or off: the dock onto its canvas, or off it. Send { devtools: true | false }.',
+      execute: async (data) => {
+        const on = data['devtools'] === true;
+        try {
+          const live = shell();
+          const occupied = live.getCanvasState(DEVTOOLS_CANVAS).stack.length > 0;
+          if (on && !occupied) live.push(DEVTOOLS_CANVAS, 'devtools.dock');
+          else if (!on && occupied) live.clear(DEVTOOLS_CANVAS);
+        } catch {
+          /* the principal does not hold the dock, or there is no shell */
+        }
+        return on;
+      },
     },
-    'devtools.shellState': async () => snapshotShell(shell(), [DEVTOOLS_CANVAS]),
-    'devtools.audit': async () => {
-      const rows = auditCatalog(definitions);
-      return { rows, address: rows.reduce((total, row) => total + row.address, 0), definitions: rows.length };
+    { id: 'devtools.shellState', description: 'Answers every canvas of the shell with its stack and the active instance’s data.', execute: async () => snapshotShell(shell(), [DEVTOOLS_CANVAS]) },
+    {
+      id: 'devtools.audit',
+      description: 'Audits the catalog’s definitions: what each addresses, and what it reaches that is not there.',
+      execute: async () => {
+        const rows = auditCatalog(definitions);
+        return { rows, address: rows.reduce((total, row) => total + row.address, 0), definitions: rows.length };
+      },
     },
-    'devtools.pop': async (data) => {
-      const canvasId = String(data['popCanvas'] ?? '');
-      try {
-        const live = shell();
-        if (live.getCanvasState(canvasId).stack.length > 1) live.pop(canvasId);
-      } catch {}
-      return null;
+    {
+      id: 'devtools.pop',
+      description: 'Pops the top of a canvas, leaving at least one. Send { popCanvas }.',
+      execute: async (data) => {
+        const canvasId = String(data['popCanvas'] ?? '');
+        try {
+          const live = shell();
+          if (live.getCanvasState(canvasId).stack.length > 1) live.pop(canvasId);
+        } catch {}
+        return null;
+      },
     },
-    'devtools.timeline': async () => ({ rows: timeline.slice().reverse(), count: timeline.length }),
-    'devtools.describe': async (data) =>
-      describeInstance(shell(), String(data['instanceId'] ?? '')) ?? { id: 'unmounted', found: false, data: {}, layout: null, issues: [] },
-  };
+    { id: 'devtools.timeline', description: 'Answers the endpoint calls the shell recorded, newest first, and how many.', execute: async () => ({ rows: timeline.slice().reverse(), count: timeline.length }) },
+    {
+      id: 'devtools.describe',
+      description: 'Describes a mounted instance: its data, its layout and what the audit found. Send { instanceId }.',
+      execute: async (data) => describeInstance(shell(), String(data['instanceId'] ?? '')) ?? { id: 'unmounted', found: false, data: {}, layout: null, issues: [] },
+    },
+  ];
 };

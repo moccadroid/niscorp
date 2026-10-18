@@ -127,6 +127,7 @@ export type {
   TransformFn,
   FetchFn,
   FunctionHandler,
+  FunctionDefinition,
   FetchInit,
   FetchResponse,
   NavigationEffect,
