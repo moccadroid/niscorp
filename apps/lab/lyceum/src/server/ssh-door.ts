@@ -11,9 +11,18 @@ import { sshTty } from './ssh-tty.shim';
 
 const MOST_AT_ONCE = 300;
 
+// ssh2 now and then writes an ed25519 key it cannot read back; one it can is kept.
+const generatedHostKey = (): string => {
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const { private: key } = ssh2.utils.generateKeyPairSync('ed25519');
+    if (!(ssh2.utils.parseKey(key) instanceof Error)) return key;
+  }
+  throw new Error('lyceum: ssh2 generated five host keys it could not read back');
+};
+
 const hostKeyAt = (file: string): string => {
   if (existsSync(file)) return readFileSync(file, 'utf8');
-  const { private: key } = ssh2.utils.generateKeyPairSync('ed25519');
+  const key = generatedHostKey();
   mkdirSync(dirname(file), { recursive: true });
   writeFileSync(file, key, { mode: 0o600 });
   return key;
