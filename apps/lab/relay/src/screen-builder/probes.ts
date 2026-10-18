@@ -10,7 +10,7 @@ export const ProbeSchema = z.object({
     .array(
       z.object({
         set: z.string().optional().describe('The ref of an input or select: type into it or pick in it.'),
-        to: z.union([z.string(), z.number(), z.boolean()]).optional().describe('With set: what is typed or picked.'),
+        to: z.union([z.string(), z.number(), z.boolean()]).optional().describe('With set: what is typed or picked. With click: the option clicked, such as which tab.'),
         click: z.string().optional().describe('The ref of what is clicked. A row ref clicks the first row.'),
       }),
     )
@@ -21,7 +21,8 @@ export const ProbeSchema = z.object({
   reloads: z.string().optional().describe('For a probe that only clicks, such as a refresh: a data key whose endpoint must be called again.'),
 });
 
-const said = (step: ProbeStep): string => (step.set !== undefined ? `set "${step.set}" to ${JSON.stringify(step.to)}` : `click "${step.click ?? ''}"`);
+const said = (step: ProbeStep): string =>
+  step.set !== undefined ? `set "${step.set}" to ${JSON.stringify(step.to)}` : `click "${step.click ?? ''}"${step.to === undefined ? '' : ` on ${JSON.stringify(step.to)}`}`;
 
 const malformed = (probe: Probe): string | undefined => {
   const step = probe.do.find((one) => (one.set === undefined) === (one.click === undefined) || (one.set !== undefined && one.to === undefined));
@@ -35,11 +36,11 @@ const malformed = (probe: Probe): string | undefined => {
   return undefined;
 };
 
-// Every control or row whose trigger loads data or opens a screen is used by a probe.
-export const coverage = (definition: ActionDefinition, probes: readonly Probe[]): Finding[] =>
+// Every control or row whose trigger loads data or opens a screen, and that a probe can reach, is used by a probe.
+export const coverage = (definition: ActionDefinition, probes: readonly Probe[], reachable: ReadonlySet<string>): Finding[] =>
   (definition.triggers ?? []).flatMap((trigger): Finding[] => {
     const ref = trigger.ref;
-    if (ref === undefined || (trigger.event !== 'ui:model' && trigger.event !== 'ui:click')) return [];
+    if (ref === undefined || !reachable.has(ref) || (trigger.event !== 'ui:model' && trigger.event !== 'ui:click')) return [];
     const steps = stepsIn(trigger.do);
     const calls = steps.flatMap((step) => (typeof step['call'] === 'string' ? [step['call']] : []));
     const opens = steps.flatMap((step) => navigationOf(step)?.action ?? []);
@@ -71,13 +72,17 @@ const sameBecause = (mounted: Mounted, sentBefore: number): string => {
 const act = (mounted: Mounted, step: ProbeStep, setup: ScreenSetup): string | undefined => {
   const components = mounted.components();
   if (step.set !== undefined) {
-    if (!components.some((node) => node.ref === step.set)) return `nothing on the screen carries the ref "${step.set}"`;
+    const node = components.find((one) => one.ref === step.set);
+    if (node === undefined) return `nothing on the screen carries the ref "${step.set}"`;
+    if (setup.kit.inputs !== undefined && !setup.kit.inputs.includes(node.name)) return `a ${node.name} takes nothing typed or picked; a person clicks it: { "click": "${step.set}", "to": … }`;
     mounted.shell.dispatch({ type: 'ui:model', ref: step.set, payload: step.to });
     return undefined;
   }
   const ref = step.click ?? '';
-  if (components.some((node) => node.ref === ref)) {
-    mounted.shell.dispatch({ type: 'ui:click', ref });
+  const own = components.find((node) => node.ref === ref);
+  if (own !== undefined) {
+    const payload = step.to ?? setup.kit.clicks?.[own.name]?.(own.props);
+    mounted.shell.dispatch({ type: 'ui:click', ref, ...(payload === undefined ? {} : { payload }) });
     return undefined;
   }
   const list = components.find((node) => {
@@ -146,7 +151,11 @@ const runProbe = async (definition: ActionDefinition, probe: Probe, setup: Scree
 };
 
 // Each probe on a fresh mount, so no probe starts from what another left behind.
-export const runProbes = async (definition: ActionDefinition, probes: readonly Probe[], setup: ScreenSetup): Promise<Finding[]> => {
+export const runProbes = async (definition: ActionDefinition, probes: readonly Probe[], setup: ScreenSetup, reachable: ReadonlySet<string>): Promise<Finding[]> => {
+  const out = probes.flatMap((probe) => probe.do.flatMap((step) => [step.set, step.click]).filter((ref): ref is string => ref !== undefined && !reachable.has(ref)));
+  if (out.length > 0) {
+    return [{ code: 'probe', message: `a probe can use only what carries a ref on the screen and the rows of a list; ${[...new Set(out)].map((ref) => `"${ref}"`).join(', ')} ${out.length === 1 ? 'is' : 'are'} fired from inside a component, so leave ${out.length === 1 ? 'it' : 'them'} out of the probes` }];
+  }
   const wrong = probes.flatMap((probe) => malformed(probe) ?? []);
   if (wrong.length > 0) return wrong.map((message) => ({ code: 'probe', message }));
   const found: Finding[] = [];

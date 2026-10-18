@@ -1,12 +1,16 @@
 import type { ActionDefinition, ComponentRegistry, FetchFn, TransformFn } from '@niscorp/nova';
 import type { ContextMeta, DiscoveryResponse, QueryRequest, QueryResponse } from '@niscorp/vex';
 
-// A component that draws rows: the prop holding them, and the ref a click on one fires with what payload.
+// A component that draws rows: the prop holding them, the ref a click on one fires with what payload, and the row keys it reads.
 export type ListComponent = {
   rows: string;
   rowRef?: string;
   rowPayload?: (row: Record<string, unknown>, props: Record<string, unknown>) => unknown;
+  reads?: (props: Record<string, unknown>) => string[];
 };
+
+// What a click on a component carries, read from its props.
+export type ClickPayload = (props: Record<string, unknown>) => unknown;
 
 export type ProbeStep = { set?: string; to?: string | number | boolean; click?: string };
 
@@ -21,6 +25,9 @@ export type Kit = {
   offer: readonly string[];
   omitProps?: readonly string[];
   lists: Readonly<Record<string, ListComponent>>;
+  clicks?: Readonly<Record<string, ClickPayload>>;
+  // The components that send what is typed or picked in them as ui:model; every other one is clicked.
+  inputs?: readonly string[];
   layoutRules?: string;
   examples: readonly Example[];
 };
@@ -38,6 +45,8 @@ export type ScreenSetup = {
   kit: Kit;
   vex: Vex;
   catalog: readonly CatalogEntry[];
+  // The message channels the host's screens emit and listen on; left out, channels are not judged.
+  channels?: readonly string[];
   wire: FetchFn;
   transform: TransformFn;
   ambient: Readonly<Record<string, unknown>>;
@@ -48,6 +57,10 @@ export type FindingCode =
   | 'audit'
   | 'set-path'
   | 'unknown-fingerprint'
+  | 'frozen-value'
+  | 'ignored-context'
+  | 'empty-pattern'
+  | 'dead-trigger'
   | 'no-data'
   | 'endpoint'
   | 'transform'

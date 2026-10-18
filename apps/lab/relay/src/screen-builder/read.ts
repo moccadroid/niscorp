@@ -45,7 +45,10 @@ export const replays = (definition: ActionDefinition, vexEndpoint: string): stri
     .filter((endpoint) => endpoint.url === vexEndpoint)
     .flatMap((endpoint) => fingerprintsOf(endpoint.request));
 
-export const contextKeysOf =(request: unknown): string[] => (isRecord(request) && isRecord(request['context']) ? Object.keys(request['context']) : []);
+// vex's reserved keys: they order any query and are bound by none.
+export const RESERVED_CONTEXT: ReadonlySet<string> = new Set(['sortBy', 'sortDir']);
+
+export const contextKeysOf = (request: unknown): string[] => (isRecord(request) && isRecord(request['context']) ? Object.keys(request['context']) : []);
 
 export const componentsIn = (nodes: readonly RenderNode[]): RenderComponentNode[] =>
   nodes.flatMap((node) => (node.type === 'component' ? [node, ...componentsIn(node.children)] : node.type === 'fragment' ? componentsIn(node.children) : []));

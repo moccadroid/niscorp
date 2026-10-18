@@ -16,24 +16,25 @@ const REFERENCE = [
   '- { "if": "$.key", "then": <node>, "else": <node> } shows one branch; { "for": "$.rows", "as": "row", "do": <node> } repeats one per row ("$row.field" inside).',
   '- Props and children bind data with "$.key" (the value itself) or text with "{{$.rows.length}} deals". Nothing else resolves in a layout.',
   '',
-  'STEPS',
+  'STEPS — each step is an object with one of these keys:',
   '- { "set": "key", "value": <literal or "@event.payload"> } writes data.key; "key" is a bare data key.',
   '- { "call": "<endpoint>", "onSuccess": [ … ], "onError": [ … ] } runs an endpoint; its reply lands in its target.',
-  '- { "push": { "action": "<id from ACTIONS>", "input": { "id": "@event.payload" } } } opens another screen.',
+  '- { "push": { "action": "<id from ACTIONS>", "input": { "id": "@event.payload" } } } opens another screen; "action" and "input" sit inside "push".',
   '- "@event.payload" is what the event carries: the row\'s key for a row click, the typed or picked value for ui:model.',
   '',
   'ENDPOINTS',
   '- "request" (and "response") are transforms, run on every call over the screen\'s data: literal JSON, with ops where a value varies.',
   '  { "$ref": "$.key" } reads data; { "$case": { "branches": [ { "when": { "$eq": [ { "$ref": "$.month" }, "June" ] }, "then": "2026-06-01" } ], "else": "2026-07-01" } } chooses;',
-  '  { "$join": { "parts": [ "%", { "$ref": "$.q" }, "%" ], "sep": "" } } joins text. These ops work only inside endpoints.',
+  '  { "$join": { "parts": [ "%", { "$ref": "$.q" }, "%" ], "sep": "" } } joins text;',
+  '  { "$date": { "value": { "$dateAdd": { "date": { "$ref": "$.start" }, "amount": 7, "unit": "day" } }, "format": "YYYY-MM-DD" } } counts a date from another. These ops work only inside endpoints.',
   '- The reply is written to "target" as it comes.',
 ].join('\n');
 
 const palette = (kit: Kit): string =>
   [
-    'COMPONENTS — the only components a layout may use, each with the props it takes:',
+    'COMPONENTS — the only components a layout may use. A node is written { "component": …, "props": { … } }: every prop listed goes inside "props", never beside "component".',
     ...paletteFromRegistry(kit.registry, { include: [...kit.offer], omitProps: [...(kit.omitProps ?? [])] }).map(
-      (entry) => `  ${entry.name} — ${entry.description}\n    props: ${JSON.stringify(entry.propsSchema ?? {})}`,
+      (entry) => `  ${entry.name} — ${entry.description}\n    { "component": "${entry.name}", "props": <${JSON.stringify(entry.propsSchema ?? {})}> }`,
     ),
   ].join('\n');
 

@@ -4,7 +4,7 @@ import { collectInteractive } from '@niscorp/nova/agent';
 import { classifyAudit } from '@niscorp/nova/reflect';
 import { mount } from './mount';
 import { coverage, runProbes } from './probes';
-import { allSteps, contextKeysOf, describeValue, fingerprintsOf, httpEndpoints, isEmpty, isRecord, renderErrorsIn } from './read';
+import { allSteps, contextKeysOf, describeValue, fingerprintsOf, httpEndpoints, isEmpty, isRecord, renderErrorsIn, RESERVED_CONTEXT } from './read';
 import type { CheckResult, Finding, Probe, Proof, ScreenSetup } from './types';
 
 export type CheckOptions = {
@@ -13,6 +13,8 @@ export type CheckOptions = {
   proofs?: ReadonlyMap<string, Proof>;
   // Whether a fingerprint may be replayed. Left out, fingerprints are not judged before the mount.
   replayable?: (fingerprint: string) => boolean;
+  // The context keys of a query that vex matches like a search.
+  patterns?: (fingerprint: string) => readonly string[];
 };
 
 const refused = (findings: Finding[]): CheckResult => ({ ok: false, findings, loaded: {} });
@@ -49,7 +51,7 @@ const unknownSteps = (candidate: unknown): Finding[] => {
 
 const statics = (definition: ActionDefinition, setup: ScreenSetup, options: CheckOptions): Finding[] => {
   const vexEndpoints = httpEndpoints(definition).filter((endpoint) => endpoint.url === setup.vex.endpoint);
-  const audit = auditAction(definition, { catalog: setup.catalog.map((entry) => ({ id: entry.id, input: entry.input })) })
+  const audit = auditAction(definition, { catalog: setup.catalog.map((entry) => ({ id: entry.id, input: entry.input })), ...(setup.channels === undefined ? {} : { channels: setup.channels }) })
     .issues.filter((issue) => classifyAudit(issue).kind === 'address')
     .map((message): Finding => ({ code: 'audit', message }));
   const replayable = options.replayable;
@@ -61,10 +63,38 @@ const statics = (definition: ActionDefinition, setup: ScreenSetup, options: Chec
       .filter((fingerprint) => !replayable(fingerprint))
       .map((fingerprint) => ({ code: 'unknown-fingerprint', message: `endpoint "${endpoint.name}" replays "${fingerprint}", which no prove call answered and discover did not list: copy the fingerprint from a prove result` }));
   });
+  // An ambient value written down is right for one day or one person.
+  const frozen = vexEndpoints.flatMap((endpoint): Finding[] => {
+    const context = isRecord(endpoint.request) && isRecord(endpoint.request['context']) ? endpoint.request['context'] : {};
+    return Object.entries(context).flatMap(([key, value]): Finding[] => {
+      const ambient = Object.entries(setup.ambient).find(([, now]) => typeof value === 'string' && value === now)?.[0];
+      return ambient === undefined
+        ? []
+        : [{ code: 'frozen-value', message: `endpoint "${endpoint.name}" sends "${key}": ${JSON.stringify(value)}, the value $.${ambient} has now; it changes, so send { "$ref": "$.${ambient}" }, and count any value from it in the request ({ "$dateAdd": … } for a date).` }];
+    });
+  });
+  // A pattern sent empty matches nothing.
+  const emptyPatterns = vexEndpoints.flatMap((endpoint): Finding[] => {
+    const context = isRecord(endpoint.request) && isRecord(endpoint.request['context']) ? endpoint.request['context'] : {};
+    const signatures = fingerprintsOf(endpoint.request).map((fingerprint) => options.patterns?.(fingerprint) ?? []);
+    return Object.entries(context)
+      .filter(([key, value]) => value === '' && signatures.some((patterns) => patterns.includes(key)))
+      .map(([key]) => ({ code: 'empty-pattern' as const, message: `endpoint "${endpoint.name}" sends "${key}": "", and "${key}" is matched like a search, so "" matches nothing: send "%" for everything, or wrap what is typed in "%"` }));
+  });
+  // A key the proved query does not bind changes nothing, whatever the screen sends in it.
+  const unbound = vexEndpoints.flatMap((endpoint): Finding[] => {
+    const proofs = fingerprintsOf(endpoint.request).map((fingerprint) => options.proofs?.get(fingerprint));
+    if (proofs.length === 0 || proofs.some((proof) => proof === undefined)) return [];
+    const sent = contextKeysOf(endpoint.request).filter((key) => !RESERVED_CONTEXT.has(key));
+    const ignored = sent.filter((key) => proofs.every((proof) => !Object.hasOwn(proof?.context ?? {}, key)));
+    return ignored.length === 0
+      ? []
+      : [{ code: 'ignored-context', message: `endpoint "${endpoint.name}" sends ${ignored.map((key) => `"${key}"`).join(', ')}, which its query does not take, so the value changes nothing: describe a query that names it` }];
+  });
   const noData = (options.proofs?.size ?? 0) > 0 && vexEndpoints.length === 0
     ? [{ code: 'no-data' as const, message: `the screen loads none of the data you proved: add an endpoint that posts to ${setup.vex.endpoint} and replays it, called from lifecycle.mount` }]
     : [];
-  return [...audit, ...fingerprints, ...noData];
+  return [...audit, ...fingerprints, ...frozen, ...emptyPatterns, ...unbound, ...noData];
 };
 
 // A set path is a bare data key; "$." belongs to bindings.
@@ -76,7 +106,13 @@ const setPaths = (definition: ActionDefinition): Finding[] =>
       : [];
   });
 
-const loadReport = (definition: ActionDefinition, data: Record<string, unknown>, setup: ScreenSetup, proofs: ReadonlyMap<string, Proof>): { loaded: Record<string, string>; findings: Finding[] } => {
+const loadReport = (
+  definition: ActionDefinition,
+  data: Record<string, unknown>,
+  setup: ScreenSetup,
+  proofs: ReadonlyMap<string, Proof>,
+  sent: readonly unknown[],
+): { loaded: Record<string, string>; findings: Finding[] } => {
   const loaded: Record<string, string> = {};
   const findings: Finding[] = [];
   for (const endpoint of httpEndpoints(definition)) {
@@ -87,9 +123,12 @@ const loadReport = (definition: ActionDefinition, data: Record<string, unknown>,
     const proved = fingerprintsOf(endpoint.request).map((fingerprint) => proofs.get(fingerprint)).find((proof) => proof !== undefined && proof.count > 0);
     if (proved === undefined) continue;
     const takes = Object.entries(proved.context).filter(([, meta]) => meta.kind === 'context').map(([key]) => key);
+    const replayed = new Set(fingerprintsOf(endpoint.request));
+    const body = [...sent].reverse().find((one) => isRecord(one) && typeof one['fingerprint'] === 'string' && replayed.has(one['fingerprint']));
+    const context = isRecord(body) ? JSON.stringify(body['context'] ?? {}) : undefined;
     findings.push({
       code: 'load-empty',
-      message: `endpoint "${endpoint.name}" loaded nothing, but its query answered ${proved.count} rows when proved: the query takes [${takes.join(', ')}], the endpoint sends [${contextKeysOf(endpoint.request).join(', ')}]`,
+      message: `endpoint "${endpoint.name}" loaded nothing, but its query answered ${proved.count} rows when proved: the query takes [${takes.join(', ')}], the endpoint ${context === undefined ? `sends [${contextKeysOf(endpoint.request).join(', ')}]` : `sent ${context}`}`,
     });
   }
   return { loaded, findings };
@@ -145,6 +184,44 @@ const unshownRows = (components: readonly RenderComponentNode[], definition: Act
     }));
 };
 
+// A ui:model trigger on a component that never sends one never fires.
+const deadTriggers = (definition: ActionDefinition, components: readonly RenderComponentNode[], setup: ScreenSetup): Finding[] => {
+  const inputs = setup.kit.inputs;
+  if (inputs === undefined) return [];
+  return (definition.triggers ?? []).flatMap((trigger): Finding[] => {
+    if (trigger.event !== 'ui:model') return [];
+    const node = components.find((one) => one.ref === trigger.ref);
+    return node === undefined || inputs.includes(node.name)
+      ? []
+      : [{ code: 'dead-trigger', message: `a ${node.name} sends no ui:model, so the trigger on "${node.ref ?? ''}" never fires: a ${node.name} is clicked — trigger on ui:click, where @event.payload is what the click carries` }];
+  });
+};
+
+// What a probe can click or set: an element that carries a ref, and the rows of a list.
+const reachableRefs = (components: readonly RenderComponentNode[], setup: ScreenSetup): ReadonlySet<string> =>
+  new Set(
+    components.flatMap((node) => {
+      const rowRef = setup.kit.lists[node.name]?.rowRef;
+      const fired = rowRef === undefined ? undefined : node.props[rowRef];
+      return [...(node.ref === undefined ? [] : [node.ref]), ...(typeof fired === 'string' ? [fired] : [])];
+    }),
+  );
+
+// A list that reads a key no row has draws that column empty.
+const emptyColumns = (components: readonly RenderComponentNode[], setup: ScreenSetup): Finding[] =>
+  components.flatMap((node): Finding[] => {
+    const capability = setup.kit.lists[node.name];
+    const rows = capability === undefined ? undefined : node.props[capability.rows];
+    if (capability?.reads === undefined || !Array.isArray(rows) || rows.length === 0) return [];
+    const records = rows.filter(isRecord);
+    const has = (key: string): boolean => records.some((row) => !isEmpty(getPath(row, key)) || getPath(row, key) === 0 || getPath(row, key) === false);
+    const missing = capability.reads(node.props).filter((key) => !has(key));
+    const keys = Object.keys(records[0] ?? {});
+    return missing.length === 0
+      ? []
+      : [{ code: 'unshown-rows', message: `a ${node.name} reads ${missing.map((key) => `"${key}"`).join(', ')}, which no row has, so it draws empty: the rows have ${keys.map((key) => `"${key}"`).join(', ')}` }];
+  });
+
 export const checkScreen = async (candidate: unknown, setup: ScreenSetup, options: CheckOptions = {}): Promise<CheckResult> => {
   const parsed = ActionDefinitionSchema.safeParse(candidate);
   if (!parsed.success) {
@@ -165,11 +242,13 @@ export const checkScreen = async (candidate: unknown, setup: ScreenSetup, option
 
   const mounted = await mount(definition, setup);
   let loaded: Record<string, string>;
+  let reachable: ReadonlySet<string>;
   try {
     const data = mounted.runtime.getData();
     const tree = mounted.tree();
     const components = mounted.components();
-    const report = loadReport(definition, data, setup, options.proofs ?? new Map());
+    reachable = reachableRefs(components, setup);
+    const report = loadReport(definition, data, setup, options.proofs ?? new Map(), mounted.sent);
     loaded = report.loaded;
     const found: Finding[] = [
       ...mounted.findings,
@@ -178,6 +257,8 @@ export const checkScreen = async (candidate: unknown, setup: ScreenSetup, option
       ...unresolvedBindings(components),
       ...unbound(definition, data),
       ...unshownRows(components, definition, data, setup),
+      ...emptyColumns(components, setup),
+      ...deadTriggers(definition, components, setup),
     ];
     if (found.length > 0) return { ok: false, findings: found, loaded };
   } finally {
@@ -185,8 +266,8 @@ export const checkScreen = async (candidate: unknown, setup: ScreenSetup, option
   }
 
   const probes = options.probes ?? [];
-  const uncovered = coverage(definition, probes);
+  const uncovered = coverage(definition, probes, reachable);
   if (uncovered.length > 0) return { ok: false, findings: uncovered, loaded };
-  const probed = await runProbes(definition, probes, setup);
+  const probed = await runProbes(definition, probes, setup, reachable);
   return { ok: probed.length === 0, findings: probed, loaded };
 };

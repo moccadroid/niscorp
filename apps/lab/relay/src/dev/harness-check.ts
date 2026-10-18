@@ -130,6 +130,52 @@ const main = async (): Promise<void> => {
   );
   checks.push([`a step nova does not know is shown with the forms a step takes (${said(flattened)})`, !flattened.ok && flattened.findings.length === 1 && flattened.findings[0]?.message.includes('triggers.1.do.0 is no step') === true]);
 
+  const emptyColumn = await checkScreen(
+    screen((definition) => ({ ...definition, layout: { component: 'Stack', children: [{ component: 'Input', ref: 'search', model: '$.search' }, { component: 'Table', props: { rows: '$.rows', rowKey: 'deal_id', rowRef: 'dealRow', empty: 'None.', columns: [{ label: 'When', cell: { kind: 'text', key: 'occurred_at' } }] } }] } })),
+    setup,
+    { probes: PROBES },
+  );
+  checks.push([`a column that reads a key no row has is reported (${said(emptyColumn)})`, !emptyColumn.ok && emptyColumn.findings.some((finding) => finding.message.includes('"occurred_at", which no row has'))]);
+
+  const today = String(setup.ambient['today']);
+  const frozenToday = await checkScreen(
+    screen((definition) => ({ ...definition, endpoints: { load: { url: '/api/vex', method: 'POST', request: { fingerprint: 'deals/list', context: { q: { $join: { parts: ['%', { $ref: '$.search' }, '%'], sep: '' } }, since: today } }, target: 'rows' } } })),
+    setup,
+    { probes: PROBES },
+  );
+  checks.push([`today's date written into a request is reported (${said(frozenToday)})`, !frozenToday.ok && codes(frozenToday).includes('frozen-value')]);
+
+  const tabbed = await checkScreen(
+    screen((definition) => ({
+      ...definition,
+      data: { ...definition.data, status: 'open' },
+      layout: { component: 'Stack', children: [{ component: 'Tabs', ref: 'status', props: { value: '$.status', options: [{ value: 'open', label: 'Open' }, { value: 'zzzz', label: 'Nothing' }] } }, ...((definition.layout as { children: unknown[] }).children as never[])] },
+      triggers: [...(definition.triggers ?? []), { event: 'ui:click', ref: 'status', do: [{ set: 'status', value: '@event.payload' }, { set: 'search', value: '@event.payload' }, { call: 'load' }] }],
+    })),
+    setup,
+    { probes: [...PROBES, { do: [{ click: 'status', to: 'zzzz' }], changes: 'rows' }] },
+  );
+  checks.push([`a tab is probed by the value its click carries (${said(tabbed)})`, tabbed.ok]);
+
+  const emptyPattern = await checkScreen(
+    screen((definition) => ({ ...definition, endpoints: { load: { url: '/api/vex', method: 'POST', request: { fingerprint: 'deals/list', context: { q: '' } }, target: 'rows' } } })),
+    setup,
+    { probes: PROBES, patterns: (fingerprint) => (fingerprint === 'deals/list' ? ['q'] : []) },
+  );
+  checks.push([`a search pattern sent empty is reported (${said(emptyPattern)})`, !emptyPattern.ok && codes(emptyPattern).includes('empty-pattern')]);
+
+  const modelTabs = await checkScreen(
+    screen((definition) => ({
+      ...definition,
+      data: { ...definition.data, status: 'open' },
+      layout: { component: 'Stack', children: [{ component: 'Tabs', ref: 'status', model: '$.status', props: { value: '$.status', options: [{ value: 'open', label: 'Open' }, { value: 'won', label: 'Won' }] } }, ...((definition.layout as { children: unknown[] }).children as never[])] },
+      triggers: [...(definition.triggers ?? []), { event: 'ui:model', ref: 'status', do: [{ call: 'load' }] }],
+    })),
+    setup,
+    { probes: [...PROBES, { do: [{ set: 'status', to: 'won' }], changes: 'rows' }] },
+  );
+  checks.push([`a ui:model trigger on tabs, which are clicked, is reported (${said(modelTabs)})`, !modelTabs.ok && codes(modelTabs).includes('dead-trigger')]);
+
   const invalid = await checkScreen({ id: 123, endpoints: 'nope' }, setup);
   checks.push([`a definition that is not one is refused (${said(invalid)})`, !invalid.ok && codes(invalid).includes('schema')]);
 

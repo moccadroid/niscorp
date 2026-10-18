@@ -4,6 +4,7 @@ import { ActionDefinitionSchema, type ActionDefinition } from '@niscorp/nova';
 import { vexGuide, type ContextSignature, type QueryRequest, type QueryResponse } from '@niscorp/vex';
 import { checkScreen } from './check';
 import { ProbeSchema } from './probes';
+import { RESERVED_CONTEXT } from './read';
 import type { Finding, Probe, Proof, ScreenSetup } from './types';
 
 export type BuildState = {
@@ -155,6 +156,14 @@ export const makeTools = (setup: ScreenSetup, state: BuildState): ToolDefinition
       if (proved !== undefined && missing.length === 0) {
         state.proofs.set(proved, { count: Array.isArray(rows) ? rows.length : 1, context: response.meta.context, ...(intent === undefined ? {} : { intent }) });
       }
+      const signature = state.listed.get(proved ?? replay ?? '') ?? {};
+      const emptyPatterns = Object.entries(values).filter(([key, value]) => value === '' && signature[key]?.note === 'pattern').map(([key]) => `"${key}"`);
+      if (emptyPatterns.length > 0) notes.push(`${emptyPatterns.join(', ')} ${emptyPatterns.length === 1 ? 'is a pattern' : 'are patterns'}, matched like a search: "" matches nothing, "%" matches everything.`);
+      const ignored = Object.keys(values).filter((key) => !Object.hasOwn(response.meta.context, key) && !RESERVED_CONTEXT.has(key));
+      if (ignored.length > 0) {
+        const taken = Object.entries(response.meta.context).filter(([, meta]) => meta.kind === 'context').map(([key]) => `"${key}"`);
+        notes.push(`${ignored.map((key) => `"${key}"`).join(', ')} ${ignored.length === 1 ? 'is no context this query takes, so it' : 'are no context this query takes, so they'} changed nothing${taken.length > 0 ? `; it takes ${taken.join(', ')}` : ''}. To filter by ${ignored.length === 1 ? 'it' : 'them'}, describe a new query that names ${ignored.length === 1 ? 'it' : 'them'}.`);
+      }
       if (missing.length > 0) notes.push(`NOT PROVEN: the query takes ${missing.map((key) => `"${key}"`).join(', ')} and ran without them, so these rows are wrong. Prove it again with a value for each.`);
       if (!Array.isArray(rows)) notes.push('One record, because the shape was an object. For a list of rows the shape is [ { … } ].');
       return {
@@ -177,14 +186,19 @@ export const makeTools = (setup: ScreenSetup, state: BuildState): ToolDefinition
       'Mount the screen for real, load its data, and run its probes. Answers what broke, or that it passes — and a screen that passes is the result: the work ends there.',
     guide:
       'A probe is what a person does on the screen and what must follow: { "do": [ { "set": "<ref>", "to": "<value>" } ], "changes": "<data key>" } or ' +
-      '{ "do": [ { "click": "<row or button ref>" } ], "opens": "<action id>" }; a refresh button, which loads the same rows again: { "do": [ { "click": "<ref>" } ], "reloads": "<data key>" }. ' +
+      '{ "do": [ { "click": "<row or button ref>" } ], "opens": "<action id>" }; a refresh button, which loads the same rows again: { "do": [ { "click": "<ref>" } ], "reloads": "<data key>" }; a tab: { "do": [ { "click": "<tabs ref>", "to": "<the tab\'s value>" } ], "changes": "<data key>" }. ' +
       'Every control or row whose trigger loads data or opens a screen needs one. Pick values that must change what loads.',
     input: z.object({
       action: z.record(z.string(), z.unknown()).describe('The complete action definition.'),
       probes: z.array(ProbeSchema).optional().describe('What the screen must do when it is used.'),
     }),
     execute: async ({ action, probes }) => {
-      const result = await checkScreen(action, setup, { probes: probes ?? [], proofs: state.proofs, replayable: (fingerprint) => replayable(state, fingerprint) });
+      const result = await checkScreen(action, setup, {
+        probes: probes ?? [],
+        proofs: state.proofs,
+        replayable: (fingerprint) => replayable(state, fingerprint),
+        patterns: (fingerprint) => Object.entries(state.listed.get(fingerprint) ?? {}).filter(([, field]) => field.note === 'pattern').map(([key]) => key),
+      });
       const parsed = ActionDefinitionSchema.safeParse(action);
       if (result.ok && parsed.success) {
         state.passed = { action: parsed.data, probes: probes ?? [] };
