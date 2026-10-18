@@ -78,11 +78,10 @@ export const makeScreenTools = (ray: RayContext): ScreenTools => {
       intent: z
         .string()
         .describe('A complete description of the screen: the data (records, filters, sorting) and every interaction. In edit mode: only the change.'),
-      // No transform to normalize null: tool inputs travel as JSON Schema and
-      // z.toJSONSchema throws on transforms.
+      // Not nullish: a schema that allows null is answered with null by models on Groq.
       edit: z
         .string()
-        .nullish()
+        .optional()
         .describe('The id of a screen built earlier or kept (from ACTIONS) — modify that screen instead of building a new one.'),
     }),
     execute: async ({ intent, edit }, ctx) => {

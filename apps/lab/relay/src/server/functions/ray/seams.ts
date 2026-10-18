@@ -7,7 +7,7 @@ export type RayContext = {
   shell: Shell;
   userId: string;
   wire: FetchFn;
-  answerIntent: (asked: { intent: string; shape: unknown; context?: Record<string, unknown> }) => ReturnType<FunctionSession['answerIntent']>;
+  answerIntent: (asked: Parameters<FunctionSession['answerIntent']>[1]) => ReturnType<FunctionSession['answerIntent']>;
   draft: FunctionSession['draft'];
   artifacts: FunctionSession['artifacts'];
 };

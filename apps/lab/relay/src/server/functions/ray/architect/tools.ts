@@ -27,18 +27,11 @@ const parseMaybeJson = (value: string): unknown => {
 
 type Answered = { result: unknown; meta: { cache: { fingerprint?: string }; context: Record<string, { kind: string }>; missingContext?: string[]; warnings?: string[] } };
 
-// A replay goes through the wire, as an action's endpoint does, and answers the rows alone;
-// an intent is answered by vex through the session, with everything it knows of the query.
+// Asked of vex through the session, as the caller: a replay and an intent both come back
+// with what vex knows of the query, a replay's missing context included.
 const answered = async (ray: RayContext, fingerprint: string | undefined, intent: string | undefined, shape: unknown, context: Record<string, unknown>): Promise<Answered> => {
-  if (fingerprint !== undefined) {
-    const res = await ray.wire('/api/vex', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ fingerprint, context }) });
-    if (!res.ok) throw new Error(`replay of ${fingerprint} failed (${res.status}): ${(await res.text()).slice(0, 300)}`);
-    const body = await res.json();
-    const result = body !== null && typeof body === 'object' && !Array.isArray(body) && 'result' in body ? (body as Record<string, unknown>)['result'] : body;
-    return { result, meta: { cache: { fingerprint }, context: Object.fromEntries(Object.keys(context).map((key) => [key, { kind: 'context' }])) } };
-  }
-  if (intent === undefined) throw new Error('a query needs an intent and a shape, or a fingerprint to replay');
-  const res = await ray.answerIntent({ intent, shape, context });
+  if (fingerprint === undefined && intent === undefined) throw new Error('a query needs an intent and a shape, or a fingerprint to replay');
+  const res = await ray.answerIntent(fingerprint !== undefined ? { fingerprint, context } : { intent: intent ?? '', shape, context });
   return {
     result: res.result,
     meta: {
@@ -143,15 +136,16 @@ export const makeArchitectTools = (supportLlm: SignalClient, ray: RayContext): A
       'and typing narrows. PROVE the query with a wrapped value too ("%a%", not "a"), and never send a bare search string: ' +
       'an empty one matches nothing and the screen mounts blank.',
     input: z.object({
+      // Not nullish, here and on intent: a schema that allows null is answered with null by models on Groq.
       fingerprint: z
         .string()
-        .nullish()
+        .optional()
         .describe(
           'A fingerprint from discover or an earlier query result — replays that exact query. Omit when describing a NEW query with intent + shape.',
         ),
       intent: z
         .string()
-        .nullish()
+        .optional()
         .describe(
           'For a NEW query: plain English carrying EVERY filter, scope, sort, threshold and derived field, spelled ' +
             'out with real field names (see discover). Anything not written here will NOT be in the query.',
@@ -187,12 +181,7 @@ export const makeArchitectTools = (supportLlm: SignalClient, ray: RayContext): A
       // attach them anyway, and vex's named-slot posture (fingerprint + intent +
       // shape) 409s on a protected entry and silently replaces an unprotected one.
       const replaying = memoFp ?? (replayFingerprint == null ? undefined : (replayFingerprint as string));
-      // The wire answers a replay's rows alone: a key a query proved in this build needs is checked here.
-      const needed = replaying === undefined ? [] : (proofs.get(replaying)?.contextKeys ?? []).filter((key) => !(key in ctx));
-      const res: Answered =
-        needed.length > 0
-          ? { result: [], meta: { cache: { fingerprint: replaying }, context: {}, missingContext: needed } }
-          : await answered(ray, replaying, intent ?? undefined, shape, ctx);
+      const res = await answered(ray, replaying, intent ?? undefined, shape, ctx);
       if (identity !== undefined && memoFp === undefined && res.meta.cache.fingerprint !== undefined) {
         provenRequests.set(identity, res.meta.cache.fingerprint);
       }
