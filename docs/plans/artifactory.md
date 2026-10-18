@@ -424,9 +424,9 @@ the shell does not have adds it (`addCanvas`), and one that leaves takes it
 out again. The canvases a shell manifest declares stay as they are.
 
 **The draft.** It lives in the shell and is a capability of the session an
-app's functions are handed: read and list what is in it, put one or several
+app's functions are handed: read and list what is in it, add one or several
 artifacts (one numbered step), remove one, show the draft as it was at a step,
-discard it, save it. What is put passes the check and is applied to that one
+discard it, save it. What is added passes the check and is applied to that one
 shell at once, so its owner sees it. It is gone when the shell is.
 
 **Saving is the session's principal's** (the owner's, 2026-10-13; it was
@@ -487,7 +487,7 @@ is deleted. Until then it keeps the queries a model wrote; for it to go, a
 query that was written and not saved needs a place in the artifactory, which
 the draft is.
 
-**The check.** At a put into the draft, at a save, and when a shell is built:
+**The check.** At an add to the draft, at a save, and when a shell is built:
 the kind's schema (nova's, vex's), `auditAction`, the layout against the kit
 (`layoutMisfits`), the chains that never end (`endlessChains`), a read against
 the schema (`engine.compile`), and a generated action's endpoints against what
@@ -637,16 +637,16 @@ one; saving and opening in one call, which is the draft's (step 6).
 
 **Step 6. The draft. Built (2026-10-13)**, in moss, and no app uses it yet
 (the owner's: lyceum is wired to it in a session of its own, and no app is
-touched while it works). `session.draft` (`manifest/app.ts`) has `put`,
+touched while it works). `session.draft` (`manifest/app.ts`) has `add`,
 `list`, `remove`, `show`, `discard` and `save`. The draft is kept by the shell
 it is in (`shells/draft.ts`): its steps, and which one is shown. The shell
 asks for what it is made of with what its draft holds (`composition`, and
 `artifactsFor` lays it over what was saved, `artifactory/draft.ts`), and a
-change to the draft is awaited (`adoptDraft`, `shells/host.ts`). What is put
+change to the draft is awaited (`adoptDraft`, `shells/host.ts`). What is added
 is checked, and a draft is saved, by what a session's save is made of
 (`draftSaving`, `artifactory/draft.ts`). *Tests that failed first:*
-`server-draft.test.ts`. *Done when:* what is put into a draft is on that one
-screen when the put answers and nowhere else, and one call saves it.
+`server-draft.test.ts`. *Done when:* what is added to a draft is on that one
+screen when the add answers and nowhere else, and one call saves it.
 *Not in this step any more:* relay's builder, atrium's preview and lyceum's
 two layouts stay on `@niscorp/moss/unverified`, which they were to leave. Read
 on 2026-10-13, none of the three is something a draft takes: the actions
@@ -724,10 +724,10 @@ shell. On the whole shell (`unverifiedShell`) they see the ref.
   when pruning runs. Measure before proposing a number.
 - What lyceum shows with the draft. The owner's to say, and to build in a
   session of lyceum's own.
-- Relay's assistant still runs an engine of its own over `vex_cache`, for the
-  queries its model writes. It moves onto saved reads (step 7), which is
-  where a query a model wrote gets a place in the artifactory, and onto the
-  draft with them.
+- Relay's assistant ran an engine of its own over `vex_cache` for the queries
+  its model writes; since 2026-10-18 it runs on the session (below, "Relay on
+  the artifactory"). The dev scripts that bench the builder keep an engine of
+  their own under `src/dev/`.
 - `nisc migrate` gives its pass, for an entry that was already broken before a
   run, to an entry that has a copy in `vex_cache`: one an earlier release
   wrote, or one an app writes itself for an engine of its own. The pass goes
@@ -776,6 +776,27 @@ lyra, lyceum and relay. Cost: one anonymous shell build. Limit: every check
 reads nobody's functions. Declaring functions statically, which would have
 made all of this a boot check with no shell, was proposed and struck by the
 owner.
+
+**Relay on the artifactory** (the owner's go, 2026-10-18: "make sure that the
+assistant works even better than before"). Ray's functions are
+`{ id, description, execute }`, and so are relay's sign-in, model and devtools
+functions. The server's ray has no vex engine of its own: `find_records` and
+the chat's `query` go through the session's wire and `session.answerIntent`;
+the architect's `discover` reads the app's vex route (entities and fields) and
+lists the queries that exist — the app's entries and the person's saved and
+drafted reads; its `query` proves through `answerIntent` and replays through
+the wire; the harness probes through the wire. A built screen goes into the
+draft with the reads it proved and is placed by the id moss gave it; `edit`
+adds a new take under that id; `keep_screens` saves the draft and
+`discard_screens` throws it away; the screens a person kept are in ACTIONS when
+they come back. What is better: a kept screen survives a reload, every screen
+is checked by moss before it is shown (the refusal reaches the model
+verbatim), and a model-written query is a kept read, not a `vex_cache` row a
+schema change deletes. The dev scripts keep an engine under `src/dev/engine.ts`
+(`devRayContext`); `ray-screens-check` proves the placing with no model.
+**Not verified here:** the paths that run a model (building, chatting): there
+are no model keys on this machine; typecheck, `ray-check`, `server-check` and
+the lab baseline are what was run.
 
 **Publishing every kind, as built** (the owner's go, 2026-10-17, after the
 owner asked why only layouts were published: step 5's list had left it to be
@@ -881,8 +902,8 @@ default): the publisher names a new id and hands the body over.
 - **Loom moves with nova and vex.** It depends on both, and the changeset
   check refuses a breaking release whose dependents do not move. The nova
   changeset missed it since that change.
-- **Not built:** relay's assistant moving onto saved reads. Publishing a read
-  was built on 2026-10-17 (below).
+- Relay's assistant moved onto saved reads on 2026-10-18 (below, "Relay on the
+  artifactory"). Publishing a read was built on 2026-10-17 (below).
 
 **Step 9 as built.** The builder's recommendations, built on the owner's go
 (2026-10-13).
@@ -965,8 +986,8 @@ default): the publisher names a new id and hands the body over.
 - **`save` saves the step that is shown**, which is the last one unless
   `show` moved it.
 - **Calls on one draft are taken in turn.**
-- **What is put into a draft is held to what its own shell can draw**, where a
-  save is held to what any shell of the app can. So a put is in the shell
+- **What is added into a draft is held to what its own shell can draw**, where a
+  save is held to what any shell of the app can. So what is added is in the shell
   whenever it answers.
 - **The draft is as it is to be only once the shell has taken it.** A change
   to it that the shell could not take leaves both as they were. Where the
@@ -977,8 +998,8 @@ default): the publisher names a new id and hands the body over.
   answered after a reset replaced its shell is dropped, where before step 6
   it was applied to the new shell: its answer holds the old shell's draft,
   and the new shell adopts for itself where it is behind.
-- **A put that marks a layout in use takes the mark off the draft's others for
-  that ref**, as a save does. Two of one put marked for one ref are refused.
+- **An add that marks a layout in use takes the mark off the draft's others for
+  that ref**, as a save does. Two of one add marked for one ref are refused.
 - **The draft's code is in two modules**, as the draft is: the shell keeps it
   (`shells/draft.ts`, and the adopt in `shells/host.ts`), and the artifactory
   checks and saves it (`artifactory/draft.ts`). `shells` may not import
