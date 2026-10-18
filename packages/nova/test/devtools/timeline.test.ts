@@ -31,7 +31,7 @@ describe('devtools — endpoint timeline (fed by shell.onEndpoint telemetry)', (
       registry: createPermissiveRegistry(),
       layoutStore: createLayoutStore(),
       actions: { Probe },
-      functions: { ...fns, probe: async () => ({ ok: 1 }) },
+      functions: { ...Object.fromEntries(fns.map((fn) => [fn.id, fn.execute])), probe: async () => ({ ok: 1 }) },
     });
     await tick(); // let the tap's microtask subscribe
 
@@ -57,7 +57,7 @@ describe('devtools — endpoint timeline (fed by shell.onEndpoint telemetry)', (
       registry: createPermissiveRegistry(),
       layoutStore: createLayoutStore(),
       actions: { Probe },
-      functions: { ...fns, probe: async () => ({ ok: 1 }) },
+      functions: { ...Object.fromEntries(fns.map((fn) => [fn.id, fn.execute])), probe: async () => ({ ok: 1 }) },
     });
     await tick();
 
