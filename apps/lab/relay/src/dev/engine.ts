@@ -13,7 +13,7 @@ import { resourceEntities } from '@relay/app/vex/resources';
 import { TABLES } from '@relay/db/schema';
 import { llmFor, type AgentRole } from '@relay/server/llm';
 import type { RayContext } from '@relay/server/functions/ray';
-import { devRuntime } from '../server/runtime';
+import { devRuntime, type DevRuntime } from '../server/runtime';
 
 export type RayEngine = { engine: QueryEngine; db: NiscRuntime['db'] };
 
@@ -62,9 +62,14 @@ export const rayEngine = (runtime: NiscRuntime, policy: ScopePolicy): Promise<Ra
   return made;
 };
 
+// One database for every call a dev script makes: devRuntime makes a new one each
+// time, and a query generated through one call is replayed through the next.
+let database: Promise<DevRuntime> | undefined;
+const sharedRuntime = (): Promise<DevRuntime> => (database ??= devRuntime());
+
 let booted: Promise<RayEngine> | undefined;
 export const getVexRuntime = (): Promise<RayEngine> => {
-  booted ??= (async () => rayEngine(await devRuntime(), systemPolicy))();
+  booted ??= (async () => rayEngine(await sharedRuntime(), systemPolicy))();
   return booted;
 };
 
@@ -80,7 +85,7 @@ const notHere =
 export const devRayContext = (options: { shell?: Shell; userId?: string; roles?: readonly string[]; wire?: FetchFn } = {}): RayContext => {
   const userId = options.userId ?? 'usr_001';
   const policy = options.roles === undefined ? systemPolicy : policyOf(options.roles);
-  const engineOf = async (): Promise<RayEngine> => rayEngine(await devRuntime(), policy);
+  const engineOf = async (): Promise<RayEngine> => rayEngine(await sharedRuntime(), policy);
   // Mirrors moss's session wire, which unwraps a vex reply before the endpoint sees it.
   const unwrap = (status: number, body: unknown): Awaited<ReturnType<FetchFn>> => {
     const result = status < 400 && body !== null && typeof body === 'object' && 'result' in body ? (body as Record<string, unknown>)['result'] : body;
