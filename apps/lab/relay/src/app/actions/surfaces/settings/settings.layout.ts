@@ -271,25 +271,6 @@ export const settingsLayout: LayoutNode = {
               component: 'Row',
               props: { justify: 'between', align: 'center', gap: 12 },
               children: [
-                { component: 'Stack', props: { gap: 2 }, children: [{ component: 'Text', props: { weight: 500 }, children: 'Transform writer' }, { component: 'Text', props: { size: 'sm', color: 'mute' }, children: 'Writes the config that maps one shape into another' }] },
-                {
-                  component: 'Row',
-                  props: { gap: 8, align: 'center' },
-                  children: [
-                    { component: 'Box', props: { width: 240 }, children: { component: 'Select', ref: 'model-mapping', model: '$.models.assignments.mapping.model', props: { options: '$.models.options' } } },
-                    { component: 'Box', props: { width: 140 }, children: { component: 'Select', ref: 'effort-mapping', model: '$.models.assignments.mapping.effort', props: { options: '$.models.efforts.mapping' } } },
-                  ],
-                },
-              ],
-            },
-          },
-          {
-            component: 'Box',
-            props: { px: 18, py: 14, border: 'bottom' },
-            children: {
-              component: 'Row',
-              props: { justify: 'between', align: 'center', gap: 12 },
-              children: [
                 { component: 'Stack', props: { gap: 2 }, children: [{ component: 'Text', props: { weight: 500 }, children: 'Query writer' }, { component: 'Text', props: { size: 'sm', color: 'mute' }, children: 'Turns a request into a query when no cached shape matches' }] },
                 {
                   component: 'Row',
