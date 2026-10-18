@@ -1,7 +1,8 @@
 # The screen harness: how hotfixed it is, and what a nisc harness looks like
 
 2026-10-18, after the work recorded in [screen-builder.md](screen-builder.md). This is a review
-and a proposal; nothing in it is built.
+and a proposal. Built the same evening inside relay, without the package changes: see "The module"
+in [screen-builder.md](screen-builder.md).
 
 ## Short answers
 

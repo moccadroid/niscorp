@@ -135,3 +135,71 @@ verdict refused twice and the screen shipped unreviewed.
 - `rowsFitShape` is still exported from `@niscorp/vex/agent` and no longer used by vex.
 - Relay's house style and channels are to be added back once the pipeline under them holds.
 - The defaults still run builder and reviewer on qwen; 120B stays at temperature 0.
+
+## The module (evening of 2026-10-18)
+
+The proposal in [screen-harness-review.md](screen-harness-review.md) is built inside relay, with
+no package change: `apps/lab/relay/src/screen-builder/` (`4ba6151e`, `edf341a6`). It imports nova,
+cortex and vex, and neither moss nor relay. The host hands it a kit (registry, offered components,
+list components, layout rules, examples with probes), vex's own call shape (`discover`,
+`execute`, the endpoint URL), the push catalog, its wire, its endpoint transform and the ambient
+values. Relay's side is `server/functions/ray/screens/`: the setup, four examples, and the
+build/keep/discard tools. The reviewer is gone.
+
+**What replaced what**
+- The reviewer → probes. The builder states what a person does (set a ref to a value, click a
+  ref; a row ref clicks the first row) and what must follow (a data key changes, an action opens
+  with its required input, or, for a click alone, a data key is loaded again). Every control or
+  row whose trigger loads data or opens a screen needs one. Each probe runs on a fresh mount. One
+  that changes nothing says whether the request never changed or the answer did not.
+- The final answer → a passing check is the result and ends the run. An answer before a pass is
+  sent back. At most one repair of the last screen the check found fault with.
+- The fp_ regex, the layout directive list, the audit message rewrites, the `cache_miss` advice
+  → structural reads: fingerprints read from the endpoints that post to the vex URL, values that
+  did not resolve read from the rendered props, data no layout binds read from nova's own
+  `collectInteractive`.
+- The ActionDefinition JSON Schema in context (19.7k characters) → a compact reference (2k).
+  The whole context fell from 52k to about 31k characters, tools included.
+- The dev path and the product path are one: the suite builds through `screenSetup(ray)` on the
+  same `RayContext` the session uses.
+
+**Measured** — architect suite, one build per screen, the relay server's live check against the
+same database. `expiry` is the owner's request of this morning, added as a tenth screen.
+
+| | built and live (9 original) | expiry | median build |
+|---|---|---|---|
+| old builder, best of the day, qwen | 7/9 | wrong data | — |
+| old builder, best of the day, 120B | 7/9 | — | — |
+| module, qwen, pass 1 | 7/9 | right | 13.6 s |
+| module, qwen, pass 2 | 8/9 | right | 10.1 s |
+| module, qwen, final code | **9/9** | right | 12.3 s |
+| module, 120B, pass 1 | 7/9 | right | 8.6 s |
+| module, 120B, final code | **9/9** | right | 14.1 s |
+
+Each pass ran on the code as it stood; the fixes between passes are in `edf341a6`. "Right" means
+the suite set the range to July and the table showed the database's July count.
+
+Live in relay, after a restart of the dev server, the same request through the chat built in
+15 seconds (one proof, three checks), and setting the range to July in the real date inputs
+showed the 6 July deals. This morning the old builder took 110 seconds and showed 120 deals for
+any range.
+
+**Where it stands**
+- Probes check what the reviewer could not: in relay's check script (`harness-check`, no model) a
+  search whose value never reaches the query fails its probe with the context the endpoint sent,
+  and the owner's request now builds right on both models and in the live chat.
+- qwen still writes a Table's props beside `component` and flattens `push` on most builds; the
+  check shows it what it sent, and it corrects both within a step or two.
+- The suite's search oracle counts names only, while the shipped companies query matches more;
+  its week oracle reads the boundary one way.
+
+**Open**
+- **Values frozen into a request**: the week-of-tasks screen sends today's date as a string, so it
+  goes stale tomorrow; no check sees a literal that equals an ambient value.
+- **qwen's two habits** (props beside `component`, a flattened `push`) cost a step or two per
+  build; the examples show both right.
+- **A click on a button carries no payload in a probe**; relay's Button sends its `value`.
+- **Relay's own**: the house style and channels are still out of the builder (values render raw),
+  and the Table's columns overlap at the pane's narrow width.
+- **Promotion upstream** — nova's agent subpath with vex as an optional peer, or the `nisc`
+  umbrella — is the owner's call; the module needs no change to move.
