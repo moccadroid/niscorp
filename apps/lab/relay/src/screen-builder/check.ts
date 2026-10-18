@@ -1,5 +1,5 @@
 import { flattenSchemaIssues } from '@niscorp/cortex';
-import { ActionDefinitionSchema, auditAction, getPath, StepSchema, type ActionDefinition, type RenderComponentNode } from '@niscorp/nova';
+import { ActionDefinitionSchema, auditAction, getPath, paletteFromRegistry, StepSchema, type ActionDefinition, type RenderComponentNode } from '@niscorp/nova';
 import { collectInteractive } from '@niscorp/nova/agent';
 import { classifyAudit } from '@niscorp/nova/reflect';
 import { mount } from './mount';
@@ -21,6 +21,15 @@ const refused = (findings: Finding[]): CheckResult => ({ ok: false, findings, lo
 
 const valueAt = (value: unknown, path: readonly PropertyKey[]): unknown =>
   path.reduce<unknown>((at, key) => (at !== null && typeof at === 'object' ? (at as Record<PropertyKey, unknown>)[key] : undefined), value);
+
+// Keys beside "component" that the component takes as props belong inside "props".
+const propsBeside = (node: unknown, keys: unknown, setup: ScreenSetup): string => {
+  if (!isRecord(node) || typeof node['component'] !== 'string' || !Array.isArray(keys)) return '';
+  const schema = paletteFromRegistry(setup.kit.registry, { include: [node['component']] })[0]?.propsSchema;
+  const props = isRecord(schema) && isRecord(schema['properties']) ? schema['properties'] : {};
+  const misplaced = keys.filter((key): key is string => typeof key === 'string' && Object.hasOwn(props, key));
+  return misplaced.length === 0 ? '' : `: ${misplaced.map((key) => `"${key}"`).join(', ')} ${misplaced.length === 1 ? 'is a prop' : 'are props'} of ${node['component']}, so ${misplaced.length === 1 ? 'it goes' : 'they go'} inside "props"`;
+};
 
 const STEP_FORMS =
   '{ "set": "key", "value": … } · { "call": "<endpoint>", "onSuccess": [ … ], "onError": [ … ] } · { "push": { "action": "<id>", "input": { … } } } · ' +
@@ -242,10 +251,13 @@ export const checkScreen = async (candidate: unknown, setup: ScreenSetup, option
     const steps = unknownSteps(candidate);
     if (steps.length > 0) return refused(steps);
     return refused(
-      flattenSchemaIssues(parsed.error.issues).map((issue) => ({
-        code: 'schema',
-        message: `${issue.path.map(String).join('.') || '(root)'}: ${issue.message} — it is ${JSON.stringify(valueAt(candidate, issue.path))?.slice(0, 200) ?? 'missing'}`,
-      })),
+      flattenSchemaIssues(parsed.error.issues).map((issue) => {
+        const value = valueAt(candidate, issue.path);
+        return {
+          code: 'schema',
+          message: `${issue.path.map(String).join('.') || '(root)'}: ${issue.message}${propsBeside(value, (issue as { keys?: unknown }).keys, setup)} — it is ${JSON.stringify(value)?.slice(0, 200) ?? 'missing'}`,
+        };
+      }),
     );
   }
   const definition = parsed.data;

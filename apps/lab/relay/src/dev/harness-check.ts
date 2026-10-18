@@ -183,6 +183,13 @@ const main = async (): Promise<void> => {
   );
   checks.push([`an optional key sent as "" is reported (${said(emptyOptional)})`, !emptyOptional.ok && codes(emptyOptional).includes('empty-optional')]);
 
+  const beside = await checkScreen(
+    screen((definition) => ({ ...definition, layout: { component: 'Stack', children: [{ component: 'Input', ref: 'search', model: '$.search', placeholder: 'Search' }, ...((definition.layout as { children: unknown[] }).children.slice(1) as never[])] } })),
+    setup,
+    { probes: PROBES },
+  );
+  checks.push([`a prop written beside "component" is named as a prop (${said(beside)})`, !beside.ok && beside.findings.some((finding) => finding.message.includes('"placeholder" is a prop of Input'))]);
+
   const invalid = await checkScreen({ id: 123, endpoints: 'nope' }, setup);
   checks.push([`a definition that is not one is refused (${said(invalid)})`, !invalid.ok && codes(invalid).includes('schema')]);
 
