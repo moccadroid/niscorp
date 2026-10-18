@@ -196,6 +196,22 @@ describe('the data module, over an engine', () => {
     expect(shown[2]).toEqual([]);
   });
 
+  it('answers a replay by its fingerprint, with what vex knows of it, under the policy of whoever it is asked for', async () => {
+    const { data } = await world();
+    const writers = {
+      generateDsl: async () => {
+        throw new Error('a replay writes no query');
+      },
+      mapToShape: async () => {
+        throw new Error('a replay maps no rows');
+      },
+    };
+    const answered = await data.answerIntent(writers, { fingerprint: 'notes/all' }, who('reader'), { userId: 'usr_1' });
+    expect(answered.result).toEqual([{ id: 1, body: 'first' }]);
+    expect(answered.meta.cache.fingerprint).toBe('notes/all');
+    await expect(data.answerIntent(writers, { fingerprint: 'notes/all' }, who('public'), {})).rejects.toThrow();
+  });
+
   it('row rules of moss’s own are part of every policy, and an intent is still answered where they name a table the engine does not know', async () => {
     const double = await engineDouble();
     const governing: Charter = { public: [], reader: { data: ['*.read'] } };

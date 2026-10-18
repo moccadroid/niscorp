@@ -306,7 +306,7 @@ describe('shells — the session app code is handed', () => {
   it('an intent is answered as the session’s own principal, whoever the app code names', async () => {
     const calls: { principal: string | null; intent: string }[] = [];
     const answerIntent: HostSetup['answerIntent'] = async (principal, _writers, intent) => {
-      calls.push({ principal, intent: intent.intent });
+      calls.push({ principal, intent: 'intent' in intent ? intent.intent : intent.fingerprint });
       return { result: ['a note'], meta: { cache: { hit: false, fingerprint: 'fp_1' }, context: {} } };
     };
     const member = await sessionOf({ answerIntent }, 'usr_1');

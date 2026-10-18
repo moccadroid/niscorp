@@ -1,7 +1,7 @@
 import type { ActionDefinition, ActionFragment, FetchFn, LayoutNode, RenderNode, Shell } from '@niscorp/nova';
 import type { PhraseKeys } from '@niscorp/nova/i18n';
 import type { QueryResponse, SeedEntry, SeedMutation } from '@niscorp/vex';
-import type { Intent, QueryWriters } from '../data';
+import type { ExistingQuery, Intent, QueryWriters } from '../data';
 import type { ArtifactKind, DraftArtifact, NiscApp, SessionArtifacts, ShellCanvas, ShellManifest } from '../manifest';
 import type { Telemetry } from '../runtime';
 
@@ -55,7 +55,7 @@ export type ShellHostConfig = {
   kept?: boolean;
   wire: (token: string | null) => FetchFn;
   wrapWire?: (inner: FetchFn) => FetchFn;
-  answerIntent?: (principal: string | null, writers: QueryWriters, asked: Intent) => Promise<QueryResponse>;
+  answerIntent?: (principal: string | null, writers: QueryWriters, asked: Intent | ExistingQuery) => Promise<QueryResponse>;
   artifacts?: (principal: string | null) => SessionArtifacts;
   draftSaving?: (principal: string | null) => DraftSaving;
   revokeSessions?: (principal: string) => Promise<void>;

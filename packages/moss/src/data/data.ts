@@ -19,7 +19,7 @@ import { createExecuteAs, createPolicies, resolvePolicyForRoles } from './policy
 import { ARTIFACT_TABLES } from './tables';
 import type { ExecuteAs } from './policy';
 import { createIntentAnswers, createVexRoutes } from './routes';
-import type { AnswerIntent, Intent, QueryWriters } from './routes';
+import type { AnswerIntent, ExistingQuery, Intent, QueryWriters } from './routes';
 import { createWriteNotifier } from './writes';
 import type { WriteListener } from './writes';
 
@@ -63,7 +63,7 @@ export type Data = {
   // Throws, with vex's sentence, where the query does not run against the schema.
   compileQuery: (dsl: Query) => void;
   executeAs: ExecuteAs;
-  answerIntent: (writers: QueryWriters, asked: Intent, who: Caller, scope: Record<string, unknown>) => Promise<QueryResponse>;
+  answerIntent: (writers: QueryWriters, asked: Intent | ExistingQuery, who: Caller, scope: Record<string, unknown>) => Promise<QueryResponse>;
   ownEntries: (feature: string, entries: OwnEntries['entries']) => Promise<Replay>;
   artifactEntries: (entries: OwnEntries['entries'], rules: NonNullable<OwnEntries['rules']>) => Promise<Replay>;
   routes: <E extends Env>(config: DataRoutesConfig<E>) => Hono<E>;

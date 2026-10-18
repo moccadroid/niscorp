@@ -148,9 +148,10 @@ export type FunctionSession = {
   wire: FetchFn;
   grant: (token: string) => void;
   revoke: () => Promise<void>;
+  // `asked` is a query for vex to write, `{ intent, shape }`, or one that exists, replayed by its `fingerprint`.
   answerIntent: (
     writers: { generateDsl: GenerateDsl; mapToShape: MapToShape },
-    asked: { intent: string; shape: unknown; context?: Record<string, unknown> },
+    asked: { intent: string; shape: unknown; context?: Record<string, unknown> } | { fingerprint: string; context?: Record<string, unknown> },
   ) => Promise<QueryResponse>;
   recordRun: (run: Omit<RunRecord, 'at' | 'principal' | 'shellId'>) => void;
   // The app's functions this session may call: those its roles' `functions` grant.

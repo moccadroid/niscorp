@@ -65,6 +65,7 @@ export const createVexRoutes = <E extends Env>(deps: VexRoutesDeps<E>): Hono<E> 
 export type QueryWriters = { generateDsl: GenerateDsl; mapToShape: MapToShape };
 
 export type Intent = { intent: string; shape: unknown; context?: Record<string, unknown> };
+export type ExistingQuery = { fingerprint: string; context?: Record<string, unknown> };
 
 export type IntentAnswersDeps = {
   adapter: DatabaseAdapter;
@@ -74,7 +75,7 @@ export type IntentAnswersDeps = {
   vexConfig?: QueryEngineConfig['config'];
 };
 
-export type AnswerIntent = (writers: QueryWriters, asked: Intent, caller: { policy: ScopePolicy; scope: Record<string, unknown> }) => Promise<QueryResponse>;
+export type AnswerIntent = (writers: QueryWriters, asked: Intent | ExistingQuery, caller: { policy: ScopePolicy; scope: Record<string, unknown> }) => Promise<QueryResponse>;
 
 export const createIntentAnswers = (deps: IntentAnswersDeps): AnswerIntent => {
   const engines = new WeakMap<QueryWriters, Promise<QueryEngine>>();
@@ -99,5 +100,8 @@ export const createIntentAnswers = (deps: IntentAnswersDeps): AnswerIntent => {
   };
 
   return async (writers, asked, caller) =>
-    (await engineFor(writers)).execute({ intent: asked.intent, shape: asked.shape, context: asked.context ?? {} }, { scope: caller.scope, scopePolicy: caller.policy });
+    (await engineFor(writers)).execute(
+      'fingerprint' in asked ? { fingerprint: asked.fingerprint, context: asked.context ?? {} } : { intent: asked.intent, shape: asked.shape, context: asked.context ?? {} },
+      { scope: caller.scope, scopePolicy: caller.policy },
+    );
 };
