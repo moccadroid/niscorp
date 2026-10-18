@@ -75,6 +75,34 @@ describe('what a caller reads and writes of what was saved', () => {
   });
 });
 
+describe('the server, assembled — what a person generated and nobody used ages out', () => {
+  it('with `artifactsUnusedMs`, the sweep runs as the server comes up and then on its own clock; without it, never', async () => {
+    const swept: string[] = [];
+    const pool = { query: async (text: string, params?: unknown[]) => (text.startsWith('DELETE FROM artifacts') && swept.push(String(params?.[0])), { rows: [] }) };
+    const { made, left } = await intervalsDuring(async () => {
+      const server = await assemble(appWith({}), { pool, artifactsUnusedMs: 7 * 24 * 3_600_000 });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      server.close();
+    });
+    expect(swept).toEqual([String(7 * 24 * 3_600_000)]);
+    expect(made.length).toBeGreaterThan(0);
+    expect(left).toEqual([]);
+
+    swept.length = 0;
+    const quiet = await assemble(appWith({}), { pool });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    quiet.close();
+    expect(swept).toEqual([]);
+  });
+
+  it('a limit under two hours, a fraction or Infinity is refused: an artifact in use is stamped once an hour, and the sweep reads whole milliseconds', async () => {
+    const refusal = 'moss: `runtime.artifactsUnusedMs` is how long what a person generated may go unused before it is deleted: a whole number of milliseconds, at least 7200000 (two hours), or left out, and nothing is deleted.';
+    for (const limit of [0, -1, 3_600_000, 7_199_999, 7_200_000.5, Infinity, Number.NaN]) await expect(assemble(appWith({}), { artifactsUnusedMs: limit })).rejects.toThrow(refusal);
+    const server = await assemble(appWith({}), { artifactsUnusedMs: 7_200_000 });
+    server.close();
+  });
+});
+
 describe('the server, assembled — `checkFunctions` reads the app’s functions before anyone is served', () => {
   const leaving = { charter: { public: { actions: ['home'], functions: ['auth.*'] } }, actions: { home: { id: 'home', endpoints: { leave: { fn: 'auth.leave' } } } } };
 

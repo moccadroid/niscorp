@@ -77,7 +77,8 @@ type Entry = Found & { why: 'credential' | 'store' | 'debt' | 'tables'; note: st
 const LEDGER: Readonly<Record<string, Readonly<Record<string, Entry>>>> = {
   moss: {
     'identity/sessions.ts': { doors: 5, statements: 5, tables: 1, why: 'credential', note: 'the session credential: a token hash is looked up before anybody is signed in' },
-    'data/tables.ts': { doors: 0, statements: 1, tables: 23, why: 'tables', note: "moss's own table sequence (`nisc.moss`): migrations that have run are history, checksummed in every ledger; the one statement is the generation pointer's seed row, a step of migration 1" },
+    'data/tables.ts': { doors: 0, statements: 1, tables: 24, why: 'tables', note: "moss's own table sequence (`nisc.moss`): migrations that have run are history, checksummed in every ledger; the one statement is the generation pointer's seed row, a step of migration 1" },
+    'data/aging.ts': { doors: 2, statements: 2, tables: 0, why: 'store', note: "the sweep over what a person generated and nobody used for `runtime.artifactsUnusedMs`: vex keeps every statement to one principal's rows, and this one crosses them all, so it is raw, here and nowhere else" },
     'data/migrate.ts': { doors: 1, statements: 0, tables: 0, why: 'tables', note: "hands the migration's own transaction to vex's adapter to read the schema" },
   },
   tide: {

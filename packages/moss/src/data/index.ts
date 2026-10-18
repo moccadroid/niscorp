@@ -1,3 +1,4 @@
+export { startAging } from './aging';
 export { createData } from './data';
 export type { Data } from './data';
 export { featureTablesOf, migrateTables } from './migrate';

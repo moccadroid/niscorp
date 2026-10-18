@@ -15,6 +15,7 @@ export type NiscRuntime = {
   migrations?: 'apply' | 'verify';
   tables?: readonly Sequence[];
   shellIdleMs?: number;
+  artifactsUnusedMs?: number;
   anonymousShellMax?: number;
   endpointTimeoutMs?: number;
   sessionRevalidateMs?: number;

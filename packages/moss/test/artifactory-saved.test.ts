@@ -524,6 +524,44 @@ describe('a layout published for everybody', () => {
     expect(Object.keys(await storeOf('ada'))).not.toContain('action/desk');
   });
 
+  it('a stamp is one replay of the caller’s touch entry for each artifact, naming it and the time', async () => {
+    const replayed: { fingerprint: string; context: Record<string, unknown>; scope: Record<string, unknown> | undefined }[] = [];
+    const rows = savedRowsOver(async (fingerprint, context, scope) => (replayed.push({ fingerprint, context, scope }), []), await createGrammarUpgrader({}));
+
+    await rows.of({ userId: 'ada' }).touch([{ kind: 'layout', id: 'l1' }, { kind: 'action', id: 'generated.a' }], '2026-10-18T10:00:00.000Z');
+
+    expect(replayed).toEqual([
+      { fingerprint: 'artifactory/touch', context: { kind: 'layout', id: 'l1', at: '2026-10-18T10:00:00.000Z' }, scope: { userId: 'ada', artifactSavedBy: 'ada' } },
+      { fingerprint: 'artifactory/touch', context: { kind: 'action', id: 'generated.a', at: '2026-10-18T10:00:00.000Z' }, scope: { userId: 'ada', artifactSavedBy: 'ada' } },
+    ]);
+  });
+
+  it('a shell built for a person stamps their artifacts in force as used, once within the hour; a reset one, and nobody’s, are not stamped', async () => {
+    const { of, storeOf, rows } = world();
+    const first = await of('ada').save([mine('as ada has it', true)]);
+    const id = first.artifacts[0]?.id ?? '';
+    const second = await of('ada').save([mine('another', false)]);
+    await of('ada').reset('layout', second.artifacts[0]?.id ?? '');
+
+    await storeOf('ada');
+    await storeOf('ada');
+    await storeOf(null, ['public']);
+
+    expect(rows.touched.map((touch) => [touch.principal, touch.artifacts.map((artifact) => artifact.kind)])).toEqual([['ada', ['layout']]]);
+    expect(rows.touched[0]?.artifacts[0]?.id).toBe(id);
+    expect(rows.touched[0]?.at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+
+    const often = world({ touchEveryMs: 0 }, rows);
+    await often.storeOf('ada');
+    await often.storeOf('ada');
+    expect(rows.touched).toHaveLength(3);
+
+    // What is drafted is nobody's row yet: it is not stamped.
+    await often.running.artifactsFor(SHELL, { principal: 'ada', roles: ['member'], installed: undefined, saved: rows.as('ada'), drafted: [{ kind: 'layout', id: 'drafted-1', body: mine('drafted', true).body }] });
+    expect(rows.touched).toHaveLength(4);
+    expect(rows.touched[3]?.artifacts.map((artifact) => artifact.id)).toEqual([id]);
+  });
+
   it('is kept as rows no session reaches, and one read of them answers every shell until the next publish', async () => {
     const { of, published, storeOf, rows } = world();
     const saved = await published.save([forAll('action/home', 'home, as published')]);

@@ -448,6 +448,14 @@ functions: (session) => [
   catalog: `/catalog`, the socket's hello and `server.catalogOf` answer what
   the charter grants. What somebody generated is listed by
   `session.artifacts.list('action')`.
+- **It ages out when nobody uses it.** With `runtime.artifactsUnusedMs`, a
+  version of an artifact a person saved is stamped as used when a shell is
+  built for them (`last_used_at`, once an hour at most), and every artifact of
+  theirs whose newest version was neither saved nor used within that time is
+  deleted, every version of it, by a sweep that runs as the server comes up and
+  then every hour. What is published for everybody never ages, and what the
+  build ships is not a row. Without the setting nothing is deleted. A limit of
+  `0` or less refuses the boot.
 - **It reaches its owner's open shells a moment after the save answers**, as a
   saved layout does, and not before: a function that saves an action and
   opens it in the same call finds it not there yet. One that is to be seen at
@@ -761,6 +769,7 @@ type NiscRuntime = {
   migrations?: 'apply' | 'verify'; // the boot's ledgered run; default 'apply'
   tables?: readonly Sequence[];    // the app's own table sequences, in that same run
   shellIdleMs?: number;            // idle shell eviction; default 30 min, `0` disables
+  artifactsUnusedMs?: number;      // delete what a person generated once nobody has loaded it for this long; default never
   anonymousShellMax?: number;      // shells for nobody signed in alive at once; default 1,000, `Infinity` is no limit
   endpointTimeoutMs?: number;      // a server shell's endpoint call, and the build of a shell; default nova's, 30s
   sessionRevalidateMs?: number;    // live-socket re-verify; default 60s, `0` disables

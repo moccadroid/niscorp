@@ -187,6 +187,10 @@ export const MOSS_SEQUENCE: Sequence = {
         { kind: 'sql', sql: `CREATE INDEX artifacts_latest ON artifacts (principal, kind, id, created_at)` },
       ],
     },
+    {
+      description: 'When a version of an artifact was last loaded into a shell, for the sweep over what is unused',
+      steps: [{ kind: 'sql', sql: `ALTER TABLE artifacts ADD COLUMN last_used_at timestamptz` }],
+    },
   ],
 };
 

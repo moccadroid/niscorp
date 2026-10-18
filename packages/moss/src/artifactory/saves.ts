@@ -29,6 +29,8 @@ export type SavedRows = {
   inForce: () => Promise<SavedVersion[]>;
   history: (kind: string, id: string, save?: string) => Promise<SavedVersion[]>;
   write: (save: NewSave) => Promise<void>;
+  // Marks these artifacts as used at `at`: every version of each, so the sweep reads one stamp.
+  touch: (artifacts: readonly { kind: string; id: string }[], at: string) => Promise<void>;
 };
 
 // A row is its caller's: vex keeps every read and every write of the two tables
@@ -148,7 +150,21 @@ const save: SeedMutation = {
   ],
 };
 
-export const SAVE_ENTRIES: readonly (SeedEntry | SeedMutation)[] = [inForce, history, save];
+// One update for each artifact: a mutation's filter names one id, and ids are unique within a kind.
+const touch: SeedMutation = {
+  fingerprint: 'artifactory/touch',
+  intent: 'Mark one of the caller’s artifacts as used now',
+  mutation: [
+    {
+      op: 'update',
+      table: 'artifacts',
+      set: { last_used_at: { $context: 'at' } },
+      where: { and: [{ eq: ['artifacts.kind', { $context: 'kind' }] }, { eq: ['artifacts.id', { $context: 'id' }] }] },
+    },
+  ],
+};
+
+export const SAVE_ENTRIES: readonly (SeedEntry | SeedMutation)[] = [inForce, history, save, touch];
 
 const RowSchema = z.object({
   save: z.string(),
@@ -210,6 +226,9 @@ export const savedRowsOver = (replay: Replay, upgrader: Upgrader): SavedRowsOf =
       write: async (saved) => {
         const versions = saved.versions.map((version) => ({ kind: version.kind, id: version.id, body: version.body, grammar: upgrader.stamp, copied_from: version.copiedFrom }));
         await replay(save.fingerprint, { save: saved.id, versions }, scope);
+      },
+      touch: async (artifacts, at) => {
+        for (const { kind, id } of artifacts) await replay(touch.fingerprint, { kind, id, at }, scope);
       },
     };
   };

@@ -1,9 +1,9 @@
 import { Hono } from 'hono';
 import { createIdentity, sessionRemainingMs, sessionRevokerOf, sessionVerifierOf } from '../identity';
 import type { Identity } from '../identity';
-import { createData, featureTablesOf } from '../data';
+import { createData, featureTablesOf, startAging } from '../data';
 import type { Data } from '../data';
-import { SAVE_ENTRIES, SAVE_ROW_RULES, createRunningManifest, savedRowsOver } from '../artifactory';
+import { SAVE_ENTRIES, SAVE_ROW_RULES, TOUCH_EVERY_MS, createRunningManifest, savedRowsOver } from '../artifactory';
 import type { RunningManifest, SavedRowsOf } from '../artifactory';
 import { receiveManifest } from '../manifest';
 import type { NiscApp } from '../manifest';
@@ -84,6 +84,16 @@ const assemble = async ({ app, runtime, session, revokeSessions, data }: ServerD
   const saved = savedRowsOver(await data.artifactEntries(SAVE_ENTRIES, SAVE_ROW_RULES), data.grammars);
   const running = await buildRunningManifest(app, runtime, data, saved);
   stops.push(running.stop);
+  if (runtime.artifactsUnusedMs !== undefined) {
+    // An artifact in use is stamped once an hour: a limit under two of those would delete what is open.
+    if (!Number.isSafeInteger(runtime.artifactsUnusedMs) || runtime.artifactsUnusedMs < 2 * TOUCH_EVERY_MS) {
+      throw new Error(
+        'moss: `runtime.artifactsUnusedMs` is how long what a person generated may go unused before it is deleted: ' +
+          `a whole number of milliseconds, at least ${2 * TOUCH_EVERY_MS} (two hours), or left out, and nothing is deleted.`,
+      );
+    }
+    stops.push(startAging(runtime.pool, runtime.artifactsUnusedMs));
+  }
 
   const identity = buildIdentity(app, runtime, data);
   stops.push(identity.stop);

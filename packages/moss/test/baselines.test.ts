@@ -24,6 +24,7 @@ const PINNED: ReadonlyArray<[Sequence, number, string]> = [
   [MOSS_SEQUENCE, 3, 'b05aa252f4f3b70dad03282552ac6b94c5d4e5012d964c23cb32fedbb4f8b60f'],
   [MOSS_SEQUENCE, 4, 'd4fdae75451da4bb3d46c6b31c8ad1797f1c0a487eb85708f30c5d4e5e37ce5b'],
   [MOSS_SEQUENCE, 5, '0eb5c8bbb44fa43e3052d8c4c6b6f781173fa8d660584c84df1766b28293e039'],
+  [MOSS_SEQUENCE, 6, '60dd875a7e1a20fc8df32c2b1840852bbd3dd5d3eec4dbdac27019bb12ddae67'],
   [SESSIONS_SEQUENCE, 1, '83a62e0217940bfe62136052c18f730947355d20e481d9aceb76463251b33700'],
 ];
 
@@ -51,10 +52,10 @@ describe('boot — every owner through one ledger', () => {
     const pool = createPglitePool(freshDatabase());
     const booted = await quietly(() => createServer(app, { pool, db: pool, session: 'sessions' }));
     const ledger = await readLedger(pool);
-    expect(ledger.map((r) => `${r.sequence}/${r.n}`)).toEqual(['nisc.moss/1', 'nisc.moss/2', 'nisc.moss/3', 'nisc.moss/4', 'nisc.moss/5', 'nisc.moss.sessions/1', 'nisc.vex.cache/1', 'nisc.vex.cache/2']);
+    expect(ledger.map((r) => `${r.sequence}/${r.n}`)).toEqual(['nisc.moss/1', 'nisc.moss/2', 'nisc.moss/3', 'nisc.moss/4', 'nisc.moss/5', 'nisc.moss/6', 'nisc.moss.sessions/1', 'nisc.vex.cache/1', 'nisc.vex.cache/2']);
 
     await quietly(() => createServer(app, { pool, db: pool, session: 'sessions', migrations: 'verify' }));
-    expect((await readLedger(pool)).length).toBe(8);
+    expect((await readLedger(pool)).length).toBe(9);
 
     // What a charter grants of the two tables of what was saved is kept to the caller's own rows, as moss's
     // own reads and writes of them are. A table with no such rule is granted whole.

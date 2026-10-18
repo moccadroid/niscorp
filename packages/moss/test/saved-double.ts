@@ -7,16 +7,18 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 // What vex does for the artifactory on a database: `as` answers the rows of one
 // caller, and every row written through it is that caller's.
-export type RowsDouble = { rows: Row[]; asked: string[]; as: (principal: string) => SavedRows };
+export type RowsDouble = { rows: Row[]; asked: string[]; touched: { principal: string; artifacts: readonly { kind: string; id: string }[]; at: string }[]; as: (principal: string) => SavedRows };
 
 export const rowsDouble = (): RowsDouble => {
   const rows: Row[] = [];
   const asked: string[] = [];
+  const touched: RowsDouble['touched'] = [];
   let saves = 0;
   const newestFirst = (one: Row, other: Row): number => other.createdAt.localeCompare(one.createdAt);
   return {
     rows,
     asked,
+    touched,
     as: (principal) => ({
       inForce: async () => {
         asked.push(principal);
@@ -37,10 +39,13 @@ export const rowsDouble = (): RowsDouble => {
         const createdAt = new Date(Date.UTC(2026, 0, 1) + saves * 1000).toISOString();
         for (const version of save.versions) rows.push({ ...version, save: save.id, principal, createdAt });
       },
+      touch: async (artifacts, at) => {
+        touched.push({ principal, artifacts, at });
+      },
     }),
   };
 };
 
-export const noRows: SavedRows = { inForce: async () => [], history: async () => [], write: async () => undefined };
+export const noRows: SavedRows = { inForce: async () => [], history: async () => [], write: async () => undefined, touch: async () => undefined };
 
 export const nobody = (roles: readonly string[], installed?: readonly string[]): Who => ({ principal: null, roles, installed });

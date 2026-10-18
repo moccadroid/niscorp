@@ -37,6 +37,7 @@ import type { SavedRows, SavedVersion } from './saves';
 import { savedArtifacts } from './session';
 import type { HeldTo, SavedArtifactsDeps, Written } from './session';
 import { createSetOwners } from './sets';
+import { TOUCH_EVERY_MS, createUsage } from './usage';
 
 type Actions = Readonly<Record<string, ActionDefinition>>;
 
@@ -54,6 +55,8 @@ export type RunningManifestConfig = {
   // Where a read somebody generated is taken from and checked against, and whose
   // rows a scope reaches. Absent: no read is saved, and none is answered.
   reads?: ReadSources & { savedOf: (scope: Record<string, unknown>) => SavedRows };
+  // How often at most a person's artifact is stamped as used; default an hour.
+  touchEveryMs?: number;
 };
 
 // `replayable`: the fingerprints their policy may replay. Absent: none.
@@ -120,6 +123,7 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
   const { shipped } = config;
   const entries = createEntriesInForce(entriesOf(shipped));
   let defaults: Defaults = NO_DEFAULTS;
+  const usage = createUsage(config.touchEveryMs ?? TOUCH_EVERY_MS);
   let functionIds: ReadonlySet<string> | undefined;
   const candidate = (actions: Actions, held = entries.list(), fragments = defaults.fragments): ManifestCandidate =>
     withFragments({ ...candidateOf(shipped, { actions, entries: held }, config.grants), ...(functionIds === undefined ? {} : { functionIds }) }, fragments);
@@ -381,7 +385,9 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
     catalogFor: roleMemo.catalogFor,
     artifactsFor: async (shell, { principal, roles, installed, saved, replayable, drafted }) => {
       // Asked of the rows at every shell: what somebody saved in another process is theirs here too.
-      const versions = saved === undefined || principal === null ? [] : laidOver(await saved.inForce(), drafted);
+      const own = saved === undefined || principal === null ? [] : await saved.inForce();
+      if (saved !== undefined && principal !== null) usage.touch(principal, own, saved);
+      const versions = own.length === 0 && drafted === undefined ? [] : laidOver(own, drafted);
       const everybodysVersions = await publishedNow();
       const whose = `of ${principal ?? 'nobody'}`;
       const theirOwn = await heldWithGenerated(roleMemo.storedLayoutsFor(roles, installed), versions, { replayable, roles }, shell, whose);
