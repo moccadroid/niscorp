@@ -246,7 +246,15 @@ export const makeArchitectTools = (supportLlm: SignalClient, ray: RayContext): A
           Array.isArray(value) ? { rows: value.length, first: value[0] ?? null } : value,
         ]),
       );
-      return { ok: check.ok, issues: check.issues, loaded: check.loaded, data };
+      return {
+        ok: check.ok,
+        issues: check.issues,
+        loaded: check.loaded,
+        data,
+        ...(check.ok && {
+          next: 'This screen passes. If it does what was asked, you are done: do not run it again — answer now with this definition as your envelope’s `data`. If not, change it and run it again.',
+        }),
+      };
     },
   });
 
