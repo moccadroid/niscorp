@@ -6,6 +6,7 @@ import { buildScreen } from '@relay/screen-builder';
 import { screenSetup } from '@relay/server/functions/ray/screens';
 import { shell, runtime } from './check-shell';
 import { assign, isModelId, llmFor } from '@relay/server/llm';
+import { todayStr } from '@relay/lib/date';
 import { devRayContext } from './engine';
 
 // The suite builds as alex (usr_001) with the sales and dev roles: tasks are read through the assignee rule, so
@@ -193,7 +194,8 @@ const CHECKS: Record<string, () => Promise<string[]>> = {
       { order: 'desc' },
     ),
   ],
-  tasksWeek: async () => [judge(rowsOf(tables()[0]), await candidates(`SELECT id AS label, title AS alt1, due_date::text AS alt2, due_date::text AS rank FROM tasks WHERE done = false AND assignee_id = '${ME}' AND due_date BETWEEN CURRENT_DATE AND CURRENT_DATE + 7 ORDER BY due_date`), { order: 'asc' })],
+  // Relay's today is the UTC date; the database's CURRENT_DATE is its local one, a day ahead late in the evening.
+  tasksWeek: async () => [judge(rowsOf(tables()[0]), await candidates(`SELECT id AS label, title AS alt1, due_date::text AS alt2, due_date::text AS rank FROM tasks WHERE done = false AND assignee_id = '${ME}' AND due_date BETWEEN '${todayStr()}'::date AND '${todayStr()}'::date + 7 ORDER BY due_date`), { order: 'asc' })],
   expiry: async () => {
     const inputs = tree().filter((node) => node.name === 'Input' && node.ref !== undefined);
     const [from, to] = inputs;
