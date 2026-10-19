@@ -54,14 +54,15 @@ const rowPayload = (row: Record<string, unknown>, props: Record<string, unknown>
 
 export const screenSetup = (ray: RayContext): ScreenSetup => {
   const ambient = { userId: ray.userId, today: todayStr() };
+  const registry = buildRegistry();
   return {
     kit: {
-      registry: buildRegistry(),
+      registry,
       offer: OFFER,
       omitProps: VIZ_OMIT_PROPS,
       lists: { Table: { rows: 'rows', rowRef: 'rowRef', rowPayload, reads: cellKeys } },
       clicks: { Button: (props) => props['value'] },
-      inputs: ['Input', 'Select', 'Textarea', 'Checkbox', 'Switch'],
+      inputs: registry.list().filter((name) => registry.get(name)?.meta.events?.['ui:model'] !== undefined),
       layoutRules: RELAY_RULES,
       examples: EXAMPLES,
     },

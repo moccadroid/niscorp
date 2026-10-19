@@ -33,9 +33,10 @@ const REFERENCE = [
 const palette = (kit: Kit): string =>
   [
     'COMPONENTS — the only components a layout may use. A node is written { "component": …, "props": { … } }: every prop listed goes inside "props", never beside "component".',
-    ...paletteFromRegistry(kit.registry, { include: [...kit.offer], omitProps: [...(kit.omitProps ?? [])] }).map(
-      (entry) => `  ${entry.name} — ${entry.description}\n    { "component": "${entry.name}", "props": <${JSON.stringify(entry.propsSchema ?? {})}> }`,
-    ),
+    ...paletteFromRegistry(kit.registry, { include: [...kit.offer], omitProps: [...(kit.omitProps ?? [])] }).map((entry) => {
+      const events = Object.entries(kit.registry.get(entry.name)?.meta.events ?? {}).map(([event, meta]) => `${event}: ${meta.description ?? ''}`);
+      return `  ${entry.name} — ${entry.description}${events.length > 0 ? `\n    sends ${events.join('; ')}` : ''}\n    { "component": "${entry.name}", "props": <${JSON.stringify(entry.propsSchema ?? {})}> }`;
+    }),
   ].join('\n');
 
 const catalog = (entries: readonly CatalogEntry[]): string =>

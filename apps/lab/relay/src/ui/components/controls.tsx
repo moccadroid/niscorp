@@ -40,6 +40,7 @@ export const Button: NovaComponent<z.infer<typeof ButtonProps>> = ({
 Button.meta = {
   description: 'Clickable button. Give it a ref and a trigger to act.',
   propsSchema: ButtonProps,
+  events: { 'ui:click': { description: 'its `value`, when it has one, on its ref' } },
 };
 
 const NavItemProps = z
@@ -110,7 +111,7 @@ export const Tabs: NovaComponent<z.infer<typeof TabsProps>> = ({ options, value,
     </div>
   );
 };
-Tabs.meta = { description: 'Segmented control (e.g. All/Mine); active = `value`, fires ui:click with the chosen value.', propsSchema: TabsProps };
+Tabs.meta = { description: 'Segmented control (e.g. All/Mine); active = `value`, fires ui:click with the chosen value.', propsSchema: TabsProps, events: { 'ui:click': { description: "the chosen option's value, on its ref", payloadType: 'string' } } };
 
 const SortHeaderProps = z
   .object({
@@ -193,4 +194,4 @@ export const LinkRow: NovaComponent<z.infer<typeof LinkRowProps>> = ({ value, no
     </div>
   );
 };
-LinkRow.meta = { description: 'Clickable nav row (hover + reveal chevron); fires ui:click with `value`. The one way to link a record.', propsSchema: LinkRowProps };
+LinkRow.meta = { description: 'Clickable nav row (hover + reveal chevron); fires ui:click with `value`. The one way to link a record.', propsSchema: LinkRowProps, events: { 'ui:click': { description: 'its `value`, on its ref' } } };

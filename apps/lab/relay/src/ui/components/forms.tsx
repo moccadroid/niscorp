@@ -105,7 +105,7 @@ export const Input: NovaComponent<z.infer<typeof InputProps>> = ({
     ),
   );
 };
-Input.meta = { description: 'Text input. Two-way bound via `model:`.', propsSchema: InputProps };
+Input.meta = { description: 'Text input. Two-way bound via `model:`.', propsSchema: InputProps, events: { 'ui:model': { description: 'what is typed, on its model ref', payloadType: 'string' }, 'ui:key': { description: 'a key pressed in it, such as Enter' } } };
 
 const SelectProps = z
   .object({
@@ -155,6 +155,7 @@ export const Select: NovaComponent<z.infer<typeof SelectProps>> = ({
 Select.meta = {
   description: 'Dropdown select. Options are objects; `valueKey`/`labelKey` (default value/label) pick the fields. Two-way bound via `model:`.',
   propsSchema: SelectProps,
+  events: { 'ui:model': { description: "the picked option's value, on its model ref", payloadType: 'string' } },
 };
 
 const TextareaProps = z
@@ -201,6 +202,7 @@ export const Textarea: NovaComponent<z.infer<typeof TextareaProps>> = ({
 Textarea.meta = {
   description: 'Multi-line text input. Two-way bound via `model:`.',
   propsSchema: TextareaProps,
+  events: { 'ui:model': { description: 'what is typed, on its model ref', payloadType: 'string' }, 'ui:key': { description: 'a key pressed in it, such as Enter' } },
 };
 
 const CheckboxProps = z.object({ label: z.string().optional(), value: z.unknown().optional() }).strict();
@@ -226,7 +228,7 @@ export const Checkbox: NovaComponent<z.infer<typeof CheckboxProps>> = ({
     </label>
   );
 };
-Checkbox.meta = { description: 'Boolean checkbox. Two-way bound via `model:`.', propsSchema: CheckboxProps };
+Checkbox.meta = { description: 'Boolean checkbox. Two-way bound via `model:`.', propsSchema: CheckboxProps, events: { 'ui:model': { description: 'whether it is checked, on its model ref', payloadType: 'boolean' } } };
 
 const SwitchProps = z.object({ value: z.unknown().optional() }).strict();
 
@@ -249,4 +251,4 @@ export const Switch: NovaComponent<z.infer<typeof SwitchProps>> = ({
     </label>
   );
 };
-Switch.meta = { description: 'Boolean toggle switch. Two-way bound via `model:`.', propsSchema: SwitchProps };
+Switch.meta = { description: 'Boolean toggle switch. Two-way bound via `model:`.', propsSchema: SwitchProps, events: { 'ui:model': { description: 'whether it is on, on its model ref', payloadType: 'boolean' } } };

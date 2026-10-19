@@ -294,4 +294,7 @@ export const Table: NovaComponent<TableP> = ({
 Table.meta = {
   description: 'Data-driven list table: a `columns` spec (label + sort field + cell) over `rows`, with sort headers, optional row ⋯ menu, skeleton + empty. Cells show row fields verbatim (shape in Vex/Prism).',
   propsSchema: TableProps,
+  events: {
+    'ui:click': { description: 'on `rowRef` when a row is clicked, carrying row[clickKey ?? rowKey]; on `sortRef` when a header is clicked, carrying { sortBy, sortDir }' },
+  },
 };
