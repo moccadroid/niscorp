@@ -1,6 +1,5 @@
 import { createPostgresAdapter, createPostgresCache, createQueryEngine, createScopePolicy, handleDiscovery, handleQuery, scopeGrants, seedCache } from '@niscorp/vex';
 import type { QueryEngine, ScopePolicy } from '@niscorp/vex';
-import { createQueryDsl, createShapeMapper } from '@niscorp/vex/agent';
 import { resolvePrincipal } from '@niscorp/charter';
 import type { SignalClient } from '@niscorp/cortex';
 import { randomUUID } from 'node:crypto';
@@ -14,6 +13,7 @@ import { TABLES } from '@relay/db/schema';
 import { llmFor, type AgentRole } from '@relay/server/llm';
 import type { RayContext } from '@relay/server/functions/ray';
 import { devRuntime, type DevRuntime } from '../server/runtime';
+import { DSL_SPEC, entitySelection, queryWriter, shapeWriter, type EntitySelection } from '@relay/server/functions/ray/writers';
 import { engineTurns, turnsOf } from './turns';
 
 export type RayEngine = { engine: QueryEngine; db: NiscRuntime['db'] };
@@ -28,6 +28,11 @@ const buildLlm = (role: AgentRole): SignalClient => {
   return turnsOf(resolved.llm, (turn) => engineTurns.sink({ ...turn, role }));
 };
 
+const selectionOf = (): EntitySelection | undefined => {
+  const selection = entitySelection();
+  return selection === undefined ? undefined : { ...selection, onSelect: (chosen) => engineTurns.sink({ ev: 'select', ms: chosen.ms, taken: chosen.taken, left: chosen.left.length, ...(chosen.failed === undefined ? {} : { failed: chosen.failed }) }) };
+};
+
 // The dev scripts' own engine over the app's entries. The server keeps the
 // entries it serves to itself, and the running app has no engine beside it.
 const boot = async (runtime: NiscRuntime, policy: ScopePolicy): Promise<RayEngine> => {
@@ -35,16 +40,12 @@ const boot = async (runtime: NiscRuntime, policy: ScopePolicy): Promise<RayEngin
   const cache = runtime.cache ?? createPostgresCache({ pool: runtime.pool });
   await cache.init?.();
   await seedCache(cache, [...ENTRIES, ...MUTATION_ENTRIES]);
-  // The DSL JSON Schema is static; a throwaway engine yields it without
-  // touching the DB. generateDsl needs it before the real engine exists.
-  const dslJsonSchema = createQueryEngine({ adapter }).getDslSchema();
   const engine = createQueryEngine({
     adapter,
     scope: policy,
     cache,
-    generateDsl: (request, schema, caller) =>
-      createQueryDsl({ llm: buildLlm('query'), queryJsonSchema: dslJsonSchema })(request, schema, caller),
-    mapToShape: (rows, shape, intent) => createShapeMapper(buildLlm('shape'))(rows, shape, intent),
+    generateDsl: (request, schema, caller) => queryWriter(buildLlm('query'), DSL_SPEC, selectionOf())(request, schema, caller),
+    mapToShape: (rows, shape, intent) => shapeWriter(buildLlm('shape'))(rows, shape, intent),
   });
   await engine.introspect();
   return { engine, db: runtime.db };
