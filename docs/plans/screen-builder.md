@@ -408,3 +408,42 @@ at medium.
   query language rather than in a model-written mapping.
 - **`assign()` ignores a role's own effort**: choosing a model without an effort falls back to the
   model's default, so the builder would run at medium. The suite passes the effort.
+
+## Round 6 (2026-10-19 and 20): measured in relay, then moved into the libraries
+
+**Measured in relay first**, on 19 of the builder's own queries in a fresh vex cache and on six suite
+screens at high:
+
+- **A compact query-writer prompt** (the schema as an entity per line, the DSL as types that keep every
+  description): the first call fell from 9,815 tokens to 5,039, vex's cost by 56%, the median query
+  from 5.1 s to 3.5 s, with the same row counts. On the six screens vex's input fell 60 to 70%.
+- **Declared formats** (`"close_date_display": { "$date": { "value": { "$ref": "$.close_date" }, "format":
+  "MMM D" } }`), computed by prism: the stored date is never overwritten, where a model-written mapping
+  overwrote it about a quarter of the time.
+- **Jev picking the entities** (TypeSafe's System One, through signal's `decide()`): it took every entity
+  the full-schema query used (94% on its own picks, the rest were neighbours), but with the entities
+  they belong to it took a median of 6 of 15, the compact schema is about 1,000 tokens, and cost rose 9%
+  and each query took 0.5 s longer. Removed; its place is a context far larger than relay's.
+
+**Moved into the libraries:**
+
+| commit | package | what |
+|---|---|---|
+| `c952ab08` | signal | `modelDefaults`: gpt-oss on Groq gets temperature 1, top_p 1 and 16,384 completion tokens for whatever the caller leaves unset |
+| `6680ad68` | vex | `createQueryDsl` reads the compact schema and DSL; a declared field is computed by prism; a flat shape the rows carry is mapped with no model call; `normalizeShape` keeps a declared field whole. It replaces "ask the mapping agent for every new query" (`bcd222d4`), which had broken lyceum's offline checks |
+| `9d661ba3`, `2730423a` | relay | its copies, the dev scripts that compared them, and context selection go |
+
+Checks: signal's 147 tests and vex's 674 pass, the new ones failing on the old code; lyceum's 17
+checks pass on the rebuilt packages (three failed before, on `bcd222d4`); two screens at high
+through the rebuilt libraries were both right, the query writer at 4,150 to 5,500 tokens a call and
+no mapping-model call.
+
+**Open**
+- Proposed, not built: Jev before each Ray message (open-screen data, guides, actions); "already
+  answered?" replays for Ray's query tool and the builder's prove; a library of small base actions
+  the builder adapts. The model-led app direction is decided after the push.
+- vex's `VexQueryDeps` names its inputs `schemaJson` and `dslSpecJson`, which now carry text;
+  renaming changes an exported type.
+- qwen on Groq has the same 3,072-token default cap and no budget.
+- prove could refuse a context value that is a type description; relay's `assign()` ignores a role's
+  own effort.
