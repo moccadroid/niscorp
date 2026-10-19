@@ -2,11 +2,11 @@ import { defineAgent, repeatedCalls, stepCount, type CortexEvent, type SignalCli
 import { ActionDefinitionSchema, type ActionDefinition } from '@niscorp/nova';
 import { contextOf, EDITING } from './context';
 import { replays } from './read';
-import { AnswerSchema, checkCandidate, makeTools, newBuildState, type Answer, type BuildState } from './tools';
+import { makeTools, newBuildState, type BuildState } from './tools';
 import type { BuildOutcome, Finding, ScreenSetup } from './types';
 
 const INSTRUCTIONS = [
-  'You build one screen, a nova action, from one request. You are done when the check passes. Hand the screen to check, or answer with it as { "action": …, "probes": [ … ] }: either way it is checked.',
+  'You build one screen, a nova action, from one request. You are done when the check passes: you never answer with the screen, you hand it to check.',
   '1. discover: the entities, their fields, and the queries that exist.',
   '2. prove every dataset the screen shows. Replay a query that exists (its fingerprint) only when it answers exactly what is asked: the same rows, every filter included, in the order and form asked for. Otherwise describe a new one (intent + shape), written with real field names.',
   '3. check the complete definition with its probes. The check mounts it for real, loads its data, runs the probes and answers what broke. Fix what it names and check again. When it passes, the screen is the result and your work ends.',
@@ -25,19 +25,15 @@ export type BuildOptions = {
 const passedCheck = (state: BuildState): StopCondition => () => (state.passed === undefined ? null : { stop: 'custom', message: 'the screen passed its check' });
 
 const runOnce = async (input: string, editing: boolean, setup: ScreenSetup, state: BuildState, options: BuildOptions): Promise<string | undefined> => {
-  const agent = defineAgent<Answer>({
+  const agent = defineAgent({
     id: 'screen.builder',
     description: 'Builds one nova screen from a request.',
     instructions: INSTRUCTIONS,
     context: [...contextOf(setup), ...(editing ? [EDITING] : [])],
-    // An answer that carries a screen is checked like a call to check: models that answer with the screen lose no step.
+    // The result is the screen that passed its check, never an answer: an answer before that is sent back.
     output: {
-      schema: AnswerSchema,
-      validate: async (envelope) => {
-        if (state.passed !== undefined) return { ok: true };
-        const answer = await checkCandidate(setup, state, envelope.data.action, envelope.data.probes);
-        return answer.ok ? { ok: true } : { retry: `The check found: ${answer.findings.join(' | ')}` };
-      },
+      validate: () =>
+        state.passed !== undefined ? { ok: true } : { retry: 'No screen has passed its check yet: call check with the complete definition and its probes. Your work ends when it passes.' },
     },
     stopWhen: [stepCount(20), repeatedCalls(2), passedCheck(state)],
   });
