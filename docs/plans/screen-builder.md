@@ -203,3 +203,105 @@ any range.
   and the Table's columns overlap at the pane's narrow width.
 - **Promotion upstream** — nova's agent subpath with vex as an optional peer, or the `nisc`
   umbrella — is the owner's call; the module needs no change to move.
+
+## Rounds 2 and 3 (2026-10-19): a stricter suite, harder screens, 120B
+
+**Why.** The owner asked whether the results above were correct. They were not, fully: "built and
+live" counted screens that showed rows, not screens that showed the right rows. The owner then
+chose GPT-OSS 120B as the builder's model (qwen cost more than ten times as much), so round 3 is
+measured on 120B only.
+
+**The suite now judges the rows** (`96df97a4` and later): each screen's rows against SQL under the
+caller's scope (tasks are alex's), by id or by title and date, in the order asked for with ties
+allowed, with the values a row must carry, money near the stored dollars, and no column that draws
+empty. Five harder screens joined it (a dropdown loaded from data, two filters at once, tabs, a
+checkbox, a row click that narrows a second table), and four held-out screens are scored but are
+not meant to be read to change the builder (`62a24717`). Paging was dropped: vex's queries take a
+limit and no offset. The old oracles were wrong in two places: search counted names only, and
+tasks were counted unscoped (the week screen's 21 is alex's; 31 is everyone's).
+
+**What the harder tests found, and what changed**
+
+| found | change |
+|---|---|
+| tabs wired as an input passed their probe and did nothing live | components declare what they send in their own `events` metadata (`9b5b3bc7`); the palette prints it, and a ui:model trigger or a `set` probe on a component that sends none is refused |
+| a column bound to a key the rows lack drew empty | the kit says which keys a list reads; the check names the missing ones |
+| a filter key the query does not take, or a search pattern sent empty, changed nothing | prove notes it; the check refuses it |
+| an empty optional filter matched nothing | the check names it after the mount; the guide shows the null idiom |
+| a screen with a Checkbox rendered COMPONENT_NOT_FOUND live | relay's shell declares its kit by name (`dc12bd1d`) |
+| Groq 429s failed builds | relay's Groq client waits the time Groq names (`d755caea`) |
+| a header sort or a cell toggle demanded probes the check cannot click | probes are demanded only for what the check can reach |
+| "today plus 7" could not be expressed, so dates were frozen | a literal ambient value is refused, and prism's `$dateAdd` is shown |
+| 120B formatted $36,000 as "$360.00" | relay shows money as stored; prism's money op reads cents by default |
+| a query that did not answer the request (a lost "open" filter) passed | probes carry row claims (`holds`), checked on the loaded rows (`50042e9b`) |
+| Groq refused near-miss tool calls with no word on what missed | the check tool reads its probes itself and names the wrong field (`7212b76f`) |
+| a claim that ordered a formatted date ("Jan 5, 2027") read as rows out of range | the finding names the formatted value (`90738aeb`) |
+| pick-then-show screens that were right hit the step limit: the detail list was "empty at open" though nothing had called it, and a Select's rows counted as shown by nothing | an endpoint only a trigger calls loads when used; one no step calls is still named; rows any component shows count as shown (`c65fab4e`) |
+| 120B put `probes` inside the action, and "Unrecognized key" did not tell it where they go | the finding says they go beside it (`c65fab4e`) |
+| tabs probed with `{ "click": ref }` and no tab: the click carried nothing and the finding blamed the transform | a click on a component whose ui:click declares a payload needs a value (`dcec5bb4`) |
+
+**Tried and reverted.** Checking an answer that carries the screen like a call to check
+(`91041a1f`, reverted in `6fe80562`): a repeated identical check call ends the run and gets the
+repair, but nothing stopped a model that answered the same broken screen again; one build retried
+23 times, and the pass fell from 12/19 right to 9/19.
+
+**Generality.** The module names no relay concept. Relay's part is its kit: the offered components,
+house rules, catalog, four examples, and what its components send. The examples moved to screens
+the suite does not test (`2dab8d30`): before, the month picker and the date range mirrored two
+suite intents. The check rules added in round 3 read the component's own metadata (a declared
+click payload, the events it sends) or the action itself (lifecycle.mount, a trigger's calls), not
+relay's components by name.
+
+**The holdout is no longer clean for two classes.** Diagnosing the step-limit builds meant reading
+the traces of two held-out screens (a company's contacts, activity tabs) beside the suite screens
+with the same failure (a company's deals, status tabs). The fixes are motivated by the suite screens,
+but those two holdouts now measure fixes made with them in view.
+
+**The artifactory, through the real session** (`artifactory-walk`, 120B): built and placed a screen,
+kept it, reloaded, edited it in place (a new column), kept the edit, reloaded again with the edit
+there, built a second screen and discarded it, and it was gone after a reload. All eight checks pass.
+
+**Measured** on 120B, each pass on the code as it stood (19 screens: 10 core, 5 hard, 4 held out):
+
+| pass | code | effort | built | right | core (10) | hard (5) | held out (4) | stuck at a limit |
+|---|---|---|---|---|---|---|---|---|
+| 1 | `7212b76f` | medium | 14 | 12 | 9 | 2 | 1 | 5 |
+| 2 | `91041a1f`, answers checked | medium | 13 | 9 | 7 | 1 | 1 | 6 |
+| 3 | `6fe80562`, reverted | low | 9 | 6 | 5 | 1 | 0 | 10 |
+| 4 | `dcec5bb4` | medium | 13 | 11 | 9 | 0 | 2 | 5 |
+| 5 | `dcec5bb4` | medium | 16 | 12 | 8 | 3 | 1 | 3 |
+
+"Right" counts screens whose rows match the oracle; the set columns count right screens. "Stuck"
+counts builds that ended at the step limit or on a repeated call. One pass-4 failure was a Groq
+parse error six seconds in.
+
+**What the passes say**
+- 120B stays at medium effort: low was worse on every set, and on the hard screens it answered
+  without calling check 13 to 25 times per build.
+- The fixes in `c65fab4e`..`dcec5bb4` removed the false findings that stalled pick-then-show and
+  tab screens (status tabs built right for the first time in these passes), and builds stuck at a limit
+  fell to 5 and 3. The right count did not move beyond noise: 11 and 12 against 12.
+- What stalls the rest is the model sending the same call after a finding that names the fix (the
+  tabs finding named the missing "to" three times; probes set a data key instead of the ref four
+  times), and query choices no check can judge: counts of "won" in a column that holds stage
+  names, 0 in every row of its own sample; a lost "open" filter; a limit the request never asked
+  for.
+
+**Open**
+- **A probe that sets a data key instead of the ref** ("companyId" is what "companySelect" writes):
+  the coverage finding could name the ref. Not built.
+- **A row click in a probe whose list loads only after a pick**: "no rows to click" could say to
+  pick first in the same probe. Not built.
+- **A column that is 0 in every proved row**: a prove note beside the no-rows note; the won/lost
+  screen shipped counts that were 0 in every row of its own sample. Not built.
+- **120B answers with the screen instead of calling check** (39 to 193 refused answers per pass):
+  checking the answer needs the repeat stop that check has. Not built; pass 2 shows the cost
+  without it.
+- **The suite logs a refused answer by its message only**; logging the answer would tell prose
+  from a screen.
+- **Package proposals, the owner's call**: vex's 100-row cut as a structured flag, not a warning;
+  prism's money op naming the unit it reads (cents, unless told), so stored dollars are not divided by 100; distinct values in discovery, so a filter value is
+  read, not guessed.
+- **A second app** (lyceum) needs the module where both apps can import it: promotion is the
+  owner's call.
+- Nothing is pushed.
