@@ -1,5 +1,6 @@
 ---
 '@niscorp/nova': minor
+'@niscorp/loom': minor
 ---
 
 `createDevtoolsFunctions` answers a list of `{ id, description, execute }`, and `FunctionDefinition` names that shape. **Breaking.**
