@@ -2,9 +2,10 @@ import { mkdirSync, writeFileSync, appendFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { CortexEvent } from '@niscorp/cortex';
+import type { ActionDefinition } from '@niscorp/nova';
 import { buildScreen } from '@relay/screen-builder';
 import { screenSetup } from '@relay/server/functions/ray/screens';
-import { shell, runtime } from './check-shell';
+import { login, runtime, shell as firstShell } from './check-shell';
 import { assign, isEffort, isModelId, llmFor } from '@relay/server/llm';
 import { todayStr } from '@relay/lib/date';
 import { devRayContext } from './engine';
@@ -344,6 +345,19 @@ const trunc = (v: unknown, n = 6000): unknown => {
   return s !== undefined && s.length > n ? `${s.slice(0, n)}…[+${s.length - n}]` : v;
 };
 
+// moss ends a session no socket holds once it has been idle for 30 minutes, and the suite's never holds one: a run
+// that outlasts it signs in again.
+let shell = firstShell;
+const register = async (action: ActionDefinition): Promise<void> => {
+  try {
+    shell.registerAction(action);
+  } catch (error) {
+    if ((error as { code?: string }).code !== 'SHELL_DISPOSED') throw error;
+    shell = await login('alex');
+    shell.registerAction(action);
+  }
+};
+
 type RunRow = { intent: string; rep: number; built: boolean; correct: boolean; seconds: number; tools: number; retries: Record<string, number>; note: string };
 
 const main = async (): Promise<void> => {
@@ -407,7 +421,7 @@ const main = async (): Promise<void> => {
       if (built.ok) {
         put({ ev: 'built', action: built.action, probes: built.probes });
         writeFileSync(join(outDir, `${id}.${rep}.action.json`), JSON.stringify({ action: built.action, probes: built.probes }, null, 2));
-        shell.registerAction(built.action);
+        await register(built.action);
         const instance = shell.push('main', built.action.id);
         const rt = shell.getRuntime(instance);
         if (rt === undefined) note = 'no runtime after push';
