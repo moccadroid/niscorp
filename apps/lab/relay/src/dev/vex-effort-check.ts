@@ -3,8 +3,6 @@ import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { createMemoryCache, createPostgresAdapter, createQueryEngine, seedCache, type GenerateDsl, type QueryEngine } from '@niscorp/vex';
 import { createQueryDsl, createShapeMapper } from '@niscorp/vex/agent';
-import { createSignal } from '@niscorp/signal';
-import type { Selection } from '@relay/context-selection';
 import { ENTRIES, MUTATION_ENTRIES } from '@relay/app/vex';
 import { MODELS } from '@relay/server/llm';
 import { DSL_SPEC, queryWriter, shapeWriter } from '@relay/server/functions/ray/writers';
@@ -14,14 +12,14 @@ import { turnsOf } from './turns';
 
 // vex's query writer and shape mapper on the same queries in several setups, at medium effort, each query in a fresh
 // cache so every one is written by the model: "vex" (vex's own writers), "compact" (relay's: compact schema and DSL,
-// declared formats), "jev" (relay's, with Jev picking the entities).
+// declared formats).
 // Usage: vex-effort-check <queries.json> <out.json> [perScreen] [reps] [variants]
 type Query = { screen: string; intent: string; shape: unknown; context: Record<string, unknown> };
 type Turn = Record<string, unknown> & { ms?: number; finish?: string; usage?: { inputTokens: number; outputTokens: number; reported: boolean } };
-type Run = { turns: Turn[]; entities?: string[]; selection?: Selection };
+type Run = { turns: Turn[]; entities?: string[] };
 type Outcome = Run & { screen: string; at: number; variant: string; rep: number; ms: number; ok: boolean; error?: string; rows?: number; digest?: string; sample?: unknown };
 
-const [source = '', target = '', perScreen = '2', reps = '1', variantList = 'vex,compact,jev'] = process.argv.slice(2);
+const [source = '', target = '', perScreen = '2', reps = '1', variantList = 'vex,compact'] = process.argv.slice(2);
 const variants = variantList.split(',');
 const all = JSON.parse(readFileSync(source, 'utf8')) as Query[];
 const kept = new Map<string, number>();
@@ -36,8 +34,6 @@ const current = new AsyncLocalStorage<Run>();
 const entry = MODELS['groq-120b'];
 const key = entry.getKey();
 if (key === undefined) throw new Error(`no ${entry.envKey}`);
-if (variants.includes('jev') && (process.env['TYPESAFE_API_KEY'] ?? '') === '') throw new Error('the jev variant needs TYPESAFE_API_KEY in .env');
-const decider = variants.includes('jev') ? createSignal('typesafe') : undefined;
 
 const runtime = await devRuntime();
 const adapter = createPostgresAdapter({ pool: runtime.pool });
@@ -58,7 +54,7 @@ const engineFor = async (variant: string): Promise<QueryEngine> => {
   const writer: GenerateDsl =
     variant === 'vex'
       ? createQueryDsl({ llm, queryJsonSchema: dslJsonSchema })
-      : queryWriter(llm, DSL_SPEC, variant === 'jev' && decider !== undefined ? { decider, onSelect: (selection) => { const run = current.getStore(); if (run !== undefined) run.selection = selection; } } : undefined);
+      : queryWriter(llm, DSL_SPEC);
   const cache = createMemoryCache();
   await seedCache(cache, [...ENTRIES, ...MUTATION_ENTRIES]);
   const engine = createQueryEngine({

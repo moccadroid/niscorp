@@ -13,7 +13,7 @@ import { TABLES } from '@relay/db/schema';
 import { llmFor, type AgentRole } from '@relay/server/llm';
 import type { RayContext } from '@relay/server/functions/ray';
 import { devRuntime, type DevRuntime } from '../server/runtime';
-import { DSL_SPEC, entitySelection, queryWriter, shapeWriter, type EntitySelection } from '@relay/server/functions/ray/writers';
+import { DSL_SPEC, queryWriter, shapeWriter } from '@relay/server/functions/ray/writers';
 import { engineTurns, turnsOf } from './turns';
 
 export type RayEngine = { engine: QueryEngine; db: NiscRuntime['db'] };
@@ -28,11 +28,6 @@ const buildLlm = (role: AgentRole): SignalClient => {
   return turnsOf(resolved.llm, (turn) => engineTurns.sink({ ...turn, role }));
 };
 
-const selectionOf = (): EntitySelection | undefined => {
-  const selection = entitySelection();
-  return selection === undefined ? undefined : { ...selection, onSelect: (chosen) => engineTurns.sink({ ev: 'select', ms: chosen.ms, taken: chosen.taken, left: chosen.left.length, ...(chosen.failed === undefined ? {} : { failed: chosen.failed }) }) };
-};
-
 // The dev scripts' own engine over the app's entries. The server keeps the
 // entries it serves to itself, and the running app has no engine beside it.
 const boot = async (runtime: NiscRuntime, policy: ScopePolicy): Promise<RayEngine> => {
@@ -44,7 +39,7 @@ const boot = async (runtime: NiscRuntime, policy: ScopePolicy): Promise<RayEngin
     adapter,
     scope: policy,
     cache,
-    generateDsl: (request, schema, caller) => queryWriter(buildLlm('query'), DSL_SPEC, selectionOf())(request, schema, caller),
+    generateDsl: (request, schema, caller) => queryWriter(buildLlm('query'), DSL_SPEC)(request, schema, caller),
     mapToShape: (rows, shape, intent) => shapeWriter(buildLlm('shape'))(rows, shape, intent),
   });
   await engine.introspect();
