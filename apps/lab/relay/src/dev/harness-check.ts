@@ -234,6 +234,9 @@ const main = async (): Promise<void> => {
   );
   checks.push([`rows a Select shows are shown, and its list waits for a pick (${said(picked)})`, !codes(picked).includes('unshown-rows') && !codes(picked).includes('load-empty')]);
 
+  const notRows = await checkScreen(screen(), setup, { probes: [...PROBES, { holds: [{ in: 'search', field: 'status', is: 'open' }] }] });
+  checks.push([`a claim on a key that holds no rows says what it holds (${said(notRows)})`, !notRows.ok && notRows.findings.some((finding) => finding.message.includes('"search" holds') && finding.message.includes('not rows'))]);
+
   const nested = await checkScreen({ ...screen(), probes: PROBES }, setup);
   checks.push([`probes inside the action are named as such (${said(nested)})`, !nested.ok && nested.findings.some((finding) => finding.message.includes('the probes sit inside the action'))]);
 

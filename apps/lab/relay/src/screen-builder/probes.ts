@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { getPath, type ActionDefinition } from '@niscorp/nova';
 import { mount, type Mounted } from './mount';
-import { navigationOf, stepsIn } from './read';
+import { describeValue, navigationOf, stepsIn } from './read';
 import type { Claim, Finding, Probe, ProbeStep, ScreenSetup } from './types';
 
 // Not nullish anywhere: a schema that allows null is answered with null by models on Groq.
@@ -170,7 +170,9 @@ const broken = (claim: Claim, data: Record<string, unknown>): string | undefined
   const values = rows.map((row) => (row !== null && typeof row === 'object' ? getPath(row as Record<string, unknown>, field) : undefined));
   if (values.every((value) => value === undefined)) {
     const keys = rows[0] !== null && typeof rows[0] === 'object' ? Object.keys(rows[0] as object) : [];
-    return `the rows in "${claim.in}" have no field "${field}"; they have ${keys.map((key) => `"${key}"`).join(', ')}`;
+    return keys.length === 0
+      ? `"${claim.in}" holds ${describeValue(held)}, not rows with a field "${field}"`
+      : `the rows in "${claim.in}" have no field "${field}"; they have ${keys.map((key) => `"${key}"`).join(', ')}`;
   }
   const unordered = incomparable(claim, field, values);
   if (unordered !== undefined) return unordered;
