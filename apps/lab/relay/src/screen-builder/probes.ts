@@ -1,8 +1,8 @@
 import { z } from 'zod';
 import { getPath, type ActionDefinition } from '@niscorp/nova';
 import { mount, type Mounted } from './mount';
-import { describeValue, navigationOf, stepsIn } from './read';
-import type { Claim, Finding, Probe, ProbeStep, ScreenSetup } from './types';
+import { describeValue, httpEndpoints, isRecord, navigationOf, stepsIn } from './read';
+import type { Claim, Finding, ListComponent, Probe, ProbeStep, ScreenSetup } from './types';
 
 // Not nullish anywhere: a schema that allows null is answered with null by models on Groq.
 export const ProbeSchema = z.object({
@@ -62,6 +62,15 @@ const malformed = (probe: Probe): string | undefined => {
   return undefined;
 };
 
+const recordsIn = (value: unknown): Record<string, unknown>[] =>
+  Array.isArray(value) ? value.flatMap(recordsIn) : isRecord(value) ? [value, ...Object.values(value).flatMap(recordsIn)] : [];
+
+// Each control's ref beside the data key its "model" writes.
+const controlsIn = (definition: ActionDefinition): { ref: string; key: string }[] =>
+  recordsIn(definition.layout).flatMap((node) =>
+    typeof node['ref'] === 'string' && typeof node['model'] === 'string' ? [{ ref: node['ref'], key: node['model'].replace(/^\$\./, '') }] : [],
+  );
+
 // Every control or row whose trigger loads data or opens a screen, and that a probe can reach, is used by a probe.
 export const coverage = (definition: ActionDefinition, probes: readonly Probe[], reachable: ReadonlySet<string>): Finding[] =>
   (definition.triggers ?? []).flatMap((trigger): Finding[] => {
@@ -75,7 +84,10 @@ export const coverage = (definition: ActionDefinition, probes: readonly Probe[],
     if (probes.some((probe) => stepsOf(probe).some((step) => (typing ? step.set : step.click) === ref))) return [];
     const does = [...(calls.length > 0 ? [`calls ${calls.map((name) => `"${name}"`).join(', ')}`] : []), ...(opens.length > 0 ? [`opens ${opens.map((id) => `"${id}"`).join(', ')}`] : [])].join(' and ');
     const follows = opens.length > 0 ? 'what opens' : typing ? 'what changes' : 'what changes, or for a refresh what it reloads';
-    return [{ code: 'probe-missing', message: `no probe ${typing ? 'sets' : 'clicks'} "${ref}", which ${does}: add one, saying ${follows}` }];
+    const key = typing ? controlsIn(definition).find((control) => control.ref === ref)?.key : undefined;
+    const near = key !== undefined && probes.some((probe) => stepsOf(probe).some((step) => step.set === key));
+    const hint = near ? `; a probe sets "${key}", the data key "${ref}" writes — a probe sets the ref: { "set": "${ref}", "to": … }` : '';
+    return [{ code: 'probe-missing', message: `no probe ${typing ? 'sets' : 'clicks'} "${ref}", which ${does}: add one, saying ${follows}${hint}` }];
   });
 
 const PROBE_WAIT_MS = 30_000;
@@ -95,7 +107,21 @@ const sameBecause = (mounted: Mounted, sentBefore: number): string => {
   return `The endpoint sent ${contextOf(first)} and then ${contextOf(last)}, and the answer did not change: pick a value that changes the rows.`;
 };
 
-const act = (mounted: Mounted, step: ProbeStep, setup: ScreenSetup): string | undefined => {
+// The controls whose triggers fill the rows of the list that fires a row ref.
+const loadsWhen = (definition: ActionDefinition, rowRef: string, capability: ListComponent): string => {
+  const list = recordsIn(definition.layout).find((node) => isRecord(node['props']) && capability.rowRef !== undefined && node['props'][capability.rowRef] === rowRef);
+  const bound = isRecord(list?.['props']) ? list['props'][capability.rows] : undefined;
+  const key = typeof bound === 'string' ? bound.replace(/^\$\./, '') : undefined;
+  const filling = new Set(httpEndpoints(definition).filter((endpoint) => key !== undefined && endpoint.target === key).map((endpoint) => endpoint.name));
+  const controls = new Set(
+    (definition.triggers ?? []).flatMap((trigger) =>
+      trigger.ref !== undefined && stepsIn(trigger.do).some((step) => typeof step['call'] === 'string' && filling.has(step['call'])) ? [`"${trigger.ref}"`] : [],
+    ),
+  );
+  return controls.size > 0 ? `: its rows load when ${[...controls].join(' or ')} is used, so do that first in this probe` : ': do what loads its rows first in this probe';
+};
+
+const act = (definition: ActionDefinition, mounted: Mounted, step: ProbeStep, setup: ScreenSetup): string | undefined => {
   const components = mounted.components();
   if (step.set !== undefined) {
     const node = components.find((one) => one.ref === step.set);
@@ -121,7 +147,7 @@ const act = (mounted: Mounted, step: ProbeStep, setup: ScreenSetup): string | un
   const capability = list === undefined ? undefined : setup.kit.lists[list.name];
   if (list === undefined || capability === undefined) return `nothing on the screen fires "${ref}"`;
   const rows = list.props[capability.rows];
-  if (!Array.isArray(rows) || rows.length === 0) return `the ${list.name} that fires "${ref}" has no rows to click`;
+  if (!Array.isArray(rows) || rows.length === 0) return `the ${list.name} that fires "${ref}" has no rows to click${loadsWhen(definition, ref, capability)}`;
   const row = rows[0] as Record<string, unknown>;
   mounted.shell.dispatch({ type: 'ui:click', ref, payload: capability.rowPayload === undefined ? row : capability.rowPayload(row, list.props) });
   return undefined;
@@ -214,7 +240,7 @@ const runProbe = async (definition: ActionDefinition, probe: Probe, setup: Scree
     });
 
     for (const step of stepsOf(probe)) {
-      const missed = act(mounted, step, setup);
+      const missed = act(definition, mounted, step, setup);
       if (missed !== undefined) return [{ code: 'probe', message: `${steps}: ${missed}` }];
       if (!(await mounted.idle(PROBE_WAIT_MS))) return [{ code: 'probe', message: `${steps}: the screen did not settle within ${PROBE_WAIT_MS / 1000} s` }];
     }
@@ -258,9 +284,13 @@ const runProbe = async (definition: ActionDefinition, probe: Probe, setup: Scree
 
 // Each probe on a fresh mount, so no probe starts from what another left behind.
 export const runProbes = async (definition: ActionDefinition, probes: readonly Probe[], setup: ScreenSetup, reachable: ReadonlySet<string>): Promise<Finding[]> => {
-  const out = probes.flatMap((probe) => stepsOf(probe).flatMap((step) => [step.set, step.click]).filter((ref): ref is string => ref !== undefined && !reachable.has(ref)));
+  const out = [...new Set(probes.flatMap((probe) => stepsOf(probe).flatMap((step) => [step.set, step.click]).filter((ref): ref is string => ref !== undefined && !reachable.has(ref))))];
   if (out.length > 0) {
-    return [{ code: 'probe', message: `a probe can use only what carries a ref on the screen and the rows of a list; ${[...new Set(out)].map((ref) => `"${ref}"`).join(', ')} ${out.length === 1 ? 'is' : 'are'} fired from inside a component, so leave ${out.length === 1 ? 'it' : 'them'} out of the probes` }];
+    const controls = controlsIn(definition);
+    const keys = out.flatMap((ref) => controls.filter((control) => control.key === ref).map((control) => `"${ref}" is the data key "${control.ref}" writes: set the ref, { "set": "${control.ref}", "to": … }`));
+    const inside = out.filter((ref) => !controls.some((control) => control.key === ref));
+    const fired = inside.length === 0 ? [] : [`a probe can use only what carries a ref on the screen and the rows of a list; ${inside.map((ref) => `"${ref}"`).join(', ')} ${inside.length === 1 ? 'is' : 'are'} fired from inside a component, so leave ${inside.length === 1 ? 'it' : 'them'} out of the probes`];
+    return [{ code: 'probe', message: [...keys, ...fired].join('; ') }];
   }
   const wrong = probes.flatMap((probe) => malformed(probe) ?? []);
   if (wrong.length > 0) return wrong.map((message) => ({ code: 'probe', message }));

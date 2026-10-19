@@ -4,7 +4,7 @@ import { ActionDefinitionSchema, type ActionDefinition } from '@niscorp/nova';
 import { vexGuide, type ContextSignature, type QueryRequest, type QueryResponse } from '@niscorp/vex';
 import { checkScreen } from './check';
 import { ProbeSchema } from './probes';
-import { RESERVED_CONTEXT } from './read';
+import { isRecord, RESERVED_CONTEXT } from './read';
 import type { Finding, Probe, Proof, ScreenSetup } from './types';
 
 export type BuildState = {
@@ -170,6 +170,11 @@ export const makeTools = (setup: ScreenSetup, state: BuildState): ToolDefinition
       if (!Array.isArray(rows)) notes.push('One record, because the shape was an object. For a list of rows the shape is [ { … } ].');
       if (Array.isArray(rows) && rows.length === 0 && missing.length === 0 && Object.keys(values).length > 0) {
         notes.push('No rows. If some were expected, the values may not be the stored ones: prove the query without that filter and read the values in its sample.');
+      }
+      const records = Array.isArray(rows) && rows.length > 1 ? (rows as unknown[]).filter(isRecord) : [];
+      const zeros = records.length > 1 ? Object.keys(records[0] ?? {}).filter((key) => records.every((row) => row[key] === 0)) : [];
+      if (zeros.length > 0) {
+        notes.push(`${zeros.map((key) => `"${key}"`).join(', ')} ${zeros.length === 1 ? 'is' : 'are'} 0 in every row. If that is not expected, a value the query compares against may not be a stored one: prove the rows without that condition and read the values in its sample.`);
       }
       return {
         ...(Array.isArray(rows) ? { count: rows.length, sample: rows.slice(0, 2) } : { record: rows }),

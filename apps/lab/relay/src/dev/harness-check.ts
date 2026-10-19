@@ -237,6 +237,39 @@ const main = async (): Promise<void> => {
   const notRows = await checkScreen(screen(), setup, { probes: [...PROBES, { holds: [{ in: 'search', field: 'status', is: 'open' }] }] });
   checks.push([`a claim on a key that holds no rows says what it holds (${said(notRows)})`, !notRows.ok && notRows.findings.some((finding) => finding.message.includes('"search" holds') && finding.message.includes('not rows'))]);
 
+  const withBox = (definition: ActionDefinition): ActionDefinition => ({
+    ...definition,
+    layout: { component: 'Stack', children: [{ component: 'Input', ref: 'searchBox', model: '$.search' }, (definition.layout as { children: unknown[] }).children[1] as never] },
+    triggers: [{ ...(definition.triggers?.[0] as object), ref: 'searchBox' } as never, definition.triggers?.[1] as never],
+  });
+  const keySet = await checkScreen(screen(withBox), setup, { probes: [{ do: [{ set: 'search', to: 'zzzz' }], changes: 'rows' }, PROBES[1] as Probe] });
+  checks.push([`a probe that sets the data key and not the ref is told the ref (${said(keySet)})`, !keySet.ok && keySet.findings.some((finding) => finding.message.includes('the data key "searchBox" writes'))]);
+
+  const keyStep = await checkScreen(screen(withBox), setup, { probes: [{ do: [{ set: 'searchBox', to: 'zzzz' }], changes: 'rows' }, PROBES[1] as Probe, { do: [{ set: 'search', to: 'a' }], changes: 'rows' }] });
+  checks.push([`a step that sets the data key is told the ref (${said(keyStep)})`, !keyStep.ok && keyStep.findings.some((finding) => finding.message.includes('"search" is the data key "searchBox" writes'))]);
+
+  const pickFirst = await checkScreen(
+    screen((definition) => ({
+      ...definition,
+      data: { rows: [], search: '', picked: '', detail: [] },
+      layout: {
+        component: 'Stack',
+        children: [
+          { component: 'Select', ref: 'pick', model: '$.picked', props: { options: '$.rows', valueKey: 'deal_id', labelKey: 'title' } },
+          { component: 'Table', props: { rows: '$.detail', rowKey: 'deal_id', rowRef: 'detailRow', empty: 'None.', columns: [{ label: 'Title', cell: { kind: 'primary', key: 'title' } }] } },
+        ],
+      },
+      triggers: [
+        { event: 'ui:model', ref: 'pick', do: [{ call: 'loadDetail' }] },
+        { event: 'ui:click', ref: 'detailRow', do: [{ push: { action: 'crm.deal.view', input: { id: '@event.payload' } } }] },
+      ],
+      endpoints: { ...definition.endpoints, loadDetail: { url: '/api/vex', method: 'POST', request: { fingerprint: 'deals/list', context: { q: { $join: { parts: ['%', { $ref: '$.picked' }, '%'], sep: '' } } } }, target: 'detail' } },
+    })),
+    setup,
+    { probes: [{ do: [{ set: 'pick', to: 'a' }], changes: 'detail' }, { do: [{ click: 'detailRow' }], opens: 'crm.deal.view' }] },
+  );
+  checks.push([`a row click before its list loads names what loads it (${said(pickFirst)})`, !pickFirst.ok && pickFirst.findings.some((finding) => finding.message.includes('its rows load when "pick" is used'))]);
+
   const nested = await checkScreen({ ...screen(), probes: PROBES }, setup);
   checks.push([`probes inside the action are named as such (${said(nested)})`, !nested.ok && nested.findings.some((finding) => finding.message.includes('the probes sit inside the action'))]);
 
