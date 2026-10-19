@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { defineTool, type ToolDefinition } from '@niscorp/cortex';
+import { defineTool, flattenSchemaIssues, type ToolDefinition } from '@niscorp/cortex';
 import { ActionDefinitionSchema, type ActionDefinition } from '@niscorp/nova';
 import { vexGuide, type ContextSignature, type QueryRequest, type QueryResponse } from '@niscorp/vex';
 import { checkScreen } from './check';
@@ -198,18 +198,31 @@ export const makeTools = (setup: ScreenSetup, state: BuildState): ToolDefinition
       'after picking July, { "in": "rows", "field": "date", "from": "2026-07-01", "to": "2026-07-31" }. Claim on stored values (a raw date or number), not on formatted ones.',
     input: z.object({
       action: z.record(z.string(), z.unknown()).describe('The complete action definition.'),
-      probes: z.array(ProbeSchema).optional().describe('What the screen must do when it is used.'),
+      // Plain objects, read below: a provider that holds a tool call to its schema refuses a near miss with no word
+      // on what missed, and the step is lost.
+      probes: z
+        .array(z.record(z.string(), z.unknown()))
+        .optional()
+        .describe('What the screen must do when it is used: { "do": [ { "set": ref, "to": value } or { "click": ref } ], "changes" | "opens" | "reloads": …, "holds": [ … ] }.'),
     }),
-    execute: async ({ action, probes }) => {
+    execute: async ({ action, probes: sent }) => {
+      const read = (sent ?? []).map((probe) => ProbeSchema.safeParse(probe));
+      const unread = read.flatMap((one, at) =>
+        one.success
+          ? []
+          : [`probe ${at + 1} is not one: ${flattenSchemaIssues(one.error.issues).map((issue) => `${issue.path.map(String).join('.') || '(probe)'} ${issue.message}`).join('; ')} — it is ${JSON.stringify(sent?.[at]).slice(0, 200)}`],
+      );
+      if (unread.length > 0) return { ok: false, findings: unread };
+      const probes = read.flatMap((one) => (one.success ? [one.data as Probe] : []));
       const result = await checkScreen(action, setup, {
-        probes: probes ?? [],
+        probes,
         proofs: state.proofs,
         replayable: (fingerprint) => replayable(state, fingerprint),
         patterns: (fingerprint) => Object.entries(state.listed.get(fingerprint) ?? {}).filter(([, field]) => field.note === 'pattern').map(([key]) => key),
       });
       const parsed = ActionDefinitionSchema.safeParse(action);
       if (result.ok && parsed.success) {
-        state.passed = { action: parsed.data, probes: probes ?? [] };
+        state.passed = { action: parsed.data, probes };
         return { ok: true, loaded: result.loaded };
       }
       state.last = { action, findings: result.findings };
