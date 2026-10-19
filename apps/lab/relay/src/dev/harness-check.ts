@@ -270,6 +270,15 @@ const main = async (): Promise<void> => {
   );
   checks.push([`a row click before its list loads names what loads it (${said(pickFirst)})`, !pickFirst.ok && pickFirst.findings.some((finding) => finding.message.includes('its rows load when "pick" is used'))]);
 
+  const stepOp = await checkScreen(screen((definition) => ({ ...definition, lifecycle: { mount: [{ call: 'load', onSuccess: [{ set: 'search', value: { $ref: '$.rows.0.title' } }] }] } })), setup, { probes: PROBES });
+  checks.push([`a transform op in a step's value is named (${said(stepOp)})`, !stepOp.ok && stepOp.findings.some((finding) => finding.message.includes('a transform op, which a step does not run'))]);
+
+  const stepDirective = await checkScreen(screen((definition) => ({ ...definition, lifecycle: { mount: [{ call: 'load', onSuccess: [{ set: 'picked', value: { $at: ['$.rows', 0, 'title'] } }] }] }, data: { ...definition.data, picked: '' } })), setup, { probes: PROBES });
+  checks.push([`a nova directive in a step's value is not taken for a transform op (${said(stepDirective)})`, !codes(stepDirective).includes('unresolved-binding')]);
+
+  const keyLeftOut = await checkScreen(screen((definition) => ({ ...definition, endpoints: { load: { url: '/api/vex', method: 'POST', request: { fingerprint: 'deals/list', context: {} }, target: 'rows' } } })), setup, { probes: PROBES });
+  checks.push([`a request that leaves out a key its query takes is named, from vex's own answer (${said(keyLeftOut)})`, !keyLeftOut.ok && keyLeftOut.findings.some((finding) => finding.code === 'missing-context' && finding.message.includes('also takes "q"'))]);
+
   const nested = await checkScreen({ ...screen(), probes: PROBES }, setup);
   checks.push([`probes inside the action are named as such (${said(nested)})`, !nested.ok && nested.findings.some((finding) => finding.message.includes('the probes sit inside the action'))]);
 

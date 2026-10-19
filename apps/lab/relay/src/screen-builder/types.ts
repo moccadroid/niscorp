@@ -61,6 +61,7 @@ export type ScreenSetup = {
 
 export type FindingCode =
   | 'schema'
+  | 'missing-context'
   | 'audit'
   | 'set-path'
   | 'unknown-fingerprint'

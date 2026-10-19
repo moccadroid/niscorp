@@ -103,8 +103,27 @@ const statics = (definition: ActionDefinition, setup: ScreenSetup, options: Chec
   const noData = (options.proofs?.size ?? 0) > 0 && vexEndpoints.length === 0
     ? [{ code: 'no-data' as const, message: `the screen loads none of the data you proved: add an endpoint that posts to ${setup.vex.endpoint} and replays it, called from lifecycle.mount` }]
     : [];
-  return [...audit, ...fingerprints, ...frozen, ...emptyPatterns, ...unbound, ...noData];
+  return [...audit, ...stepTransforms(definition), ...fingerprints, ...frozen, ...emptyPatterns, ...unbound, ...noData];
 };
+
+// What nova runs inside a step's value; any other "$" key is a transform op, which only an endpoint runs.
+const STEP_DIRECTIVES: ReadonlySet<string> = new Set(['$if', '$then', '$else', '$eq', '$exists', '$at', '$prism']);
+
+const transformIn = (value: unknown): Record<string, unknown> | undefined => {
+  if (Array.isArray(value)) return value.map(transformIn).find((found) => found !== undefined);
+  if (!isRecord(value) || '$prism' in value) return undefined;
+  if (Object.keys(value).some((key) => key.startsWith('$') && !STEP_DIRECTIVES.has(key))) return value;
+  return Object.values(value).map(transformIn).find((found) => found !== undefined);
+};
+
+const stepTransforms = (definition: ActionDefinition): Finding[] =>
+  allSteps(definition).flatMap((step): Finding[] => {
+    const own = Object.fromEntries(Object.entries(step).filter(([key]) => key !== 'onSuccess' && key !== 'onError'));
+    const found = transformIn(own);
+    if (found === undefined) return [];
+    const named = typeof step['set'] === 'string' ? `set: ${step['set']}` : (Object.keys(own)[0] ?? 'step');
+    return [{ code: 'unresolved-binding', message: `step "${named}" holds ${JSON.stringify(found).slice(0, 120)}, a transform op, which a step does not run: a step reads data with "$.key" (an index is a dot: "$.rows.0.id") — transform ops work only inside endpoints` }];
+  });
 
 // A set path is a bare data key; "$." belongs to bindings.
 const setPaths = (definition: ActionDefinition): Finding[] =>
@@ -147,6 +166,24 @@ const loadReport = (
     });
   }
   return { loaded, findings };
+};
+
+// A key the query takes and the request left out: vex runs the query without it, so its rows are wrong. vex says so
+// itself when the request is replayed.
+const missingContext = async (definition: ActionDefinition, sent: readonly unknown[], setup: ScreenSetup): Promise<Finding[]> => {
+  const bodies = new Map(sent.filter(isRecord).filter((body) => typeof body['fingerprint'] === 'string').map((body) => [JSON.stringify(body), body]));
+  const found: Finding[] = [];
+  for (const body of bodies.values()) {
+    const fingerprint = String(body['fingerprint']);
+    const context = isRecord(body['context']) ? body['context'] : {};
+    const answer = await setup.vex.execute({ fingerprint, context }).catch(() => undefined);
+    const missing = [...new Set(answer?.meta.missingContext ?? [])];
+    if (missing.length === 0) continue;
+    const endpoint = httpEndpoints(definition).find((one) => fingerprintsOf(one.request).includes(fingerprint))?.name ?? fingerprint;
+    const them = missing.length === 1 ? 'it' : 'them';
+    found.push({ code: 'missing-context', message: `endpoint "${endpoint}" sent ${JSON.stringify(context)}, and its query also takes ${missing.map((key) => `"${key}"`).join(', ')}: vex ran it without ${them}, so its rows are wrong — send ${them} in the request's context` });
+  }
+  return found;
 };
 
 // A value nova could not resolve stays an object with "$" keys in the rendered props, and the component draws nothing from it.
@@ -286,8 +323,10 @@ export const checkScreen = async (candidate: unknown, setup: ScreenSetup, option
     reachable = reachableRefs(components, setup);
     const report = loadReport(definition, data, setup, options.proofs ?? new Map(), mounted.sent);
     loaded = report.loaded;
+    const missing = await missingContext(definition, mounted.sent, setup);
     const found: Finding[] = [
       ...mounted.findings,
+      ...missing,
       ...renderErrorsIn(tree).map((node): Finding => ({ code: 'mount', message: `a layout node did not render: ${node.code}: ${node.message}` })),
       ...report.findings,
       ...unresolvedBindings(components),

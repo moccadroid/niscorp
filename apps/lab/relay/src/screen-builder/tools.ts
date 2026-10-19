@@ -142,6 +142,7 @@ export const makeTools = (setup: ScreenSetup, state: BuildState): ToolDefinition
       `{ "url": "${setup.vex.endpoint}", "method": "POST", "request": { "fingerprint": "<from prove>", "context": { … } }, "target": "<data key>" }\n` +
       '- The request context sends every key of kind "context": a value that follows the screen is a binding over its data ({ "$ref": "$.month" }); keys of kind "scope" are filled by the server.\n' +
       '- A key marked optional is left out by sending null: { "$case": { "branches": [ { "when": { "$ref": "$.stage" }, "then": { "$ref": "$.stage" } } ] } } sends the stage once one is picked and null before. "" is a value, and filters on it.\n' +
+      '- A switch that turns a filter on and off sends the filter\'s value or null, and the query takes the value, never the switch: { "$case": { "branches": [ { "when": { "$ref": "$.activeOnly" }, "then": "active" } ] } } sends "active" while it is on and null while it is off. A query does not branch on a flag.\n' +
       '- A proof takes literal values, the ones the screen would send. To see the rows for another value, replay the fingerprint with it.\n' +
       '- Copy a fingerprint from a prove result, character for character.\n' +
       '- A list query that names no limit is cut at the engine\'s default: when the screen shows every row, name a limit large enough in the intent.',
