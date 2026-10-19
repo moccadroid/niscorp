@@ -12,17 +12,21 @@ export const GROQ_ENV_KEY = 'GROQ_API_KEY';
 
 export type Sampling = (reasoningEffort: ReasoningEffort | undefined) => { temperature: number; topP?: number };
 
-// temperature 0: at the provider default (~1.0) the same prompt draws a
-// 3-tool run or a 20-step wander by luck.
-const GREEDY: Sampling = () => ({ temperature: 0 });
+// OpenAI's settings for gpt-oss. At temperature 0 its reasoning repeats one sentence ("Now we need to ensure …")
+// until the turn's budget runs out, at every effort, and long reasoning at high effort nearly always.
+export const GPT_OSS_SAMPLING: Sampling = () => ({ temperature: 1, topP: 1 });
 
 // Qwen's own settings: greedy decoding makes it repeat itself. Without reasoning
 // (Groq's `default`, and `none`) temperature 0.7 and top_p 0.8; reasoning, 0.6 and 0.95.
 export const QWEN_SAMPLING: Sampling = (effort) =>
   effort === undefined || effort === 'default' || effort === 'none' ? { temperature: 0.7, topP: 0.8 } : { temperature: 0.6, topP: 0.95 };
 
+// Groq ends a turn at 3,072 completion tokens unless told otherwise, and reasoning alone can pass that: the turn
+// then ends before its tool call or answer.
+const COMPLETION_BUDGET = 16_384;
+
 export const createGroqClient =
-  (model: string, sampling: Sampling = GREEDY) =>
+  (model: string, sampling: Sampling) =>
   (apiKey: string, reasoningEffort?: ReasoningEffort): SignalClient => {
     const client = new OpenAI({
       apiKey,
@@ -34,7 +38,7 @@ export const createGroqClient =
         client,
         model,
         apiKey,
-        options: { ...sampling(reasoningEffort), ...(reasoningEffort !== undefined && { reasoningEffort }) },
+        options: { ...sampling(reasoningEffort), maxTokens: COMPLETION_BUDGET, ...(reasoningEffort !== undefined && { reasoningEffort }) },
       }),
     );
   };
