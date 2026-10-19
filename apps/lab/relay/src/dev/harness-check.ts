@@ -190,6 +190,15 @@ const main = async (): Promise<void> => {
   );
   checks.push([`a prop written beside "component" is named as a prop (${said(beside)})`, !beside.ok && beside.findings.some((finding) => finding.message.includes('"placeholder" is a prop of Input'))]);
 
+  const holding = await checkScreen(screen(), setup, { probes: [...PROBES, { holds: [{ in: 'rows', atLeast: 1, atMost: 200 }, { in: 'rows', field: 'status', is: ['open', 'won', 'lost'] }, { in: 'rows', field: 'status', has: 'won' }] }] });
+  checks.push([`claims the rows bear out pass (${said(holding)})`, holding.ok]);
+
+  const onlyOpen = await checkScreen(screen(), setup, { probes: [...PROBES, { holds: [{ in: 'rows', field: 'status', is: 'open' }] }] });
+  checks.push([`a filter the rows do not bear out is reported (${said(onlyOpen)})`, !onlyOpen.ok && onlyOpen.findings.some((finding) => finding.message.includes('where every row\'s is "open"'))]);
+
+  const byValue = await checkScreen(screen(), setup, { probes: [...PROBES, { do: [{ set: 'search', to: 'a' }], changes: 'rows', holds: [{ in: 'rows', field: 'value', sorted: 'desc' }] }] });
+  checks.push([`an order the rows do not bear out is reported after the steps (${said(byValue)})`, !byValue.ok && byValue.findings.some((finding) => finding.message.includes('is not sorted by value descending'))]);
+
   const invalid = await checkScreen({ id: 123, endpoints: 'nope' }, setup);
   checks.push([`a definition that is not one is refused (${said(invalid)})`, !invalid.ok && codes(invalid).includes('schema')]);
 

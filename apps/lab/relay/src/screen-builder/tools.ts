@@ -99,7 +99,8 @@ export const makeTools = (setup: ScreenSetup, state: BuildState): ToolDefinition
       '- The request context sends every key of kind "context": a value that follows the screen is a binding over its data ({ "$ref": "$.month" }); keys of kind "scope" are filled by the server.\n' +
       '- A key marked optional is left out by sending null: { "$case": { "branches": [ { "when": { "$ref": "$.stage" }, "then": { "$ref": "$.stage" } } ] } } sends the stage once one is picked and null before. "" is a value, and filters on it.\n' +
       '- A proof takes literal values, the ones the screen would send. To see the rows for another value, replay the fingerprint with it.\n' +
-      '- Copy a fingerprint from a prove result, character for character.',
+      '- Copy a fingerprint from a prove result, character for character.\n' +
+      '- A list query that names no limit is cut at the engine\'s default: when the screen shows every row, name a limit large enough in the intent.',
     input: z.object({
       fingerprint: z.string().optional().describe('Replays a query that exists: from discover or an earlier prove. Leave out for a new query.'),
       intent: z.string().optional().describe('A new query: plain English with every filter, sort, limit and derived value, named with real fields from discover.'),
@@ -167,6 +168,9 @@ export const makeTools = (setup: ScreenSetup, state: BuildState): ToolDefinition
       }
       if (missing.length > 0) notes.push(`NOT PROVEN: the query takes ${missing.map((key) => `"${key}"`).join(', ')} and ran without them, so these rows are wrong. Prove it again with a value for each.`);
       if (!Array.isArray(rows)) notes.push('One record, because the shape was an object. For a list of rows the shape is [ { … } ].');
+      if (Array.isArray(rows) && rows.length === 0 && missing.length === 0 && Object.keys(values).length > 0) {
+        notes.push('No rows. If some were expected, the values may not be the stored ones: prove the query without that filter and read the values in its sample.');
+      }
       return {
         ...(Array.isArray(rows) ? { count: rows.length, sample: rows.slice(0, 2) } : { record: rows }),
         ...(proved !== undefined && missing.length === 0 ? { fingerprint: proved } : {}),
@@ -188,7 +192,10 @@ export const makeTools = (setup: ScreenSetup, state: BuildState): ToolDefinition
     guide:
       'A probe is what a person does on the screen and what must follow: { "do": [ { "set": "<ref>", "to": "<value>" } ], "changes": "<data key>" } or ' +
       '{ "do": [ { "click": "<row or button ref>" } ], "opens": "<action id>" }; a refresh button, which loads the same rows again: { "do": [ { "click": "<ref>" } ], "reloads": "<data key>" }; a tab: { "do": [ { "click": "<tabs ref>", "to": "<the tab\'s value>" } ], "changes": "<data key>" }. ' +
-      'Every control or row whose trigger loads data or opens a screen needs one. Pick values that must change what loads.',
+      'Every control or row whose trigger loads data or opens a screen needs one. Pick values that must change what loads. ' +
+      'A probe also says what the rows must be, as the request names it, in "holds": after its steps, or with no "do" as the screen opens — ' +
+      '{ "holds": [ { "in": "rows", "field": "status", "is": "open" }, { "in": "rows", "field": "amount", "sorted": "desc" }, { "in": "rows", "atMost": 10 } ] }; ' +
+      'after picking July, { "in": "rows", "field": "date", "from": "2026-07-01", "to": "2026-07-31" }. Claim on stored values (a raw date or number), not on formatted ones.',
     input: z.object({
       action: z.record(z.string(), z.unknown()).describe('The complete action definition.'),
       probes: z.array(ProbeSchema).optional().describe('What the screen must do when it is used.'),

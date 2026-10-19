@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { getPath, type ActionDefinition } from '@niscorp/nova';
 import { mount, type Mounted } from './mount';
 import { navigationOf, stepsIn } from './read';
-import type { Finding, Probe, ProbeStep, ScreenSetup } from './types';
+import type { Claim, Finding, Probe, ProbeStep, ScreenSetup } from './types';
 
 // Not nullish anywhere: a schema that allows null is answered with null by models on Groq.
 export const ProbeSchema = z.object({
@@ -14,25 +14,51 @@ export const ProbeSchema = z.object({
         click: z.string().optional().describe('The ref of what is clicked. A row ref clicks the first row.'),
       }),
     )
-    .min(1)
-    .describe('What the person does, in order.'),
+    .optional()
+    .describe('What the person does, in order. Left out, the claims are about the screen as it opens.'),
   changes: z.string().optional().describe('A data key whose content must be different afterwards.'),
   opens: z.string().optional().describe('An action id that must open afterwards.'),
   reloads: z.string().optional().describe('For a probe that only clicks, such as a refresh: a data key whose endpoint must be called again.'),
+  holds: z
+    .array(
+      z.object({
+        in: z.string().describe('The data key holding the rows.'),
+        field: z.string().optional().describe('The row field the claim is about.'),
+        is: z.union([z.string(), z.number(), z.boolean(), z.array(z.union([z.string(), z.number(), z.boolean()]))]).optional().describe('Every row\'s field is this, or one of these.'),
+        has: z.union([z.string(), z.number(), z.boolean()]).optional().describe('Some row\'s field is this.'),
+        sorted: z.enum(['asc', 'desc']).optional().describe('The rows are ordered by the field.'),
+        from: z.union([z.string(), z.number()]).optional().describe('Every row\'s field is at least this.'),
+        to: z.union([z.string(), z.number()]).optional().describe('Every row\'s field is at most this.'),
+        atMost: z.number().optional().describe('At most this many rows.'),
+        atLeast: z.number().optional().describe('At least this many rows.'),
+      }),
+    )
+    .optional()
+    .describe('What the rows must be: the filters, order and limit the request names.'),
 });
+
+const stepsOf = (probe: Probe): ProbeStep[] => probe.do ?? [];
 
 const said = (step: ProbeStep): string =>
   step.set !== undefined ? `set "${step.set}" to ${JSON.stringify(step.to)}` : `click "${step.click ?? ''}"${step.to === undefined ? '' : ` on ${JSON.stringify(step.to)}`}`;
 
 const malformed = (probe: Probe): string | undefined => {
-  const step = probe.do.find((one) => (one.set === undefined) === (one.click === undefined) || (one.set !== undefined && one.to === undefined));
+  const steps = stepsOf(probe);
+  if (steps.length === 0) {
+    if ((probe.holds ?? []).length === 0) return 'a probe without steps says what the rows must be as the screen opens: add "holds"';
+    if (probe.changes !== undefined || probe.opens !== undefined || probe.reloads !== undefined) return '"changes", "opens" and "reloads" follow steps: add "do"';
+    return undefined;
+  }
+  const step = steps.find((one) => (one.set === undefined) === (one.click === undefined) || (one.set !== undefined && one.to === undefined));
   if (step !== undefined) return `a probe step does one thing: { "set": ref, "to": value } or { "click": ref } — got ${JSON.stringify(step)}`;
-  if (probe.changes === undefined && probe.opens === undefined && probe.reloads === undefined) {
-    return `the probe "${probe.do.map(said).join(', ')}" says nothing must follow: add "changes" (a data key), "opens" (an action id) or, for a refresh, "reloads" (a data key)`;
+  if (probe.changes === undefined && probe.opens === undefined && probe.reloads === undefined && (probe.holds ?? []).length === 0) {
+    return `the probe "${steps.map(said).join(', ')}" says nothing must follow: add "changes" (a data key), "opens" (an action id), "holds" (what the rows must be) or, for a refresh, "reloads" (a data key)`;
   }
-  if (probe.reloads !== undefined && probe.changes === undefined && probe.do.some((step) => step.set !== undefined)) {
-    return `the probe "${probe.do.map(said).join(', ')}" sets a value, so it says which data key "changes": "reloads" is for a click alone`;
+  if (probe.reloads !== undefined && probe.changes === undefined && steps.some((step) => step.set !== undefined)) {
+    return `the probe "${steps.map(said).join(', ')}" sets a value, so it says which data key "changes": "reloads" is for a click alone`;
   }
+  const vague = (probe.holds ?? []).find((claim) => claim.field === undefined && (claim.is !== undefined || claim.has !== undefined || claim.sorted !== undefined || claim.from !== undefined || claim.to !== undefined));
+  if (vague !== undefined) return `a claim about values names its "field": ${JSON.stringify(vague)}`;
   return undefined;
 };
 
@@ -46,7 +72,7 @@ export const coverage = (definition: ActionDefinition, probes: readonly Probe[],
     const opens = steps.flatMap((step) => navigationOf(step)?.action ?? []);
     if (calls.length === 0 && opens.length === 0) return [];
     const typing = trigger.event === 'ui:model';
-    if (probes.some((probe) => probe.do.some((step) => (typing ? step.set : step.click) === ref))) return [];
+    if (probes.some((probe) => stepsOf(probe).some((step) => (typing ? step.set : step.click) === ref))) return [];
     const does = [...(calls.length > 0 ? [`calls ${calls.map((name) => `"${name}"`).join(', ')}`] : []), ...(opens.length > 0 ? [`opens ${opens.map((id) => `"${id}"`).join(', ')}`] : [])].join(' and ');
     const follows = opens.length > 0 ? 'what opens' : typing ? 'what changes' : 'what changes, or for a refresh what it reloads';
     return [{ code: 'probe-missing', message: `no probe ${typing ? 'sets' : 'clicks'} "${ref}", which ${does}: add one, saying ${follows}` }];
@@ -98,8 +124,60 @@ const act = (mounted: Mounted, step: ProbeStep, setup: ScreenSetup): string | un
   return undefined;
 };
 
+const scalar = (value: unknown): string => (value !== null && typeof value === 'object' ? JSON.stringify(value) : String(value));
+
+const numeric = (a: unknown, b: unknown): [number, number] | undefined => {
+  const x = typeof a === 'number' ? a : typeof a === 'string' && a.trim() !== '' ? Number(a) : NaN;
+  const y = typeof b === 'number' ? b : typeof b === 'string' && b.trim() !== '' ? Number(b) : NaN;
+  return Number.isFinite(x) && Number.isFinite(y) ? [x, y] : undefined;
+};
+
+// Negative when a comes before b: as numbers when both read as numbers, else as text (an ISO date orders as text).
+const order = (a: unknown, b: unknown): number => {
+  const both = numeric(a, b);
+  if (both !== undefined) return both[0] - both[1];
+  const x = scalar(a);
+  const y = scalar(b);
+  return x < y ? -1 : x > y ? 1 : 0;
+};
+
+// Where a claim fails on the rows in a data key, or undefined when it holds.
+const broken = (claim: Claim, data: Record<string, unknown>): string | undefined => {
+  const held = getPath(data, claim.in);
+  if (held === undefined) return `there is no data key "${claim.in}"`;
+  const rows = (Array.isArray(held) ? held : [held]) as unknown[];
+  if (claim.atMost !== undefined && rows.length > claim.atMost) return `"${claim.in}" holds ${rows.length} rows, more than ${claim.atMost}`;
+  if (claim.atLeast !== undefined && rows.length < claim.atLeast) return `"${claim.in}" holds ${rows.length} rows, fewer than ${claim.atLeast}`;
+  const field = claim.field;
+  if (field === undefined || rows.length === 0) return claim.has === undefined ? undefined : `"${claim.in}" holds no rows, so none has ${field ?? ''} ${JSON.stringify(claim.has)}`;
+  const values = rows.map((row) => (row !== null && typeof row === 'object' ? getPath(row as Record<string, unknown>, field) : undefined));
+  if (values.every((value) => value === undefined)) {
+    const keys = rows[0] !== null && typeof rows[0] === 'object' ? Object.keys(rows[0] as object) : [];
+    return `the rows in "${claim.in}" have no field "${field}"; they have ${keys.map((key) => `"${key}"`).join(', ')}`;
+  }
+  const allowed = claim.is === undefined ? undefined : (Array.isArray(claim.is) ? claim.is : [claim.is]).map(scalar);
+  if (allowed !== undefined) {
+    const at = values.findIndex((value) => !allowed.includes(scalar(value)));
+    if (at >= 0) return `row ${at + 1} of "${claim.in}" has ${field} ${JSON.stringify(values[at])}, where every row's is ${allowed.map((one) => JSON.stringify(one)).join(' or ')}`;
+  }
+  if (claim.has !== undefined && !values.some((value) => scalar(value) === scalar(claim.has))) return `no row of "${claim.in}" has ${field} ${JSON.stringify(claim.has)}`;
+  if (claim.from !== undefined) {
+    const at = values.findIndex((value) => order(value, claim.from) < 0);
+    if (at >= 0) return `row ${at + 1} of "${claim.in}" has ${field} ${JSON.stringify(values[at])}, before ${JSON.stringify(claim.from)}`;
+  }
+  if (claim.to !== undefined) {
+    const at = values.findIndex((value) => order(value, claim.to) > 0);
+    if (at >= 0) return `row ${at + 1} of "${claim.in}" has ${field} ${JSON.stringify(values[at])}, after ${JSON.stringify(claim.to)}`;
+  }
+  if (claim.sorted !== undefined) {
+    const at = values.findIndex((value, index) => index > 0 && (claim.sorted === 'asc' ? order(values[index - 1], value) > 0 : order(values[index - 1], value) < 0));
+    if (at > 0) return `"${claim.in}" is not sorted by ${field} ${claim.sorted === 'asc' ? 'ascending' : 'descending'}: row ${at} has ${JSON.stringify(values[at - 1])}, row ${at + 1} ${JSON.stringify(values[at])}`;
+  }
+  return undefined;
+};
+
 const runProbe = async (definition: ActionDefinition, probe: Probe, setup: ScreenSetup): Promise<Finding[]> => {
-  const steps = probe.do.map(said).join(', then ');
+  const steps = stepsOf(probe).length === 0 ? 'as the screen opens' : stepsOf(probe).map(said).join(', then ');
   const mounted = await mount(definition, setup);
   try {
     const failedAtMount = mounted.findings.length;
@@ -111,7 +189,7 @@ const runProbe = async (definition: ActionDefinition, probe: Probe, setup: Scree
       if (event.ok) called.push(event.name);
     });
 
-    for (const step of probe.do) {
+    for (const step of stepsOf(probe)) {
       const missed = act(mounted, step, setup);
       if (missed !== undefined) return [{ code: 'probe', message: `${steps}: ${missed}` }];
       if (!(await mounted.idle(PROBE_WAIT_MS))) return [{ code: 'probe', message: `${steps}: the screen did not settle within ${PROBE_WAIT_MS / 1000} s` }];
@@ -123,6 +201,10 @@ const runProbe = async (definition: ActionDefinition, probe: Probe, setup: Scree
       const now = getPath(mounted.runtime.getData(), probe.changes);
       if (now === undefined) found.push({ code: 'probe', message: `${steps}: there is no data key "${probe.changes}"` });
       else if (JSON.stringify(now) === before) found.push({ code: 'probe', message: `${steps}: "${probe.changes}" holds the same as before. ${sameBecause(mounted, sentBefore)}` });
+    }
+    for (const claim of probe.holds ?? []) {
+      const failure = broken(claim, mounted.runtime.getData());
+      if (failure !== undefined) found.push({ code: 'probe', message: `${steps}: ${failure}` });
     }
     if (probe.reloads !== undefined) {
       const filling = Object.entries(definition.endpoints ?? {}).filter(([, endpoint]) => endpoint.target === probe.reloads).map(([name]) => name);
@@ -152,7 +234,7 @@ const runProbe = async (definition: ActionDefinition, probe: Probe, setup: Scree
 
 // Each probe on a fresh mount, so no probe starts from what another left behind.
 export const runProbes = async (definition: ActionDefinition, probes: readonly Probe[], setup: ScreenSetup, reachable: ReadonlySet<string>): Promise<Finding[]> => {
-  const out = probes.flatMap((probe) => probe.do.flatMap((step) => [step.set, step.click]).filter((ref): ref is string => ref !== undefined && !reachable.has(ref)));
+  const out = probes.flatMap((probe) => stepsOf(probe).flatMap((step) => [step.set, step.click]).filter((ref): ref is string => ref !== undefined && !reachable.has(ref)));
   if (out.length > 0) {
     return [{ code: 'probe', message: `a probe can use only what carries a ref on the screen and the rows of a list; ${[...new Set(out)].map((ref) => `"${ref}"`).join(', ')} ${out.length === 1 ? 'is' : 'are'} fired from inside a component, so leave ${out.length === 1 ? 'it' : 'them'} out of the probes` }];
   }

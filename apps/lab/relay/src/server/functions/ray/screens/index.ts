@@ -39,8 +39,12 @@ const entryOf = (id: string, action: ActionDefinition): CatalogEntry => ({ id, d
 const definitionOf = (version: { id: string; body: unknown }): ActionDefinition | undefined =>
   version.body !== null && typeof version.body === 'object' && !Array.isArray(version.body) ? ({ ...(version.body as Record<string, unknown>), id: version.id } as ActionDefinition) : undefined;
 
-const saidProbe = (probe: Probe): string =>
-  `${probe.do.map((step) => (step.set !== undefined ? `setting ${step.set} to ${JSON.stringify(step.to)}` : `clicking ${step.click ?? ''}`)).join(' then ')} ${probe.changes !== undefined ? `changes ${probe.changes}` : probe.opens !== undefined ? `opens ${probe.opens}` : `reloads ${probe.reloads ?? ''}`}`;
+const saidProbe = (probe: Probe): string => {
+  const steps = (probe.do ?? []).map((step) => (step.set !== undefined ? `setting ${step.set} to ${JSON.stringify(step.to)}` : `clicking ${step.click ?? ''}`)).join(' then ');
+  const follows = probe.changes !== undefined ? `changes ${probe.changes}` : probe.opens !== undefined ? `opens ${probe.opens}` : probe.reloads !== undefined ? `reloads ${probe.reloads}` : '';
+  const claims = (probe.holds ?? []).map((claim) => JSON.stringify(claim)).join(', ');
+  return [steps.length > 0 ? `${steps} ${follows}`.trim() : 'as it opens', claims.length > 0 ? `holds ${claims}` : ''].filter((part) => part.length > 0).join(': ');
+};
 
 export const makeScreenTools = (ray: RayContext): ScreenTools => {
   // The screens of this session, by the id moss gave them: built in this chat, or kept earlier.

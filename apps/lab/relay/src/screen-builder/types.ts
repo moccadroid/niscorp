@@ -14,9 +14,16 @@ export type ClickPayload = (props: Record<string, unknown>) => unknown;
 
 export type ProbeStep = { set?: string; to?: string | number | boolean; click?: string };
 
+type Scalar = string | number | boolean;
+
+// What the rows held in a data key must be: every row's field one of `is`, some row's field `has`, the rows sorted
+// by a field, every field within `from`..`to`, and how many rows there are.
+export type Claim = { in: string; field?: string; is?: Scalar | Scalar[]; has?: Scalar; sorted?: 'asc' | 'desc'; from?: string | number; to?: string | number; atMost?: number; atLeast?: number };
+
 // What a person does on the screen, and what must follow: a data key whose content changes, an action that opens,
-// or — for a click alone, a refresh — a data key whose endpoint is called again.
-export type Probe = { do: ProbeStep[]; changes?: string; opens?: string; reloads?: string };
+// or — for a click alone, a refresh — a data key whose endpoint is called again; and what the rows must be, after
+// the steps or, with none, as the screen opens.
+export type Probe = { do?: ProbeStep[]; changes?: string; opens?: string; reloads?: string; holds?: Claim[] };
 
 export type Example = { intent: string; prove: Partial<QueryRequest>[]; action: ActionDefinition; probes: Probe[] };
 

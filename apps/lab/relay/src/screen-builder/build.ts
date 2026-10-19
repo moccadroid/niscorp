@@ -6,11 +6,11 @@ import { makeTools, newBuildState, type BuildState } from './tools';
 import type { BuildOutcome, Finding, ScreenSetup } from './types';
 
 const INSTRUCTIONS = [
-  'You build one screen, a nova action, from one request. You are done when the check passes.',
+  'You build one screen, a nova action, from one request. You are done when the check passes: you never answer with the screen, you hand it to check.',
   '1. discover: the entities, their fields, and the queries that exist.',
   '2. prove every dataset the screen shows. Replay a query that exists (its fingerprint) only when it answers exactly what is asked: the same rows, every filter included, in the order and form asked for. Otherwise describe a new one (intent + shape), written with real field names.',
   '3. check the complete definition with its probes. The check mounts it for real, loads its data, runs the probes and answers what broke. Fix what it names and check again. When it passes, the screen is the result and your work ends.',
-  'Probes say what the screen must do when it is used: for every control or row whose trigger loads data or opens a screen, what the person does, and which data key changes or which action opens.',
+  'Probes say what the screen must do when it is used: for every control or row whose trigger loads data or opens a screen, what the person does, and which data key changes or which action opens. They also say what the loaded rows must be: every filter, order and limit the request names, as claims the check verifies.',
 ].join('\n');
 
 export type BuildOptions = {
