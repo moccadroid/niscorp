@@ -108,6 +108,9 @@ const act = (mounted: Mounted, step: ProbeStep, setup: ScreenSetup): string | un
   const own = components.find((node) => node.ref === ref);
   if (own !== undefined) {
     const payload = step.to ?? setup.kit.clicks?.[own.name]?.(own.props);
+    if (payload === undefined && setup.kit.registry.get(own.name)?.meta.events?.['ui:click']?.payloadType !== undefined) {
+      return `a ${own.name} click carries a value, and this click gives none: { "click": "${ref}", "to": <the value it carries> }`;
+    }
     mounted.shell.dispatch({ type: 'ui:click', ref, ...(payload === undefined ? {} : { payload }) });
     return undefined;
   }

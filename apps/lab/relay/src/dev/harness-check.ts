@@ -145,17 +145,17 @@ const main = async (): Promise<void> => {
   );
   checks.push([`today's date written into a request is reported (${said(frozenToday)})`, !frozenToday.ok && codes(frozenToday).includes('frozen-value')]);
 
-  const tabbed = await checkScreen(
-    screen((definition) => ({
-      ...definition,
-      data: { ...definition.data, status: 'open' },
-      layout: { component: 'Stack', children: [{ component: 'Tabs', ref: 'status', props: { value: '$.status', options: [{ value: 'open', label: 'Open' }, { value: 'zzzz', label: 'Nothing' }] } }, ...((definition.layout as { children: unknown[] }).children as never[])] },
-      triggers: [...(definition.triggers ?? []), { event: 'ui:click', ref: 'status', do: [{ set: 'status', value: '@event.payload' }, { set: 'search', value: '@event.payload' }, { call: 'load' }] }],
-    })),
-    setup,
-    { probes: [...PROBES, { do: [{ click: 'status', to: 'zzzz' }], changes: 'rows' }] },
-  );
+  const withTabs = (definition: ActionDefinition): ActionDefinition => ({
+    ...definition,
+    data: { ...definition.data, status: 'open' },
+    layout: { component: 'Stack', children: [{ component: 'Tabs', ref: 'status', props: { value: '$.status', options: [{ value: 'open', label: 'Open' }, { value: 'zzzz', label: 'Nothing' }] } }, ...((definition.layout as { children: unknown[] }).children as never[])] },
+    triggers: [...(definition.triggers ?? []), { event: 'ui:click', ref: 'status', do: [{ set: 'status', value: '@event.payload' }, { set: 'search', value: '@event.payload' }, { call: 'load' }] }],
+  });
+  const tabbed = await checkScreen(screen(withTabs), setup, { probes: [...PROBES, { do: [{ click: 'status', to: 'zzzz' }], changes: 'rows' }] });
   checks.push([`a tab is probed by the value its click carries (${said(tabbed)})`, tabbed.ok]);
+
+  const tabUnsaid = await checkScreen(screen(withTabs), setup, { probes: [...PROBES, { do: [{ click: 'status' }], changes: 'rows' }] });
+  checks.push([`a tab click that says no tab is named as such (${said(tabUnsaid)})`, !tabUnsaid.ok && tabUnsaid.findings.some((finding) => finding.message.includes('a Tabs click carries a value'))]);
 
   const emptyPattern = await checkScreen(
     screen((definition) => ({ ...definition, endpoints: { load: { url: '/api/vex', method: 'POST', request: { fingerprint: 'deals/list', context: { q: '' } }, target: 'rows' } } })),
