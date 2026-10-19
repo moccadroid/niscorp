@@ -266,6 +266,21 @@ The **shape** is an example, not a schema: use empty strings, zeros, and
 booleans as type markers. `[{ id: '', total: 0 }]` means "an array of objects
 with a string `id` and a number `total`." A bare object means a single record.
 
+A field can be **declared** rather than shown by example: a Prism expression over
+the row's own stored fields, where `$.close_date` is the row's `close_date`.
+
+```typescript
+shape: [{ id: '', close_date: '', close_date_display: { $date: { value: { $ref: '$.close_date' }, format: 'MMM D' } } }]
+// → [{ id: 'deal_085', close_date: '2026-06-08', close_date_display: 'Jun 8' }]
+```
+
+The query is written for the stored fields a declared field reads, and
+`createShapeMapper` computes the declared field with Prism, never a model, so
+the stored value beside it is never overwritten. A declared field is part of the
+request's identity: two formats are two cache entries. A form shown only by
+example (`close_date_display: 'Apr 6'`) is left to the mapping agent; an intent
+alone does not format a field the rows already carry.
+
 The shape also picks the result envelope: an **array** shape maps over the whole
 row set (the mapping sees `$.result` as the rows array — a `$map`/identity); a
 **non-array** shape maps the single (first) row (the mapping sees `$.result` as
@@ -1397,15 +1412,21 @@ await engine.introspect();
 
 - `createQueryDsl(config)` builds the `generateDsl` hook by running
   `vexQueryDslAgent`. It is built from a model and the DSL spec only — who it
-  runs for arrives with every call. The engine calls the hook as
+  runs for arrives with every call. The agent reads the schema and the DSL spec
+  as compact text — an entity per line with its relations and indexes, the DSL
+  as types with every description — and, for a shape with declared fields, the
+  stored fields those read. The engine calls the hook as
   `generateDsl(request, schema, caller)`: `schema` holds only the tables the
   caller's policy can read, and `caller.read(dsl)` runs a DSL through the
   engine's own pipeline under the caller's policy and scope values (`$context`
   binds NULL). That capability is the tools' only way to the database.
-- `createShapeMapper(llm)` builds the `mapToShape` hook by running Prism's
-  `mappingAgent`. When the rows already are the shape (`rowsFitShape` — a flat
-  shape whose keys and value kinds the first row matches exactly) it stores the
-  identity mapping and makes no model call. The `@niscorp/vex/agent` subpath
+- `createShapeMapper(llm)` builds the `mapToShape` hook. A flat shape whose
+  fields the first row carries — plain fields by key, declared fields computed
+  from the stored fields they read — is mapped by Prism with no model call. Any
+  other shape (nested, a field the rows lack, a form shown only by example) goes
+  to Prism's `mappingAgent`, handed the request's intent and run on the rows
+  before it is used: a mapping that fails there is written again, up to three
+  attempts. `rowsFitShape` is still exported. The `@niscorp/vex/agent` subpath
   also exports `vexQueryDslAgent` itself, `createQueryTools` for customizing the
   tool set, and `describeCaller`, which turns `caller.bindings` into the
   context line the agent reads. A run of `vexQueryDslAgent` given no `caller`

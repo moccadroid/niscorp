@@ -4,6 +4,8 @@ import { mappingAgent } from '@niscorp/prism/agent';
 import { compile, execute } from '@niscorp/prism';
 import type { JsonObject } from '@niscorp/prism';
 import { createQueryTools } from './tools.js';
+import { compactSchema, compactSpec } from './compact.js';
+import { declaredMapping, storedShape } from './declared.js';
 import { describeCaller, vexQueryDslAgent } from './query.agent.js';
 import type { Query } from '../schemas/query.schema.js';
 import type { GenerateDsl, MapToShape } from '../types.js';
@@ -26,12 +28,15 @@ const reasonFrom = (args: unknown): string | undefined => {
 };
 
 export const createQueryDsl = (config: QueryDslConfig): GenerateDsl => {
+  const dslSpec = compactSpec(config.queryJsonSchema);
   return async (request, schema, caller) => {
     const tools = createQueryTools({ getSchema: () => schema, read: caller.read });
 
+    // A shape with declared fields asks only for the stored fields they read: they are computed after the query.
+    const stored = storedShape(request.shape);
     const agentInput = {
-      intent: request.intent,
-      shape: request.shape,
+      intent: stored.declared ? `${request.intent ?? ''}\nReturn the stored fields the shape names; how a field is shown is worked out from them after the query.` : request.intent,
+      shape: stored.shape,
       contextKeys: Object.keys(request.context),
     };
 
@@ -40,8 +45,8 @@ export const createQueryDsl = (config: QueryDslConfig): GenerateDsl => {
     run = vexQueryDslAgent.run(agentInput, {
       llm: config.llm,
       deps: {
-        schemaJson: JSON.stringify(schema),
-        dslSpecJson: JSON.stringify(config.queryJsonSchema),
+        schemaJson: compactSchema(schema),
+        dslSpecJson: dslSpec,
         caller: describeCaller(caller.bindings),
       },
       tools,
@@ -95,6 +100,15 @@ export const createShapeMapper = (llm: SignalClient): MapToShape => {
     // `result` must match the envelope engine/runtime.ts replays the IR against.
     const single = !Array.isArray(shape);
     const envelope = { result: single ? (rows[0] ?? null) : rows } as unknown as JsonObject;
+
+    // A flat shape whose fields the rows carry is mapped by prism from the shape itself, declared fields computed
+    // from the stored ones; the agent writes the mapping for any other.
+    const declared = declaredMapping(shape);
+    const first = rows[0];
+    if (declared !== undefined && (first === undefined || declared.reads.every((field) => field in first))) {
+      const ir = await compile(declared.config);
+      return { ir, config: declared.config, transformed: execute(ir, envelope) };
+    }
 
     let failed: string | undefined;
     for (let attempt = 1; attempt <= MAPPING_ATTEMPTS; attempt += 1) {

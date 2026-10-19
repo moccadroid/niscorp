@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { SignalClient } from '@niscorp/cortex';
 import { routeResponse, type StepRequest, type StepResult } from '@niscorp/signal';
+import { compile, execute, type JsonObject } from '@niscorp/prism';
 import { createShapeMapper, rowsFitShape } from '../../src/agent/index.js';
 
 describe('rowsFitShape', () => {
@@ -76,7 +77,7 @@ describe('createShapeMapper', () => {
       }),
     };
     const rows = [{ name: 'Ada' }];
-    const { transformed } = await createShapeMapper(llm)(rows, [{ name: '' }], 'every name');
+    const { transformed } = await createShapeMapper(llm)(rows, [{ label: '' }], 'every name');
     expect(transformed).toEqual(rows);
     expect(asked).toHaveLength(2);
     expect(asked[1]).toContain('Your last config failed on these rows');
@@ -112,11 +113,28 @@ describe('createShapeMapper', () => {
     await expect(createShapeMapper(llm)([{ value: 247000 }], [{ value_display: '' }], 'value formatted as money, like $247K')).rejects.toThrow();
     expect(asked.length).toBeGreaterThan(0);
     expect(asked[0]).toContain('value formatted as money, like $247K');
+  });
 
-    asked.length = 0;
-    const fitting = [{ when: '2026-10-18 13:00:00+01' }];
-    await expect(createShapeMapper(llm)(fitting, [{ when: '' }], 'when it happened, like 2h ago')).rejects.toThrow();
-    expect(asked[0]).toContain('when it happened, like 2h ago');
+  it('maps a flat shape the rows carry with no model call', async () => {
+    const rows = [{ when: '2026-10-18 13:00:00+01', subject: 'Call' }];
+    const { transformed } = await createShapeMapper(untouchable)(rows, [{ when: '' }], 'when it happened');
+    expect(transformed).toEqual([{ when: '2026-10-18 13:00:00+01' }]);
+    const single = await createShapeMapper(untouchable)([{ open: 5 }], { open: 0 });
+    expect(single.transformed).toEqual({ open: 5 });
+  });
+
+  it('computes a declared field from the stored one, with no model call, and the mapping replays on other rows', async () => {
+    const shape = [{ id: '', close_date: '', close_date_display: { $date: { value: { $ref: '$.close_date' }, format: 'MMM D' } } }];
+    const { transformed, ir } = await createShapeMapper(untouchable)([{ id: 'd1', close_date: '2026-06-08', title: 'x' }], shape);
+    expect(transformed).toEqual([{ id: 'd1', close_date: '2026-06-08', close_date_display: 'Jun 8' }]);
+    const replayed = execute(ir, { result: [{ id: 'd2', close_date: '2026-07-01' }], context: {}, scope: {} } as unknown as JsonObject);
+    expect(replayed).toEqual([{ id: 'd2', close_date: '2026-07-01', close_date_display: 'Jul 1' }]);
+    expect(await compile(shape[0]?.close_date_display ?? {})).toBeDefined();
+  });
+
+  it('leaves to the agent a shape that shows a form only by example, or names a field the rows lack', async () => {
+    await expect(createShapeMapper(untouchable)([{ close_date: '2026-06-08' }], [{ close_date: '', close_date_display: 'Apr 6' }])).rejects.toThrow('the model was called');
+    await expect(createShapeMapper(untouchable)([{ id: 'd1' }], [{ id: '', title: '' }])).rejects.toThrow('the model was called');
   });
 
 });

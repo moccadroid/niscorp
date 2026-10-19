@@ -603,16 +603,16 @@ exported from the `@niscorp/vex/agent` subpath — `createQueryDsl` (fills
   `getDistinctValues`, `describeField`, `testQuery`, `cannotSatisfy` — and three
   stop conditions (`stepCount(20)`, `outputRetries(3)`, `repeatedCalls(2)`);
   `createQueryDsl` aborts the run when `cannotSatisfy` is called. Context
-  producers inject the live schema, the caller line and the DSL JSON Schema so the
-  static instructions stay stable. Every data-touching tool is a DSL run through
+  producers inject the live schema and the DSL specification as compact text, and
+  the caller line, so the static instructions stay stable. Every data-touching tool is a DSL run through
   `caller.read`; the tool set holds no adapter and no SQL.
   `createQueryDsl` wraps it into the `generateDsl` hook.
 - The **mapping agent** is Prism's exported `mappingAgent`; `createShapeMapper`
   builds the same envelope the runtime replays against — `{ result: rows }` for an
   array shape, `{ result: rows[0] ?? null }` for an object shape — runs the agent
   once, with the intent as its `notes`, to get a transform config, compiles it to IR, and applies the IR once over
-  that envelope. It asks the agent even when the rows already have the shape's keys: a column can fit the shape
-  and still not have the form the intent asks for (a raw timestamp where it asks for `2h ago`).
+  that envelope. A flat shape whose fields the rows carry is mapped by Prism with no model call, its declared
+  fields computed from the stored ones; the agent writes the mapping for any other.
 
 > The reference agents are a separate concern from the deterministic core: they
 > live behind the `@niscorp/vex/agent` subpath, so `@niscorp/cortex` (and

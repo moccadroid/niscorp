@@ -61,6 +61,12 @@ describe('a query vex writes for a request', () => {
     expect(intents).toEqual(['everybody, by name']);
   });
 
+  it("maps a plain shape with vex's own mapper and no model call", async () => {
+    const { engine } = await world(undefined, createShapeMapper(noModel));
+    const written = await engine.execute({ intent: 'everybody, by name', shape, context: {} });
+    expect(written.result).toEqual([{ id: 1, name: 'Ada' }, { id: 2, name: 'Ben' }]);
+  });
+
   it('keeps the prism config its mapping was compiled from, beside the compiled form', async () => {
     const { engine, inner } = await world();
     const written = await engine.execute({ intent: 'everybody, by name', shape, context: {} });

@@ -6,6 +6,13 @@ import { sweepCache } from '../../src/cache/util.js';
 import type { CacheEntry, OkCacheEntry } from '../../src/cache/cache.types.js';
 
 describe('normalizeShape', () => {
+  it('keeps a declared field whole, so two formats are two requests', () => {
+    const declared = (format: string) => [{ id: '', due_display: { $date: { format, value: { $ref: '$.due_date' } } } }];
+    expect(normalizeShape(declared('MMM D'))).toEqual([{ id: 'string', due_display: { $date: { format: 'MMM D', value: { $ref: '$.due_date' } } } }]);
+    expect(computeRequestHash({ intent: 'tasks', shape: declared('MMM D') })).not.toBe(computeRequestHash({ intent: 'tasks', shape: declared('D MMM') }));
+    expect(computeRequestHash({ intent: 'tasks', shape: [{ due: { $date: { value: { $ref: '$.d' }, format: 'X' } } }] })).toBe(computeRequestHash({ intent: 'tasks', shape: [{ due: { $date: { format: 'X', value: { $ref: '$.d' } } } }] }));
+  });
+
   it('normalizes strings to "string"', () => {
     expect(normalizeShape('hello')).toBe('string');
   });

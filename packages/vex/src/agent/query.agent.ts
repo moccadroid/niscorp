@@ -24,9 +24,9 @@ const INSTRUCTIONS = `You are Vex's query agent. You turn a caller's request —
 
 Context gives you two things:
 - the database schema: the entities, fields, relations, and indexes that actually exist;
-- the DSL JSON Schema: the exact structure your query must take. Its field
-  descriptions ARE the rules — read them and follow them. They are the single
-  source of truth for how every part of a query is written.
+- the DSL specification, written as types: the exact structure your query must
+  take. Its descriptions ARE the rules — read them and follow them. They are the
+  single source of truth for how every part of a query is written.
 
 Your job is to RETRIEVE the data the request needs: choose the entities, columns,
 filters, computed values, and aggregates the schema supports. A separate step runs
@@ -63,7 +63,7 @@ export const vexQueryDslAgent: AgentDefinition<Query, VexQueryDeps> = defineAgen
     ({ deps }) => `Database schema:\n${deps.schemaJson}`,
     ({ deps }) => deps.caller ?? describeCaller([]),
     // Named OUTPUT SCHEMA because cortex's finish protocol refers to it by that name.
-    ({ deps }) => `OUTPUT SCHEMA — the DSL specification (JSON Schema), the single source of truth for your query:\n${deps.dslSpecJson}`,
+    ({ deps }) => `OUTPUT SCHEMA — the DSL specification, written as types, the single source of truth for your query:\n${deps.dslSpecJson}`,
   ],
   // The DSL spec in the context is the schema documentation; with `doc` on it would be injected twice.
   output: { schema: QuerySchema, doc: 'off' },

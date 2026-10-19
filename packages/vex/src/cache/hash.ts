@@ -4,6 +4,13 @@ import { hashText } from '../utils/canonical.js';
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === 'object' && !Array.isArray(value);
 
+const sortedDeep = (value: unknown): unknown =>
+  Array.isArray(value)
+    ? value.map(sortedDeep)
+    : isRecord(value)
+      ? Object.fromEntries(Object.keys(value).sort().map((key) => [key, sortedDeep(value[key])]))
+      : value;
+
 export const normalizeShape = (shape: unknown): unknown => {
   if (shape === null) return 'null';
   if (shape === undefined) return 'unknown';
@@ -14,7 +21,10 @@ export const normalizeShape = (shape: unknown): unknown => {
   }
 
   if (isRecord(shape)) {
-    const sortedKeys = Object.keys(shape).sort();
+    // A declared field ({ "$date": … }) says how a value is shown: two that differ answer differently, so it is kept whole.
+    const keys = Object.keys(shape);
+    if (keys.length === 1 && keys[0]?.startsWith('$') === true) return sortedDeep(shape);
+    const sortedKeys = keys.sort();
     const normalized: Record<string, unknown> = {};
     for (const key of sortedKeys) {
       normalized[key] = normalizeShape(shape[key]);
