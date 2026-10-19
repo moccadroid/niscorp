@@ -141,6 +141,23 @@ const order = (a: unknown, b: unknown): number => {
   return x < y ? -1 : x > y ? 1 : 0;
 };
 
+// A number, an ISO date, or text: a bound and a value of different kinds cannot be ordered ("Jun 8" against "2026-06-30").
+const kindOf = (value: unknown): 'number' | 'date' | 'text' =>
+  typeof value === 'number' || (typeof value === 'string' && value.trim() !== '' && Number.isFinite(Number(value)))
+    ? 'number'
+    : typeof value === 'string' && /^\d{4}-\d{2}-\d{2}/.test(value)
+      ? 'date'
+      : 'text';
+
+const incomparable = (claim: Claim, field: string, values: readonly unknown[]): string | undefined => {
+  const bounds = [claim.from, claim.to].filter((bound) => bound !== undefined);
+  const kinds = new Set(bounds.map(kindOf));
+  if (claim.sorted !== undefined && values.length > 1) kinds.add(kindOf(values[0]));
+  const odd = values.find((value) => value !== undefined && value !== null && bounds.length > 0 && !kinds.has(kindOf(value)));
+  if (odd === undefined) return undefined;
+  return `"${claim.in}" holds ${field} ${JSON.stringify(odd)}, a formatted value that cannot be ordered against ${bounds.map((bound) => JSON.stringify(bound)).join(' and ')}: claim on the stored value — put it in the query's shape beside the formatted one — or leave the claim out`;
+};
+
 // Where a claim fails on the rows in a data key, or undefined when it holds.
 const broken = (claim: Claim, data: Record<string, unknown>): string | undefined => {
   const held = getPath(data, claim.in);
@@ -155,6 +172,8 @@ const broken = (claim: Claim, data: Record<string, unknown>): string | undefined
     const keys = rows[0] !== null && typeof rows[0] === 'object' ? Object.keys(rows[0] as object) : [];
     return `the rows in "${claim.in}" have no field "${field}"; they have ${keys.map((key) => `"${key}"`).join(', ')}`;
   }
+  const unordered = incomparable(claim, field, values);
+  if (unordered !== undefined) return unordered;
   const allowed = claim.is === undefined ? undefined : (Array.isArray(claim.is) ? claim.is : [claim.is]).map(scalar);
   if (allowed !== undefined) {
     const at = values.findIndex((value) => !allowed.includes(scalar(value)));

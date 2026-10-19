@@ -199,6 +199,9 @@ const main = async (): Promise<void> => {
   const byValue = await checkScreen(screen(), setup, { probes: [...PROBES, { do: [{ set: 'search', to: 'a' }], changes: 'rows', holds: [{ in: 'rows', field: 'value', sorted: 'desc' }] }] });
   checks.push([`an order the rows do not bear out is reported after the steps (${said(byValue)})`, !byValue.ok && byValue.findings.some((finding) => finding.message.includes('is not sorted by value descending'))]);
 
+  const formatted = await checkScreen(screen(), setup, { probes: [...PROBES, { holds: [{ in: 'rows', field: 'close_date_display', from: '2026-01-01' }] }] });
+  checks.push([`a claim that orders a formatted value says so, not that the rows are wrong (${said(formatted)})`, !formatted.ok && formatted.findings.some((finding) => finding.message.includes('a formatted value that cannot be ordered'))]);
+
   const invalid = await checkScreen({ id: 123, endpoints: 'nope' }, setup);
   checks.push([`a definition that is not one is refused (${said(invalid)})`, !invalid.ok && codes(invalid).includes('schema')]);
 
