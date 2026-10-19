@@ -124,8 +124,8 @@ const activitiesBetween: Example = {
   intent: 'Activities that happened between two dates the person picks, newest first, with type, subject and when; changing either date reloads the table.',
   prove: [
     {
-      intent: 'activities whose day of occurrence is on or after start and on or before end, with type, subject, the moment they occurred, and that moment as a short date ("Sep 7"), newest first, up to 500',
-      shape: [{ id: '', type: '', subject: '', occurred_at: '', occurred_display: '' }],
+      intent: 'activities whose day of occurrence is on or after start and on or before end, with type, subject and the moment they occurred, newest first, up to 500',
+      shape: [{ id: '', type: '', subject: '', occurred_at: '', occurred_display: { $date: { value: { $ref: '$.occurred_at' }, format: 'MMM D' } } }],
       context: { start: '2026-09-01', end: '2026-09-30' },
     },
   ],
@@ -180,7 +180,7 @@ const openTasksHeadline: Example = {
   intent: 'How many of my tasks are open, as a headline number, my five next open tasks below it with title and due date, and a button that opens the form for a new task.',
   prove: [
     { intent: 'the number of my open tasks', shape: { open: 0 } },
-    { intent: 'my five open tasks with the earliest due date, with title, the due date, and the due date as a short date ("Oct 21"), earliest first', shape: [{ id: '', title: '', due_date: '', due_display: '' }] },
+    { intent: 'my five open tasks with the earliest due date, with title and due date, earliest first', shape: [{ id: '', title: '', due_date: '', due_display: { $date: { value: { $ref: '$.due_date' }, format: 'MMM D' } } }] },
   ],
   action: {
     id: 'tasks.headline',

@@ -17,7 +17,7 @@ const OFFER = ['Stack', 'Row', 'Grid', 'Text', 'Badge', 'Stat', 'Avatar', 'Table
 const RELAY_RULES = [
   'RELAY — how its screens look and behave:',
   '- The chrome shows the screen\'s name: never repeat it as a heading. A short line such as "{{$.deals.length}} deals" is welcome.',
-  '- Dates are shown formatted, by the query: name the form in its intent and shape (close_date_display "Apr 6") and show that column. Money is shown as stored, in whole dollars: a query asked to format it reads it as cents.',
+  '- Dates are shown formatted. Declare the form in the query\'s shape, from the stored date beside it, and show that column: [ { "close_date": "", "close_date_display": { "$date": { "value": { "$ref": "$.close_date" }, "format": "MMM D" } } } ], where "$.close_date" is the row\'s own field. The intent names the stored fields; the shape says how one is shown. Money is shown as stored, in whole dollars.',
   '- A screen re-reads when what it shows changes: a write announces itself on "deals-changed", "companies-changed", "contacts-changed" or "tasks-changed", and the screen listens on the channel of each of those it shows: { "message": "deals-changed", "do": [ { "call": "<its endpoint>" } ] }.',
   '- A screen body is a Stack of sections (gap 2-4). Children of a Stack stretch to full width.',
   '- Anything that must not stretch (a Button, a small control) goes inside a Row; a Row sizes children to their content.',

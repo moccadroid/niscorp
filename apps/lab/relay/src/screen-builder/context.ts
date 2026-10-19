@@ -26,7 +26,7 @@ const REFERENCE = [
   '- "request" (and "response") are transforms, run on every call over the screen\'s data: literal JSON, with ops where a value varies.',
   '  { "$ref": "$.key" } reads data; { "$case": { "branches": [ { "when": { "$eq": [ { "$ref": "$.month" }, "June" ] }, "then": "2026-06-01" } ], "else": "2026-07-01" } } chooses;',
   '  { "$join": { "parts": [ "%", { "$ref": "$.q" }, "%" ], "sep": "" } } joins text;',
-  '  { "$date": { "value": { "$dateAdd": { "date": { "$ref": "$.start" }, "amount": 7, "unit": "day" } }, "format": "YYYY-MM-DD" } } counts a date from another. These ops work only inside endpoints.',
+  '  { "$date": { "value": { "$dateAdd": { "date": { "$ref": "$.start" }, "amount": 7, "unit": "day" } }, "format": "YYYY-MM-DD" } } counts a date from another. These ops work in endpoints, never in a layout or a step.',
   '- The reply is written to "target" as it comes.',
 ].join('\n');
 
