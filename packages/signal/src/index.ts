@@ -5,8 +5,8 @@ export { defineTool } from './tools/define-tool';
 
 export { SignalError, ErrorCode } from './errors';
 
-export { providerRegistry, chatProviderEntry, modelRegistry, modelEntry, modelKey, UNMEASURED_MODEL } from './registry';
-export type { ProviderEntry, ChatProviderEntry, DecisionProviderEntry, ModelEntry } from './registry';
+export { providerRegistry, chatProviderEntry, modelRegistry, modelEntry, modelKey, modelDefaults, UNMEASURED_MODEL } from './registry';
+export type { ProviderEntry, ChatProviderEntry, DecisionProviderEntry, ModelEntry, ModelDefaults } from './registry';
 
 export type { StepOutcome, WireReport, Rejection } from './types';
 export type { WireStrategy, ErrorWireStrategy, ResponseWireStrategy } from './wire/strategies';

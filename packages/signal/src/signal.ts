@@ -9,7 +9,7 @@ import type {
 import type { SignalConfig, CustomProviderConfig } from './config';
 import { estimateUsage } from './utils/estimate-usage';
 import { SignalError, ErrorCode } from './errors';
-import { providerRegistry, modelEntry, resolveApiKey, UNMEASURED_MODEL, type ModelEntry, type ProviderEntry } from './registry';
+import { providerRegistry, modelDefaults, modelEntry, modelKey, resolveApiKey, UNMEASURED_MODEL, type ModelDefaults, type ModelEntry, type ProviderEntry } from './registry';
 import { createOpenAICompatibleAdapter } from './adapters/openai-compatible.adapter';
 import { createAnthropicAdapter } from './adapters/anthropic.adapter';
 import { createGoogleAdapter } from './adapters/google.adapter';
@@ -117,6 +117,11 @@ const modelRowOf = (config: SignalConfig): { provider: string; model: string; ro
   return { provider: config.provider, model, row: modelEntry(config.provider, model) };
 };
 
+const defaultsOf = (config: SignalConfig): ModelDefaults | undefined => {
+  const resolved = modelRowOf(config);
+  return resolved === undefined ? undefined : modelDefaults[modelKey(resolved.provider, resolved.model)];
+};
+
 const resolveCapabilities = (config: SignalConfig): Capabilities => {
   if (typeof config.provider === 'string') {
     const entry = providerRegistry[config.provider];
@@ -195,6 +200,8 @@ const createSignalFromConfig = <T = string>(config: SignalConfig): Signal<T> => 
   const wireStrategies: WireStrategy[] = resolveWireStrategies(wireIdsOf(config));
 
   assertEffort(config, config.options?.reasoningEffort);
+  // Under the caller's options: a model's defaults apply only to what the caller leaves unset.
+  const defaults = defaultsOf(config);
 
   const getAdapter = async (): Promise<ProviderAdapter> => {
     const resolved = resolveProvider(config);
@@ -238,8 +245,8 @@ const createSignalFromConfig = <T = string>(config: SignalConfig): Signal<T> => 
       ...(providerTools && { tools: providerTools }),
       ...(request.toolChoice !== undefined && { toolChoice: request.toolChoice }),
       ...(request.responseFormat !== undefined && { responseFormat: request.responseFormat }),
-      ...((config.options !== undefined || request.options !== undefined) && {
-        options: { ...config.options, ...request.options },
+      ...((defaults !== undefined || config.options !== undefined || request.options !== undefined) && {
+        options: { ...defaults, ...config.options, ...request.options },
       }),
     };
     assertEffort(config, providerRequest.options?.reasoningEffort);
@@ -295,8 +302,8 @@ const createSignalFromConfig = <T = string>(config: SignalConfig): Signal<T> => 
       const resolved = resolveProvider(config);
       const declared = new Set((request.tools ?? []).map((tool) => tool.name));
       const merged: StepRequest =
-        config.options !== undefined || request.options !== undefined
-          ? { ...request, options: { ...config.options, ...request.options } }
+        defaults !== undefined || config.options !== undefined || request.options !== undefined
+          ? { ...request, options: { ...defaults, ...config.options, ...request.options } }
           : request;
       assertEffort(config, merged.options?.reasoningEffort);
       try {

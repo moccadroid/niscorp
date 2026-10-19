@@ -146,6 +146,13 @@ Set LLM options: `temperature`, `maxTokens`, `topP`, `stopSequences`, `seed`, `s
 signal.options({ temperature: 0 })
 ```
 
+### Model defaults
+Some models need options their caller does not know to set. `modelDefaults` (beside `modelRegistry` in `src/registry.ts`, exported) holds them, and a request gets them for whatever the caller leaves unset: the caller's options always win. gpt-oss on Groq gets `temperature: 1` and `topP: 1`, OpenAI's sampling for it (at temperature 0 its reasoning repeats one sentence until the budget runs out), and `maxTokens: 16384`, because Groq ends a completion at 3,072 tokens unless asked for more, and reasoning alone can pass that.
+```typescript
+createSignal('groq').model('openai/gpt-oss-120b')                      // temperature 1, top_p 1, max_completion_tokens 16384
+createSignal('groq').model('openai/gpt-oss-120b').options({ maxTokens: 4000 }) // temperature 1, top_p 1, max_completion_tokens 4000
+```
+
 ### Capabilities — looked up, not configured
 What a client can do is the provider's registry row (what the ENDPOINT
 does) joined with the model's registry row (what the MODEL does, as

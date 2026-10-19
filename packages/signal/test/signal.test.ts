@@ -153,6 +153,50 @@ describe('stepStream carries the client options to the wire', () => {
     expect(captured.params?.['temperature']).toBe(0.5);
   });
 
+  it("a gpt-oss call on Groq gets OpenAI's sampling and a completion budget the caller did not set", async () => {
+    const { captured, client } = capture();
+    const signal = createSignal('groq', { apiKey: 'k', client }).model('openai/gpt-oss-120b');
+    await drain(signal.stepStream({ messages: [{ role: 'user', content: 'hi' }] }));
+    expect(captured.params?.['temperature']).toBe(1);
+    expect(captured.params?.['top_p']).toBe(1);
+    expect(captured.params?.['max_completion_tokens']).toBe(16_384);
+  });
+
+  it("the caller's options win over a model's defaults", async () => {
+    const { captured, client } = capture();
+    const signal = createSignal('groq', { apiKey: 'k', client }).model('openai/gpt-oss-120b').options({ temperature: 0.2, maxTokens: 500 });
+    await drain(signal.stepStream({ messages: [{ role: 'user', content: 'hi' }] }));
+    expect(captured.params?.['temperature']).toBe(0.2);
+    expect(captured.params?.['max_completion_tokens']).toBe(500);
+    expect(captured.params?.['top_p']).toBe(1);
+  });
+
+  it('a model without defaults is sent no sampling the caller did not set', async () => {
+    const { captured, client } = capture();
+    const signal = createSignal('groq', { apiKey: 'k', client });
+    await drain(signal.stepStream({ messages: [{ role: 'user', content: 'hi' }] }));
+    expect(captured.params?.['temperature']).toBeUndefined();
+    expect(captured.params?.['max_completion_tokens']).toBeUndefined();
+  });
+
+  it("step() carries a model's defaults too", async () => {
+    const captured: { params?: Record<string, unknown> } = {};
+    const client = {
+      chat: {
+        completions: {
+          create: async (params: Record<string, unknown>) => {
+            captured.params = params;
+            return { choices: [{ message: { role: 'assistant', content: 'ok' }, finish_reason: 'stop' }], usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 } };
+          },
+        },
+      },
+    };
+    const signal = createSignal('groq', { apiKey: 'k', client }).model('openai/gpt-oss-120b');
+    await signal.step({ messages: [{ role: 'user', content: 'hi' }] });
+    expect(captured.params?.['max_completion_tokens']).toBe(16_384);
+    expect(captured.params?.['temperature']).toBe(1);
+  });
+
   it('end-to-end: a streamed Groq call with reasoningEffort now asks for the effort AND opts into the trace', async () => {
     const { captured, client } = capture();
     const signal = createSignal('groq', { apiKey: 'k', client }).options({ reasoningEffort: 'high' });

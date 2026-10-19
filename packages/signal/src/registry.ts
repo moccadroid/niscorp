@@ -1,4 +1,4 @@
-import type { EndpointCapabilities, ModelCapabilities, ReasoningEffort } from './types';
+import type { EndpointCapabilities, ModelCapabilities, ReasoningEffort, SignalOptions } from './types';
 
 type ProviderEntryBase = {
   id: string;
@@ -191,6 +191,19 @@ export const UNMEASURED_MODEL: ModelCapabilities = {
 export const modelKey = (provider: string, model: string): string => `${provider}/${model}`;
 
 export const modelEntry = (provider: string, model: string): ModelEntry | undefined => modelRegistry[modelKey(provider, model)];
+
+// The options a request to a model gets when the caller sets none: what its maker recommends, or what the provider
+// needs. Typed from their documentation, beside the registry, whose rows stay the probe's output.
+export type ModelDefaults = Pick<SignalOptions, 'temperature' | 'topP' | 'maxTokens'>;
+
+// OpenAI's sampling for gpt-oss: at temperature 0 its reasoning repeats one sentence until the budget runs out.
+// Groq ends a completion at 3,072 tokens unless asked for more, and reasoning alone can pass that.
+const GPT_OSS_ON_GROQ: ModelDefaults = { temperature: 1, topP: 1, maxTokens: 16_384 };
+
+export const modelDefaults: Record<string, ModelDefaults> = {
+  'groq/openai/gpt-oss-120b': GPT_OSS_ON_GROQ,
+  'groq/openai/gpt-oss-20b': GPT_OSS_ON_GROQ,
+};
 
 export const resolveApiKey = (envKey: string, explicitKey?: string): string | undefined =>
   explicitKey ?? (typeof process !== 'undefined' ? process.env?.[envKey] : undefined);
