@@ -305,3 +305,55 @@ parse error six seconds in.
 - **A second app** (lyceum) needs the module where both apps can import it: promotion is the
   owner's call.
 - Nothing is pushed.
+
+## Round 4 (2026-10-19): three more findings, a repeat stop, and the sampling defect
+
+**Built.** On the owner's go for the three findings above (`ba5326b0`): a probe that sets a data
+key is told the ref that writes it; a row click on an empty list names the controls that fill it;
+prove notes a column that is 0 in every row. In one won/lost build the note led 120B to prove the
+rows without its condition, read the stored stage names, and count "Closed Won". Then checking the
+answer again, with a stop when the same screen comes back three times in a row, to check or as the
+answer, and a fresh count for the repair (`0c48ea9b`).
+
+**The sampling defect.** A high-effort pass built 6 of 19 screens, with 208 turns that "produced no
+output". Groq's raw replies showed each such turn ended with `finish_reason: "length"` at exactly
+3,072 completion tokens, all of it reasoning: relay sent no `max_completion_tokens`, and Groq's
+default is 3,072. Replayed with 16,384 and 32,768 tokens, the same turn still never answered: at
+temperature 0, set in round 1 to steady the runs and measured then only at medium, gpt-oss's
+reasoning repeats one sentence until the budget runs out. At temperature 1, OpenAI's setting for
+gpt-oss, the loop breaks. Relay now runs 120B at temperature 1 and top_p 1 and gives every Groq
+turn 16,384 completion tokens (`c74b80a7`). Every 120B pass before it ran with this defect; medium
+lost 2 to 6 turns per pass to the cap.
+
+**Measured** on 120B, 19 screens:
+
+| pass | code | sampling | effort | right | built | core | hard | held out | stuck | time |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 6 | `ba5326b0` | temperature 0 | medium | 13 | 15 | 9 | 3 | 1 | 4 | 27.7 min |
+| 7 | `ba5326b0` | temperature 0 | medium | 13 | 16 | 6 | 4 | 3 | 3 | 27.4 min |
+| 8 | `ba5326b0` | temperature 0 | high | 5 | 6 | 5 | 0 | 0 | 13 | 50.5 min |
+| 9 | `0c48ea9b` | temperature 0 | medium | 11 | 12 | 7 | 4 | 0 | 7 | 21.2 min |
+| 10 | `c74b80a7` | temperature 1, budget | high | **16** | 18 | **10** | 3 | 3 | 1 | 26.0 min |
+| 11 | `c74b80a7` | temperature 1, budget | medium | 12 | 14 | 7 | 3 | 2 | 5 | 20.7 min |
+| 12 | `c74b80a7` | temperature 1, budget | medium | 12 | 16 | 8 | 2 | 2 | 3 | 15.2 min |
+
+The median build took 56 s on high against 29 and 51 s on medium. The token counts the suite logs
+are cortex's estimates and leave out reasoning, so they say nothing about what high costs.
+
+**What it says**
+- High, with the defect fixed, is the best pass of all four rounds: 16 of 19 right, every core
+  screen right, one build stuck. Its misses: the drill-down shows all 120 deals before a click where
+  the request asks for the 82 open ones, the hide-closed screen ran out of steps, and one held-out
+  dropdown did not offer the company the suite picks.
+- Medium at temperature 1 is no better than at temperature 0: 12 and 12. It still sends the same
+  screen back after a finding often enough that the repeat stop ends 3 to 5 builds a pass; high
+  sent back the same screen in none.
+- The repeat stop's cost at temperature 0 (pass 9) came from greedy decoding: given nearly the same
+  context, the model wrote the same screen.
+
+**Open**
+- **High as the default effort** for the builder: the owner's call; one line in relay's model table.
+- **A step value written as a transform op** (`{ "$ref": "$.companies[0].id" }` in a set step):
+  nova resolves the strings inside it, so the request sends `{}` and vex answers 500. A check could
+  name it, like a transform op in a layout prop. Not built: it was not in the approved list.
+- The suite's usage counts leave out reasoning tokens; Groq's own counts arrive in the stream.
