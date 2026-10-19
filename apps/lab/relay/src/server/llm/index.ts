@@ -93,7 +93,8 @@ export type Assignment = { model: ModelId; effort: ReasoningEffort };
 export const AGENTS: Record<AgentRole, AgentEntry> = {
   chat: { label: 'Chat', runsOn: 'groq-120b' },
   layout: { label: 'Chat visualiser', runsOn: 'groq-120b' },
-  architect: { label: 'Screen builder', runsOn: 'groq-120b' },
+  // High plans the whole screen before it answers; at medium it sends the same screen back after a finding more often.
+  architect: { label: 'Screen builder', runsOn: 'groq-120b', effort: 'high' },
   // The two below stay on 120b on purpose: Groq's 250k tokens/minute is per
   // model, and with them on qwen too one build runs past it into 429s.
   query: { label: 'Query writer', runsOn: 'groq-120b' },
