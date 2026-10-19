@@ -20,6 +20,8 @@ export type BuildState = {
   passed?: { action: ActionDefinition; probes: Probe[] };
   // The last definition the check found fault with, as it was sent.
   last?: { action: unknown; findings: Finding[] };
+  // The last screen sent, to check or as the answer, and how many times in a row it came unchanged.
+  sent?: { screen: string; times: number };
 };
 
 export const newBuildState = (inherited: Iterable<string> = []): BuildState => ({
@@ -53,6 +55,48 @@ const jsonOrSelf = (value: unknown): unknown => {
 };
 
 const messageOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));
+
+// The screen as the builder hands it over: to the check tool, or as its answer.
+const candidate = {
+  action: z.record(z.string(), z.unknown()).describe('The complete action definition.'),
+  // Plain objects, read by checkCandidate: a provider that holds a tool call to its schema refuses a near miss with
+  // no word on what missed, and the step is lost.
+  probes: z
+    .array(z.record(z.string(), z.unknown()))
+    .optional()
+    .describe('What the screen must do when it is used: { "do": [ { "set": ref, "to": value } or { "click": ref } ], "changes" | "opens" | "reloads": …, "holds": [ … ] }.'),
+};
+
+export const AnswerSchema = z.object(candidate).strict();
+export type Answer = z.infer<typeof AnswerSchema>;
+
+export type CheckAnswer = { ok: true; loaded: Record<string, string> } | { ok: false; findings: string[]; loaded?: Record<string, string> };
+
+export const checkCandidate = async (setup: ScreenSetup, state: BuildState, action: Record<string, unknown>, sent: readonly Record<string, unknown>[] | undefined): Promise<CheckAnswer> => {
+  const screen = JSON.stringify({ action, probes: sent ?? [] });
+  state.sent = { screen, times: state.sent?.screen === screen ? state.sent.times + 1 : 1 };
+  const read = (sent ?? []).map((probe) => ProbeSchema.safeParse(probe));
+  const unread = read.flatMap((one, at) =>
+    one.success
+      ? []
+      : [`probe ${at + 1} is not one: ${flattenSchemaIssues(one.error.issues).map((issue) => `${issue.path.map(String).join('.') || '(probe)'} ${issue.message}`).join('; ')} — it is ${JSON.stringify(sent?.[at]).slice(0, 200)}`],
+  );
+  if (unread.length > 0) return { ok: false, findings: unread };
+  const probes = read.flatMap((one) => (one.success ? [one.data as Probe] : []));
+  const result = await checkScreen(action, setup, {
+    probes,
+    proofs: state.proofs,
+    replayable: (fingerprint) => replayable(state, fingerprint),
+    patterns: (fingerprint) => Object.entries(state.listed.get(fingerprint) ?? {}).filter(([, field]) => field.note === 'pattern').map(([key]) => key),
+  });
+  const parsed = ActionDefinitionSchema.safeParse(action);
+  if (result.ok && parsed.success) {
+    state.passed = { action: parsed.data, probes };
+    return { ok: true, loaded: result.loaded };
+  }
+  state.last = { action, findings: result.findings };
+  return { ok: false, findings: result.findings.map((finding) => finding.message), loaded: result.loaded };
+};
 
 export const makeTools = (setup: ScreenSetup, state: BuildState): ToolDefinition[] => {
   const ambientValues = Object.entries(setup.ambient).map(([key, value]) => `${key} is ${JSON.stringify(value)}`).join(', ');
@@ -201,38 +245,8 @@ export const makeTools = (setup: ScreenSetup, state: BuildState): ToolDefinition
       'A probe also says what the rows must be, as the request names it, in "holds": after its steps, or with no "do" as the screen opens — ' +
       '{ "holds": [ { "in": "rows", "field": "status", "is": "open" }, { "in": "rows", "field": "amount", "sorted": "desc" }, { "in": "rows", "atMost": 10 } ] }; ' +
       'after picking July, { "in": "rows", "field": "date", "from": "2026-07-01", "to": "2026-07-31" }. Claim on stored values (a raw date or number), not on formatted ones.',
-    input: z.object({
-      action: z.record(z.string(), z.unknown()).describe('The complete action definition.'),
-      // Plain objects, read below: a provider that holds a tool call to its schema refuses a near miss with no word
-      // on what missed, and the step is lost.
-      probes: z
-        .array(z.record(z.string(), z.unknown()))
-        .optional()
-        .describe('What the screen must do when it is used: { "do": [ { "set": ref, "to": value } or { "click": ref } ], "changes" | "opens" | "reloads": …, "holds": [ … ] }.'),
-    }),
-    execute: async ({ action, probes: sent }) => {
-      const read = (sent ?? []).map((probe) => ProbeSchema.safeParse(probe));
-      const unread = read.flatMap((one, at) =>
-        one.success
-          ? []
-          : [`probe ${at + 1} is not one: ${flattenSchemaIssues(one.error.issues).map((issue) => `${issue.path.map(String).join('.') || '(probe)'} ${issue.message}`).join('; ')} — it is ${JSON.stringify(sent?.[at]).slice(0, 200)}`],
-      );
-      if (unread.length > 0) return { ok: false, findings: unread };
-      const probes = read.flatMap((one) => (one.success ? [one.data as Probe] : []));
-      const result = await checkScreen(action, setup, {
-        probes,
-        proofs: state.proofs,
-        replayable: (fingerprint) => replayable(state, fingerprint),
-        patterns: (fingerprint) => Object.entries(state.listed.get(fingerprint) ?? {}).filter(([, field]) => field.note === 'pattern').map(([key]) => key),
-      });
-      const parsed = ActionDefinitionSchema.safeParse(action);
-      if (result.ok && parsed.success) {
-        state.passed = { action: parsed.data, probes };
-        return { ok: true, loaded: result.loaded };
-      }
-      state.last = { action, findings: result.findings };
-      return { ok: false, findings: result.findings.map((finding) => finding.message), loaded: result.loaded };
-    },
+    input: z.object(candidate),
+    execute: async ({ action, probes }) => checkCandidate(setup, state, action, probes),
   });
 
   return [discover, prove, check];
