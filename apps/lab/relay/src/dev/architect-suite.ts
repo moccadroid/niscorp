@@ -1,7 +1,7 @@
 import { mkdirSync, writeFileSync, appendFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { CortexEvent } from '@niscorp/cortex';
+import type { CortexEvent, SignalClient } from '@niscorp/cortex';
 import { buildScreen } from '@relay/screen-builder';
 import { screenSetup } from '@relay/server/functions/ray/screens';
 import { shell, runtime } from './check-shell';
@@ -343,6 +343,39 @@ const trunc = (v: unknown, n = 6000): unknown => {
   return s !== undefined && s.length > n ? `${s.slice(0, n)}…[+${s.length - n}]` : v;
 };
 
+// Every model turn as the provider answered it: how long it took, how it ended, and its tokens (reported: false
+// when the provider sent no count and signal estimated it).
+const turnsOf = (inner: SignalClient, put: (o: Record<string, unknown>) => void): SignalClient => ({
+  ...inner,
+  step: async (request) => {
+    const t0 = Date.now();
+    try {
+      const result = await inner.step(request);
+      put({ ev: 'turn', ms: Date.now() - t0, finish: result.finishReason, usage: result.usage });
+      return result;
+    } catch (error) {
+      put({ ev: 'turn', ms: Date.now() - t0, error: String(error).slice(0, 300) });
+      throw error;
+    }
+  },
+  stepStream: (request, options) => ({
+    async *[Symbol.asyncIterator]() {
+      const t0 = Date.now();
+      let first: number | undefined;
+      try {
+        for await (const event of inner.stepStream(request, options)) {
+          first ??= Date.now() - t0;
+          if (event.type === 'done') put({ ev: 'turn', ms: Date.now() - t0, firstMs: first, finish: event.result.finishReason, usage: event.result.usage });
+          yield event;
+        }
+      } catch (error) {
+        put({ ev: 'turn', ms: Date.now() - t0, error: String(error).slice(0, 300) });
+        throw error;
+      }
+    },
+  }),
+});
+
 type RunRow = { intent: string; rep: number; built: boolean; correct: boolean; seconds: number; tools: number; retries: Record<string, number>; note: string };
 
 const main = async (): Promise<void> => {
@@ -396,7 +429,7 @@ const main = async (): Promise<void> => {
       };
 
       const t0 = Date.now();
-      const built = await buildScreen(intent, setup, { llm: llm.llm, onEvent });
+      const built = await buildScreen(intent, setup, { llm: turnsOf(llm.llm, put), onEvent });
       const seconds = Math.round((Date.now() - t0) / 100) / 10;
 
       let note: string;
