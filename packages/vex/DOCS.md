@@ -277,9 +277,9 @@ shape: [{ id: '', close_date: '', close_date_display: { $date: { value: { $ref: 
 The query is written for the stored fields a declared field reads, and
 `createShapeMapper` computes the declared field with Prism, never a model, so
 the stored value beside it is never overwritten. A declared field is part of the
-request's identity: two formats are two cache entries. A form shown only by
-example (`close_date_display: 'Apr 6'`) is left to the mapping agent; an intent
-alone does not format a field the rows already carry.
+request's identity: two formats are two cache entries. A field the rows lack,
+such as a form shown only by example (`close_date_display: 'Apr 6'`), is left
+to the mapping agent; a field the rows already carry is copied as it is.
 
 The shape also picks the result envelope: an **array** shape maps over the whole
 row set (the mapping sees `$.result` as the rows array — a `$map`/identity); a
@@ -1421,10 +1421,10 @@ await engine.introspect();
   engine's own pipeline under the caller's policy and scope values (`$context`
   binds NULL). That capability is the tools' only way to the database.
 - `createShapeMapper(llm)` builds the `mapToShape` hook. A flat shape whose
-  fields the first row carries — plain fields by key, declared fields computed
-  from the stored fields they read — is mapped by Prism with no model call. Any
-  other shape (nested, a field the rows lack, a form shown only by example) goes
-  to Prism's `mappingAgent`, handed the request's intent and run on the rows
+  fields the first row carries, each plain one of the kind its example shows —
+  plain fields by key, declared fields computed from the stored fields they
+  read — is mapped by Prism with no model call. Any other shape (nested, a field
+  the rows lack, a value of another kind) goes to Prism's `mappingAgent`, handed the request's intent and run on the rows
   before it is used: a mapping that fails there is written again, up to three
   attempts. `rowsFitShape` is still exported. The `@niscorp/vex/agent` subpath
   also exports `vexQueryDslAgent` itself, `createQueryTools` for customizing the

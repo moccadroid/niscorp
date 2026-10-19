@@ -50,18 +50,16 @@ const onRow = (value: unknown): unknown => {
 };
 
 // The mapping as a prism config over vex's envelope ({ result: rows }, or the first row for a single shape): plain
-// fields copied, declared ones computed. Undefined for a shape that is not a flat row template, and for one that shows
-// a form only by example ("close_date_display": "Apr 6"), which vex's mapping agent matches.
-export const declaredMapping = (shape: unknown): { config: object; reads: string[] } | undefined => {
+// fields copied, declared ones computed. Undefined for a shape that is not a flat row template.
+export const declaredMapping = (shape: unknown): { config: object; reads: string[]; examples: Record<string, unknown> } | undefined => {
   const fields = fieldsOf(shape);
   if (fields === undefined) return undefined;
   const template = templateOf(shape) as Record<string, unknown>;
-  if (fields.declared.length === 0 && fields.plain.some((key) => typeof template[key] === 'string' && template[key] !== '')) return undefined;
   const body = Object.fromEntries([
     ...fields.plain.map((key) => [key, { $get: { from: { $var: 'row' }, path: [key], fallback: null } }]),
     ...fields.declared.map(([key, expression]) => [key, onRow(expression)]),
   ]);
   const reads = [...new Set([...fields.plain, ...fields.declared.flatMap(([, expression]) => readsOf(expression))])];
   const config = Array.isArray(shape) ? { $map: { over: { $ref: '$.result' }, as: 'row', body } } : { $with: { let: { row: { $ref: '$.result' } }, value: body } };
-  return { config, reads };
+  return { config, reads, examples: Object.fromEntries(fields.plain.map((key) => [key, template[key]])) };
 };

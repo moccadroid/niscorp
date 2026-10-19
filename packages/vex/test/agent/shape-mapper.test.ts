@@ -132,9 +132,13 @@ describe('createShapeMapper', () => {
     expect(await compile(shape[0]?.close_date_display ?? {})).toBeDefined();
   });
 
-  it('leaves to the agent a shape that shows a form only by example, or names a field the rows lack', async () => {
+  it('leaves to the agent a field the rows lack, such as a form shown only by example', async () => {
     await expect(createShapeMapper(untouchable)([{ close_date: '2026-06-08' }], [{ close_date: '', close_date_display: 'Apr 6' }])).rejects.toThrow('the model was called');
     await expect(createShapeMapper(untouchable)([{ id: 'd1' }], [{ id: '', title: '' }])).rejects.toThrow('the model was called');
+  });
+
+  it('leaves to the agent a value of another kind than its example — a count that came back as text', async () => {
+    await expect(createShapeMapper(untouchable)([{ value: '40' }], { value: 0 })).rejects.toThrow('the model was called');
   });
 
 });

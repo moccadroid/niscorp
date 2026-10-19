@@ -101,11 +101,16 @@ export const createShapeMapper = (llm: SignalClient): MapToShape => {
     const single = !Array.isArray(shape);
     const envelope = { result: single ? (rows[0] ?? null) : rows } as unknown as JsonObject;
 
-    // A flat shape whose fields the rows carry is mapped by prism from the shape itself, declared fields computed
-    // from the stored ones; the agent writes the mapping for any other.
+    // A flat shape whose fields the rows carry, each plain one of the kind its example shows, is mapped by prism from
+    // the shape itself, declared fields computed from the stored ones; the agent writes the mapping for any other.
     const declared = declaredMapping(shape);
     const first = rows[0];
-    if (declared !== undefined && (first === undefined || declared.reads.every((field) => field in first))) {
+    const carried =
+      first === undefined ||
+      (declared !== undefined &&
+        declared.reads.every((field) => field in first) &&
+        Object.entries(declared.examples).every(([field, example]) => first[field] === null || typeof first[field] === typeof example));
+    if (declared !== undefined && carried) {
       const ir = await compile(declared.config);
       return { ir, config: declared.config, transformed: execute(ir, envelope) };
     }

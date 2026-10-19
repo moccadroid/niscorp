@@ -75,7 +75,7 @@ describe('createQueryDsl', () => {
       write(
         { intent: 'deals with their close date', shape: [{ id: '', close_display: { $date: { value: { $ref: '$.close_date' }, format: 'MMM D' } } }], context: {} },
         schema,
-        { bindings: [], read: async () => [] },
+        { bindings: [], read: async () => ({ rows: [], sql: '', warnings: [] }) },
       ),
     ).rejects.toThrow();
     const request = asked[0] ?? '';
