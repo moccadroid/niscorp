@@ -5,7 +5,7 @@ import type { CortexEvent } from '@niscorp/cortex';
 import { buildScreen } from '@relay/screen-builder';
 import { screenSetup } from '@relay/server/functions/ray/screens';
 import { shell, runtime } from './check-shell';
-import { assign, isModelId, llmFor } from '@relay/server/llm';
+import { assign, isEffort, isModelId, llmFor } from '@relay/server/llm';
 import { todayStr } from '@relay/lib/date';
 import { devRayContext } from './engine';
 
@@ -48,6 +48,14 @@ const HARD: Record<string, string> = {
   statusTabs: 'Deals with tabs Open, Won and Lost; clicking a tab shows the deals with that status, latest close date first, with title, value and close date.',
   hideClosed: 'All deals in a table with title, status and value, and a checkbox "Hide closed deals": when it is checked only open deals are listed.',
   stageDrill: 'Two tables: the open deals per pipeline stage (stage, count, combined value), and below it the open deals of the stage I click in the first table, with title and value. Until I click a stage, the second table shows every open deal.',
+};
+
+// Held out: no log of these is read to change the builder; they are only scored.
+const HOLDOUT: Record<string, string> = {
+  holdOwnerDeals: "Pick a deal owner from a dropdown that lists every user; the table shows that owner's open deals with title and value, highest value first. Clicking a deal opens it.",
+  holdActivityTabs: "Activities with tabs Calls, Emails, Meetings and Notes; each tab shows that type's activities, newest first, with subject and when.",
+  holdTasksDone: 'My tasks with title and due date, ordered by due date, and a checkbox "Show done tasks": unchecked lists my open tasks, checked lists all my tasks.',
+  holdCompanyContacts: 'Pick a company from a dropdown that lists every company; the table shows the people who work there, with name, email and title.',
 };
 
 type Row = Record<string, unknown>;
@@ -276,6 +284,44 @@ const CHECKS: Record<string, () => Promise<string[]>> = {
   },
 };
 
+const pickFrom = async (label: string, truth: string): Promise<string> => {
+  const select = tree().find((node) => node.name === 'Select' && node.ref !== undefined);
+  const option = optionsOf(select).find((one) => one.label === label || one.value === label);
+  if (select?.ref === undefined || option === undefined) return `${label}: FAIL no dropdown with that option`;
+  await typeInto(select.ref, option.value);
+  return `${label}: ${judge(rowsOf(tables()[0]), await candidates(truth.replace('$value', option.value)), truth.includes('ORDER BY') ? { order: truth.includes('DESC') ? 'desc' : 'asc' } : {})}`;
+};
+
+Object.assign(CHECKS, {
+  holdOwnerDeals: async () => [await pickFrom('Jordan Chen', "SELECT d.id AS label, d.value::float8 AS rank, d.value::float8 AS amount FROM deals d JOIN users u ON u.id = d.owner_id WHERE u.name = 'Jordan Chen' AND d.status = 'open' ORDER BY d.value DESC")],
+  holdActivityTabs: async () => {
+    const tabs = tree().find((node) => node.name === 'Tabs' && node.ref !== undefined);
+    if (tabs?.ref === undefined) return ['FAIL no Tabs with a ref'];
+    const found: string[] = [];
+    for (const [label, type] of [['Emails', 'email'], ['Notes', 'note']] as const) {
+      const option = optionsOf(tabs).find((one) => one.label === label);
+      if (option === undefined) {
+        found.push(`${label}: FAIL no such tab`);
+        continue;
+      }
+      await click(tabs.ref, option.value);
+      found.push(`${label}: ${judge(rowsOf(tables()[0]), await candidates(`SELECT id AS label, occurred_at::text AS rank FROM activities WHERE type = '${type}' ORDER BY occurred_at DESC`), { order: 'desc' })}`);
+    }
+    return found;
+  },
+  holdTasksDone: async () => {
+    const mine = (open: boolean): Promise<Candidate[]> =>
+      candidates(`SELECT id AS label, title AS alt1, due_date::text AS alt2, due_date::text AS rank FROM tasks WHERE assignee_id = '${ME}'${open ? ' AND done = false' : ''} ORDER BY due_date`);
+    const box = tree().find((node) => node.name === 'Checkbox' && node.ref !== undefined);
+    if (box?.ref === undefined) return ['FAIL no checkbox with a ref'];
+    const found = [`unchecked: ${judge(rowsOf(tables()[0]), await mine(true), { order: 'asc' })}`];
+    await typeInto(box.ref, true);
+    found.push(`checked: ${judge(rowsOf(tables()[0]), await mine(false), { order: 'asc' })}`);
+    return found;
+  },
+  holdCompanyContacts: async () => [await pickFrom('Acme Technologies', "SELECT p.id AS label FROM contacts p JOIN companies c ON c.id = p.company_id WHERE c.name = 'Acme Technologies'")],
+});
+
 async function monthChecks(ordered: boolean): Promise<string[]> {
   const order = ordered ? { order: 'asc' as const } : {};
   const found = [`June: ${judge(rowsOf(tables()[0]), await candidates(DEALS_IN('2026-06-01', '2026-06-30')), order)}`];
@@ -304,19 +350,21 @@ const main = async (): Promise<void> => {
   const group = process.argv.find((a) => a.startsWith('--set='))?.slice(6) ?? 'all';
   const reps = Number(process.argv.find((a) => a.startsWith('--reps='))?.slice(7) ?? '1');
   const model = process.argv.find((a) => a.startsWith('--model='))?.slice(8);
-  if (model !== undefined) {
-    if (!isModelId(model)) {
-      console.error(`unknown model "${model}"`);
+  const effort = process.argv.find((a) => a.startsWith('--effort='))?.slice(9);
+  if (model !== undefined || effort !== undefined) {
+    const chosen = model ?? 'groq-120b';
+    if (!isModelId(chosen) || (effort !== undefined && !isEffort(effort))) {
+      console.error(`unknown model "${chosen}" or effort "${effort ?? ''}"`);
       process.exit(2);
     }
-    assign('architect', model);
+    assign('architect', chosen, effort);
   }
   const llm = llmFor('architect');
   if ('error' in llm) {
     console.error(llm.error);
     process.exit(2);
   }
-  const intents = { ...(group === 'hard' ? {} : CORE), ...(group === 'core' ? {} : HARD) };
+  const intents = group === 'holdout' ? HOLDOUT : { ...(group === 'hard' ? {} : CORE), ...(group === 'core' ? {} : HARD), ...(group === 'all' ? HOLDOUT : {}) };
   const outDir = join(process.argv.find((a) => a.startsWith('--out='))?.slice(6) ?? join(tmpdir(), 'relay-architect-suite'), new Date().toISOString().replace(/[:.]/g, '-'));
   mkdirSync(outDir, { recursive: true });
   console.log(`suite → ${outDir}\n`);
