@@ -357,3 +357,54 @@ are cortex's estimates and leave out reasoning, so they say nothing about what h
   nova resolves the strings inside it, so the request sends `{}` and vex answers 500. A check could
   name it, like a transform op in a layout prop. Not built: it was not in the approved list.
 - The suite's usage counts leave out reasoning tokens; Groq's own counts arrive in the stream.
+
+## Round 5 (2026-10-19): what a build costs, vex measured alone, four more fixes
+
+**Measuring.** The suite now records every model turn — its time, how it ended, and the provider's
+token counts — for the builder and for vex's query writer and shape mapper (`3ca70e3e`,
+`c5edee2b`). Groq reports counts on every turn it answers, reasoning included; only turns it
+rejects are estimated. A run longer than 30 minutes used to die: moss ends a session no socket
+holds after 30 idle minutes, and the suite's never holds one; it now signs in again (`d3e28da7`).
+
+**Built** on the owner's go (`a075fb98`, `3cb978e3`): a transform op in a step's value is named
+before the mount; after the mount each request is replayed and vex's own `missingContext` is named
+(discover's signatures do not say which keys are optional); the guide shows a switch sending the
+filter's value or null; the screen builder runs at high effort, vex's roles stay at medium.
+
+**Measured** on 120B, 19 screens, everything a run spends — the builder's turns and vex's:
+
+| run | effort | right | built | core | hard | held out | stuck | time | input | output | cost |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | high | 15 | 17 | 8 | 3 | 4 | 2 | 31.8 min | 4.78 M | 0.62 M | $1.09 |
+| 2 | high | 16 | 17 | 9 | 3 | 4 | 2 | 30.5 min | 5.07 M | 0.57 M | $1.10 |
+| 3 | medium | 11 | 12 | 7 | 2 | 2 | 7 | 21.0 min | 6.86 M | 0.40 M | $1.27 |
+
+Costs at Groq's list price for gpt-oss-120b ($0.15 per million input tokens, $0.60 per million
+output). Nearly all of a run's time is model turns: in run 2, 23.8 minutes the builder's and 6.6
+minutes vex's; the check itself takes a fraction of a second. vex spends 40 to 50% of the input
+tokens. High takes about 1.5 times as long per run as medium and costs less, because it takes fewer
+steps: per right screen, about $0.07 and two minutes on high, $0.12 and two minutes on medium.
+The fixes did not move the count (15 and 16 against 16 before them); the held-out screens were 4 of
+4 in both runs, and the new findings fired in 1 to 4 builds a run.
+
+**vex alone** (`c813c840`): 55 of the builder's own queries, each twice at medium and twice at high,
+each in a fresh cache. At medium 101 of 110 answered, at high 101; Groq rejected 18% and 24% of the
+query writer's turns (cortex recovers them); high cost 40% more and took nearly three times as long
+per query. Which rows a query returns is steady: every query both efforts answered had the same
+row count, and the samples compared row by row had the same ids. The formatted fields are not: of the answers with a display field, the
+shape mapper wrote the formatted value over the stored date in about a quarter (9 of 42 at medium,
+11 of 43 at high) and left the display field unformatted in a third (14 and 18). The same query
+answered twice gave different formatted fields in 27% of cases at medium and 15% at high. vex stays
+at medium.
+
+**Open**
+- **A proof's context value that is a type description** (`"status": { "optional": true, "type":
+  "string" }`): the hide-closed build sent it for many proves instead of a value; prove could refuse
+  it and say to send the value, or null. Not built.
+- **Formatting outside vex**: ask vex for stored values only and format in the endpoint transform
+  with prism, so a model never writes a display field or overwrites a stored one. A change to
+  relay's house rule; the owner's call.
+- **vex's shape mapper**, the owner's call: never write over a stored column; format dates in the
+  query language rather than in a model-written mapping.
+- **`assign()` ignores a role's own effort**: choosing a model without an effort falls back to the
+  model's default, so the builder would run at medium. The suite passes the effort.
