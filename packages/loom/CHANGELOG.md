@@ -1,5 +1,35 @@
 # @niscorp/loom
 
+## 0.4.0
+
+### Minor Changes
+
+- c7c4f9b: A nova shell keeps actions and fragments in one registry. **Breaking.**
+
+  BREAKING — approved by moccadroid, 2026-10-13: `shell.registerFragment` is gone, and an action and a fragment no longer share an id.
+  - **`shell.registerAction(definition)` takes an action or a fragment**, told apart by the fragment's `kind: 'fragment'`, and **`shell.removeAction(id)` takes either out**. There was no call to take a fragment out. Taken out, a fragment is unknown to a later `with: [...]`; an instance that was opened with it keeps the definition it was composed into, and `back` skips a position that was opened with it, as it skips one it cannot put back.
+  - **A fragment handed to `createShell` is validated**, as an action is: one that does not parse throws `DefinitionValidationError` at construction. Only `registerFragment` validated one before.
+  - **An id names an action or a fragment, never both.** `createShell` and `registerAction` throw `DefinitionValidationError` for an id that is already the other kind's.
+  - Opening a fragment by itself still throws `UnknownActionError`, and a `with: [...]` that names an action still throws `UnknownFragmentError`. `ShellConfig` keeps `actions` and `fragments`.
+  - **Moss:** a fragment that is no longer answered for a principal is taken out of their open shell, as an action is. A boot, and a set of actions handed over, refuse an action under the id of a fragment a shell ships. On a session's own shell, `registerAction` (refused there as before) is the one call that would take a fragment.
+
+  **What to change:** `shell.registerFragment(fragment)` becomes `shell.registerAction(fragment)`. Give an action and a fragment that share an id two ids.
+
+- 4068f98: Vex keeps what an entry it writes was written from, and says who asks when it looks one up. **Breaking.**
+
+  BREAKING — approved by moccadroid, 2026-10-14: a `mapToShape` an app writes answers `config`, the Prism config its `ir` was compiled from, beside `ir` and `transformed`. `createShapeMapper` does.
+  - **A query vex writes keeps its mapping's Prism config** (`mapping`, on the entry), beside the compiled form. A compiled form can neither be read back as a config nor upgraded when Prism changes.
+  - **The Postgres cache's table gets a `mapping` column**, in a new migration, `nisc.vex.cache/2`. A deployment that runs its migrations before it boots runs that one first.
+  - **`CacheBackend.get(key, scope?)`**: the two lookups that replay an entry hand the cache the scope of whoever asks, so a cache can answer an entry to some callers and not to others. A backend that takes no scope works as before.
+  - **`@niscorp/vex/migrations`** exports `VEX_SEQUENCE`, one stored kind, `nisc.vex/entry` (an entry as written, its `mapping` a `nisc.prism/config`), and `VEX_SCHEMAS`.
+
+### Patch Changes
+
+- Updated dependencies [c7c4f9b]
+- Updated dependencies [4068f98]
+  - @niscorp/nova@0.4.0
+  - @niscorp/vex@0.4.0
+
 ## 0.3.1
 
 ### Patch Changes
