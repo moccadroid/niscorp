@@ -1,7 +1,7 @@
 import type { SignalClient } from '@niscorp/cortex';
 import { EFFORT_LABELS, type ReasoningEffort } from './effort';
 import { streamViaStep } from './streaming';
-import { createGroqClient, getKey as groqKey, GPT_OSS_MODEL, GPT_OSS_SAMPLING, QWEN_MODEL, QWEN_SAMPLING, GROQ_ENV_KEY } from './groq';
+import { createGroqClient, getKey as groqKey, GPT_OSS_MODEL, QWEN_MODEL, QWEN_SAMPLING, GROQ_ENV_KEY } from './groq';
 import {
   createOpenRouterClient,
   createLunaClient,
@@ -47,7 +47,7 @@ export const MODELS: Record<ModelId, ModelEntry> = {
     envKey: GROQ_ENV_KEY,
     efforts: ['low', 'medium', 'high'],
     defaultEffort: 'medium',
-    create: createGroqClient(GPT_OSS_MODEL, GPT_OSS_SAMPLING),
+    create: createGroqClient(GPT_OSS_MODEL),
     getKey: groqKey,
   },
   'glm-5.2': {

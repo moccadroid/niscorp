@@ -13,7 +13,8 @@ import { TABLES } from '@relay/db/schema';
 import { llmFor, type AgentRole } from '@relay/server/llm';
 import type { RayContext } from '@relay/server/functions/ray';
 import { devRuntime, type DevRuntime } from '../server/runtime';
-import { DSL_SPEC, queryWriter, shapeWriter } from '@relay/server/functions/ray/writers';
+import { createQueryDsl, createShapeMapper } from '@niscorp/vex/agent';
+import { DSL_SCHEMA } from '@relay/server/functions/ray/writers';
 import { engineTurns, turnsOf } from './turns';
 
 export type RayEngine = { engine: QueryEngine; db: NiscRuntime['db'] };
@@ -39,8 +40,8 @@ const boot = async (runtime: NiscRuntime, policy: ScopePolicy): Promise<RayEngin
     adapter,
     scope: policy,
     cache,
-    generateDsl: (request, schema, caller) => queryWriter(buildLlm('query'), DSL_SPEC)(request, schema, caller),
-    mapToShape: (rows, shape, intent) => shapeWriter(buildLlm('shape'))(rows, shape, intent),
+    generateDsl: (request, schema, caller) => createQueryDsl({ llm: buildLlm('query'), queryJsonSchema: DSL_SCHEMA })(request, schema, caller),
+    mapToShape: (rows, shape, intent) => createShapeMapper(buildLlm('shape'))(rows, shape, intent),
   });
   await engine.introspect();
   return { engine, db: runtime.db };
