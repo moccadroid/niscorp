@@ -4,7 +4,7 @@ import { collectInteractive } from '@niscorp/nova/agent';
 import { classifyAudit } from '@niscorp/nova/reflect';
 import { mount } from './mount';
 import { coverage, runProbes } from './probes';
-import { allSteps, contextKeysOf, describeValue, fingerprintsOf, httpEndpoints, isEmpty, isRecord, renderErrorsIn, RESERVED_CONTEXT } from './read';
+import { allSteps, contextKeysOf, describeValue, fingerprintsOf, httpEndpoints, isEmpty, isRecord, renderErrorsIn, RESERVED_CONTEXT, stepsIn } from './read';
 import type { CheckResult, Finding, Probe, Proof, ScreenSetup } from './types';
 
 export type CheckOptions = {
@@ -132,6 +132,12 @@ const loadReport = (
     const proved = fingerprintsOf(endpoint.request).map((fingerprint) => proofs.get(fingerprint)).find((proof) => proof !== undefined && proof.count > 0);
     if (proved === undefined) continue;
     const takes = Object.entries(proved.context).filter(([, meta]) => meta.kind === 'context').map(([key]) => key);
+    if (!stepsIn(definition.lifecycle?.mount).some((step) => step['call'] === endpoint.name)) {
+      // An endpoint a trigger calls loads when the screen is used, and its probes say what it loads.
+      if (allSteps(definition).some((step) => step['call'] === endpoint.name)) continue;
+      findings.push({ code: 'load-empty', message: `endpoint "${endpoint.name}" is called by no step, so "${endpoint.target}" stays empty: call it from lifecycle.mount, or from the trigger that should load it` });
+      continue;
+    }
     const replayed = new Set(fingerprintsOf(endpoint.request));
     const body = [...sent].reverse().find((one) => isRecord(one) && typeof one['fingerprint'] === 'string' && replayed.has(one['fingerprint']));
     const context = isRecord(body) ? JSON.stringify(body['context'] ?? {}) : undefined;
@@ -173,15 +179,16 @@ const unbound = (definition: ActionDefinition, data: Record<string, unknown>): F
   });
 };
 
-// A list that draws nothing while loaded rows appear in no list: it is bound to the wrong place.
+// A list that draws nothing while loaded rows appear nowhere on the screen: it is bound to the wrong place.
 const unshownRows = (components: readonly RenderComponentNode[], definition: ActionDefinition, data: Record<string, unknown>, setup: ScreenSetup): Finding[] => {
   const lists = components.flatMap((node) => {
     const rowsProp = setup.kit.lists[node.name]?.rows;
     return rowsProp === undefined ? [] : [{ name: node.name, rowsProp, rows: JSON.stringify(node.props[rowsProp] ?? []) }];
   });
+  const drawn = new Set(components.flatMap((node) => Object.values(node.props).map((value) => JSON.stringify(value))));
   const unshown = httpEndpoints(definition).flatMap((endpoint) => {
     const value = endpoint.target === undefined ? undefined : getPath(data, endpoint.target);
-    return Array.isArray(value) && value.length > 0 && !lists.some((list) => list.rows === JSON.stringify(value)) ? [{ target: endpoint.target ?? '', rows: value.length }] : [];
+    return Array.isArray(value) && value.length > 0 && !drawn.has(JSON.stringify(value)) ? [{ target: endpoint.target ?? '', rows: value.length }] : [];
   });
   const first = unshown[0];
   if (first === undefined) return [];
@@ -189,7 +196,7 @@ const unshownRows = (components: readonly RenderComponentNode[], definition: Act
     .filter((list) => list.rows === '[]')
     .map((list) => ({
       code: 'unshown-rows' as const,
-      message: `a ${list.name} shows no rows while ${unshown.map((one) => `"${one.target}" holds ${one.rows}`).join(', ')}, which no list shows: bind its ${list.rowsProp} ("${list.rowsProp}": "$.${first.target}")`,
+      message: `a ${list.name} shows no rows while ${unshown.map((one) => `"${one.target}" holds ${one.rows}`).join(', ')}, which nothing on the screen shows: bind its ${list.rowsProp} ("${list.rowsProp}": "$.${first.target}")`,
     }));
 };
 
@@ -246,6 +253,9 @@ const emptyColumns = (components: readonly RenderComponentNode[], setup: ScreenS
   });
 
 export const checkScreen = async (candidate: unknown, setup: ScreenSetup, options: CheckOptions = {}): Promise<CheckResult> => {
+  if (isRecord(candidate) && 'probes' in candidate) {
+    return refused([{ code: 'schema', message: 'the probes sit inside the action: they go beside it, { "action": { … }, "probes": [ … ] }' }]);
+  }
   const parsed = ActionDefinitionSchema.safeParse(candidate);
   if (!parsed.success) {
     const steps = unknownSteps(candidate);

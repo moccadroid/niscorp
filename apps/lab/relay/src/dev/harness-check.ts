@@ -202,6 +202,41 @@ const main = async (): Promise<void> => {
   const formatted = await checkScreen(screen(), setup, { probes: [...PROBES, { holds: [{ in: 'rows', field: 'close_date_display', from: '2026-01-01' }] }] });
   checks.push([`a claim that orders a formatted value says so, not that the rows are wrong (${said(formatted)})`, !formatted.ok && formatted.findings.some((finding) => finding.message.includes('a formatted value that cannot be ordered'))]);
 
+  const proofs = new Map([['deals/list', { count: 120, context: { q: { kind: 'context' as const, type: 'string' as const } } }]]);
+  const typed: Probe[] = [{ do: [{ set: 'search', to: 'a' }], changes: 'rows' }, { do: [{ set: 'search', to: 'a' }, { click: 'dealRow' }], opens: 'crm.deal.view' }];
+  const waits = await checkScreen(screen((definition) => ({ ...definition, lifecycle: {} })), setup, { probes: typed, proofs });
+  checks.push([`a list that loads only when a control is used is not blamed for being empty as the screen opens (${said(waits)})`, waits.ok]);
+
+  const uncalled = await checkScreen(
+    screen((definition) => ({ ...definition, layout: { component: 'Stack', children: [(definition.layout as { children: unknown[] }).children[1] as never] }, lifecycle: {}, triggers: [definition.triggers?.[1] as never] })),
+    setup,
+    { probes: [PROBES[1] as Probe], proofs },
+  );
+  checks.push([`an endpoint no step calls is reported (${said(uncalled)})`, !uncalled.ok && uncalled.findings.some((finding) => finding.message.includes('is called by no step'))]);
+
+  const picked = await checkScreen(
+    screen((definition) => ({
+      ...definition,
+      data: { rows: [], search: '', picked: '', detail: [] },
+      layout: {
+        component: 'Stack',
+        children: [
+          { component: 'Select', ref: 'pick', model: '$.picked', props: { options: '$.rows', valueKey: 'deal_id', labelKey: 'title' } },
+          { component: 'Table', props: { rows: '$.detail', rowKey: 'deal_id', empty: 'None.', columns: [{ label: 'Title', cell: { kind: 'primary', key: 'title' } }] } },
+        ],
+      },
+      triggers: [{ event: 'ui:model', ref: 'pick', do: [{ call: 'loadDetail' }] }],
+      lifecycle: { mount: [{ call: 'load' }] },
+      endpoints: { ...definition.endpoints, loadDetail: { url: '/api/vex', method: 'POST', request: { fingerprint: 'deals/list', context: { q: { $ref: '$.picked' } } }, target: 'detail' } },
+    })),
+    setup,
+    { probes: [], proofs },
+  );
+  checks.push([`rows a Select shows are shown, and its list waits for a pick (${said(picked)})`, !codes(picked).includes('unshown-rows') && !codes(picked).includes('load-empty')]);
+
+  const nested = await checkScreen({ ...screen(), probes: PROBES }, setup);
+  checks.push([`probes inside the action are named as such (${said(nested)})`, !nested.ok && nested.findings.some((finding) => finding.message.includes('the probes sit inside the action'))]);
+
   const invalid = await checkScreen({ id: 123, endpoints: 'nope' }, setup);
   checks.push([`a definition that is not one is refused (${said(invalid)})`, !invalid.ok && codes(invalid).includes('schema')]);
 
