@@ -14,6 +14,7 @@ import { TABLES } from '@relay/db/schema';
 import { llmFor, type AgentRole } from '@relay/server/llm';
 import type { RayContext } from '@relay/server/functions/ray';
 import { devRuntime, type DevRuntime } from '../server/runtime';
+import { engineTurns, turnsOf } from './turns';
 
 export type RayEngine = { engine: QueryEngine; db: NiscRuntime['db'] };
 
@@ -24,7 +25,7 @@ export const systemPolicy = policyOf(['system']);
 const buildLlm = (role: AgentRole): SignalClient => {
   const resolved = llmFor(role);
   if ('error' in resolved) throw new Error(resolved.error);
-  return resolved.llm;
+  return turnsOf(resolved.llm, (turn) => engineTurns.sink({ ...turn, role }));
 };
 
 // The dev scripts' own engine over the app's entries. The server keeps the
