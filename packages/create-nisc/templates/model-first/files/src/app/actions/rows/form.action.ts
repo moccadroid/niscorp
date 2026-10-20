@@ -1,7 +1,8 @@
 import type { ActionDefinition } from '@niscorp/nova';
 import { z } from 'zod';
 
-// The model may fill it in; only the person saves it.
+// The model may fill it in; only the person saves it. Saved, it says so on the message `saved`, and the server takes
+// it off an answer that opened it.
 export const formAction: ActionDefinition = {
   id: 'rows.form',
   title: 'Form',
@@ -38,7 +39,11 @@ export const formAction: ActionDefinition = {
         { set: 'saving', value: true },
         { set: 'saved', value: false },
         { set: 'error', value: '' },
-        { call: 'save', onSuccess: [{ set: 'saving', value: false }, { set: 'saved', value: true }], onError: [{ set: 'saving', value: false }, { set: 'error', value: '{{@error.message}}' }] },
+        {
+          call: 'save',
+          onSuccess: [{ set: 'saving', value: false }, { set: 'saved', value: true }, { reset: 'fields' }, { emit: { channel: 'saved', payload: '$.write' } }],
+          onError: [{ set: 'saving', value: false }, { set: 'error', value: '{{@error.message}}' }],
+        },
       ],
     },
   ],

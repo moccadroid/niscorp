@@ -4,6 +4,8 @@ import { actions } from '../app/action-catalog';
 import { ANSWERS } from '../app/answers';
 import { assignments } from '../app/charter/assignments';
 import { charter } from '../app/charter/charter';
+import { SCREENS } from '../app/screens';
+import { AREAS } from '../app/shell/areas';
 import { shell } from '../app/shell/shell';
 import { buildRegistry } from '../ui/registry';
 
@@ -76,6 +78,16 @@ for (const answer of ANSWERS) {
   const paths = [...Object.keys(answer.choose ?? {}), ...Object.keys(answer.set ?? {})];
   const lost = paths.filter((path) => path.split('.').reduce<unknown>((at, key) => (isRecord(at) || Array.isArray(at) ? (at as Record<string, unknown>)[key] : undefined), answer.input) === undefined);
   check(`prepared answer "${answer.id}" chooses and sets only inputs it has`, lost.length === 0, lost.join(', '));
+}
+
+pure('the screens', SCREENS);
+check('there is a first screen to open on', SCREENS.length > 0);
+for (const screen of SCREENS) {
+  const missing = screen.answers.filter((id) => !ANSWERS.some((answer) => answer.id === id));
+  check(`screen "${screen.id}" shows only prepared answers there are`, missing.length === 0, missing.join(', '));
+  const choosing = screen.answers.filter((id) => ANSWERS.find((answer) => answer.id === id)?.choose !== undefined);
+  check(`screen "${screen.id}" shows only answers that need nothing picked`, choosing.length === 0, choosing.join(', '));
+  check(`screen "${screen.id}" fits the ${AREAS.length} areas`, screen.answers.length <= AREAS.length, `${screen.answers.length} answers`);
 }
 
 console.log(failures === 0 ? '[pass] artifacts: all checks passed' : `[fail] artifacts: ${failures} check(s) failed`);

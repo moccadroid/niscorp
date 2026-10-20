@@ -10,6 +10,7 @@ What is particular to this app:
 
 ```
 src/app/answers.ts  the prepared answers a screen is composed from — an action, its input, and what it shows in words
+src/app/screens.ts  the screens in the bar’s menu: prepared answers shown together; the first is the one the app opens on
 src/server/compose/ the message loop: Jev picks prepared answers, gpt-oss-120b fills them in, the plan is placed
 src/server/models/  the models, from .env
 src/db/         the tables, and the hello-world rows
@@ -26,12 +27,14 @@ strata.lock.json  the grammar versions the source is written at (rule 20) — mo
 
 ## How the model leads
 
-There is no navigation and no chat history. A person types a message into the line at the bottom, and the answer is a screen: up to four small actions placed on the areas `a`–`d`, most important first. The bar keeps what was asked, and goes back and forward through the answers.
+There is no chat history. A person types a message into the line at the bottom, and the answer is a screen: up to four small actions placed on the areas `a`–`d`, most important first. The bar keeps what was asked, goes back and forward through the answers, and holds the menu of **screens** (`src/app/screens.ts`): prepared answers shown together, opened without asking. The first screen is what the app opens on, and falls back on when nothing answers a message.
 
 - **The message loop is `src/server/compose/`**, the function `ask`:
   1. **Jev picks.** One pass of the decision model over the message alone: for each prepared answer, does it answer the message — and for each input it chooses from rows (`choose`), which value. A yes is a probability of 0.5 or more. This lands in about 300 ms, and the screen shows it at once.
   2. **The model fills in.** gpt-oss-120b sees the prepared answers, what Jev picked and what was on screen, and replies with a closed structure: `{ answers: [{ id, set }] }`. It is rejected whole if it names an answer that is not there, sets an input it may not, or chooses a value that is not among the rows. When it lands and differs, it replaces Jev's plan — in the history, and on screen while that answer is still the one shown. When Jev is sure of nothing, the model is asked before anything is shown, and a notice says nothing answers only when it finds nothing either.
-  3. **The plan is placed by the bar,** with nova's `reconcile`: each area holds exactly what the plan lists for it.
+  3. **The plan is placed by the bar,** with nova's `reconcile`: each area holds exactly what the plan lists for it. What is already on screen keeps its order, and what is new follows it, so two answers that stay never trade places — the model's plan is placed against Jev's.
+- **The model may say a few words** (`say`: a title and at most two short sentences, bounded by the reply's schema), shown by `answer.text` — only for a question about the app itself, or one no prepared answer shows. Prepared answers come first, always. When nothing answers, a line saying so is shown above the first screen.
+- **A form an answer opened goes once it is saved** (`answers.saved`); on a screen it stays, emptied.
 - **A prepared answer is data, in `src/app/answers.ts`:** an action, the input it is opened with, and what it shows in words. Those words are what a message is matched to — write them as what a person would want to see, not as the action's name. Every thing a person will ask about gets a prepared answer.
 - **The actions are small, with one purpose each:** a table, a number, bars, a form. Each says what it shows (`description`) and declares what an answer may fill in (`input`). A new kind of view is a new action, not a bigger one.
 - **The model never presses anything.** It can open a form filled in; only the person saves it. A write goes through a write the app ships, named by the form's prepared answer (`answers.write`).

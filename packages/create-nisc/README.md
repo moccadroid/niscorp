@@ -62,20 +62,27 @@ The structure the rulebook describes, and a first screen that works:
 
 A model-first app has, instead of the welcome screen:
 
-- a frame of three parts — the bar (what was asked, back and forward through
-  the answers), four areas an answer is placed on, and the line to ask in;
+- a frame of three parts — the bar (the screens, what was asked, back and
+  forward through the answers), four areas an answer is placed on, and the line
+  to ask in;
+- **screens** (`src/app/screens.ts`): prepared answers shown together, opened
+  from the bar's menu without asking; the first is the dashboard the app opens
+  on, and falls back on when nothing answers;
 - **the message loop** (`src/server/compose/`): Jev picks the prepared answers
   that fit a message in about 300 ms, and the screen shows them at once;
   gpt-oss-120b then fills in what the message says (a form's fields, the value
-  to filter by) and its plan replaces the first. The model opens a form filled
-  in; only the person saves it;
+  to filter by) and its plan replaces the first, placed so that nothing already
+  on screen moves. It may also say a few words — a title and two short
+  sentences — where no prepared answer shows what was asked. The model opens a
+  form filled in; only the person saves it, and a saved form goes;
 - **prepared answers** (`src/app/answers.ts`): an action, the input it opens
   with, and what it shows in words — what a message is matched to;
-- eight small actions — the line and the bar, and a table, a number, bars, a
-  form, a notice and the welcome for the areas — over a table of five
-  hello-worlds, so the first question has a real answer;
+- seven small actions — the line and the bar, and a table, a number, bars, a
+  form and a few words for the areas — over a table of five hello-worlds, so
+  the first question has a real answer;
 - a check that runs the loop offline with a scripted decision model and chat
-  model: typed, picked, filled in, placed, read, written, back and forward.
+  model: typed, picked, filled in, placed without moving, read, written and
+  gone, a screen opened, a few words, back and forward.
 
 And two documents:
 

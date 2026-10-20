@@ -3,6 +3,8 @@ import type { FunctionDefinition, FunctionSession } from '@niscorp/moss';
 import type { FetchFn } from '@niscorp/nova';
 import { ANSWERS } from '../../app/answers';
 import type { PreparedAnswer } from '../../app/answers';
+import { SCREENS } from '../../app/screens';
+import type { Screen } from '../../app/screens';
 import { fill } from './fill';
 import type { Fill } from './fill';
 import { createHistory } from './history';
@@ -10,8 +12,8 @@ import { optionsOf } from './options';
 import type { Options, Rows } from './options';
 import { pick } from './pick';
 import type { Decide } from './pick';
-import { notice, placed, samePlan } from './plan';
-import type { Chosen, Plan, Unnumbered } from './plan';
+import { placedOf, planOf, samePlan, textOf } from './plan';
+import type { Chosen, Placed, Plan, Said, Unnumbered } from './plan';
 
 export type { Decide, Picked, Question } from './pick';
 export type { Fill } from './fill';
@@ -66,16 +68,31 @@ const failed =
   };
 
 const AskSchema = z.looseObject({ text: z.string() });
+const OpenSchema = z.looseObject({ opening: z.string() });
+const SavedSchema = z.looseObject({ saved: z.string() });
 const WriteSchema = z.looseObject({ write: z.string(), fields: z.array(z.looseObject({ key: z.string(), value: z.unknown() })) });
 
 export const composer =
-  (models: Models, answers: readonly PreparedAnswer[] = ANSWERS) =>
+  (models: Models, answers: readonly PreparedAnswer[] = ANSWERS, screens: readonly Screen[] = SCREENS) =>
   (session: FunctionSession): FunctionDefinition[] => {
     const history = createHistory();
     const rows = vexRows(session.wire);
     const examples = answers.map((answer) => answer.example);
     const writes = new Set(answers.flatMap((answer) => (typeof answer.input['write'] === 'string' ? [answer.input['write']] : [])));
     let asked = 0;
+
+    const entriesOf = (screen: Screen): Placed[] =>
+      screen.answers.flatMap((id) => {
+        const answer = answers.find((candidate) => candidate.id === id);
+        return answer === undefined ? [] : [placedOf({ answer, values: {} })];
+      });
+    const home = screens[0];
+    const homeEntries = home === undefined ? [] : entriesOf(home);
+    // Before anything was asked, the screen is the first screen, as the shell opened it.
+    const shown = (): Unnumbered => (history.showing() >= 0 ? history.current() : home === undefined ? { question: '', answers: [], canvases: {} } : planOf('', homeEntries, {}, home.id));
+    const entriesFrom = (chosen: readonly Chosen[], said: Said | undefined): Placed[] => [...(said !== undefined ? [textOf(said, examples)] : []), ...chosen.map(placedOf)];
+    // Words above the first screen: what is said when there is nothing else to show.
+    const withHome = (said: Said): Placed[] => [textOf(said, examples), ...homeEntries];
 
     // Every plan reaches the screen as the message `answer`, which the bar places: one sender, so the picker's plan and
     // the model's that follows it arrive in the order they were made.
@@ -85,11 +102,14 @@ export const composer =
     };
 
     // The chat model's plan replaces the picker's in the history, and on screen only while it is still the one shown.
-    const refine = async (turn: number, index: number, message: string, offered: readonly PreparedAnswer[], options: Options, quick: readonly Chosen[], screen: readonly string[], fillWith: Fill): Promise<void> => {
+    // It is placed against the picker's, so what both show stays where it is.
+    const refine = async (turn: number, first: Plan, message: string, offered: readonly PreparedAnswer[], options: Options, quick: readonly Chosen[], screen: readonly string[], fillWith: Fill): Promise<void> => {
       const better = await fill(message, offered, options, quick, screen, fillWith);
-      if (better === undefined || better.length === 0) return;
-      const plan = placed(message, better);
-      if (samePlan(plan, placed(message, quick))) return;
+      const entries = better === undefined ? [] : entriesFrom(better.chosen, better.said);
+      if (entries.length === 0) return;
+      const plan = planOf(message, entries, first.canvases);
+      if (samePlan(plan, first)) return;
+      const index = first.position - 1;
       const now = history.replace(index, plan);
       if (turn === asked && history.showing() === index) show(now);
     };
@@ -97,24 +117,44 @@ export const composer =
     const ask = async (data: unknown): Promise<Plan> => {
       const message = AskSchema.parse(data).text.trim();
       if (message === '') return history.current();
-      if (models.decide === undefined) return show(history.add(notice(message, 'Nothing to answer with', `Set ${models.missing.join(' and ')} in .env, and start the app again.`, [])));
+      const before = shown();
+      if (models.decide === undefined) {
+        return show(history.add(planOf(message, withHome({ title: 'Nothing to answer with', text: `Set ${models.missing.join(' and ')} in .env, and start the app again.` }), before.canvases)));
+      }
       const turn = (asked += 1);
-      const screen = history.current().answers;
       const offered = await narrowed(message, answers, models.embed);
       const options = await optionsOf(offered, rows);
       const quick = await pick(message, offered, options, models.decide);
-      const nothing = (): Unnumbered => notice(message, 'Nothing here answers that yet', 'These are things this app can show:', examples);
-      // A picker sure of nothing is no answer yet: the chat model is asked before anything is shown, and a notice is
-      // shown only when it finds nothing either.
+      // A picker sure of nothing is no answer yet: the chat model is asked before anything is shown, and the first
+      // screen comes back, with a line saying so, only when it finds nothing either.
       if (quick.length === 0) {
-        const better = models.fill === undefined ? undefined : await fill(message, offered, options, quick, screen, models.fill).catch(failed(message));
-        return show(history.add(better !== undefined && better.length > 0 ? placed(message, better) : nothing()));
+        const better = models.fill === undefined ? undefined : await fill(message, offered, options, quick, before.answers, models.fill).catch(failed(message));
+        const entries = better === undefined ? [] : entriesFrom(better.chosen, better.said);
+        return show(history.add(planOf(message, entries.length > 0 ? entries : withHome({ title: 'Nothing here answers that yet', text: 'These are things this app can show.' }), before.canvases)));
       }
-      const first = show(history.add(placed(message, quick)));
-      if (models.fill !== undefined) {
-        void refine(turn, first.position - 1, message, offered, options, quick, screen, models.fill).catch(failed(message));
-      }
+      const first = show(history.add(planOf(message, quick.map(placedOf), before.canvases)));
+      if (models.fill !== undefined) void refine(turn, first, message, offered, options, quick, before.answers, models.fill).catch(failed(message));
       return first;
+    };
+
+    // A screen is shown as it is written, not arranged around what was on screen before.
+    const open = async (data: unknown): Promise<Plan> => {
+      const screen = screens.find((candidate) => candidate.id === OpenSchema.parse(data).opening);
+      if (screen === undefined) return history.current();
+      return show(history.add(planOf('', entriesOf(screen), {}, screen.id)));
+    };
+
+    // A form an answer opened has done its work once saved, and goes; on a screen it stays, emptied, for the next one.
+    // An answer left with nothing is the first screen again.
+    const saved = async (data: unknown): Promise<Plan> => {
+      const fingerprint = SavedSchema.parse(data).saved;
+      const now = history.current();
+      if (history.showing() < 0 || now.screen !== undefined) return now;
+      const kept = Object.values(now.canvases)
+        .flatMap((entries) => entries ?? [])
+        .filter((entry) => entry.input['write'] !== fingerprint);
+      const next = kept.length > 0 ? planOf(now.question, kept, now.canvases) : planOf('', homeEntries, {}, home?.id);
+      return show(history.replace(history.showing(), next));
     };
 
     const write = async (data: unknown): Promise<{ saved: true }> => {
@@ -126,8 +166,10 @@ export const composer =
 
     return [
       { id: 'ask', description: 'Answers a message with a screen, sent to the bar as the message `answer`. Send { text }; answers the plan: { question, position, total, answers, canvases }.', execute: ask },
+      { id: 'screens.open', description: 'Shows a screen from the menu: its prepared answers together. Send { opening: <screen id> }; answers its plan.', execute: open },
       { id: 'answers.back', description: 'Shows the answer before the one shown, and answers its plan.', execute: async () => show(history.back()) },
       { id: 'answers.forward', description: 'Shows the answer after the one shown, and answers its plan.', execute: async () => show(history.forward()) },
+      { id: 'answers.saved', description: 'Takes a form that was saved off the answer shown. Send { saved: <the write it saved through> }; answers the plan.', execute: saved },
       { id: 'answers.write', description: 'Saves what a form holds through the write its prepared answer names. Send { write, fields: [{ key, value }] }.', execute: write },
     ];
   };
