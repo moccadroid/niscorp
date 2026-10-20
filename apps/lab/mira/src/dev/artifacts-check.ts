@@ -2,6 +2,7 @@ import { ActionDefinitionSchema, LayoutNodeSchema } from '@niscorp/nova';
 import type { LayoutNode } from '@niscorp/nova';
 import { actions } from '../app/action-catalog';
 import { ANSWERS } from '../app/answers';
+import { ARRANGEMENTS } from '../app/arrangements';
 import { assignments } from '../app/charter/assignments';
 import { charter } from '../app/charter/charter';
 import { SCREENS } from '../app/screens';
@@ -60,7 +61,11 @@ for (const [id, definition] of Object.entries(actions)) {
 }
 
 const registered = new Set(buildRegistry().list());
-const layouts: [string, LayoutNode | undefined][] = [['the frame', shell.layout], ...Object.values(actions).map((definition): [string, LayoutNode | undefined] => [`action "${definition.id}"`, definition.layout])];
+const layouts: [string, LayoutNode | undefined][] = [
+  ['the frame', shell.layout],
+  ...Object.values(actions).map((definition): [string, LayoutNode | undefined] => [`action "${definition.id}"`, definition.layout]),
+  ...ARRANGEMENTS.map((arrangement): [string, LayoutNode | undefined] => [`arrangement "${arrangement.id}"`, arrangement.layout]),
+];
 for (const [name, layout] of layouts) {
   const missing = [...new Set(componentsIn(layout))].filter((component) => !registered.has(component));
   check(`${name} names only components the kit has`, missing.length === 0, missing.join(', '));
@@ -80,6 +85,21 @@ for (const answer of ANSWERS) {
   check(`prepared answer "${answer.id}" chooses and sets only inputs it has`, lost.length === 0, lost.join(', '));
 }
 
+pure('the arrangements', ARRANGEMENTS);
+const canvasesIn = (node: unknown): string[] => {
+  if (Array.isArray(node)) return node.flatMap(canvasesIn);
+  if (!isRecord(node)) return [];
+  const own = node['component'] === 'CanvasSlot' && isRecord(node['props']) && typeof node['props']['canvasId'] === 'string' ? [node['props']['canvasId']] : [];
+  return [...own, ...['children', 'then', 'else', 'do'].flatMap((key) => canvasesIn(node[key]))];
+};
+for (const arrangement of ARRANGEMENTS) {
+  parses(`arrangement "${arrangement.id}"`, () => LayoutNodeSchema.parse(arrangement.layout));
+  const held = canvasesIn(arrangement.layout);
+  check(`arrangement "${arrangement.id}" holds only areas the shell has, each once`, held.every((name) => (AREAS as readonly string[]).includes(name)) && new Set(held).size === held.length, held.join(', '));
+  check(`arrangement "${arrangement.id}" holds the ${arrangement.slots} it says, the first areas in order`, held.join(',') === AREAS.slice(0, arrangement.slots).join(','), held.join(', '));
+}
+check('the frame has the region an arrangement is swapped into, and the first one in it', JSON.stringify(shell.layout).includes('"ref":"answers"') && shell.layoutStore?.['answers'] !== undefined);
+
 pure('the screens', SCREENS);
 check('there is a first screen to open on', SCREENS.length > 0);
 for (const screen of SCREENS) {
@@ -87,7 +107,8 @@ for (const screen of SCREENS) {
   check(`screen "${screen.id}" shows only prepared answers there are`, missing.length === 0, missing.join(', '));
   const choosing = screen.answers.filter((id) => ANSWERS.find((answer) => answer.id === id)?.choose !== undefined);
   check(`screen "${screen.id}" shows only answers that need nothing picked`, choosing.length === 0, choosing.join(', '));
-  check(`screen "${screen.id}" fits the ${AREAS.length} areas`, screen.answers.length <= AREAS.length, `${screen.answers.length} answers`);
+  const arrangement = ARRANGEMENTS.find((candidate) => candidate.id === screen.arrangement);
+  check(`screen "${screen.id}" is laid out in an arrangement there is, with room for its answers`, arrangement !== undefined && arrangement.slots >= screen.answers.length, `${screen.arrangement}: ${screen.answers.length} answers`);
 }
 
 console.log(failures === 0 ? '[pass] artifacts: all checks passed' : `[fail] artifacts: ${failures} check(s) failed`);

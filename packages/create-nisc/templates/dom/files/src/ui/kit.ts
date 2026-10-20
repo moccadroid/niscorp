@@ -41,10 +41,20 @@ export const Button: DomComponent = ({ props, children }) => {
 export const Frame: DomComponent = ({ children }) => element('div', 'k-frame', children);
 export const Bar: DomComponent = ({ children }) => element('header', 'k-bar', children);
 export const Menu: DomComponent = ({ children }) => element('nav', 'k-menu', children);
-export const Answers: DomComponent = ({ children }) => element('main', 'k-answers', children);
+const AnswersProps = z.object({ columns: z.number().int().min(1).max(3).optional() });
+export const Answers: DomComponent = ({ props, children }) => {
+  const answers = element('main', 'k-answers', children);
+  answers.style.setProperty('--k-columns', String(parsed(AnswersProps, props, {}).columns ?? 2));
+  return answers;
+};
 
-const AreaProps = z.object({ name: z.string() });
-export const Area: DomComponent = ({ props, children }) => element('section', `k-area k-area-${parsed(AreaProps, props, { name: '' }).name}`, children);
+const AreaProps = z.object({ name: z.string(), span: z.number().int().min(1).max(3).optional() });
+export const Area: DomComponent = ({ props, children }) => {
+  const { name, span } = parsed(AreaProps, props, { name: '' });
+  const area = element('section', `k-area k-area-${name}`, children);
+  area.style.setProperty('--k-span', String(span ?? 1));
+  return area;
+};
 
 const CardProps = z.object({ title: z.string().optional() });
 export const Card: DomComponent = ({ props, children }) => {

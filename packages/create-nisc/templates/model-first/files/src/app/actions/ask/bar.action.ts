@@ -15,7 +15,7 @@ export const barAction: ActionDefinition = {
   data: {
     name: 'nisc-template-app',
     screens: SCREENS.map(({ id, label }) => ({ id, label })),
-    current: { question: '', label: first?.label ?? '', screen: first?.id ?? '', position: 1, total: 1, stack: [{ position: 1, label: first?.label ?? '' }], answers: [], canvases: {} },
+    current: { question: '', label: first?.label ?? '', screen: first?.id ?? '', arrangement: first?.arrangement ?? '', position: 1, total: 1, stack: [{ position: 1, label: first?.label ?? '' }], answers: [], canvases: {} },
     listing: false,
     opening: '',
     going: 0,

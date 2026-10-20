@@ -64,7 +64,7 @@ A model-first app has, instead of the welcome screen:
 
 - a frame of three parts — the bar (the screens, what was asked, and the stack
   of answers: back, forward, or any of them from the list behind its counter),
-  four areas an answer is placed on, and the line to ask in;
+  six areas an answer is placed on, and the line to ask in;
 - **screens** (`src/app/screens.ts`): prepared answers shown together, opened
   from the bar's menu without asking; the first is the dashboard the app opens
   on, and falls back on when nothing answers;

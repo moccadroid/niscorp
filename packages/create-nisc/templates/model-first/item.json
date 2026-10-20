@@ -63,6 +63,7 @@
     "where": [
       "src/app/answers.ts  the prepared answers a screen is composed from — an action, its input, and what it shows in words",
       "src/app/screens.ts  the screens in the bar’s menu: prepared answers shown together; the first is the one the app opens on",
+      "src/app/arrangements.ts  how an answer is laid out: layouts for the frame’s `answers` region, and what each suits",
       "src/server/compose/ the message loop: Jev picks prepared answers, gpt-oss-120b fills them in, the plan is placed",
       "src/server/models/  the models, from .env",
       "src/db/         the tables, and the hello-world rows"
@@ -71,12 +72,13 @@
       "| D3 Reads | answered | **Vex entries.** An answer's action reads one by its fingerprint (`/api/vex`), under the person's policy, and again whenever what it read changes (`refresh: 'reactive'`). |",
       "| D4 Writes | answered | **Vex mutation entries**, sent from a form an answer opened (`answers.write`) — by the person, never by the model. |",
       "| D6 Who answers a message | answered | Jev picks the prepared answers that fit (`TYPESAFE_API_KEY`); gpt-oss-120b on Groq fills them in (`GROQ_API_KEY`). Without Jev the chat model picks too, slower and with no probabilities. |",
-      "| D7 What a screen is made of | answered · **open: the answers** | Prepared answers (`src/app/answers.ts`) placed on four areas, and screens of them (`src/app/screens.ts`) in the bar’s menu. Which answers and screens there are follows the data. |",
+      "| D7 What a screen is made of | answered · **open: the answers** | Prepared answers (`src/app/answers.ts`) placed on six areas, and screens of them (`src/app/screens.ts`) in the bar’s menu. Which answers and screens there are follows the data. |",
       "| D8 History | derived · **open** | The answers one shell was given, kept while it lives; a reload starts again. Open: whether a person's answers outlive the shell, and memory beyond that. |",
-      "| D9 Embeddings | answered · **open: memory** | `EMBEDDINGS` in `.env`; they narrow the prepared answers to the 255 nearest a message when there are more. |"
+      "| D9 Embeddings | answered · **open: memory** | `EMBEDDINGS` in `.env`; they narrow the prepared answers to the 255 nearest a message when there are more. |",
+      "| D10 Layout swaps | derived · **open: sign-in** | An answer’s arrangement is swapped into the frame’s `answers` region through moss’s unverified shell (`@niscorp/moss/unverified`, in `src/server/compose/index.ts`), because moss lets a session change a layout only through a draft, and a draft needs a signed-in person. **When the app has sign-in, the swap moves to `session.draft`, where moss checks it.** |"
     ],
     "answered": [
-      "**Who leads:** a model. A message is answered with a screen: Jev picks the prepared answers that fit (`src/app/answers.ts`), gpt-oss-120b fills in what the message says, and the plan is placed on the four areas. The keys are in `.env`."
+      "**Who leads:** a model. A message is answered with a screen: Jev picks the prepared answers that fit (`src/app/answers.ts`), gpt-oss-120b fills in what the message says, and the plan is placed on the six areas. The keys are in `.env`."
     ],
     "open": [
       "The entities, and how they relate — and what a person will ask about them.",

@@ -1,6 +1,6 @@
 import type { Plan, Unnumbered } from './plan';
 
-const NOTHING: Plan = { question: '', label: '', position: 0, total: 0, stack: [], answers: [], canvases: {} };
+const NOTHING: Plan = { question: '', label: '', position: 0, total: 0, stack: [], answers: [], canvases: {}, arrangement: '', layout: { component: 'Answers' } };
 
 export const createHistory = (first: Unnumbered | undefined) => {
   const plans: Unnumbered[] = first === undefined ? [] : [first];

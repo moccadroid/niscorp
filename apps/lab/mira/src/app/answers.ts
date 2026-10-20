@@ -19,7 +19,7 @@ const GREETING_COLUMNS = [
   { key: 'language', label: 'Language' },
 ];
 
-export const ANSWERS: readonly PreparedAnswer[] = [
+const GREETINGS: readonly PreparedAnswer[] = [
   {
     id: 'greetings.table',
     shows: 'a table of every greeting',
@@ -66,3 +66,18 @@ export const ANSWERS: readonly PreparedAnswer[] = [
     set: { 'fields.0.value': 'the greeting itself, as the message writes it', 'fields.1.value': 'the language the greeting is in, named in English' },
   },
 ];
+
+// What the app is, in its own words: the first card of the first screen, and what "what can you do?" is answered with.
+const ABOUT: PreparedAnswer = {
+  id: 'app.about',
+  shows: 'what this app is, and what can be asked of it',
+  example: 'What can you do?',
+  action: 'answer.text',
+  input: {
+    title: 'mira',
+    text: 'Ask for something in the line below. The answer is a screen, put together from this app’s actions.',
+    examples: GREETINGS.map((answer) => answer.example),
+  },
+};
+
+export const ANSWERS: readonly PreparedAnswer[] = [ABOUT, ...GREETINGS];

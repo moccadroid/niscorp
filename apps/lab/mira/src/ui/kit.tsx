@@ -1,4 +1,4 @@
-import { useState, type ChangeEvent, type KeyboardEvent } from 'react';
+import { useState, type ChangeEvent, type CSSProperties, type KeyboardEvent } from 'react';
 import { z } from 'zod';
 import { useNovaDispatch } from '@niscorp/nova/adapters/react';
 import type { NovaComponent } from '@niscorp/nova/adapters/react';
@@ -62,14 +62,25 @@ const MenuProps = z.object({}).describe('A list that opens under the bar: one ch
 export const Menu: NovaComponent = ({ children }) => <nav className="k-menu">{children}</nav>;
 Menu.meta = { description: 'A list that opens under the bar.', propsSchema: MenuProps };
 
-const AnswersProps = z.object({}).describe('Where an answer is drawn: its areas arrange themselves by how many are in use.');
-export const Answers: NovaComponent = ({ children }) => <main className="k-answers">{children}</main>;
-Answers.meta = { description: 'The areas an answer is drawn in.', propsSchema: AnswersProps };
+const AnswersProps = z.object({ columns: z.number().int().min(1).max(3).optional().describe('How many columns its areas are laid out in: 1 to 3.') });
+export const Answers: NovaComponent = ({ children, novaRef: _ref, novaModel: _model, ...props }) => {
+  const { columns } = parsed(AnswersProps, props, {});
+  return (
+    <main className="k-answers" style={{ '--k-columns': columns ?? 2 } as CSSProperties}>
+      {children}
+    </main>
+  );
+};
+Answers.meta = { description: 'The grid an answer is drawn in.', propsSchema: AnswersProps };
 
-const AreaProps = z.object({ name: z.string().describe('Which area: a, b, c or d.') });
+const AreaProps = z.object({ name: z.string().describe('Which canvas it holds.'), span: z.number().int().min(1).max(3).optional().describe('How many columns it takes.') });
 export const Area: NovaComponent = ({ children, novaRef: _ref, novaModel: _model, ...props }) => {
-  const { name } = parsed(AreaProps, props, { name: '' });
-  return <section className={`k-area k-area-${name}`}>{children}</section>;
+  const { name, span } = parsed(AreaProps, props, { name: '' });
+  return (
+    <section className={`k-area k-area-${name}`} style={{ '--k-span': span ?? 1 } as CSSProperties}>
+      {children}
+    </section>
+  );
 };
 Area.meta = { description: 'One area of an answer.', propsSchema: AreaProps };
 

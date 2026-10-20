@@ -1,11 +1,8 @@
 import type { LayoutNode } from '@niscorp/nova';
-import { AREAS } from './areas';
 
+// The bar, the answer, the line to ask in. The answer is a region: each answer swaps in the arrangement it is laid out
+// in (src/app/arrangements.ts).
 export const frameLayout: LayoutNode = {
   component: 'Frame',
-  children: [
-    { component: 'CanvasSlot', props: { canvasId: 'bar' } },
-    { component: 'Answers', children: AREAS.map((area) => ({ component: 'Area', props: { name: area }, children: [{ component: 'CanvasSlot', props: { canvasId: area } }] })) },
-    { component: 'CanvasSlot', props: { canvasId: 'line' } },
-  ],
+  children: [{ component: 'CanvasSlot', props: { canvasId: 'bar' } }, { ref: 'answers' }, { component: 'CanvasSlot', props: { canvasId: 'line' } }],
 };

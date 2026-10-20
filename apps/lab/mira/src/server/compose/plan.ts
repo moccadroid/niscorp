@@ -1,4 +1,6 @@
+import type { LayoutNode } from '@niscorp/nova';
 import type { PreparedAnswer } from '../../app/answers';
+import { ARRANGEMENTS } from '../../app/arrangements';
 import { AREAS } from '../../app/shell/areas';
 import type { AreaId } from '../../app/shell/areas';
 
@@ -17,6 +19,8 @@ export type Plan = {
   stack: { position: number; label: string }[];
   answers: string[];
   canvases: Partial<Record<AreaId, Placed[]>>;
+  arrangement: string;
+  layout: LayoutNode;
 };
 
 export type Unnumbered = Omit<Plan, 'position' | 'total' | 'stack'>;
@@ -25,6 +29,9 @@ export type Unnumbered = Omit<Plan, 'position' | 'total' | 'stack'>;
 export type Chosen = { answer: PreparedAnswer; values: Record<string, unknown> };
 
 export type Said = { title: string; text: string };
+
+// A layout the model wrote, and how many answers it holds.
+export type Written = { layout: LayoutNode; slots: number };
 
 const isRecord = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value);
 
@@ -59,16 +66,33 @@ const arranged = (entries: readonly Placed[], onScreen: Unnumbered['canvases']):
   return Object.fromEntries([...staying, ...left].map((entry, at) => [AREAS[at], [entry]]));
 };
 
+// The arrangement asked for — by name, or written — when it holds every answer; else the smallest one that does.
+const laidOut = (asked: string | Written | undefined, count: number): { arrangement: string; layout: LayoutNode } => {
+  if (typeof asked === 'object' && asked.slots >= count) return { arrangement: 'written', layout: asked.layout };
+  const named = ARRANGEMENTS.find((arrangement) => arrangement.id === asked && arrangement.slots >= count);
+  const fits = named ?? [...ARRANGEMENTS].filter((arrangement) => arrangement.slots >= count).sort((one, other) => one.slots - other.slots)[0] ?? ARRANGEMENTS[ARRANGEMENTS.length - 1];
+  return { arrangement: fits?.id ?? '', layout: fits?.layout ?? { component: 'Answers' } };
+};
+
 // A plan for a message is named by it, and one for a screen by the screen's label.
-export const planOf = (question: string, entries: readonly Placed[], onScreen: Unnumbered['canvases'], screen?: { id: string; label: string }): Unnumbered => {
-  const canvases = arranged(entries, onScreen);
+export const planOf = (
+  question: string,
+  entries: readonly Placed[],
+  onScreen: Unnumbered['canvases'],
+  how: { screen?: { id: string; label: string }; arrangement?: string | Written } = {},
+): Unnumbered => {
+  // A grid the model wrote is laid out for the answers in the order it gave them: that order stands.
+  const ownOrder = typeof how.arrangement === 'object' && how.arrangement.slots >= Math.min(entries.length, AREAS.length);
+  const canvases = arranged(entries, ownOrder ? {} : onScreen);
+  const answers = AREAS.flatMap((area) => canvases[area] ?? []).map((entry) => entry.answer);
   return {
     question,
-    label: screen?.label ?? question,
-    ...(screen !== undefined ? { screen: screen.id } : {}),
-    answers: AREAS.flatMap((area) => canvases[area] ?? []).map((entry) => entry.answer),
+    label: how.screen?.label ?? question,
+    ...(how.screen !== undefined ? { screen: how.screen.id } : {}),
+    answers,
     canvases,
+    ...laidOut(how.arrangement, answers.length),
   };
 };
 
-export const samePlan = (one: Unnumbered, other: Unnumbered): boolean => JSON.stringify(one.canvases) === JSON.stringify(other.canvases);
+export const samePlan = (one: Unnumbered, other: Unnumbered): boolean => JSON.stringify([one.canvases, one.layout]) === JSON.stringify([other.canvases, other.layout]);

@@ -1,8 +1,11 @@
 import { z } from 'zod';
 import type { FunctionDefinition, FunctionSession } from '@niscorp/moss';
+import { unverifiedShell } from '@niscorp/moss/unverified';
 import type { FetchFn } from '@niscorp/nova';
 import { ANSWERS } from '../../app/answers';
 import type { PreparedAnswer } from '../../app/answers';
+import { ARRANGEMENTS } from '../../app/arrangements';
+import type { Arrangement } from '../../app/arrangements';
 import { SCREENS } from '../../app/screens';
 import type { Screen } from '../../app/screens';
 import { fill } from './fill';
@@ -74,7 +77,7 @@ const GoSchema = z.looseObject({ going: z.coerce.number() });
 const WriteSchema = z.looseObject({ write: z.string(), fields: z.array(z.looseObject({ key: z.string(), value: z.unknown() })) });
 
 export const composer =
-  (models: Models, answers: readonly PreparedAnswer[] = ANSWERS, screens: readonly Screen[] = SCREENS) =>
+  (models: Models, answers: readonly PreparedAnswer[] = ANSWERS, screens: readonly Screen[] = SCREENS, arrangements: readonly Arrangement[] = ARRANGEMENTS) =>
   (session: FunctionSession): FunctionDefinition[] => {
     const rows = vexRows(session.wire);
     const examples = answers.map((answer) => answer.example);
@@ -89,25 +92,32 @@ export const composer =
     const home = screens[0];
     const homeEntries = home === undefined ? [] : entriesOf(home);
     // The stack starts at the first screen, as the shell opened it.
-    const history = createHistory(home === undefined ? undefined : planOf('', homeEntries, {}, home));
-    const entriesFrom = (chosen: readonly Chosen[], said: Said | undefined): Placed[] => [...(said !== undefined ? [textOf(said, examples)] : []), ...chosen.map(placedOf)];
-    // Words above the first screen: what is said when there is nothing else to show.
-    const withHome = (said: Said): Placed[] => [textOf(said, examples), ...homeEntries];
+    const history = createHistory(home === undefined ? undefined : planOf('', homeEntries, {}, { screen: home, arrangement: home.arrangement }));
+    // One text a screen: words the model wrote take the place of any a prepared answer would show.
+    const entriesFrom = (chosen: readonly Chosen[], said: Said | undefined): Placed[] =>
+      said === undefined ? chosen.map(placedOf) : [textOf(said, examples), ...chosen.filter((one) => one.answer.action !== 'answer.text').map(placedOf)];
+    // The first screen, with what is said in the place of its own words: when there is nothing else to show.
+    const withHome = (said: Said): Placed[] => [textOf(said, examples), ...homeEntries.filter((entry) => entry.action !== 'answer.text')];
 
-    // Every plan reaches the screen as the message `answer`, which the bar places: one sender, so the picker's plan and
-    // the model's that follows it arrive in the order they were made.
+    // Each plan swaps its layout into the frame's `answers` region, then reaches the screen as the message `answer`,
+    // which the bar places: one sender, so the picker's plan and the model's that follows it arrive in the order they
+    // were made.
+    // The swap goes around moss (`unverifiedShell`): moss lets a session change a layout only through a draft, and a
+    // draft needs a signed-in person. When the app has sign-in, this moves to `session.draft`, where moss checks it.
     const show = (plan: Plan): Plan => {
+      unverifiedShell(session).setLayout('answers', plan.layout);
       session.shell.publish('answer', plan);
       return plan;
     };
 
     // The chat model's plan replaces the picker's in the history, and on screen only while it is still the one shown.
-    // It is placed against the picker's, so what both show stays where it is.
+    // It is placed against the picker's, so what both show stays where it is; laid out as the model said, else as the
+    // picker did.
     const refine = async (turn: number, first: Plan, message: string, offered: readonly PreparedAnswer[], options: Options, quick: readonly Chosen[], screen: readonly string[], fillWith: Fill): Promise<void> => {
-      const better = await fill(message, offered, options, quick, screen, fillWith);
+      const better = await fill(message, offered, screens, arrangements, options, quick, screen, fillWith);
       const entries = better === undefined ? [] : entriesFrom(better.chosen, better.said);
       if (entries.length === 0) return;
-      const plan = planOf(message, entries, first.canvases);
+      const plan = planOf(message, entries, first.canvases, { arrangement: better?.arrangement ?? first.arrangement });
       if (samePlan(plan, first)) return;
       const index = first.position - 1;
       const now = history.replace(index, plan);
@@ -124,15 +134,17 @@ export const composer =
       const turn = (asked += 1);
       const offered = await narrowed(message, answers, models.embed);
       const options = await optionsOf(offered, rows);
-      const quick = await pick(message, offered, options, models.decide);
+      const picked = await pick(message, offered, screens, arrangements, options, models.decide);
+      const quick = picked.chosen;
       // A picker sure of nothing is no answer yet: the chat model is asked before anything is shown, and the first
       // screen comes back, with a line saying so, only when it finds nothing either.
       if (quick.length === 0) {
-        const better = models.fill === undefined ? undefined : await fill(message, offered, options, quick, before.answers, models.fill).catch(failed(message));
+        const better = models.fill === undefined ? undefined : await fill(message, offered, screens, arrangements, options, quick, before.answers, models.fill).catch(failed(message));
         const entries = better === undefined ? [] : entriesFrom(better.chosen, better.said);
-        return show(history.add(planOf(message, entries.length > 0 ? entries : withHome({ title: 'Nothing here answers that yet', text: 'These are things this app can show.' }), before.canvases)));
+        if (entries.length > 0) return show(history.add(planOf(message, entries, before.canvases, { arrangement: better?.arrangement ?? picked.arrangement })));
+        return show(history.add(planOf(message, withHome({ title: 'Nothing here answers that yet', text: 'These are things this app can show.' }), before.canvases, { arrangement: home?.arrangement })));
       }
-      const first = show(history.add(planOf(message, quick.map(placedOf), before.canvases)));
+      const first = show(history.add(planOf(message, quick.map(placedOf), before.canvases, { arrangement: picked.arrangement })));
       if (models.fill !== undefined) void refine(turn, first, message, offered, options, quick, before.answers, models.fill).catch(failed(message));
       return first;
     };
@@ -143,7 +155,7 @@ export const composer =
       const screen = screens.find((candidate) => candidate.id === OpenSchema.parse(data).opening);
       if (screen === undefined) return history.current();
       const there = history.indexOf((plan) => plan.screen === screen.id);
-      return show(there >= 0 ? history.go(there + 1) : history.add(planOf('', entriesOf(screen), {}, screen)));
+      return show(there >= 0 ? history.go(there + 1) : history.add(planOf('', entriesOf(screen), {}, { screen, arrangement: screen.arrangement })));
     };
 
     // A form an answer opened has done its work once saved, and goes; on a screen it stays, emptied, for the next one.
@@ -155,10 +167,10 @@ export const composer =
       const kept = Object.values(now.canvases)
         .flatMap((entries) => entries ?? [])
         .filter((entry) => entry.input['write'] !== fingerprint);
-      if (kept.length > 0) return show(history.replace(history.showing(), planOf(now.question, kept, now.canvases)));
+      if (kept.length > 0) return show(history.replace(history.showing(), planOf(now.question, kept, now.canvases, { arrangement: now.arrangement })));
       history.drop(history.showing());
       const there = history.indexOf((plan) => plan.screen === home?.id);
-      return show(there >= 0 ? history.go(there + 1) : history.add(planOf('', homeEntries, {}, home)));
+      return show(there >= 0 ? history.go(there + 1) : history.add(planOf('', homeEntries, {}, { ...(home !== undefined ? { screen: home } : {}), arrangement: home?.arrangement })));
     };
 
     const write = async (data: unknown): Promise<{ saved: true }> => {

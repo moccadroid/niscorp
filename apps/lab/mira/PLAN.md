@@ -12,13 +12,14 @@ Made 2026-10-20 by `npm create nisc`, on nisc 0.8.1. This is the record AGENTS.m
 | D4 Writes | answered | **Vex mutation entries**, sent from a form an answer opened (`answers.write`) — by the person, never by the model. |
 | D5 Routing | derived · **partly open** | The first screen is drawn on the server and adopted by the terminal — it costs nothing while nobody can sign in. Open: once sign-in exists, the browser keeps the session in a cookie no script can read, and the page is drawn for whoever it says (AGENTS.md rule 12) — a page drawn for somebody is theirs alone (`private, no-store`). Open: which paths are **pages** rather than the app, and whether the app's shell state syncs to the address bar. |
 | D6 Who answers a message | answered | Jev picks the prepared answers that fit (`TYPESAFE_API_KEY`); gpt-oss-120b on Groq fills them in (`GROQ_API_KEY`). Without Jev the chat model picks too, slower and with no probabilities. |
-| D7 What a screen is made of | answered · **open: the answers** | Prepared answers (`src/app/answers.ts`) placed on four areas, and screens of them (`src/app/screens.ts`) in the bar’s menu. Which answers and screens there are follows the data. |
+| D7 What a screen is made of | answered · **open: the answers** | Prepared answers (`src/app/answers.ts`) placed on six areas, and screens of them (`src/app/screens.ts`) in the bar’s menu. Which answers and screens there are follows the data. |
 | D8 History | derived · **open** | The answers one shell was given, kept while it lives; a reload starts again. Open: whether a person's answers outlive the shell, and memory beyond that. |
 | D9 Embeddings | answered · **open: memory** | `EMBEDDINGS` in `.env`; they narrow the prepared answers to the 255 nearest a message when there are more. |
+| D10 Layout swaps | derived · **open: sign-in** | An answer’s arrangement is swapped into the frame’s `answers` region through moss’s unverified shell (`@niscorp/moss/unverified`, in `src/server/compose/index.ts`), because moss lets a session change a layout only through a draft, and a draft needs a signed-in person. **When the app has sign-in, the swap moves to `session.draft`, where moss checks it.** |
 
 ## Answered when it was made
 
-- **Who leads:** a model. A message is answered with a screen: Jev picks the prepared answers that fit (`src/app/answers.ts`), gpt-oss-120b fills in what the message says, and the plan is placed on the four areas. The keys are in `.env`.
+- **Who leads:** a model. A message is answered with a screen: Jev picks the prepared answers that fit (`src/app/answers.ts`), gpt-oss-120b fills in what the message says, and the plan is placed on the six areas. The keys are in `.env`.
 - **What draws the screen:** React. The kit in `src/ui/` is where the look lives; a layout names components, never styles.
 
 ## The dial-in — open
