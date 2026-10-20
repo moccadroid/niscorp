@@ -1,5 +1,20 @@
 # @niscorp/vex
 
+## 0.4.1
+
+### Patch Changes
+
+- 6680ad6: `createQueryDsl` hands the query agent the schema and the DSL spec as compact text instead of JSON: an entity per line with its relations and indexes, and the DSL as types that keep every description, property and allowed value. On a 15-entity CRM schema the fixed part of each call drops from about 36,000 characters to about 13,000. On 19 queries a screen builder asked for, the agent answered all 19, with the same row counts as before, at 44% of the cost and a median of 3.5 s per query instead of 5.1 s. The query it writes is still validated against the full DSL schema.
+- 6680ad6: A shape can declare a field as a Prism expression over the row's stored fields, and `createShapeMapper` computes it with no model call.
+
+  `[{ close_date: '', close_date_display: { $date: { value: { $ref: '$.close_date' }, format: 'MMM D' } } }]`: `createQueryDsl` asks the query for the stored fields a declared field reads, and `createShapeMapper` computes the declared field with Prism, so the stored value beside it is never overwritten; a mapping a model wrote overwrote it about a quarter of the time. `normalizeShape` keeps a declared field whole, so two formats are two cache entries.
+
+  A flat shape whose fields the first row carries, each plain one of the kind its example shows, is mapped with no model call, as rows that fit the shape exactly were; rows with more columns than the shape names are now mapped the same way rather than by the agent. Any other shape — nested, a field the rows lack, a value of another kind — goes to the mapping agent, whose mapping is run on the rows before it is used: one that fails there is written again, the agent told why, up to three attempts in all. The agent is told the rows already answer the request (filtered, sorted, limited) and keeps every row, in order.
+
+- 1c78d6d: The engine hands `mapToShape` the request's intent, and `createShapeMapper` gives it to the mapping agent.
+
+  `MapToShape` is `(rows, shape, intent?)`: the engine passes the intent a query was asked in, so the mapping can give a value the form the request named (money as `$1.2M`, a date as `Apr 6`). Before, the mapper saw the rows and the shape alone, whose placeholders say nothing of a form. `createShapeMapper` passes it to prism's `mappingAgent` as its `notes`. A mapper that takes two arguments keeps working.
+
 ## 0.4.0
 
 ### Minor Changes

@@ -1,5 +1,49 @@
 # @niscorp/moss
 
+## 0.8.0
+
+### Minor Changes
+
+- 2076f80: `session.draft.add` is what `session.draft.put` was. **Breaking.**
+
+  BREAKING — approved by moccadroid, 2026-10-18: rename `session.draft.put(...)` to `session.draft.add(...)`. Nothing else about it changes: it takes what `save` takes, what is added is in that one shell when the add answers, and `save`, `discard`, `show`, `remove` and `list` are as they were.
+
+- cdc89cc: `server.checkFunctions()` reads the app's functions and refuses what is wrong with them before anyone is served. **Breaking.**
+
+  BREAKING — approved by moccadroid, 2026-10-18: `serve` of `@niscorp/moss/node`, and `nisc dev`, `nisc build`, `nisc check` and `nisc start`, refuse to come up on an action that calls a function the app has no function of, a charter `functions` deny that matches nothing, or two functions under one id. An app that hands a function only to signed-in sessions, with a shipped action calling it, hands it to every session (the function refuses whom it must), or is refused.
+
+  An app's functions are known only once a session is: `functions(session)` is called for each shell, and a session hook may reach for the server object, which the app holds only once `createServer` has answered. So the check is the app's to call, once it holds the server and before it listens; `serve` of `@niscorp/moss/node` calls it, and so do `nisc dev`, `nisc build`, `nisc check` and `nisc start` after the project's `boot`; each closes what it built where it refuses. It builds nobody's shell once, after everything is in force, and drops it. What that call returned is checked, and it refuses on:
+  - **an action, or a fragment a shell ships, that calls a function the app does not have**: `"home" calls "auth.leave", which the app has no function of`. Before, the call failed when a person pressed the button. An app with no `functions` has none. A set of actions handed over while the app runs is held to the same at that refresh.
+  - **a charter `functions` deny that matches nothing**: `Charter is incoherent over the app’s functions — refusing to serve:`.
+  - **two functions under one id**: `moss: functions(session) returned "auth.leave" twice.`
+
+  What the charter only warns of (a grant that names no function, a function no role grants), the functions with no description, and a map of handlers are said at that point, once.
+
+  The cost is one anonymous shell built, as any visitor who is not signed in causes. Every check reads nobody's functions: an app that hands a function only to signed-in sessions is refused where an action calls it.
+
+### Patch Changes
+
+- edd3271: `session.answerIntent(writers, asked)` also replays a query that exists: `asked` may be `{ fingerprint, context }`.
+
+  It is answered as the caller, as an intent is, with what vex knows of the query: the context keys it binds, the ones the call left out (`meta.missingContext`), its warnings. The wire answers a replay with the rows alone. A model that proves a query before it builds on it learns from this why a replay came back empty.
+
+- f461b98: What a person generated and nobody has used for long enough is deleted, with `runtime.artifactsUnusedMs`.
+  - A version of an artifact a person saved is stamped as used (`artifacts.last_used_at`, migration `nisc.moss/6`) when a shell is built for them, once an hour at most, through the same vex entries and row rule as the save itself.
+  - A sweep runs as the server comes up and then every hour: every artifact of a person whose newest version was neither saved nor used within `artifactsUnusedMs` is deleted, every version of it, and the saves left empty with them. What is published for everybody (`*`) never ages; what the build ships is not a row.
+  - Without the setting nothing is deleted. `0` or less refuses the boot.
+  - The sweep is one raw statement in moss (`data/aging.ts`), entered in the raw-SQL ledger: vex keeps every statement of its own to one principal's rows, and the sweep crosses them all.
+
+- 37422bf: `server.defaults(publisher)` publishes every kind a person saves: an action, a fragment and a read, beside a layout.
+  - **An action or a fragment is given its id by whoever publishes it**, as a shipped one has one: `server.defaults(who).save([{ kind: 'action', id: 'promo', body }])`. One without an id is refused (`moss: a published action is given its id by whoever publishes it: name it.`), and so is one under `generated.`. The charter grants it by that id: a new id needs a grant, and one that is a shipped action's or fragment's replaces the build's for everybody until it is reset.
+  - **A read vex wrote is published under its fingerprint**, `save([{ kind: 'read', id: '<fingerprint>' }])`, and is answered to everybody, nobody signed in included, after what the caller saved themselves. One under the fingerprint of a shipped entry is refused. A generated action anybody saves may replay it.
+  - **Checked as a person's save is, as the publisher, and then as a manifest.** An action's `fn:` calls are ones the publisher's roles grant and its reads ones they may replay; then the whole set in force is verified as a set handed over is, and a holder whose roles do not grant a call refuses the publish: `Publish refused — actions call functions the app does not have, or that their holders’ charter does not grant:`.
+  - **A default that no longer passes under a new build is left out, and the build's copies stand**, with a line said once per read of the rows: `[moss] what is published for everybody is left out, and the build’s copies stand: …`.
+  - `publishedArtifacts(saved, publisher)` of the running manifest takes who publishes, for the roles and reads a publish is held to; `server.defaults` resolves them from the publisher's principal.
+
+- Updated dependencies [63b9ab5]
+- Updated dependencies [6a62604]
+  - @niscorp/nova@0.5.0
+
 ## 0.7.0
 
 ### Minor Changes

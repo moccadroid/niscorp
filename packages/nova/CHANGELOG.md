@@ -1,5 +1,20 @@
 # @niscorp/nova
 
+## 0.5.0
+
+### Minor Changes
+
+- 6a62604: `createDevtoolsFunctions` answers a list of `{ id, description, execute }`, and `FunctionDefinition` names that shape. **Breaking.**
+
+  BREAKING — approved by moccadroid, 2026-10-18: `createDevtoolsFunctions(config)` returned a map of handlers by name; it returns `FunctionDefinition[]`, each with a description of what it does and what to send. An app that spread the map into its functions spreads the list into the list its `functions(session)` answers: `functions: (session) => [...createDevtoolsFunctions({ shell: () => session.shell, definitions }), ...]`.
+
+### Patch Changes
+
+- 63b9ab5: `auditAction` sees through a loop and into a component's props.
+  - A loop variable bound under the data root — `$.row.name`, `$.index`, `$.items` inside a `for`/`as` — is no longer reported as a key `data` has no default for: the renderer binds them there.
+  - A ref a component dispatches from inside its props, at any depth (a Table's `menu.items[0].ref`), is no longer reported as carried by no layout node. `collectInteractive` names such a ref's `via` by the prop's path (`menu.items.0.ref`).
+  - `classifyAudit(issue)` of `@niscorp/nova/reflect` takes the issue alone and keeps one downgrade, a push whose target is a `{{…}}` template; its loop-variable and prop-ref downgrades had nothing left to downgrade.
+
 ## 0.4.0
 
 ### Minor Changes
