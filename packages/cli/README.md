@@ -55,7 +55,7 @@ page in the manifest), and what each one needs once it has been drawn.
 
 | Field | |
 |---|---|
-| `boot` | stand the app up: `{ server, close? }`; `nisc` then calls `server.checkFunctions()`, which refuses an action calling a function the app does not have before anything is drawn or served |
+| `boot` | stand the app up: `{ server, close? }`; `nisc` then calls `server.checkFunctions()` (`nisc start` once `routes` and the site are mounted), which refuses an action calling a function the app does not have before anything is drawn or served |
 | `draw` | a terminal that draws a screen to a string (moss's `terminal/react/server`, `/vue/server`, `/dom/server`) |
 | `htmlAttributes?` | what the kit would put on `<html>` from an effect (a palette, a scheme) |
 | `site?` | the address the site is served at (`"https://example.com"`). With it, every path's document says its own canonical address — see "The head of each page" |

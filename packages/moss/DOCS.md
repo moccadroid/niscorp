@@ -112,9 +112,14 @@ Every field is an artifact (authored data) except the code seams — `scope`,
   **`server.checkFunctions()`** builds nobody's shell once, drops it, and reads
   what its `functions(session)` returned, so what is wrong with the functions
   is refused or said before anyone is served. The app calls it once it holds
-  the server and before it listens, as a session hook may reach for the
-  server: `serve` of `@niscorp/moss/node` does, and so do `nisc dev`, `nisc
-  build`, `nisc check` and `nisc start` after the project's `boot`. It says: `[moss] functions(session)
+  the server, as a session hook may reach for the server, after it has
+  mounted every route of its own, and before it listens. Nobody's shell
+  makes its reads in-process, and the server takes no route once it has
+  answered one: a route mounted after the check throws `Can not add a route
+  since the matcher is already built.` `serve` of `@niscorp/moss/node` calls
+  it, so do `nisc dev`, `nisc build` and `nisc check` after the project's
+  `boot`, and `nisc start` once the project's `routes` and the site are
+  mounted. It says: `[moss] functions(session)
   returned a map of handlers, which is deprecated: return a list of { id,
   description, execute }.`, or `[moss] functions with no description:
   auth.leave. Give each a description.` An empty description counts as none,
