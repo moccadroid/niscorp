@@ -731,12 +731,18 @@ importers:
         specifier: ^4.23.15
         version: 4.23.15
     devDependencies:
+      '@electric-sql/pglite':
+        specifier: ^0.5.1
+        version: 0.5.1
       '@niscorp/moss':
         specifier: workspace:^
         version: link:../moss
       '@niscorp/nova':
         specifier: workspace:^
         version: link:../nova
+      '@niscorp/vex':
+        specifier: workspace:^
+        version: link:../vex
       '@types/jsdom':
         specifier: ^30.0.0
         version: 30.0.0

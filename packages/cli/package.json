@@ -59,8 +59,10 @@
     "tsx": "^4.23.15"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.1",
     "@niscorp/moss": "workspace:^",
     "@niscorp/nova": "workspace:^",
+    "@niscorp/vex": "workspace:^",
     "@types/jsdom": "^30.0.0",
     "@types/node": "^26.6.4",
     "jsdom": "^25.0.1",

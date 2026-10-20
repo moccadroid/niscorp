@@ -180,12 +180,6 @@ export const start = async (options: CommandOptions): Promise<{ url: string; clo
   }
   const { attachSocket, mountSite, MOSS_PATHS } = await import('@niscorp/moss/node');
   const booted = await project.boot();
-  try {
-    await booted.server.checkFunctions();
-  } catch (error) {
-    await booted.close?.();
-    throw error;
-  }
   await project.routes?.(booted.server);
   mountSite(booted.server, {
     dist,
@@ -194,6 +188,13 @@ export const start = async (options: CommandOptions): Promise<{ url: string; clo
     ...(project.site !== undefined ? { site: project.site } : {}),
     ...(project.tokenKey !== undefined ? { tokenKey: project.tokenKey } : {}),
   });
+  // After every route: the check answers requests in-process, and Hono takes no route once it has answered one.
+  try {
+    await booted.server.checkFunctions();
+  } catch (error) {
+    await booted.close?.();
+    throw error;
+  }
   const httpServer = serve({ fetch: siteHandler(booted.server.fetch, { except: MOSS_PATHS }), port });
   attachSocket(httpServer, booted.server.socket);
   const url = await listening(httpServer, options);
