@@ -1,5 +1,4 @@
-import type { FunctionSession, MossServer, NiscApp } from '@niscorp/moss';
-import type { FunctionHandler } from '@niscorp/nova';
+import type { FunctionDefinition, FunctionSession, MossServer, NiscApp } from '@niscorp/moss';
 import { assistantAction } from '@lyceum/app/actions/assistant/assistant.action';
 
 const MIRRORED = 'assistant.thread';
@@ -7,7 +6,7 @@ export const MIRROR_CHANNEL = 'assistant-mirror';
 
 export type AssistantMirror = {
   onSession: NonNullable<NiscApp['onSession']>;
-  functions: (session: FunctionSession) => Record<string, FunctionHandler>;
+  functions: (session: FunctionSession) => FunctionDefinition[];
 };
 
 export const mirrorAssistant = (server: () => MossServer): AssistantMirror => {
@@ -30,11 +29,15 @@ export const mirrorAssistant = (server: () => MossServer): AssistantMirror => {
         }
       }, 0);
     },
-    functions: (session) => ({
-      'assistant.mirror': async () => {
-        if (session.principal !== 'stage') throw new Error('Only the stage mirrors the speaker’s assistant.');
-        return latest;
+    functions: (session) => [
+      {
+        id: 'assistant.mirror',
+        description: 'Answers the data of the speaker’s assistant thread as it last changed. The stage only. Send nothing.',
+        execute: async () => {
+          if (session.principal !== 'stage') throw new Error('Only the stage mirrors the speaker’s assistant.');
+          return latest;
+        },
       },
-    }),
+    ],
   };
 };

@@ -1,7 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { z } from 'zod';
-import type { FunctionSession } from '@niscorp/moss';
-import type { FunctionHandler } from '@niscorp/nova';
+import type { FunctionDefinition, FunctionSession } from '@niscorp/moss';
 import { ACTIONS } from '@lyceum/app/action-catalog';
 import { turnRecord, turnsMine } from '@lyceum/app/vex/assistant.entries';
 import { screenText } from '@lyceum/ui/text.kit';
@@ -85,48 +84,64 @@ const knowledgeOf = async (session: FunctionSession, assembled: Assembled, tz: s
 export const assistantFunctions = (
   session: FunctionSession,
   deps: { querier: Querier; writer: TimerWriter; orchestrator: Orchestrator; tz: string; timing: () => Timing },
-): Record<string, FunctionHandler> => ({
-  'assistant.intro': async () => {
-    const assembled = assembleFor(session.actions);
-    const main = assembled.from[assembled.from.length - 1];
-    return {
-      title: main?.title ?? 'Assistant',
-      builtFrom: assembled.from.map((declaration) => declaration.id).join(' · '),
-      tools: [...assembled.tools].join(' · '),
-    };
+): FunctionDefinition[] => [
+  {
+    id: 'assistant.intro',
+    description: 'Answers what the person’s assistant is built from: { title, builtFrom, tools }. Send nothing.',
+    execute: async () => {
+      const assembled = assembleFor(session.actions);
+      const main = assembled.from[assembled.from.length - 1];
+      return {
+        title: main?.title ?? 'Assistant',
+        builtFrom: assembled.from.map((declaration) => declaration.id).join(' · '),
+        tools: [...assembled.tools].join(' · '),
+      };
+    },
   },
-  'assistant.turn': async (data) => {
-    const message = DraftSchema.parse(data).draft.trim();
-    if (message === '') throw new Error('Write something first.');
-    const assembled = assembleFor(session.actions);
-    const { knowledge, facts, earlier } = await knowledgeOf(session, assembled, deps.tz);
-    const proposals: Proposal[] = [];
-    const opened: Opened[] = [];
-    const wrote: Written[] = [];
-    const tools = hostTools({ session, querier: deps.querier, writer: deps.writer, tz: deps.tz, facts, proposals, opened, earlier, wrote }, assembled.tools);
-    const reply = await deps.orchestrator.answer({ message, knowledge, tools });
-    const turnId = `turn_${randomBytes(8).toString('hex')}`;
-    await vexOver(session.wire)(turnRecord.fingerprint, { turnId, message, reply, proposals, opened, writerAnswer: wrote.at(-1)?.answer ?? null, writerReasoning: wrote.at(-1)?.reasoning ?? null });
-    return { turnId, text: reply, proposals, opened };
+  {
+    id: 'assistant.turn',
+    description: 'Answers one message to the assistant and keeps the turn. Send { draft }, the message; answers { turnId, text, proposals, opened }.',
+    execute: async (data) => {
+      const message = DraftSchema.parse(data).draft.trim();
+      if (message === '') throw new Error('Write something first.');
+      const assembled = assembleFor(session.actions);
+      const { knowledge, facts, earlier } = await knowledgeOf(session, assembled, deps.tz);
+      const proposals: Proposal[] = [];
+      const opened: Opened[] = [];
+      const wrote: Written[] = [];
+      const tools = hostTools({ session, querier: deps.querier, writer: deps.writer, tz: deps.tz, facts, proposals, opened, earlier, wrote }, assembled.tools);
+      const reply = await deps.orchestrator.answer({ message, knowledge, tools });
+      const turnId = `turn_${randomBytes(8).toString('hex')}`;
+      await vexOver(session.wire)(turnRecord.fingerprint, { turnId, message, reply, proposals, opened, writerAnswer: wrote.at(-1)?.answer ?? null, writerReasoning: wrote.at(-1)?.reasoning ?? null });
+      return { turnId, text: reply, proposals, opened };
+    },
   },
-  'timers.save': async (data) => {
-    const { chosen } = ChosenSchema.parse(data);
-    const slideIds = slideIdsOf(await vexOver(session.wire)(slidesDeck.fingerprint));
-    const reflex = anchorTimer(proposable(chosen.draft, slideIds), chosen.timerId, Date.now(), deps.tz, slideIds);
-    const due = dueOf(reflex, Date.now());
-    await vexOver(session.wire)(timerSave.fingerprint, {
-      timerId: chosen.timerId,
-      reflex,
-      intent: reflex.intent,
-      dueAt: due === undefined ? null : new Date(due).toISOString(),
-    });
-    await deps.timing().reload();
-    return { dueLocal: due === undefined ? '' : localNow(due, deps.tz, true).slice(11) };
+  {
+    id: 'timers.save',
+    description: 'Saves a timer the assistant drafted. Send { chosen: { timerId, draft } }; answers { dueLocal }, the local time it is next due, or empty.',
+    execute: async (data) => {
+      const { chosen } = ChosenSchema.parse(data);
+      const slideIds = slideIdsOf(await vexOver(session.wire)(slidesDeck.fingerprint));
+      const reflex = anchorTimer(proposable(chosen.draft, slideIds), chosen.timerId, Date.now(), deps.tz, slideIds);
+      const due = dueOf(reflex, Date.now());
+      await vexOver(session.wire)(timerSave.fingerprint, {
+        timerId: chosen.timerId,
+        reflex,
+        intent: reflex.intent,
+        dueAt: due === undefined ? null : new Date(due).toISOString(),
+      });
+      await deps.timing().reload();
+      return { dueLocal: due === undefined ? '' : localNow(due, deps.tz, true).slice(11) };
+    },
   },
-  'timers.delete': async (data) => {
-    const { picked } = z.looseObject({ picked: z.looseObject({ timer_id: z.string().min(1) }) }).parse(data);
-    await vexOver(session.wire)(timerDelete.fingerprint, { timerId: picked.timer_id });
-    await deps.timing().reload();
-    return { deleted: picked.timer_id };
+  {
+    id: 'timers.delete',
+    description: 'Deletes a timer. Send { picked: { timer_id } }; answers { deleted }.',
+    execute: async (data) => {
+      const { picked } = z.looseObject({ picked: z.looseObject({ timer_id: z.string().min(1) }) }).parse(data);
+      await vexOver(session.wire)(timerDelete.fingerprint, { timerId: picked.timer_id });
+      await deps.timing().reload();
+      return { deleted: picked.timer_id };
+    },
   },
-});
+];

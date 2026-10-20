@@ -1,6 +1,5 @@
 import { z } from 'zod';
-import type { FunctionSession, MossServer } from '@niscorp/moss';
-import type { FunctionHandler } from '@niscorp/nova';
+import type { FunctionDefinition, FunctionSession, MossServer } from '@niscorp/moss';
 
 export const VENDOR_ID = 'qa';
 
@@ -51,7 +50,7 @@ export const removeVendor = async (server: MossServer, operatorKey: string): Pro
   await server.request(`/operator/integrations/${VENDOR_ID}`, { method: 'DELETE', headers: { 'content-type': 'application/json', 'x-operator-key': operatorKey } });
 };
 
-export const integrationFunctions = (session: FunctionSession, server: () => MossServer, operatorKey: string, addresses: VendorAddresses): Record<string, FunctionHandler> => {
+export const integrationFunctions = (session: FunctionSession, server: () => MossServer, operatorKey: string, addresses: VendorAddresses): FunctionDefinition[] => {
   const operator = async (path: string, method: string, body?: unknown): Promise<{ ok: boolean; answer: z.infer<typeof AnswerSchema> }> => {
     if (session.principal !== 'speaker') throw new Error('Only the speaker installs integrations.');
     const res = await server().request(`/operator${path}`, {
@@ -83,26 +82,42 @@ export const integrationFunctions = (session: FunctionSession, server: () => Mos
     server().shells?.deliver('stage', 'integration-changed');
   };
 
-  return {
-    'integrations.state': state,
-    'integrations.install': async (data) => {
-      const { which } = WhichSchema.parse(data);
-      const { ok, answer } = await operator('/integrations', 'POST', { id: VENDOR_ID, url: addresses[which] });
-      const now = await state();
-      tellStage();
-      return { ...now, url: addresses[which], status: ok ? now.status : 'refused' };
+  return [
+    {
+      id: 'integrations.state',
+      description: 'Answers where the QA Company’s integration stands: its address, its status, why it was refused, which checks it passed, and the trigger behind a loop. The speaker and the stage only. Send nothing.',
+      execute: state,
     },
-    'integrations.approve': async () => {
-      await operator(`/integrations/${VENDOR_ID}/approve`, 'POST');
-      rebuildShells();
-      tellStage();
-      return state();
+    {
+      id: 'integrations.install',
+      description: 'Installs the QA Company’s integration from its good or its broken address. The speaker only. Send { which: "good" | "broken" }; answers where it stands.',
+      execute: async (data) => {
+        const { which } = WhichSchema.parse(data);
+        const { ok, answer } = await operator('/integrations', 'POST', { id: VENDOR_ID, url: addresses[which] });
+        const now = await state();
+        tellStage();
+        return { ...now, url: addresses[which], status: ok ? now.status : 'refused' };
+      },
     },
-    'integrations.remove': async () => {
-      await operator(`/integrations/${VENDOR_ID}`, 'DELETE');
-      rebuildShells();
-      tellStage();
-      return state();
+    {
+      id: 'integrations.approve',
+      description: 'Approves the installed QA Company integration, and every shell is built again with its actions. The speaker only. Send nothing; answers where it stands.',
+      execute: async () => {
+        await operator(`/integrations/${VENDOR_ID}/approve`, 'POST');
+        rebuildShells();
+        tellStage();
+        return state();
+      },
     },
-  };
+    {
+      id: 'integrations.remove',
+      description: 'Removes the QA Company’s integration, and every shell is built again without it. The speaker only. Send nothing; answers where it stands.',
+      execute: async () => {
+        await operator(`/integrations/${VENDOR_ID}`, 'DELETE');
+        rebuildShells();
+        tellStage();
+        return state();
+      },
+    },
+  ];
 };
