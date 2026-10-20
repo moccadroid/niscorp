@@ -6,17 +6,20 @@ import type { AreaId } from '../../app/shell/areas';
 // places, opened with its input.
 export type Placed = { answer: string; action: string; input: Record<string, unknown> };
 
-// What a message, or a screen opened from the menu, was answered with, and where it stands among the answers given.
+// What a message, or a screen opened from the menu, was answered with; where it stands among the answers given, and
+// what they all were (`stack`), to go back to any of them.
 export type Plan = {
   question: string;
+  label: string;
   screen?: string;
   position: number;
   total: number;
+  stack: { position: number; label: string }[];
   answers: string[];
   canvases: Partial<Record<AreaId, Placed[]>>;
 };
 
-export type Unnumbered = Omit<Plan, 'position' | 'total'>;
+export type Unnumbered = Omit<Plan, 'position' | 'total' | 'stack'>;
 
 // A prepared answer, and the values it is opened with beyond its own input: by path into the input.
 export type Chosen = { answer: PreparedAnswer; values: Record<string, unknown> };
@@ -56,9 +59,16 @@ const arranged = (entries: readonly Placed[], onScreen: Unnumbered['canvases']):
   return Object.fromEntries([...staying, ...left].map((entry, at) => [AREAS[at], [entry]]));
 };
 
-export const planOf = (question: string, entries: readonly Placed[], onScreen: Unnumbered['canvases'], screen?: string): Unnumbered => {
+// A plan for a message is named by it, and one for a screen by the screen's label.
+export const planOf = (question: string, entries: readonly Placed[], onScreen: Unnumbered['canvases'], screen?: { id: string; label: string }): Unnumbered => {
   const canvases = arranged(entries, onScreen);
-  return { question, ...(screen !== undefined ? { screen } : {}), answers: AREAS.flatMap((area) => canvases[area] ?? []).map((entry) => entry.answer), canvases };
+  return {
+    question,
+    label: screen?.label ?? question,
+    ...(screen !== undefined ? { screen: screen.id } : {}),
+    answers: AREAS.flatMap((area) => canvases[area] ?? []).map((entry) => entry.answer),
+    canvases,
+  };
 };
 
 export const samePlan = (one: Unnumbered, other: Unnumbered): boolean => JSON.stringify(one.canvases) === JSON.stringify(other.canvases);

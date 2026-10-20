@@ -40,6 +40,7 @@ export const Button: DomComponent = ({ props, children }) => {
 
 export const Frame: DomComponent = ({ children }) => element('div', 'k-frame', children);
 export const Bar: DomComponent = ({ children }) => element('header', 'k-bar', children);
+export const Menu: DomComponent = ({ children }) => element('nav', 'k-menu', children);
 export const Answers: DomComponent = ({ children }) => element('main', 'k-answers', children);
 
 const AreaProps = z.object({ name: z.string() });

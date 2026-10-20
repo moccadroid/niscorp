@@ -58,6 +58,10 @@ const BarProps = z.object({}).describe('The strip across the top.');
 export const Bar: NovaComponent = ({ children }) => <header className="k-bar">{children}</header>;
 Bar.meta = { description: 'The strip across the top.', propsSchema: BarProps };
 
+const MenuProps = z.object({}).describe('A list that opens under the bar: one choice a line.');
+export const Menu: NovaComponent = ({ children }) => <nav className="k-menu">{children}</nav>;
+Menu.meta = { description: 'A list that opens under the bar.', propsSchema: MenuProps };
+
 const AnswersProps = z.object({}).describe('Where an answer is drawn: its areas arrange themselves by how many are in use.');
 export const Answers: NovaComponent = ({ children }) => <main className="k-answers">{children}</main>;
 Answers.meta = { description: 'The areas an answer is drawn in.', propsSchema: AnswersProps };

@@ -5,6 +5,6 @@ export const charter: Charter = {
   public: {
     actions: ['ask.*', 'answer.*', 'rows.*'],
     data: ['greetings.read', 'greetings.write.insert'],
-    functions: ['ask', 'screens.open', 'answers.back', 'answers.forward', 'answers.saved', 'answers.write'],
+    functions: ['ask', 'screens.open', 'answers.back', 'answers.forward', 'answers.go', 'answers.saved', 'answers.write'],
   },
 };

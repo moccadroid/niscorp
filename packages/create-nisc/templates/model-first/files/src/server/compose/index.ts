@@ -13,7 +13,7 @@ import type { Options, Rows } from './options';
 import { pick } from './pick';
 import type { Decide } from './pick';
 import { placedOf, planOf, samePlan, textOf } from './plan';
-import type { Chosen, Placed, Plan, Said, Unnumbered } from './plan';
+import type { Chosen, Placed, Plan, Said } from './plan';
 
 export type { Decide, Picked, Question } from './pick';
 export type { Fill } from './fill';
@@ -70,12 +70,12 @@ const failed =
 const AskSchema = z.looseObject({ text: z.string() });
 const OpenSchema = z.looseObject({ opening: z.string() });
 const SavedSchema = z.looseObject({ saved: z.string() });
+const GoSchema = z.looseObject({ going: z.coerce.number() });
 const WriteSchema = z.looseObject({ write: z.string(), fields: z.array(z.looseObject({ key: z.string(), value: z.unknown() })) });
 
 export const composer =
   (models: Models, answers: readonly PreparedAnswer[] = ANSWERS, screens: readonly Screen[] = SCREENS) =>
   (session: FunctionSession): FunctionDefinition[] => {
-    const history = createHistory();
     const rows = vexRows(session.wire);
     const examples = answers.map((answer) => answer.example);
     const writes = new Set(answers.flatMap((answer) => (typeof answer.input['write'] === 'string' ? [answer.input['write']] : [])));
@@ -88,8 +88,8 @@ export const composer =
       });
     const home = screens[0];
     const homeEntries = home === undefined ? [] : entriesOf(home);
-    // Before anything was asked, the screen is the first screen, as the shell opened it.
-    const shown = (): Unnumbered => (history.showing() >= 0 ? history.current() : home === undefined ? { question: '', answers: [], canvases: {} } : planOf('', homeEntries, {}, home.id));
+    // The stack starts at the first screen, as the shell opened it.
+    const history = createHistory(home === undefined ? undefined : planOf('', homeEntries, {}, home));
     const entriesFrom = (chosen: readonly Chosen[], said: Said | undefined): Placed[] => [...(said !== undefined ? [textOf(said, examples)] : []), ...chosen.map(placedOf)];
     // Words above the first screen: what is said when there is nothing else to show.
     const withHome = (said: Said): Placed[] => [textOf(said, examples), ...homeEntries];
@@ -117,7 +117,7 @@ export const composer =
     const ask = async (data: unknown): Promise<Plan> => {
       const message = AskSchema.parse(data).text.trim();
       if (message === '') return history.current();
-      const before = shown();
+      const before = history.current();
       if (models.decide === undefined) {
         return show(history.add(planOf(message, withHome({ title: 'Nothing to answer with', text: `Set ${models.missing.join(' and ')} in .env, and start the app again.` }), before.canvases)));
       }
@@ -137,24 +137,28 @@ export const composer =
       return first;
     };
 
-    // A screen is shown as it is written, not arranged around what was on screen before.
+    // A screen already in the stack is gone back to, not stacked again; one that is not is shown as it is written,
+    // not arranged around what was on screen before.
     const open = async (data: unknown): Promise<Plan> => {
       const screen = screens.find((candidate) => candidate.id === OpenSchema.parse(data).opening);
       if (screen === undefined) return history.current();
-      return show(history.add(planOf('', entriesOf(screen), {}, screen.id)));
+      const there = history.indexOf((plan) => plan.screen === screen.id);
+      return show(there >= 0 ? history.go(there + 1) : history.add(planOf('', entriesOf(screen), {}, screen)));
     };
 
     // A form an answer opened has done its work once saved, and goes; on a screen it stays, emptied, for the next one.
-    // An answer left with nothing is the first screen again.
+    // An answer left with nothing leaves the stack, and the first screen is gone back to.
     const saved = async (data: unknown): Promise<Plan> => {
       const fingerprint = SavedSchema.parse(data).saved;
       const now = history.current();
-      if (history.showing() < 0 || now.screen !== undefined) return now;
+      if (now.screen !== undefined) return now;
       const kept = Object.values(now.canvases)
         .flatMap((entries) => entries ?? [])
         .filter((entry) => entry.input['write'] !== fingerprint);
-      const next = kept.length > 0 ? planOf(now.question, kept, now.canvases) : planOf('', homeEntries, {}, home?.id);
-      return show(history.replace(history.showing(), next));
+      if (kept.length > 0) return show(history.replace(history.showing(), planOf(now.question, kept, now.canvases)));
+      history.drop(history.showing());
+      const there = history.indexOf((plan) => plan.screen === home?.id);
+      return show(there >= 0 ? history.go(there + 1) : history.add(planOf('', homeEntries, {}, home)));
     };
 
     const write = async (data: unknown): Promise<{ saved: true }> => {
@@ -169,6 +173,7 @@ export const composer =
       { id: 'screens.open', description: 'Shows a screen from the menu: its prepared answers together. Send { opening: <screen id> }; answers its plan.', execute: open },
       { id: 'answers.back', description: 'Shows the answer before the one shown, and answers its plan.', execute: async () => show(history.back()) },
       { id: 'answers.forward', description: 'Shows the answer after the one shown, and answers its plan.', execute: async () => show(history.forward()) },
+      { id: 'answers.go', description: 'Shows one answer from the stack. Send { going: <its position> }; answers its plan.', execute: async (data) => show(history.go(GoSchema.parse(data).going)) },
       { id: 'answers.saved', description: 'Takes a form that was saved off the answer shown. Send { saved: <the write it saved through> }; answers the plan.', execute: saved },
       { id: 'answers.write', description: 'Saves what a form holds through the write its prepared answer names. Send { write, fields: [{ key, value }] }.', execute: write },
     ];

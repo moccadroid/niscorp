@@ -77,7 +77,9 @@ try {
     return { action: active?.definitionId ?? '', data: active === undefined ? {} : (shell.getRuntime(active.id)?.getData() ?? {}) };
   };
   const areas = (): string => AREAS.map((area) => on(area).action || '·').join(' ');
-  const current = (): { question?: string; screen?: string; position?: number } => (on('bar').data['current'] ?? {}) as { question?: string; screen?: string; position?: number };
+  type Shown = { question?: string; screen?: string; position?: number; total?: number; stack?: { position: number; label: string }[] };
+  const current = (): Shown => (on('bar').data['current'] ?? {}) as Shown;
+  const total = (): number => Number(current().total);
   // What a terminal does whenever the screen changes: draw every action on it. An input takes what is typed into it
   // once it has been drawn.
   const draw = (): void => void shell.flattenRenderTree(shell.getShellRenderTree());
@@ -94,7 +96,7 @@ try {
   };
   const value = (canvas: string): unknown => (on(canvas).data['result'] as { value?: unknown } | undefined)?.value;
 
-  check('the app opens on the first screen, every one of its answers an area of its own', areas() === OVERVIEW.join(' ') && on('bar').action === 'answer.bar' && on('line').action === 'ask.line', areas());
+  check('the app opens on the first screen, every one of its answers an area of its own, and the stack starts there', areas() === OVERVIEW.join(' ') && on('bar').action === 'answer.bar' && on('line').action === 'ask.line' && current().position === 1 && total() === 1, areas());
 
   await ask('Show me every greeting');
   check('"Show me every greeting" is the table alone, in the first area', areas() === 'rows.table · · ·', areas());
@@ -115,13 +117,24 @@ try {
   await ask('Add a greeting that says Servus');
   const fields = (canvas: string): { key: string; value: string }[] => rows(canvas, 'fields') as { key: string; value: string }[];
   check('"Add a greeting that says Servus" opens the form, and the model fills it in where it stands', await until(() => on('a').action === 'rows.form' && fields('a')[0]?.value === 'Servus' && fields('a')[1]?.value === 'German'), JSON.stringify(fields('a')));
+  const withForm = total();
   session.dispatch('a', { type: 'ui:click', ref: 'save' });
-  check('saved, the form goes; an answer left with nothing is the first screen again', await until(() => areas() === OVERVIEW.join(' ') && current().screen === SCREENS[0]?.id), areas());
+  check(
+    'saved, the form goes; an answer left with nothing leaves the stack, and the first screen is gone back to',
+    await until(() => areas() === OVERVIEW.join(' ') && current().screen === SCREENS[0]?.id && current().position === 1 && total() === withForm - 1),
+    `${areas()}, ${String(current().position)} of ${total()}`,
+  );
   check('the first screen counts it: 6', await until(() => value('a') === 6), JSON.stringify(on('a').data['result']));
 
   const languages = SCREENS.find((screen) => screen.id === 'languages');
   session.dispatch('bar', { type: 'ui:click', ref: 'screen', payload: 'languages' });
   check('a screen from the menu shows its answers, and the menu marks it', await until(() => current().screen === 'languages' && areas() === `${(languages?.answers ?? []).map((id) => ANSWERS.find((answer) => answer.id === id)?.action).join(' ')} · ·`), areas());
+  const stacked = total();
+  const languagesAt = Number(current().position);
+  session.dispatch('bar', { type: 'ui:click', ref: 'screen', payload: 'overview' });
+  check('a screen already in the stack is gone back to, not stacked again', await until(() => current().screen === 'overview' && current().position === 1 && total() === stacked), `${String(current().position)} of ${total()}`);
+  session.dispatch('bar', { type: 'ui:click', ref: 'screen', payload: 'languages' });
+  check('and the other screen, at its own place', await until(() => current().screen === 'languages' && Number(current().position) === languagesAt && total() === stacked), `${String(current().position)} of ${total()}`);
 
   await ask('What can you do?');
   check('a question about the app itself is answered in a few words, with things to ask', on('a').action === 'answer.text' && on('a').data['title'] === 'What this app shows' && rows('a', 'examples').length === ANSWERS.length && areas() === 'answer.text · · ·', areas());
@@ -137,6 +150,16 @@ try {
   check('back is the answer before, as it was', await until(() => Number(current().position) === weather && on('a').data['title'] === 'Nothing here answers that yet'), `position ${String(current().position)}, ${areas()}`);
   session.dispatch('bar', { type: 'ui:click', ref: 'forward' });
   check('forward is the count again', await until(() => Number(current().position) === weather + 1 && on('a').action === 'rows.stat'), `position ${String(current().position)}, ${areas()}`);
+
+  session.dispatch('bar', { type: 'ui:click', ref: 'stack' });
+  const stack = current().stack ?? [];
+  check(
+    'the counter opens the stack: every answer, by what was asked or the screen it is',
+    on('bar').data['listing'] === true && stack.length === total() && stack[0]?.label === SCREENS[0]?.label && stack[1]?.label === 'Show me every greeting',
+    JSON.stringify(stack.slice(0, 3)),
+  );
+  session.dispatch('bar', { type: 'ui:click', ref: 'entry', payload: 2 });
+  check('an answer picked from the stack is shown as it was, and the list closes', await until(() => current().position === 2 && areas() === 'rows.table · · ·' && on('bar').data['listing'] === false), `${String(current().position)}, ${areas()}`);
 } finally {
   server.close();
 }
