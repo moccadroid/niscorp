@@ -1,0 +1,37 @@
+{
+  "id": "page",
+  "answers": "shell",
+  "label": "In the page — no server",
+  "hint": "offline, static hosting; the charter is not a security boundary",
+  "usage": "the shell runs in the page, no server (offline, static hosting)",
+  "summary": "its own shell",
+  "package": {
+    "scripts": {
+      "dev": "nisc dev",
+      "build": "tsc --noEmit && nisc build",
+      "export": "nisc export",
+      "start": "nisc start",
+      "check": "nisc check",
+      "test": "nisc check",
+      "typecheck": "tsc --noEmit",
+      "strata": "tsx src/dev/strata.ts"
+    },
+    "devDependencies": {
+      "@types/jsdom": "^30.0.0",
+      "jsdom": "^25.0.1"
+    }
+  },
+  "docs": {
+    "is": "its own shell",
+    "where": [
+      "src/app/        ARTIFACTS ONLY — the actions and the shell's canvases",
+      "src/boot.ts     the shell factory: the artifacts plus everything environmental"
+    ],
+    "runs": ["`npm run dev`", "`npm run build`", "`npm run check`", "`npm run export`"],
+    "decisions": [
+      "| D1 Posture | answered | **Its own shell, in the page — no server.** The shell, its actions and its endpoints run in the browser. Consequence, said plainly: **the charter is not enforcement here.** Whatever data and policy the page has, its user has; nothing in this posture is a security boundary. An app that needs one needs a server — moss. |",
+      "| D2 Environment | **open** | The app has no data yet. Open: what serves its endpoints — in-memory fixtures, PGlite in the page (your data lives in one browser profile: no sync, no other devices, gone if site data is cleared), a real backend, or a mix. |",
+      "| D5 Routing | derived · **partly open** | The first screen is drawn at build (`nisc export`) — one file per path, the screen as nobody in particular sees it — and the page's own shell picks it up. Open: which paths exist beyond `/`, and whether shell state syncs to the address bar. |"
+    ]
+  }
+}

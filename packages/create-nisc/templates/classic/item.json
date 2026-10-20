@@ -1,0 +1,28 @@
+{
+  "id": "classic",
+  "answers": "kind",
+  "label": "You — classic",
+  "hint": "you build the screens; a first one that works is there",
+  "usage": "you build the screens",
+  "default": true,
+  "docs": {
+    "open": [
+      "The entities, and how they relate.",
+      "Expected scale.",
+      "Who uses it: one person, or roles. More than one principal sketches its roles and charter now, not later.",
+      "AI features: now, later, never. (Later still shapes D3.)",
+      "Look and feel.",
+      "Where it is deployed.",
+      "What happens to the data long-term."
+    ],
+    "order": [
+      "**The interview** — every open item above, answered or delegated by name. ← here",
+      "**Scaffold** — done: the files `npm create nisc` wrote, one action rendering, and its checks (the artifacts, the grammar lock, the welcome screen).",
+      "**Kit** — the primitives, against a kitchen-sink action; lock the look before any feature.",
+      "**Data layer** — per D2/D3: schema, seed, entries; one read end to end.",
+      "**Actions** — domain by domain: list → detail → form.",
+      "**Writes** — per D4; one round trip: create → announce → re-read.",
+      "**Checks and polish** — a check per feature in `src/dev/`; empty states and transitions last."
+    ]
+  }
+}

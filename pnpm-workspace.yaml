@@ -1,5 +1,4 @@
 packages:
   - "packages/*"
-  - "packages/create-nisc/templates/*"
   - "apps/*"
   - "apps/lab/*"

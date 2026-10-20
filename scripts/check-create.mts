@@ -105,10 +105,12 @@ try {
     // By name, from its own folder: GNU tar (Git Bash) reads `C:\…` as a remote
     // host. And Windows' tar ends its lines CRLF.
     const entries = execFileSync('tar', ['-tzf', basename(tarball)], { cwd: dirname(tarball), encoding: 'utf8' }).trim().split(/\r?\n/);
-    const stray = entries.filter((entry) => /^package\/templates\/[^/]+\/(node_modules|dist|out|\.turbo)\//.test(entry));
+    const stray = entries.filter((entry) => /^package\/templates\/.*\/(node_modules|dist|out|\.turbo)\//.test(entry));
     if (stray.length > 0) throw new Error(`in the tarball, and should not be:\n${stray.slice(0, 12).join('\n')}`);
-    for (const template of ['moss-react', 'moss-dom', 'shell-react', 'shell-dom']) {
-      if (!entries.includes(`package/templates/${template}/package.json`)) throw new Error(`the ${template} template is not in the tarball`);
+    const templates = join(packagesDir, 'create-nisc', 'templates');
+    const items = readdirSync(templates, { withFileTypes: true }).filter((entry) => entry.isDirectory()).map((entry) => entry.name);
+    for (const file of ['package/templates/questions.json', ...items.map((item) => `package/templates/${item}/item.json`)]) {
+      if (!entries.includes(file)) throw new Error(`${file} is not in the tarball`);
     }
   });
 

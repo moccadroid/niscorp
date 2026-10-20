@@ -1,0 +1,5 @@
+[
+  { "id": "kind", "message": "Who leads?" },
+  { "id": "shell", "message": "Where does the shell run?" },
+  { "id": "kit", "message": "What draws the screen?" }
+]

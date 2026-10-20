@@ -1,0 +1,40 @@
+{
+  "id": "moss",
+  "answers": "shell",
+  "label": "On a server — moss",
+  "hint": "one shell per person on the server; the charter is enforced there",
+  "usage": "the shell runs on a server (moss)",
+  "summary": "behind moss",
+  "default": true,
+  "package": {
+    "scripts": {
+      "dev": "nisc dev",
+      "build": "tsc --noEmit && nisc build",
+      "start": "nisc start",
+      "check": "nisc check",
+      "test": "nisc check",
+      "typecheck": "tsc --noEmit",
+      "strata": "tsx src/dev/strata.ts"
+    },
+    "dependencies": {
+      "@electric-sql/pglite": "^0.5.1",
+      "@niscorp/charter": "workspace:^",
+      "@niscorp/moss": "workspace:^",
+      "@niscorp/tide": "workspace:^",
+      "@niscorp/vex": "workspace:^"
+    }
+  },
+  "docs": {
+    "is": "behind moss",
+    "where": [
+      "src/app/        ARTIFACTS ONLY — the manifest (app.ts), the charter, the actions, the shell",
+      "src/server/     the environment (runtime.ts), the boot, how a screen is drawn (document.ts)"
+    ],
+    "runs": ["`npm run dev`", "`npm run build`", "`npm run check`", "`npm start`"],
+    "decisions": [
+      "| D1 Posture | answered | **A moss server app.** The shell runs on the server, one per person; the browser is a canvas terminal over a socket. The charter is enforced there: a principal reaches only the actions and the data it is granted. |",
+      "| D2 Environment | derived · **open for deployment** | Development and the checks run on PGlite, an in-memory Postgres that starts empty every boot (`src/server/runtime.ts`). Open: the Postgres a deployment hands it, and where it runs. |",
+      "| D5 Routing | derived · **partly open** | The first screen is drawn on the server and adopted by the terminal — it costs nothing while nobody can sign in. Open: once sign-in exists, the browser keeps the session in a cookie no script can read, and the page is drawn for whoever it says (AGENTS.md rule 12) — a page drawn for somebody is theirs alone (`private, no-store`). Open: which paths are **pages** rather than the app, and whether the app's shell state syncs to the address bar. |"
+    ]
+  }
+}

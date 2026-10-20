@@ -25,6 +25,7 @@ npm create nisc my-app -- --yes            # the defaults: moss, React
 | `--moss` / `--page` | the shell on a server (the default), or in the page |
 | `--react` / `--dom` | React draws the screen (the default), or plain DOM |
 | `--yes` | take the defaults for anything not given, and ask nothing |
+| `--workspace` | depend on the nisc packages of the workspace it is made in (`workspace:^`) — for an app inside the nisc repository |
 | `--help`, `-h` | this list |
 
 With no terminal to ask in, the flags are all there is and the rest takes the
@@ -69,13 +70,57 @@ the files; make the app in a subfolder instead:
 npm create nisc site -- --page --dom
 ```
 
+## How an app is put together
+
+An app is made of **items**, one for each answer, plus the ones every app has.
+Each is a folder under `templates/`, and the questions are
+`templates/questions.json`: the command's code names no item, so a new kit, a
+new shell or a new kind of app is a new folder, and its flag and its place in
+the questions follow from it.
+
+```
+templates/
+  questions.json          [{ id, message }], in the order they are asked
+  <item>/
+    item.json             what it answers, and what it adds
+    files/                written into every app made with it
+    with/<other item>/    written only when that other item is chosen too
+    agents.md, plan.md    sections added to the app's AGENTS.md and PLAN.md
+```
+
+`item.json`:
+
+| field | |
+|---|---|
+| `id` | the folder's name, and its flag: `--<id>` |
+| `answers` | the question it answers; absent, every app has it |
+| `label`, `hint`, `usage`, `summary` | what the question offers, the flag's line in `--help`, and its words in the line said once it is made |
+| `default` | the answer taken when nobody gives one: exactly one per question |
+| `requires` | `{ question: item }` — what another question must be answered with; that question is then not asked |
+| `package` | a `package.json` fragment: fields, `scripts`, `dependencies`, `devDependencies` (`workspace:^` for a nisc package) |
+| `env` | the keys it asks for: `{ name, message, required? }`, or `{ choose, message, options: [{ value, label, keys? }] }` |
+| `docs` | its lines in AGENTS.md and PLAN.md: `is`, `where`, `runs`, `decisions`, `answered`, `open`, `order` |
+| `with` | `{ <other item>: { package, env, docs } }` — added only when that other item is chosen too |
+
+Two items that write the same file, or disagree about a field, a script or a
+dependency, is a mistake in the templates: it is refused before anything is
+written. In every file, `nisc-template-app` becomes the app's name.
+
+## Keys
+
+An item that needs keys asks for them after the questions, masked, and they go
+into `.env`; `.env.example` gets the names alone. A key left empty is filled in
+`.env` later. Keys are never flags — a flag stays in the shell's history — so
+with no terminal to ask in, they are read from the environment. A `.env` that
+is already there keeps what it holds and gains only the lines it lacks.
+
 ## Why it can be trusted to work
 
-The four templates are real apps in the nisc repository: typechecked, built and
-checked by its CI on every change. And CI makes each kind of app with the built
-`create-nisc`, outside the repository, installs it from the packed packages
-under pnpm's strict resolution, and typechecks, checks and builds it
-(`pnpm check:create`). A new app starts from something that works today.
+CI makes every kind of app with the built `create-nisc`, outside the
+repository, installs it from the packed packages under pnpm's strict
+resolution, and typechecks, checks, builds and serves it (`pnpm check:create`);
+its tests make every combination the questions allow and refuse any two items
+that collide. A new app starts from something that works today.
 
 ## License
 

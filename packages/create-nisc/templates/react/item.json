@@ -1,0 +1,31 @@
+{
+  "id": "react",
+  "answers": "kit",
+  "label": "React",
+  "usage": "React draws the screen",
+  "summary": "React",
+  "default": true,
+  "package": {
+    "dependencies": {
+      "react": "^19.2.4",
+      "react-dom": "^19.2.4"
+    },
+    "devDependencies": {
+      "@types/react": "^19.2.14",
+      "@types/react-dom": "^19.2.3",
+      "@vitejs/plugin-react": "^5.0.4"
+    }
+  },
+  "docs": {
+    "is": "drawn with React",
+    "answered": ["**What draws the screen:** React. The kit in `src/ui/` is where the look lives; a layout names components, never styles."]
+  },
+  "with": {
+    "moss": {
+      "docs": { "where": ["src/ui/         the kit — the only renderer code, with src/main.tsx, the terminal entry"] }
+    },
+    "page": {
+      "docs": { "where": ["src/ui/         the kit and the screen — the only renderer code, with src/main.tsx, the entry"] }
+    }
+  }
+}

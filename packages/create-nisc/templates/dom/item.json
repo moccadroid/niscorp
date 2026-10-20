@@ -1,0 +1,24 @@
+{
+  "id": "dom",
+  "answers": "kit",
+  "label": "Plain DOM",
+  "hint": "no framework in the page",
+  "usage": "plain DOM draws the screen, no framework in the page",
+  "summary": "plain DOM",
+  "docs": {
+    "is": "drawn with plain DOM (nova’s DOM adapter — no framework in the page)",
+    "answered": ["**What draws the screen:** plain DOM (nova’s DOM adapter — no framework in the page). The kit in `src/ui/` is where the look lives; a layout names components, never styles."]
+  },
+  "with": {
+    "moss": {
+      "package": {
+        "dependencies": { "jsdom": "^25.0.1" },
+        "devDependencies": { "@types/jsdom": "^30.0.0" }
+      },
+      "docs": { "where": ["src/ui/         the kit — the only renderer code, with src/main.ts, the terminal entry"] }
+    },
+    "page": {
+      "docs": { "where": ["src/ui/         the kit and the screen — the only renderer code, with src/main.ts, the entry"] }
+    }
+  }
+}
