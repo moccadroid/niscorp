@@ -1,5 +1,22 @@
 # @niscorp/nisc
 
+## 0.8.1
+
+### Patch Changes
+
+- 8eaea60: The docs say where `server.checkFunctions()` goes: after every route of the app's own, before it listens.
+
+  Nobody's shell makes its reads in-process, and the server takes no route once it has answered one: a route mounted after the check throws `Can not add a route since the matcher is already built.` moss's DOCS, nisc's AGENTS and the cli README say so.
+
+- 1a67306: `nisc start` checks the app's functions after the project's `routes` and the site are mounted.
+
+  Checking the functions answers requests in-process, and the server takes no route once it has answered one. An app with functions whose first screen reads as it mounts failed to start: `Can not add a route since the matcher is already built.`
+
+- Updated dependencies [8eaea60]
+- Updated dependencies [1a67306]
+  - @niscorp/moss@0.8.1
+  - @niscorp/cli@0.8.1
+
 ## 0.8.0
 
 ### Minor Changes
