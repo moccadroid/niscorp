@@ -26,10 +26,6 @@
       "nisc.config.ts  how the app boots and how its screens are drawn, for the `nisc` command",
       "strata.lock.json  the grammar versions the source is written at (rule 20) — moved only",
       "                by `npm run strata verify`, never by hand"
-    ],
-    "decisions": [
-      "| D3 Reads | **open** | Vex entries (`{ fingerprint, context }`, the shape an AI feature can reach later) or plain endpoints with hand-written handlers. |",
-      "| D4 Writes | **open** | Vex mutation entries or plain endpoint handlers. Either way a write is an endpoint, never inline. |"
     ]
   }
 }

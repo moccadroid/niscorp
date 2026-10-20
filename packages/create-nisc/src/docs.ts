@@ -5,9 +5,8 @@ export type DocFacts = {
   today: string;
   nisc: string;
   parts: readonly Part[];
-  // Whole sections an item adds, from its own agents.md and plan.md.
+  // The sections items add to AGENTS.md, each from its own agents-section.md.
   agents: readonly string[];
-  plan: readonly string[];
 };
 
 const all = <K extends 'is' | 'where' | 'runs' | 'decisions' | 'answered' | 'open' | 'order'>(parts: readonly Part[], key: K): string[] =>
@@ -69,6 +68,6 @@ ${all(facts.parts, 'open')
 ${all(facts.parts, 'order')
   .map((line, at) => `${at + 1}. ${line}`)
   .join('\n')}
-${sections(facts.plan)}`;
+`;
 
 export const gitignoreLines = ['node_modules/', 'dist/', 'out/', '.strata/', '*.tsbuildinfo', '.env', '.env.*', '!.env.example'];

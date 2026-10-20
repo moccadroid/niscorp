@@ -3,10 +3,14 @@
 
 :root {
   --k-bg: #f6f4ef;
+  --k-surface: #ffffff;
   --k-ink: #1d1d1f;
   --k-muted: #6b6a66;
+  --k-line: #e4e1d9;
   --k-accent: #2f5bea;
   --k-accent-ink: #ffffff;
+  --k-accent-soft: #e8edfd;
+  --k-error: #b42318;
   --k-radius: 10px;
   font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
   color: var(--k-ink);
@@ -24,10 +28,12 @@ html, body, #root { margin: 0; min-height: 100%; }
   gap: 16px;
 }
 
-.k-row { display: flex; align-items: center; gap: 16px; }
+.k-row { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; }
 .k-heading { margin: 0; font-size: 32px; letter-spacing: -0.01em; }
 .k-text { margin: 0; line-height: 1.55; }
 .k-muted { color: var(--k-muted); }
+.k-strong { font-weight: 650; }
+.k-error { color: var(--k-error); }
 
 .k-button {
   border: 0;
@@ -40,3 +46,113 @@ html, body, #root { margin: 0; min-height: 100%; }
   cursor: pointer;
 }
 .k-button:active { transform: translateY(1px); }
+.k-button.k-quiet {
+  padding: 6px 12px;
+  font-weight: 500;
+  background: var(--k-accent-soft);
+  color: var(--k-accent);
+}
+
+/* An app a model leads: a bar, the answer, the line to ask in. */
+
+.k-frame { min-height: 100vh; display: flex; flex-direction: column; }
+
+.k-bar {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  padding: 12px 24px;
+  background: var(--k-bg);
+  border-bottom: 1px solid var(--k-line);
+}
+.k-bar .k-row { gap: 8px; }
+
+/* The areas arrange themselves by how many hold a card: one is the whole
+   width, two sit side by side, three put the first above the other two, four
+   are two by two. An area with nothing in it takes no room. */
+.k-answers {
+  flex: 1;
+  width: 100%;
+  max-width: 1080px;
+  margin: 0 auto;
+  box-sizing: border-box;
+  padding: 24px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-content: start;
+  gap: 16px;
+}
+.k-area { min-width: 0; }
+.k-area:not(:has(.k-card)) { display: none; }
+.k-area-a { grid-column: 1 / -1; }
+.k-answers:has(.k-area-b .k-card):not(:has(.k-area-c .k-card)) .k-area-a,
+.k-answers:has(.k-area-d .k-card) .k-area-a { grid-column: auto; }
+
+.k-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px;
+  background: var(--k-surface);
+  border: 1px solid var(--k-line);
+  border-radius: calc(var(--k-radius) + 4px);
+}
+.k-card-title { margin: 0; font-size: 15px; font-weight: 650; letter-spacing: 0.01em; }
+
+.k-table-wrap { overflow-x: auto; }
+.k-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.k-table th { text-align: left; font-weight: 600; color: var(--k-muted); padding: 6px 8px; border-bottom: 1px solid var(--k-line); }
+.k-table td { padding: 8px; border-bottom: 1px solid var(--k-line); }
+.k-table tr:last-child td { border-bottom: 0; }
+
+.k-stat { display: flex; align-items: baseline; gap: 10px; }
+.k-stat-value { font-size: 44px; font-weight: 700; letter-spacing: -0.02em; line-height: 1; }
+.k-stat-label { color: var(--k-muted); }
+
+.k-bars { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.k-bars-item { display: grid; grid-template-columns: minmax(80px, 30%) 1fr auto; align-items: center; gap: 10px; font-size: 14px; }
+.k-bars-track { height: 10px; border-radius: 5px; background: var(--k-accent-soft); overflow: hidden; }
+.k-bars-fill { display: block; height: 100%; border-radius: 5px; background: var(--k-accent); }
+.k-bars-value { font-variant-numeric: tabular-nums; color: var(--k-muted); }
+
+.k-field { display: flex; flex-direction: column; gap: 6px; }
+.k-field-label { font-size: 13px; font-weight: 600; color: var(--k-muted); }
+
+.k-input {
+  flex: 1;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 10px 14px;
+  font: inherit;
+  color: inherit;
+  background: var(--k-surface);
+  border: 1px solid var(--k-line);
+  border-radius: var(--k-radius);
+  outline: none;
+}
+.k-input:focus { border-color: var(--k-accent); box-shadow: 0 0 0 3px var(--k-accent-soft); }
+
+.k-prompt {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 24px;
+  background: var(--k-bg);
+  border-top: 1px solid var(--k-line);
+}
+.k-prompt > .k-input { flex: 1 1 240px; }
+.k-prompt > .k-text { flex-basis: 100%; }
+
+@media (max-width: 720px) {
+  .k-answers { grid-template-columns: 1fr; padding: 16px; }
+  .k-area-a { grid-column: auto; }
+  .k-bar, .k-prompt { padding-left: 16px; padding-right: 16px; }
+}

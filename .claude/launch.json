@@ -172,80 +172,18 @@
       "port": 4318
     },
     {
-      "name": "template-shell-react",
+      "name": "mira",
       "runtimeExecutable": "pnpm",
       "runtimeArgs": [
         "--filter",
-        "nisc-template-shell-react",
-        "exec",
-        "vite",
-        "preview",
-        "--outDir",
-        "out",
-        "--port",
-        "4321",
-        "--strictPort"
-      ],
-      "port": 4321
-    },
-    {
-      "name": "template-shell-dom",
-      "runtimeExecutable": "pnpm",
-      "runtimeArgs": [
-        "--filter",
-        "nisc-template-shell-dom",
-        "exec",
-        "vite",
-        "preview",
-        "--outDir",
-        "out",
-        "--port",
-        "4322",
-        "--strictPort"
-      ],
-      "port": 4322
-    },
-    {
-      "name": "template-moss-react",
-      "runtimeExecutable": "pnpm",
-      "runtimeArgs": [
-        "--filter",
-        "nisc-template-moss-react",
-        "exec",
-        "nisc",
-        "start",
-        "--port",
-        "4323"
-      ],
-      "port": 4323
-    },
-    {
-      "name": "template-moss-dom",
-      "runtimeExecutable": "pnpm",
-      "runtimeArgs": [
-        "--filter",
-        "nisc-template-moss-dom",
-        "exec",
-        "nisc",
-        "start",
-        "--port",
-        "4324"
-      ],
-      "port": 4324
-    },
-    {
-      "name": "template-moss-react-dev",
-      "runtimeExecutable": "pnpm",
-      "runtimeArgs": [
-        "--filter",
-        "nisc-template-moss-react",
+        "mira",
         "exec",
         "nisc",
         "dev",
         "--port",
-        "4325"
+        "5201"
       ],
-      "port": 4325
+      "port": 5201
     }
   ]
 }

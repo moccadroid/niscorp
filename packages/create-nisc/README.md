@@ -6,22 +6,32 @@ A new [nisc](https://github.com/moccadroid/niscorp) application.
 npm create nisc
 ```
 
-Three questions, because they are what shape the files:
+Four questions, because they are what shape the files:
 
 1. **Where should it go?** The folder's name becomes the app's name.
-2. **Where does the shell run?** On a server — moss: one shell per person on
+2. **Who leads?** You — classic: you build the screens, and a first one that
+   works is there. Or a model — model-first: there is no navigation; a person
+   types a message, and the answer is a screen composed from the app's actions
+   (below).
+3. **Where does the shell run?** On a server — moss: one shell per person on
    the server, the charter enforced there. Or in the page — no server: offline,
-   static hosting, and the charter is not a security boundary.
-3. **What draws the screen?** React, or plain DOM (no framework in the page).
+   static hosting, and the charter is not a security boundary. A model-first
+   app is behind moss, and is not asked.
+4. **What draws the screen?** React, or plain DOM (no framework in the page).
+
+A model-first app then asks for its keys, masked (see "Keys" below): Groq for
+gpt-oss-120b, TypeSafe for Jev, and the embeddings — OpenAI, OpenRouter or none.
 
 ```bash
 npm create nisc my-app -- --page --dom     # flags answer the questions
-npm create nisc my-app -- --yes            # the defaults: moss, React
+npm create nisc my-app -- --model-first    # a model leads; the keys are asked
+npm create nisc my-app -- --yes            # the defaults: classic, moss, React
 ```
 
 | | |
 |---|---|
 | `dir` | where the app goes (default `my-nisc-app`) |
+| `--classic` / `--model-first` | you build the screens (the default), or a model composes one for every message |
 | `--moss` / `--page` | the shell on a server (the default), or in the page |
 | `--react` / `--dom` | React draws the screen (the default), or plain DOM |
 | `--yes` | take the defaults for anything not given, and ask nothing |
@@ -49,6 +59,23 @@ The structure the rulebook describes, and a first screen that works:
   checked against** — a caret range from each one's version (such as `^0.2.0`), not
   whatever is newest — and `@niscorp/nisc` itself, which pins that set
   exactly and carries the rulebook.
+
+A model-first app has, instead of the welcome screen:
+
+- a frame of three parts — the bar (what was asked, back and forward through
+  the answers), four areas an answer is placed on, and the line to ask in;
+- **the message loop** (`src/server/compose/`): Jev picks the prepared answers
+  that fit a message in about 300 ms, and the screen shows them at once;
+  gpt-oss-120b then fills in what the message says (a form's fields, the value
+  to filter by) and its plan replaces the first. The model opens a form filled
+  in; only the person saves it;
+- **prepared answers** (`src/app/answers.ts`): an action, the input it opens
+  with, and what it shows in words — what a message is matched to;
+- eight small actions — the line and the bar, and a table, a number, bars, a
+  form, a notice and the welcome for the areas — over a table of five
+  hello-worlds, so the first question has a real answer;
+- a check that runs the loop offline with a scripted decision model and chat
+  model: typed, picked, filled in, placed, read, written, back and forward.
 
 And two documents:
 
@@ -85,7 +112,7 @@ templates/
     item.json             what it answers, and what it adds
     files/                written into every app made with it
     with/<other item>/    written only when that other item is chosen too
-    agents.md, plan.md    sections added to the app's AGENTS.md and PLAN.md
+    agents-section.md     a section added to the app's AGENTS.md
 ```
 
 `item.json`:

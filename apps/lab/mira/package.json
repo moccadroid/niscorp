@@ -1,0 +1,44 @@
+{
+  "name": "mira",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "dev": "nisc dev",
+    "build": "tsc --noEmit && nisc build",
+    "start": "nisc start",
+    "check": "nisc check",
+    "test": "nisc check",
+    "typecheck": "tsc --noEmit",
+    "strata": "tsx src/dev/strata.ts"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "^0.5.1",
+    "@niscorp/charter": "workspace:^",
+    "@niscorp/moss": "workspace:^",
+    "@niscorp/nova": "workspace:^",
+    "@niscorp/prism": "workspace:^",
+    "@niscorp/signal": "workspace:^",
+    "@niscorp/strata": "workspace:^",
+    "@niscorp/tide": "workspace:^",
+    "@niscorp/vex": "workspace:^",
+    "openai": "^6.33.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@niscorp/cli": "workspace:^",
+    "@niscorp/nisc": "workspace:^",
+    "@types/node": "^26.6.4",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.0.4",
+    "tsx": "^4.23.1",
+    "typescript": "^6.0.2",
+    "vite": "^7.1.12"
+  }
+}

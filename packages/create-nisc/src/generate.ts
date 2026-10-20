@@ -163,9 +163,11 @@ export const generate = (options: CreateOptions): Created => {
   }
   planned.set('package.json', `${JSON.stringify(manifestOf(parts, options), null, 2)}\n`);
 
-  const extra = (file: string): string[] =>
-    items.flatMap((item) => (existsSync(join(catalog.root, item.id, file)) ? [readFileSync(join(catalog.root, item.id, file), 'utf8').split(TOKEN).join(options.name)] : []));
-  const facts = { name: options.name, today: options.today, nisc: options.versions['@niscorp/nisc'] ?? 'unknown', parts, agents: extra('agents.md'), plan: extra('plan.md') };
+  const sections = items.flatMap((item) => {
+    const path = join(catalog.root, item.id, 'agents-section.md');
+    return existsSync(path) ? [readFileSync(path, 'utf8').split(TOKEN).join(options.name)] : [];
+  });
+  const facts = { name: options.name, today: options.today, nisc: options.versions['@niscorp/nisc'] ?? 'unknown', parts, agents: sections };
   planned.set('AGENTS.md', agentsDoc(facts));
   planned.set('PLAN.md', planDoc(facts));
 

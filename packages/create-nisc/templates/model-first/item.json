@@ -1,0 +1,66 @@
+{
+  "id": "model-first",
+  "answers": "kind",
+  "label": "A model — model-first",
+  "hint": "every message is answered with a screen composed from the app's actions",
+  "usage": "a model leads: each message is answered with a screen composed from the app's actions",
+  "summary": "model-first",
+  "requires": { "shell": "moss" },
+  "package": {
+    "dependencies": {
+      "@niscorp/signal": "workspace:^",
+      "openai": "^6.33.0"
+    }
+  },
+  "env": [
+    { "name": "GROQ_API_KEY", "message": "Groq API key — gpt-oss-120b fills in each answer", "required": true },
+    { "name": "TYPESAFE_API_KEY", "message": "TypeSafe API key — Jev picks an answer's parts in about 300 ms; without it the chat model picks, slower" },
+    {
+      "choose": "EMBEDDINGS",
+      "message": "Embeddings — for memory, and to narrow a catalog past 255 answers",
+      "options": [
+        { "value": "openai", "label": "OpenAI", "hint": "text-embedding-3-small", "keys": [{ "name": "OPENAI_API_KEY", "message": "OpenAI API key — embeddings" }] },
+        { "value": "openrouter", "label": "OpenRouter", "hint": "qwen3-embedding-8b", "keys": [{ "name": "OPENROUTER_API_KEY", "message": "OpenRouter API key — embeddings" }] },
+        { "value": "none", "label": "None", "hint": "no embeddings" }
+      ]
+    }
+  ],
+  "docs": {
+    "is": "led by a model: every message is answered with a screen composed from the app's actions",
+    "where": [
+      "src/app/answers.ts  the prepared answers a screen is composed from — an action, its input, and what it shows in words",
+      "src/server/compose/ the message loop: Jev picks prepared answers, gpt-oss-120b fills them in, the plan is placed",
+      "src/server/models/  the models, from .env",
+      "src/db/         the tables, and the hello-world rows"
+    ],
+    "decisions": [
+      "| D3 Reads | answered | **Vex entries.** An answer's action reads one by its fingerprint (`/api/vex`), under the person's policy, and again whenever what it read changes (`refresh: 'reactive'`). |",
+      "| D4 Writes | answered | **Vex mutation entries**, sent from a form an answer opened (`answers.write`) — by the person, never by the model. |",
+      "| D6 Who answers a message | answered | Jev picks the prepared answers that fit (`TYPESAFE_API_KEY`); gpt-oss-120b on Groq fills them in (`GROQ_API_KEY`). Without Jev the chat model picks too, slower and with no probabilities. |",
+      "| D7 What a screen is made of | answered · **open: the answers** | Prepared answers (`src/app/answers.ts`) placed on four areas. Which answers there are follows the data. |",
+      "| D8 History | derived · **open** | The answers one shell was given, kept while it lives; a reload starts again. Open: whether a person's answers outlive the shell, and memory beyond that. |",
+      "| D9 Embeddings | answered · **open: memory** | `EMBEDDINGS` in `.env`; they narrow the prepared answers to the 255 nearest a message when there are more. |"
+    ],
+    "answered": [
+      "**Who leads:** a model. A message is answered with a screen: Jev picks the prepared answers that fit (`src/app/answers.ts`), gpt-oss-120b fills in what the message says, and the plan is placed on the four areas. The keys are in `.env`."
+    ],
+    "open": [
+      "The entities, and how they relate — and what a person will ask about them.",
+      "Expected scale.",
+      "Who uses it: one person, or roles. More than one principal sketches its roles and charter now, not later.",
+      "Memory: what the app keeps of a person between messages.",
+      "Look and feel.",
+      "Where it is deployed.",
+      "What happens to the data long-term."
+    ],
+    "order": [
+      "**The interview** — every open item above, answered or delegated by name. ← here",
+      "**Scaffold** — done: the frame, the message loop, eight actions, five prepared answers over hello-world rows, and their checks.",
+      "**Data** — per D2/D3: your tables in `src/db/schema.ts`, your reads and writes in `src/app/vex/`; the greetings go.",
+      "**Prepared answers** — one for each thing a person will want to see: an action, its input, and what it shows, in words a model can match a message to.",
+      "**Actions** — your own, small: one purpose each, a description that says what it shows, an `input` for what an answer fills in.",
+      "**Writes** — per D4; a form an answer opens, filled in by the model, saved by the person.",
+      "**Checks** — every prepared answer has a message in `src/dev/compose-check.ts` that must reach it."
+    ]
+  }
+}

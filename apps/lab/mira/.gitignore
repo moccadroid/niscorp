@@ -1,0 +1,8 @@
+node_modules/
+dist/
+out/
+.strata/
+*.tsbuildinfo
+.env
+.env.*
+!.env.example

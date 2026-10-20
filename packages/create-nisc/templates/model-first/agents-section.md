@@ -1,0 +1,13 @@
+## How the model leads
+
+There is no navigation and no chat history. A person types a message into the line at the bottom, and the answer is a screen: up to four small actions placed on the areas `a`–`d`, most important first. The bar keeps what was asked, and goes back and forward through the answers.
+
+- **The message loop is `src/server/compose/`**, the function `ask`:
+  1. **Jev picks.** One pass of the decision model over the message alone: for each prepared answer, does it answer the message — and for each input it chooses from rows (`choose`), which value. A yes is a probability of 0.5 or more. This lands in about 300 ms, and the screen shows it at once.
+  2. **The model fills in.** gpt-oss-120b sees the prepared answers, what Jev picked and what was on screen, and replies with a closed structure: `{ answers: [{ id, set }] }`. It is rejected whole if it names an answer that is not there, sets an input it may not, or chooses a value that is not among the rows. When it lands and differs, it replaces Jev's plan — in the history, and on screen while that answer is still the one shown. When Jev is sure of nothing, the model is asked before anything is shown, and a notice says nothing answers only when it finds nothing either.
+  3. **The plan is placed by the bar,** with nova's `reconcile`: each area holds exactly what the plan lists for it.
+- **A prepared answer is data, in `src/app/answers.ts`:** an action, the input it is opened with, and what it shows in words. Those words are what a message is matched to — write them as what a person would want to see, not as the action's name. Every thing a person will ask about gets a prepared answer.
+- **The actions are small, with one purpose each:** a table, a number, bars, a form. Each says what it shows (`description`) and declares what an answer may fill in (`input`). A new kind of view is a new action, not a bigger one.
+- **The model never presses anything.** It can open a form filled in; only the person saves it. A write goes through a write the app ships, named by the form's prepared answer (`answers.write`).
+- **The keys are in `.env`:** `GROQ_API_KEY` (gpt-oss-120b; without it, a message is answered with a notice saying so), `TYPESAFE_API_KEY` (Jev; without it the chat model picks, slower and with no probabilities), and `EMBEDDINGS` with its key. Embeddings narrow the prepared answers to the 255 nearest a message when there are more; they are there for memory too.
+- **`src/dev/compose-check.ts` runs the loop offline**, with a scripted decision model and chat model: every prepared answer has a message that must reach it.

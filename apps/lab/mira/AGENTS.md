@@ -1,0 +1,39 @@
+# mira
+
+A nisc application. **The rules it is built by are `node_modules/@niscorp/nisc/AGENTS.md`** — read all of it before changing anything here (it is there once the app's dependencies are installed). It is the rulebook for the nisc version this app has installed, and `STYLE_GUIDE.md` sits beside it. The grammars it names — a layout node, an `ActionDefinition`, a Prism config, a charter, a Vex DSL — are in each package's own `README.md` and `DESIGN.md`, under `node_modules/@niscorp/<name>/`.
+
+What is particular to this app:
+
+- **Its decisions are in PLAN.md.** What was answered when it was made, what was derived, and what is still open. An open decision point is asked before anything is built on it, never resolved silently.
+- **It is led by a model: every message is answered with a screen composed from the app's actions**, behind moss, drawn with React.
+- **Where things go:**
+
+```
+src/app/answers.ts  the prepared answers a screen is composed from — an action, its input, and what it shows in words
+src/server/compose/ the message loop: Jev picks prepared answers, gpt-oss-120b fills them in, the plan is placed
+src/server/models/  the models, from .env
+src/db/         the tables, and the hello-world rows
+src/app/        ARTIFACTS ONLY — the manifest (app.ts), the charter, the actions, the shell
+src/server/     the environment (runtime.ts), the boot, how a screen is drawn (document.ts)
+src/ui/         the kit — the only renderer code, with src/main.tsx, the terminal entry
+src/dev/        the checks (`npm run check`) — a new feature adds its own
+nisc.config.ts  how the app boots and how its screens are drawn, for the `nisc` command
+strata.lock.json  the grammar versions the source is written at (rule 20) — moved only
+                by `npm run strata verify`, never by hand
+```
+
+- **How it runs:** `npm run dev`, `npm run build`, `npm run check`, `npm start` — all of them the `nisc` command — and `npm run strata status` for the grammars.
+
+## How the model leads
+
+There is no navigation and no chat history. A person types a message into the line at the bottom, and the answer is a screen: up to four small actions placed on the areas `a`–`d`, most important first. The bar keeps what was asked, and goes back and forward through the answers.
+
+- **The message loop is `src/server/compose/`**, the function `ask`:
+  1. **Jev picks.** One pass of the decision model over the message alone: for each prepared answer, does it answer the message — and for each input it chooses from rows (`choose`), which value. A yes is a probability of 0.5 or more. This lands in about 300 ms, and the screen shows it at once.
+  2. **The model fills in.** gpt-oss-120b sees the prepared answers, what Jev picked and what was on screen, and replies with a closed structure: `{ answers: [{ id, set }] }`. It is rejected whole if it names an answer that is not there, sets an input it may not, or chooses a value that is not among the rows. When it lands and differs, it replaces Jev's plan — in the history, and on screen while that answer is still the one shown. When Jev is sure of nothing, the model is asked before anything is shown, and a notice says nothing answers only when it finds nothing either.
+  3. **The plan is placed by the bar,** with nova's `reconcile`: each area holds exactly what the plan lists for it.
+- **A prepared answer is data, in `src/app/answers.ts`:** an action, the input it is opened with, and what it shows in words. Those words are what a message is matched to — write them as what a person would want to see, not as the action's name. Every thing a person will ask about gets a prepared answer.
+- **The actions are small, with one purpose each:** a table, a number, bars, a form. Each says what it shows (`description`) and declares what an answer may fill in (`input`). A new kind of view is a new action, not a bigger one.
+- **The model never presses anything.** It can open a form filled in; only the person saves it. A write goes through a write the app ships, named by the form's prepared answer (`answers.write`).
+- **The keys are in `.env`:** `GROQ_API_KEY` (gpt-oss-120b; without it, a message is answered with a notice saying so), `TYPESAFE_API_KEY` (Jev; without it the chat model picks, slower and with no probabilities), and `EMBEDDINGS` with its key. Embeddings narrow the prepared answers to the 255 nearest a message when there are more; they are there for memory too.
+- **`src/dev/compose-check.ts` runs the loop offline**, with a scripted decision model and chat model: every prepared answer has a message that must reach it.

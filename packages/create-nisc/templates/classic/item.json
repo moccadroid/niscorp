@@ -6,6 +6,10 @@
   "usage": "you build the screens",
   "default": true,
   "docs": {
+    "decisions": [
+      "| D3 Reads | **open** | Vex entries (`{ fingerprint, context }`, the shape an AI feature can reach later) or plain endpoints with hand-written handlers. |",
+      "| D4 Writes | **open** | Vex mutation entries or plain endpoint handlers. Either way a write is an endpoint, never inline. |"
+    ],
     "open": [
       "The entities, and how they relate.",
       "Expected scale.",

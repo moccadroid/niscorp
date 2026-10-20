@@ -9,7 +9,10 @@ import { testedSet } from './set';
 const DEFAULT_DIR = 'my-nisc-app';
 const OWN_FLAGS = ['--yes', '--workspace', '--help', '-h'];
 
-const answering = (catalog: Catalog, question: Question): Item[] => catalog.items.filter((item) => item.answers === question.id);
+// The default first, then the rest in the order of their folders.
+const defaultFirst = (items: readonly Item[]): Item[] => [...items].sort((one, other) => Number(other.default === true) - Number(one.default === true));
+
+const answering = (catalog: Catalog, question: Question): Item[] => defaultFirst(catalog.items.filter((item) => item.answers === question.id));
 
 // Written from the templates, so a new kit, shell or kind of app is in it without a line here changing.
 const usageOf = (catalog: Catalog): string => {
@@ -110,7 +113,7 @@ const main = async (): Promise<void> => {
 
   for (const question of catalog.questions) {
     if (picks[question.id] !== undefined) continue;
-    const choices = offered(catalog, question.id, picks);
+    const choices = defaultFirst(offered(catalog, question.id, picks));
     const preferred = choices.find((item) => item.default === true) ?? choices[0];
     if (preferred === undefined) refuse(`nothing can answer "${question.message}" beside ${Object.values(picks).map((id) => `--${id}`).join(' ')}`);
     picks[question.id] =

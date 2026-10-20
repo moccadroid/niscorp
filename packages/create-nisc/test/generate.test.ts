@@ -46,9 +46,29 @@ const make = (picks: Picks, name: string, extra: Partial<Parameters<typeof gener
 describe('generate — every app the questions can make', () => {
   const apps = everyApp();
 
-  it('the questions can make the four apps there always were', () => {
-    const named = apps.map((picks) => catalog.questions.map((question) => picks[question.id]).join('+'));
-    expect(named).toEqual(expect.arrayContaining(['classic+moss+react', 'classic+moss+dom', 'classic+page+react', 'classic+page+dom']));
+  it('the questions can make the four apps there always were, and a model-first app behind moss with either kit', () => {
+    const named = apps.map((picks) => catalog.questions.map((question) => picks[question.id]).join('+')).sort();
+    expect(named).toEqual(['classic+moss+dom', 'classic+moss+react', 'classic+page+dom', 'classic+page+react', 'model-first+moss+dom', 'model-first+moss+react']);
+  });
+
+  it('model-first is behind moss: asked for, the shell question is answered, and in the page it is refused', () => {
+    expect(completed(catalog, { kind: 'model-first' })).toEqual({ kind: 'model-first', shell: 'moss', kit: 'react' });
+    expect(() => generate({ dir: join(scratch, 'model-page'), name: 'model-page', picks: { kind: 'model-first', shell: 'page', kit: 'react' }, versions: SET, today: TODAY })).toThrow(/"model-first" needs "moss"/);
+  });
+
+  it('a model-first app has its keys in .env, the names in .env.example, and its own sections in AGENTS.md and PLAN.md', () => {
+    const { dir } = make(completed(catalog, { kind: 'model-first' }), 'model-keys', { env: { GROQ_API_KEY: 'gsk-test', EMBEDDINGS: 'openrouter', OPENROUTER_API_KEY: 'or-test' } });
+    expect(read(dir, '.env')).toContain('GROQ_API_KEY=gsk-test\n');
+    expect(read(dir, '.env')).toContain('EMBEDDINGS=openrouter\n');
+    expect(read(dir, '.env')).toContain('OPENROUTER_API_KEY=or-test\n');
+    expect(read(dir, '.env')).not.toContain('OPENAI_API_KEY');
+    expect(read(dir, '.env.example')).toContain('GROQ_API_KEY=\n');
+    expect(read(dir, '.env.example')).not.toContain('gsk-test');
+    expect(read(dir, 'AGENTS.md')).toContain('## How the model leads');
+    expect(read(dir, 'PLAN.md')).toContain('| D6 Who answers a message | answered |');
+    expect(read(dir, 'PLAN.md')).toContain('| D3 Reads | answered | **Vex entries.**');
+    expect(read(dir, 'src/db/schema.ts')).toContain("id: 'model-keys.app'");
+    expect(JSON.parse(read(dir, 'package.json')).dependencies['@niscorp/signal']).toBe('^0.4.9');
   });
 
   it.each(apps.map((picks) => [Object.values(picks).join('-'), picks] as const))('%s: named, pinned, documented, and nothing of the repository left in it', (label, picks) => {
