@@ -29,11 +29,12 @@ const main = async (): Promise<void> => {
   const port = Number(process.env['PORT'] ?? 8796);
   const publicUrl = process.env['PUBLIC_URL'] ?? `http://localhost:${port}`;
   const { server, close } = await bootOn(runtime, { publicUrl, sshAddress: process.env['LYCEUM_SSH_ADDRESS'] ?? '' });
-  await server.checkFunctions();
 
   mountLogin(server, runtime.pool);
   if (existsSync(dist)) mountSite(server, dist);
   else console.warn(`[lyceum] no ${dist} — serving the app surfaces only; run \`pnpm --filter lyceum build\` for the terminal.`);
+  // After every route: the check answers requests in-process, and Hono takes no route once it has answered one.
+  await server.checkFunctions();
 
   const httpServer = serve({ fetch: server.fetch, port });
   attachSocket(httpServer, server.socket);
