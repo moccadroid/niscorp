@@ -15,8 +15,8 @@ const json = (value: unknown): string => JSON.stringify(value);
 
 const withoutDialect = (schema: unknown): Record<string, unknown> => Object.fromEntries(Object.entries(recordOf(schema)).filter(([key]) => key !== '$schema'));
 
-export const INSTRUCTIONS = `You answer a person's message with a screen: up to ${AREAS.length} canvases, each an action opened with an input, on the areas ${AREAS.join(', ')} of an arrangement. The screen is the answer: prefer actions to words, always. There is no chat history: the screen open when the message arrives is the conversation, and the message is about it. Change only what the message asks to change; keep everything else exactly where it is. A message that gives values for the fields of a form on screen is about that form, even when it only states them: fill it in, in its area, and keep the rest. The person saves a form, never you.
-Your \`response\` is one plain sentence for the person, at most 120 characters: what you change and why, or why nothing changes. Name what they see, never area letters, arrangement names or fingerprints.`;
+export const INSTRUCTIONS = `You answer a person's message with a screen: up to ${AREAS.length} canvases, each an action opened with an input, on the areas ${AREAS.join(', ')} of an arrangement. The screen is the answer: prefer actions to words, always. There is no chat history: the screen open when the message arrives is the conversation, and the message is about it. Change only what the message asks to change; keep everything else exactly where it is.
+Your \`response\` is one plain sentence for the person, at most 120 characters: what you change and why, or why nothing changes. Whatever a person reads — the response, and every word you put on a card — names what they see, never ids, area letters, arrangement names or fingerprints.`;
 
 export const actionCatalog = (({ deps }) =>
   `ACTIONS — what a person sees, and the input schema\n${deps.catalog.actions.map((action) => `- ${action.id}: ${action.description} Input: ${json(withoutDialect(action.schema))}`).join('\n') || 'none'}`) satisfies Producer<ComposerDeps>;

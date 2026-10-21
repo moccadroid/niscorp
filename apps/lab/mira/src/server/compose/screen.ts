@@ -2,10 +2,12 @@ import type { Shell } from '@niscorp/nova';
 import { AREAS } from '../../app/shell/areas';
 import type { AreaId } from '../../app/shell/areas';
 import type { Plan } from './plan';
-import { isRecord } from './record';
+import { isRecord, recordOf } from './record';
 
-// What a canvas's live data holds beyond its input: rows that loaded, what the person typed. A list is its count and
-// its first rows, ids left out: they are for the database, not for a person.
+// The screen as it stands. A canvas's input is what it was opened with, and what the person pressed, ticked or typed
+// into what its input carries; `shows` is the rest of its live data beyond what it was opened with — rows that loaded,
+// a line being typed. A list there is its count and its first rows, ids left out: they are for the database, not for
+// a person.
 export type OpenCanvas = { area: AreaId; action: string; intent: string; input: Record<string, unknown>; shows: Record<string, unknown> };
 
 const ROWS = 3;
@@ -21,12 +23,15 @@ export const readOpenScreen = (shell: Shell, plan: Plan): OpenCanvas[] =>
   AREAS.flatMap((area) => {
     const placed = plan.canvases[area]?.[0];
     const active = shell.getState().canvases[area]?.active;
-    if (placed === undefined || active === undefined) return [];
-    const data = shell.getRuntime(active.id)?.getData() ?? {};
-    const shows = Object.fromEntries(
-      Object.entries(data)
-        .filter(([key, value]) => !isEmpty(value) && JSON.stringify(value) !== JSON.stringify(placed.input[key]))
-        .map(([key, value]) => [key, summarised(value)]),
-    );
-    return [{ area, action: placed.action, intent: placed.intent, input: placed.input, shows }];
+    const runtime = active === undefined ? undefined : shell.getRuntime(active.id);
+    if (placed === undefined || runtime === undefined) return [];
+    const data = runtime.getData();
+    const opened = { ...runtime.definition.data, ...placed.input };
+    const carried = Object.keys(recordOf(recordOf(runtime.definition.input)['properties']));
+    const moved = Object.keys(data).filter((key) => JSON.stringify(data[key]) !== JSON.stringify(opened[key]));
+    const input = { ...placed.input, ...Object.fromEntries(moved.filter((key) => carried.includes(key)).map((key) => [key, data[key]])) };
+    const shows = Object.fromEntries(moved.filter((key) => !carried.includes(key) && !isEmpty(data[key])).map((key) => [key, summarised(data[key])]));
+    return [{ area, action: placed.action, intent: placed.intent, input, shows }];
   });
+
+export const canvasesStanding = (open: readonly OpenCanvas[]): Plan['canvases'] => Object.fromEntries(open.map(({ area, action, intent, input }) => [area, [{ action, input, intent }]]));

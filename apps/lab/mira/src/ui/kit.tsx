@@ -29,7 +29,12 @@ const HeadingProps = z.object({}).describe('The page’s title.');
 export const Heading: NovaComponent = ({ children }) => <h1 className="k-heading">{children}</h1>;
 Heading.meta = { description: 'The page’s title.', propsSchema: HeadingProps };
 
-const TextProps = z.object({ tone: z.enum(['default', 'lead', 'muted', 'strong', 'error']).optional().describe('default | lead: the sentence a card opens with | muted | strong | error') });
+const TextProps = z.object({
+  tone: z
+    .enum(['default', 'lead', 'muted', 'strong', 'display', 'right', 'wrong', 'error'])
+    .optional()
+    .describe('default | lead: the sentence a card opens with | muted | strong | display: one big figure | right: a right answer, said | wrong: a wrong answer, said | error'),
+});
 export const Text: NovaComponent = ({ children, novaRef: _ref, novaModel: _model, ...props }) => {
   const { tone } = parsed(TextProps, props, {});
   return <p className={tone === undefined || tone === 'default' ? 'k-text' : `k-text k-${tone}`}>{children}</p>;
@@ -39,9 +44,11 @@ Text.meta = { description: 'A paragraph.', propsSchema: TextProps };
 const ButtonProps = z.object({
   label: z.string().optional().describe('What the button says; falls back to its children.'),
   tone: z
-    .enum(['primary', 'suggestion', 'choice', 'chosen', 'summary', 'step'])
+    .enum(['primary', 'suggestion', 'link', 'choice', 'chosen', 'right', 'wrong', 'summary', 'step'])
     .optional()
-    .describe('primary: what the action does | suggestion: a thing to ask | choice: one of a set to choose from | chosen: the one of the set that is chosen | summary: names what is shown, and opens to more | step: back or forward'),
+    .describe(
+      'primary: what the action does | suggestion: a thing to ask | link: opens another screen | choice: one of a set to choose from | chosen: the one of the set that is chosen | right: the right one of a set, once picked | wrong: a wrong one, picked | summary: names what is shown, and opens to more | step: back, forward, or start over',
+    ),
   value: z.unknown().optional().describe('Sent with the click as its payload.'),
 });
 export const Button: NovaComponent = ({ children, novaRef, novaModel: _model, ...props }) => {
@@ -97,11 +104,14 @@ export const Area: NovaComponent = ({ children, novaRef: _ref, novaModel: _model
 };
 Area.meta = { description: 'One area of an answer.', propsSchema: AreaProps };
 
-const CardProps = z.object({ title: z.string().optional().describe('What the card shows, in a few words.') });
+const CardProps = z.object({
+  title: z.string().optional().describe('What the card shows, in a few words.'),
+  tone: z.enum(['default', 'hero']).optional().describe('default | hero: the card a screen opens with'),
+});
 export const Card: NovaComponent = ({ children, novaRef: _ref, novaModel: _model, ...props }) => {
-  const { title } = parsed(CardProps, props, {});
+  const { title, tone } = parsed(CardProps, props, {});
   return (
-    <article className="k-card">
+    <article className={tone === 'hero' ? 'k-card k-hero' : 'k-card'}>
       {title !== undefined && title !== '' ? <h2 className="k-card-title">{title}</h2> : null}
       {children}
     </article>
@@ -148,6 +158,29 @@ export const Steps: NovaComponent = ({ novaRef: _ref, novaModel: _model, ...prop
   );
 };
 Steps.meta = { description: 'Steps in order, numbered.', propsSchema: StepsProps };
+
+const CheckProps = z.object({
+  label: z.string().describe('What is ticked off.'),
+  checked: z.boolean().optional().describe('Whether it is ticked.'),
+  value: z.unknown().optional().describe('Sent with the click as its payload.'),
+});
+export const Check: NovaComponent = ({ novaRef, novaModel: _model, ...props }) => {
+  const dispatch = useNovaDispatch();
+  const { label, checked, value } = parsed(CheckProps, props, { label: '' });
+  return (
+    <button
+      type="button"
+      role="checkbox"
+      aria-checked={checked === true}
+      className={checked === true ? 'k-check k-checked' : 'k-check'}
+      onClick={() => dispatch({ type: 'ui:click', ...(novaRef !== undefined ? { ref: novaRef } : {}), ...(value !== undefined ? { payload: value } : {}) })}
+    >
+      <span className="k-box" aria-hidden="true" />
+      <span className="k-check-label">{label}</span>
+    </button>
+  );
+};
+Check.meta = { description: 'A line to tick off; dispatches ui:click with its ref, and its value as the payload.', propsSchema: CheckProps };
 
 const InputProps = z.object({
   placeholder: z.string().optional(),

@@ -2,6 +2,7 @@ import type { Arrangement } from '../../app/arrangements';
 import type { Screen } from '../../app/screens';
 import { AREAS } from '../../app/shell/areas';
 import type { AreaId } from '../../app/shell/areas';
+import { opened } from './catalog';
 import type { Catalog } from './catalog';
 import { areasOfArrangement, gridLayout } from './layout';
 import type { WrittenLayout } from './layout';
@@ -73,7 +74,7 @@ const applyEntries = (entries: readonly Entry[], open: AreaCanvases, room: reado
     } else if (entry.say !== undefined) said[entry.area] = entry.say;
     else if (entry.action !== undefined) {
       const intent = entry.intent?.trim() ?? '';
-      canvases[entry.area] = { action: entry.action, input: entry.input ?? {}, intent: intent !== '' ? intent : (catalog.actions.find((action) => action.id === entry.action)?.description ?? '') };
+      canvases[entry.area] = opened({ action: entry.action, input: entry.input ?? {}, intent: intent !== '' ? intent : (catalog.actions.find((action) => action.id === entry.action)?.description ?? '') }, catalog);
     }
   }
   return { canvases, said };

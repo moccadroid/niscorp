@@ -2,17 +2,28 @@ import type { LayoutNode } from '@niscorp/nova';
 
 const lead: LayoutNode = { component: 'Text', props: { tone: 'lead' }, children: '{{$.lead}}' };
 
-const next: LayoutNode = {
-  component: 'Row',
-  children: [{ for: '$.next', as: 'question', do: { component: 'Button', ref: 'next', props: { label: '$question', tone: 'suggestion', value: '$question' } } }],
+const links: LayoutNode = {
+  if: '$.links',
+  then: { component: 'Row', children: [{ for: '$.links', as: 'link', do: { component: 'Button', ref: 'link', props: { label: '$link.label', tone: 'link', value: '$link.screen' } } }] },
 };
 
-export const pointsLayout: LayoutNode = { component: 'Card', props: { title: '{{$.title}}' }, children: [lead, { component: 'Points', props: { items: '$.points' } }, next] };
+export const welcomeLayout: LayoutNode = {
+  component: 'Card',
+  props: { title: '{{$.title}}', tone: 'hero' },
+  children: [
+    lead,
+    links,
+    { component: 'Text', props: { tone: 'muted' }, children: 'Or ask for something in the line below:' },
+    { component: 'Row', children: [{ for: '$.examples', as: 'example', do: { component: 'Button', ref: 'example', props: { label: '$example', tone: 'suggestion', value: '$example' } } }] },
+  ],
+};
+
+export const pointsLayout: LayoutNode = { component: 'Card', props: { title: '{{$.title}}' }, children: [lead, { component: 'Points', props: { items: '$.points' } }, links] };
 
 export const exampleLayout: LayoutNode = {
   component: 'Card',
   props: { title: '{{$.title}}' },
-  children: [lead, { component: 'Code', props: { text: '$.example' } }, { component: 'Text', props: { tone: 'muted' }, children: '{{$.text}}' }, next],
+  children: [lead, { component: 'Code', props: { text: '$.example' } }, { component: 'Text', props: { tone: 'muted' }, children: '{{$.text}}' }, links],
 };
 
-export const stepsLayout: LayoutNode = { component: 'Card', props: { title: '{{$.title}}' }, children: [lead, { component: 'Steps', props: { items: '$.steps' } }, next] };
+export const stepsLayout: LayoutNode = { component: 'Card', props: { title: '{{$.title}}' }, children: [lead, { component: 'Steps', props: { items: '$.steps' } }, links] };

@@ -17,6 +17,8 @@ const ask: Step[] = [
   },
 ];
 
+const open: Step[] = [{ set: 'opening', value: '@event.payload' }, { call: 'open', onSuccess: shown }];
+
 const first = SCREENS[0];
 
 export const dockAction: ActionDefinition = {
@@ -46,9 +48,10 @@ export const dockAction: ActionDefinition = {
   triggers: [
     { message: 'answer-moved', do: [{ call: 'current', onSuccess: shown }] },
     { message: 'ask', do: [{ set: 'text', value: '@event.payload' }, ...ask] },
+    { message: 'open', do: open },
     { event: 'ui:key', key: 'Enter', ref: 'text', do: ask },
     { event: 'ui:click', ref: 'send', do: ask },
-    { event: 'ui:click', ref: 'screen', do: [{ set: 'opening', value: '@event.payload' }, { call: 'open', onSuccess: shown }] },
+    { event: 'ui:click', ref: 'screen', do: open },
     { event: 'ui:click', ref: 'back', do: [{ call: 'back', onSuccess: shown }] },
     { event: 'ui:click', ref: 'forward', do: [{ call: 'forward', onSuccess: shown }] },
     { event: 'ui:click', ref: 'stack', do: [{ toggle: 'listing' }] },

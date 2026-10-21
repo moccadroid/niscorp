@@ -8,6 +8,10 @@
   --k-accent-ink: #ffffff;
   --k-accent-soft: #e8edfd;
   --k-error: #b42318;
+  --k-right: #17804b;
+  --k-right-soft: #e2f4ea;
+  --k-wrong: #b42318;
+  --k-wrong-soft: #fdeceb;
   --k-radius: 10px;
   font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
   color: var(--k-ink);
@@ -31,6 +35,9 @@ html, body, #root { margin: 0; min-height: 100%; }
 .k-muted { color: var(--k-muted); }
 .k-strong { font-weight: 650; }
 .k-lead { font-size: 17px; line-height: 1.5; }
+.k-display { font-size: 64px; font-weight: 700; line-height: 1; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.k-text.k-right { color: var(--k-right); }
+.k-text.k-wrong { color: var(--k-wrong); }
 
 .k-code {
   margin: 0;
@@ -85,6 +92,35 @@ html, body, #root { margin: 0; min-height: 100%; }
 .k-button.k-choice, .k-button.k-summary, .k-button.k-step { background: var(--k-surface); color: var(--k-ink); border: 1px solid var(--k-line); }
 .k-button.k-summary { flex-shrink: 1; min-width: 0; max-width: 42vw; overflow: hidden; text-overflow: ellipsis; }
 .k-button.k-step { padding: 5px 10px; }
+.k-button.k-link { padding: 0; background: none; color: var(--k-accent); font-weight: 600; }
+.k-button.k-link:hover { text-decoration: underline; }
+
+/* A set to pick one from, one under the other in its card. */
+.k-card > .k-button { padding: 10px 14px; border-radius: var(--k-radius); text-align: left; font-weight: 500; white-space: normal; }
+.k-card > .k-button.k-choice { background: var(--k-surface); color: var(--k-ink); border: 1px solid var(--k-line); }
+.k-card > .k-button.k-choice:hover { border-color: var(--k-accent); }
+.k-button.k-right { background: var(--k-right-soft); color: var(--k-right); border: 1px solid var(--k-right); }
+.k-button.k-wrong { background: var(--k-wrong-soft); color: var(--k-wrong); border: 1px solid var(--k-wrong); }
+
+.k-check {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 2px;
+  border: 0;
+  border-top: 1px solid var(--k-line);
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.k-card > .k-check + .k-check { margin-top: -12px; }
+.k-box { width: 18px; height: 18px; flex-shrink: 0; box-sizing: border-box; display: grid; place-items: center; border: 1.5px solid var(--k-muted); border-radius: 5px; }
+.k-checked .k-box { background: var(--k-accent); border-color: var(--k-accent); }
+.k-checked .k-box::after { content: '✓'; color: var(--k-accent-ink); font-size: 12px; font-weight: 700; }
+.k-checked .k-check-label { color: var(--k-muted); text-decoration: line-through; }
 
 .k-frame { min-height: 100vh; display: flex; flex-direction: column; }
 
@@ -158,6 +194,9 @@ html, body, #root { margin: 0; min-height: 100%; }
   border-radius: calc(var(--k-radius) + 4px);
 }
 .k-card-title { margin: 0; font-size: 15px; font-weight: 650; letter-spacing: 0.01em; }
+.k-hero { padding: 32px; gap: 16px; border-color: transparent; background: linear-gradient(135deg, var(--k-accent-soft), var(--k-surface) 75%); }
+.k-hero > .k-card-title { font-size: 30px; letter-spacing: -0.015em; }
+.k-hero > .k-lead { font-size: 18px; max-width: 62ch; }
 
 .k-input {
   flex: 1;

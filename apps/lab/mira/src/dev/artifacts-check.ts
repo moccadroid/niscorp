@@ -101,6 +101,11 @@ for (const screen of SCREENS) {
   const arrangement = ARRANGEMENTS.find((candidate) => candidate.id === screen.arrangement);
   check(`screen "${screen.id}" is laid out in an arrangement there is, with room for its canvases`, arrangement !== undefined && arrangement.areaCount >= screen.canvases.length, `${screen.arrangement}: ${screen.canvases.length} canvases`);
 }
+for (const definition of Object.values(actions)) {
+  const links = Array.isArray(definition.data?.['links']) ? definition.data['links'] : [];
+  const nowhere = links.map((link: unknown) => (isRecord(link) ? link['screen'] : undefined)).filter((screen: unknown) => !SCREENS.some((one) => one.id === screen));
+  if (links.length > 0) check(`action "${definition.id}" links only to screens there are`, nowhere.length === 0, nowhere.join(', '));
+}
 
 console.log(failures === 0 ? '[pass] artifacts: all checks passed' : `[fail] artifacts: ${failures} check(s) failed`);
 process.exit(failures === 0 ? 0 : 1);

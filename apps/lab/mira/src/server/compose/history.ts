@@ -8,6 +8,8 @@ export type History = {
   go: (position: number) => ShownPlan;
   back: () => ShownPlan;
   forward: () => ShownPlan;
+  // What the person did on the answer shown stays with it, as a browser keeps a page's form when it is left.
+  keep: (canvases: Plan['canvases']) => void;
 };
 
 const NOTHING: ShownPlan = { question: '', label: '', position: 0, total: 0, stack: [], canvases: {}, arrangement: '', layout: { component: 'Grid' } };
@@ -34,5 +36,9 @@ export const createHistory = (first: Plan | undefined): History => {
     go: (position) => showAt(position >= 1 && position <= plans.length ? position - 1 : at),
     back: () => showAt(Math.max(0, at - 1)),
     forward: () => showAt(Math.min(plans.length - 1, at + 1)),
+    keep: (canvases) => {
+      const plan = plans[at];
+      if (plan !== undefined) plans[at] = { ...plan, canvases };
+    },
   };
 };

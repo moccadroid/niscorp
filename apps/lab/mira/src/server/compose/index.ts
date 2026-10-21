@@ -10,7 +10,7 @@ import type { AreaId } from '../../app/shell/areas';
 import { recordModelRun } from '../runs';
 import { answerOf, answerSoFar, refusalsOf } from './answer';
 import type { Answer, AnswerContext } from './answer';
-import { CATALOG } from './catalog';
+import { CATALOG, opened } from './catalog';
 import type { Catalog } from './catalog';
 import { composerAgent } from './composer.agent';
 import { createHistory } from './history';
@@ -20,7 +20,8 @@ import { pick } from './pick';
 import type { Decide } from './pick';
 import { arrangementOfPlan, canvasesInAreas, canvasesOfPlan, changedAreas, planOf, wordsCanvas } from './plan';
 import type { AreaCanvases, Plan, ShownPlan } from './plan';
-import { readOpenScreen } from './screen';
+import { canvasesStanding, readOpenScreen } from './screen';
+import type { OpenCanvas } from './screen';
 
 export type { Decide } from './pick';
 export type { ShownPlan } from './plan';
@@ -59,7 +60,7 @@ export const composer =
     let asked = 0;
 
     const home = SCREENS[0];
-    const screenPlan = (screen: Screen): Plan => planOf('', canvasesInAreas(screen.canvases), { arrangements: ARRANGEMENTS, screen, arrangement: screen.arrangement });
+    const screenPlan = (screen: Screen): Plan => planOf('', canvasesInAreas(screen.canvases.map((canvas) => opened(canvas, catalog))), { arrangements: ARRANGEMENTS, screen, arrangement: screen.arrangement });
     const history = createHistory(home === undefined ? undefined : screenPlan(home));
 
     // The swap goes around moss (`unverifiedShell`): moss lets a session change a layout only through a draft, and a
@@ -77,6 +78,13 @@ export const composer =
       session.shell.publish('answer-moved');
     };
 
+    // Before anything else is shown, the screen as the person left it is kept with the answer it is on.
+    const standing = (): OpenCanvas[] => {
+      const open = readOpenScreen(session.shell, history.current());
+      history.keep(canvasesStanding(open));
+      return open;
+    };
+
     // A screen already in the stack is gone back to, not stacked again. What the model said when it answered with the
     // screen is shown with it, and not kept.
     const showScreen = (screen: Screen, response?: string): ShownPlan => {
@@ -89,11 +97,11 @@ export const composer =
     const ask = async (data: unknown): Promise<ShownPlan> => {
       const message = AskSchema.parse(data).text.trim();
       if (message === '') return history.current();
-      const before = history.current();
       const chat = models.chat;
       if (chat === undefined) throw new Error(`Set ${models.missing.join(' and ')} in .env, and start the app again.`);
       const turn = (asked += 1);
-      const open = readOpenScreen(session.shell, before);
+      const open = standing();
+      const before = history.current();
       const jev = models.jev;
       const picking = performance.now();
       const picked =
@@ -156,15 +164,22 @@ export const composer =
 
     const open = async (data: unknown): Promise<ShownPlan> => {
       const screen = SCREENS.find((candidate) => candidate.id === OpenSchema.parse(data).opening);
-      return screen === undefined ? history.current() : showScreen(screen);
+      if (screen === undefined) return history.current();
+      standing();
+      return showScreen(screen);
+    };
+
+    const leave = (to: () => ShownPlan): ShownPlan => {
+      standing();
+      return show(to());
     };
 
     return [
       { id: 'ask', description: 'Answers a message with a screen. Send { text }; answers the plan shown: { question, response, label, canvases, position, total, stack }.', execute: ask },
       { id: 'screens.open', description: 'Shows one of the screens in the dock: its canvases together. Send { opening: <screen id> }; answers its plan.', execute: open },
-      { id: 'answers.back', description: 'Shows the answer before the one shown, and answers its plan.', execute: async () => show(history.back()) },
-      { id: 'answers.forward', description: 'Shows the answer after the one shown, and answers its plan.', execute: async () => show(history.forward()) },
-      { id: 'answers.go', description: 'Shows one answer from the stack. Send { going: <its position> }; answers its plan.', execute: async (data) => show(history.go(GoSchema.parse(data).going)) },
+      { id: 'answers.back', description: 'Shows the answer before the one shown, and answers its plan.', execute: async () => leave(history.back) },
+      { id: 'answers.forward', description: 'Shows the answer after the one shown, and answers its plan.', execute: async () => leave(history.forward) },
+      { id: 'answers.go', description: 'Shows one answer from the stack. Send { going: <its position> }; answers its plan.', execute: async (data) => leave(() => history.go(GoSchema.parse(data).going)) },
       { id: 'answers.current', description: 'Answers the plan shown, or, while an answer streams, the answer so far.', execute: async () => soFar ?? history.current() },
     ];
   };

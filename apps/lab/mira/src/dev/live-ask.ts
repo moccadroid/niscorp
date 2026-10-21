@@ -18,7 +18,7 @@ const recordOf = (value: unknown): Record<string, unknown> => (isRecord(value) ?
 //   --no-jev    the chat model alone, with no Jev pass
 //   messages    messages of your own instead, unscored; --screen=<id> opens that screen from the menu
 
-type Shown = { area: string; id: string; action: string; read: string; params: Record<string, unknown>; fields: string[]; title: string };
+type Shown = { area: string; id: string; action: string; title: string; data: Record<string, unknown> };
 type Screen = { canvases: Shown[]; arrangement: string; screen: string; said: string; response: string; title: string };
 type Step = { ask: string; want?: (now: Screen, before: Screen) => string | undefined } | { open: string };
 
@@ -33,6 +33,8 @@ const twice = (now: Screen): string | undefined => {
 };
 
 const shows = (action: string) => (now: Screen): string | undefined => (has(now, action) ? undefined : `want ${action}`);
+const listOf = (value: unknown): unknown[] => (Array.isArray(value) ? value : []);
+const tour = (screen: Screen): Shown | undefined => screen.canvases.find((shown) => is(shown, 'guide.checklist'));
 
 const RUN: readonly Step[] = [
   { open: 'start' },
@@ -42,13 +44,35 @@ const RUN: readonly Step[] = [
   { open: 'start' },
   { ask: 'How does my message become a screen?', want: shows('guide.answers') },
   { open: 'start' },
-  { ask: 'What is an action?' },
-  { ask: 'How is an action drawn?', want: shows('guide.layouts') },
-  { ask: 'show start + intro', want: (now) => (now.screen === 'start' ? undefined : 'want the start screen') },
+  { ask: 'A counter that starts at 100', want: (now) => (now.canvases.some((shown) => is(shown, 'guide.counter') && shown.data['count'] === 100) ? undefined : 'want a counter at 100') },
   { open: 'start' },
-  { ask: 'What can you do?', want: (now) => (has(now, 'answer.text') ? undefined : 'want words') },
+  { ask: 'A checklist for my first nisc app', want: (now) => (now.canvases.some((shown) => is(shown, 'guide.checklist') && shown.title !== 'Your tour' && listOf(shown.data['todo']).length > 0) ? undefined : 'want a checklist of its own, with steps') },
   { open: 'start' },
-  { ask: 'the nisc card big at the top, the actions and the yours card below it', want: (now) => (is(now.canvases[0], 'guide.nisc') && has(now, 'guide.actions') && has(now, 'guide.yours') ? undefined : 'want the nisc card first, the actions and the yours card beneath') },
+  {
+    ask: 'Quiz me on the charter',
+    want: (now, before) => {
+      const asked = new Set(before.canvases.filter((shown) => is(shown, 'guide.quiz')).map((shown) => String(shown.data['question'])));
+      return now.canvases.some((shown) => is(shown, 'guide.quiz') && !asked.has(String(shown.data['question']))) ? undefined : 'want a new quick check';
+    },
+  },
+  { open: 'start' },
+  {
+    ask: 'tick off the first step of my tour',
+    want: (now, before) => (tour(now)?.id === tour(before)?.id && listOf(tour(now)?.data['done']).includes('Press the counter') ? undefined : 'want "Press the counter" ticked off, on the same checklist'),
+  },
+  { ask: 'add "Read the charter" to the tour', want: (now) => (listOf(tour(now)?.data['todo']).some((step) => /charter/i.test(String(step))) ? undefined : 'want the step added to the tour') },
+  { open: 'start' },
+  {
+    ask: 'Put the charter beside the counter',
+    want: (now, before) => {
+      const counter = before.canvases.find((shown) => is(shown, 'guide.counter'));
+      return counter !== undefined && at(now, counter.area)?.id === counter.id && has(now, 'guide.charter') ? undefined : 'want the counter where it was, and the charter';
+    },
+  },
+  { open: 'start' },
+  { ask: 'What can you do?', want: (now) => (has(now, 'answer.text') || has(now, 'guide.welcome') ? undefined : 'want words, or the welcome') },
+  { open: 'asking' },
+  { ask: 'Only the steps, please', want: (now) => (now.canvases.length === 1 && is(now.canvases[0], 'guide.answers') ? undefined : 'want the steps alone') },
   { open: 'start' },
   { ask: 'What are layouts?', want: shows('guide.layouts') },
   {
@@ -67,6 +91,7 @@ const RUN: readonly Step[] = [
       return is(there, 'guide.charter') && (layouts === undefined || at(now, layouts.area)?.id === layouts.id) ? undefined : 'want the charter where the shell was, and the layouts card untouched';
     },
   },
+  { ask: 'Show me the rules lesson', want: (now) => (now.screen === 'rules' ? undefined : 'want the rules screen') },
   { open: 'start' },
   { ask: 'How do I make this app mine?', want: shows('guide.yours') },
 ];
@@ -145,8 +170,7 @@ for (let run = 1; run <= runs; run += 1) {
       const active = shell.getState().canvases[area]?.active;
       if (active === undefined) return [];
       const data = dataOf(area);
-      const fields = Array.isArray(data['fields']) ? data['fields'].map((field: unknown) => String(recordOf(field)['value'] ?? '')) : [];
-      return [{ area, id: active.id, action: active.definitionId, read: String(data['read'] ?? ''), params: recordOf(data['params']), fields, title: String(data['title'] ?? '') }];
+      return [{ area, id: active.id, action: active.definitionId, title: String(data['title'] ?? ''), data }];
     }),
     arrangement: String(current()['arrangement'] ?? ''),
     screen: String(current()['screen'] ?? ''),
@@ -154,7 +178,7 @@ for (let run = 1; run <= runs; run += 1) {
     response: String(current()['response'] ?? ''),
     title: String(current()['label'] ?? ''),
   });
-  const print = (screen: Screen): string => screen.canvases.map((shown) => `  ${shown.area}: ${shown.action} — ${[shown.title, shown.read, JSON.stringify(shown.params) !== '{}' ? JSON.stringify(shown.params) : '', shown.fields.length > 0 ? JSON.stringify(shown.fields) : ''].filter((part) => part !== '').join(' · ')}`).join('\n');
+  const print = (screen: Screen): string => screen.canvases.map((shown) => `  ${shown.area}: ${shown.action} — ${shown.title}`).join('\n');
 
   let right = 0;
   let scored = 0;
