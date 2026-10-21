@@ -5,7 +5,7 @@ import { counterLayout } from './counter.layout';
 export const counterAction: ActionDefinition = {
   id: 'guide.counter',
   title: 'Counter',
-  description: 'A counter a person presses: a number, buttons that count it up and down, and one that starts it over. Shows that a card is data, and a press a change to it.',
+  description: 'A counter a person presses: a number, buttons that count it up and down, and one that sets it back to zero. Shows that a card is data, and a press a change to it.',
   data: { title: 'Press me', count: 0 },
   input: z.toJSONSchema(
     z.object({
@@ -17,6 +17,6 @@ export const counterAction: ActionDefinition = {
   triggers: [
     { event: 'ui:click', ref: 'up', do: [{ increment: 'count' }] },
     { event: 'ui:click', ref: 'down', do: [{ decrement: 'count' }] },
-    { event: 'ui:click', ref: 'reset', do: [{ reset: 'count' }] },
+    { event: 'ui:click', ref: 'reset', do: [{ set: 'count', value: 0 }] },
   ],
 };

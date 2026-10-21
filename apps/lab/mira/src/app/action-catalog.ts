@@ -3,4 +3,8 @@ import { textAction } from './actions/answer/text.action';
 import { dockAction } from './actions/ask/dock.action';
 import { GUIDE } from './actions/guide/guide.actions';
 
-export const actions: Record<string, ActionDefinition> = Object.fromEntries([dockAction, textAction, ...GUIDE].map((action) => [action.id, action]));
+// What the model may put on a screen, each opened with an input its schema takes. Its words are `answer.text`, placed
+// by saying them; the dock is never placed.
+export const placeable: readonly ActionDefinition[] = [...GUIDE];
+
+export const actions: Record<string, ActionDefinition> = Object.fromEntries([dockAction, textAction, ...placeable].map((action) => [action.id, action]));

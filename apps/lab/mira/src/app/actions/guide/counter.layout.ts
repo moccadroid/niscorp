@@ -10,7 +10,7 @@ export const counterLayout: LayoutNode = {
       children: [
         { component: 'Button', ref: 'down', props: { label: '−' } },
         { component: 'Button', ref: 'up', props: { label: '+' } },
-        { component: 'Button', ref: 'reset', props: { label: 'Start over', tone: 'step' } },
+        { component: 'Button', ref: 'reset', props: { label: 'Reset', tone: 'step' } },
       ],
     },
     { component: 'Code', props: { text: '{ "count": {{$.count}} }' } },

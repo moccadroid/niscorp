@@ -22,9 +22,11 @@ const isEmpty = (value: unknown): boolean => value === null || value === undefin
 export const readOpenScreen = (shell: Shell, plan: Plan): OpenCanvas[] =>
   AREAS.flatMap((area) => {
     const placed = plan.canvases[area]?.[0];
+    if (placed === undefined) return [];
     const active = shell.getState().canvases[area]?.active;
     const runtime = active === undefined ? undefined : shell.getRuntime(active.id);
-    if (placed === undefined || runtime === undefined) return [];
+    // While an answer streams in, an area can hold a card the plan does not list yet; the plan's card is read as placed.
+    if (runtime === undefined || runtime.definition.id !== placed.action) return [{ area, ...placed, shows: {} }];
     const data = runtime.getData();
     const opened = { ...runtime.definition.data, ...placed.input };
     const carried = Object.keys(recordOf(recordOf(runtime.definition.input)['properties']));

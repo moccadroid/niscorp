@@ -8,10 +8,9 @@ import { modelsFromEnv } from '../server/models';
 const isRecord = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value);
 const recordOf = (value: unknown): Record<string, unknown> => (isRecord(value) ? value : {});
 
-// Asks the real models, with the keys in .env, the cases asked of mira — each from the screen it was asked on — and
-// prints each screen, how long it took, and whether it is the screen the message wants: what it asked for, and every
-// area it did not ask about holding the same canvas, in the same arrangement. It costs a Jev pass and a chat call a
-// message.
+// Asks the real models, with the keys in .env, the cases in RUN — each from the screen it was asked on — and prints each
+// screen, how long it took, and whether it is the screen the case wants, and nothing shown twice. The cases are the
+// tour's: write your own when it goes. It costs a Jev pass and a chat call a message.
 //   --runs=<n>  the cases, n times over, with the count of right screens at the end
 //   --why       each message also prints what Jev said yes to and what the model replied
 //   --prompts   each message also prints everything Jev and the model were sent, and what each answered
@@ -26,9 +25,9 @@ const at = (screen: Screen, area: string): Shown | undefined => screen.canvases.
 const is = (shown: Shown | undefined, action: string): boolean => shown?.action === action;
 const has = (screen: Screen, action: string): boolean => screen.canvases.some((shown) => is(shown, action));
 
-// Two areas showing the same thing is never the screen a message wants.
+// Two areas showing the same card with the same content is never the screen a message wants.
 const twice = (now: Screen): string | undefined => {
-  const seen = now.canvases.filter((shown) => shown.action !== 'answer.text').map((shown) => shown.action);
+  const seen = now.canvases.filter((shown) => shown.action !== 'answer.text').map((shown) => JSON.stringify([shown.action, shown.data]));
   return new Set(seen).size === seen.length ? undefined : 'the same card is shown twice';
 };
 

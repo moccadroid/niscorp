@@ -38,8 +38,8 @@ Made 2026-10-20 by `npm create nisc`, on nisc 0.8.1. This is the record AGENTS.m
 
 1. **The interview** — every open item above, answered or delegated by name. ← here
 2. **Scaffold** — done: the frame, the message loop, the dock, a tour of nisc in five screens — cards to read, and a counter, a checklist and a quick check to use, which the model can fill in too — and their checks.
-3. **Data** — per D2/D3: your tables in `src/db/schema.ts`, your reads and writes in `src/app/vex/`; the guide (`src/app/actions/guide/`) goes.
+3. **Data** — the tour goes first (AGENTS.md, "How to proceed from here"); then, per D2/D3, your tables in `src/db/schema.ts`, your reads and writes in `src/app/vex/`.
 4. **Screens** — the ones a person will want in the dock, each its canvases; the first the one the app opens on.
 5. **Actions** — your own, small: one purpose each, a description that says what it shows, an `input` schema for what the model fills in; the ones the model may place go in the catalog.
 6. **Writes** — per D4; a form an answer opens, filled in by the model, saved by the person.
-7. **Checks** — `src/dev/compose-check.ts` runs the loop offline; `src/dev/live-ask.ts` asks the real models a run of messages and counts the right screens.
+7. **Checks** — `src/dev/compose-check.ts` runs the loop offline; a check for each feature beside it; `src/dev/live-ask.ts` asks the real models your cases and counts the screens that are what each wants.

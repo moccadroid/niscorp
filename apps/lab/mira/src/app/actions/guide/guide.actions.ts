@@ -20,17 +20,6 @@ const card = (id: string, description: string, layout: LayoutNode, data: { title
   triggers,
 });
 
-const counterJson = [
-  '{',
-  `  "id": "${counterAction.id}",`,
-  `  "data": ${JSON.stringify(counterAction.data)},`,
-  '  "triggers": [',
-  (counterAction.triggers ?? []).map((trigger) => `    ${JSON.stringify(trigger)}`).join(',\n'),
-  '  ],',
-  '  "layout": { "component": "Card", "children": [ … ] }',
-  '}',
-].join('\n');
-
 export const GUIDE: readonly ActionDefinition[] = [
   card('guide.welcome', 'The welcome: this app is a tour of nisc that a model leads; where the tour starts, and things to ask.', welcomeLayout, {
     title: 'Welcome to nisc',
@@ -51,7 +40,18 @@ export const GUIDE: readonly ActionDefinition[] = [
   card('guide.actions', 'Actions: everything on screen is an action — JSON with its data, its layout, and its triggers, what a press does to the data; the counter’s as the example.', exampleLayout, {
     title: 'Actions',
     lead: 'Everything you see is an action: JSON with its data, its layout, and what a press does.',
-    example: counterJson,
+    example: [
+      '{',
+      '  "id": "guide.counter",',
+      '  "data": { "title": "Press me", "count": 0 },',
+      '  "triggers": [',
+      '    { "event": "ui:click", "ref": "up", "do": [{ "increment": "count" }] },',
+      '    { "event": "ui:click", "ref": "down", "do": [{ "decrement": "count" }] },',
+      '    { "event": "ui:click", "ref": "reset", "do": [{ "set": "count", "value": 0 }] }',
+      '  ],',
+      '  "layout": { "component": "Card", "children": [ … ] }',
+      '}',
+    ].join('\n'),
     text: 'That is the counter on this screen. Actions live in src/app/actions/.',
     links: [{ label: 'Next: asking for a screen →', screen: 'asking' }],
   }),
@@ -120,7 +120,7 @@ export const GUIDE: readonly ActionDefinition[] = [
     title: 'Making it yours',
     lead: 'Start your own app from this one.',
     steps: [
-      'Delete src/app/actions/guide/, and its lines in the action catalog, the composer’s catalog, the charter and the screens.',
+      'Delete src/app/actions/guide/ and src/dev/guide-check.ts, and the lines that name them: AGENTS.md lists them.',
       'Put your tables in src/db/schema.ts.',
       'Put your reads and writes in src/app/vex/.',
       'Add your actions in src/app/actions/, each with a description the model chooses by.',

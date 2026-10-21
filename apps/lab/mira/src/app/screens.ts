@@ -56,7 +56,7 @@ export const SCREENS: readonly Screen[] = [
       card('guide.layouts', 'how a card is drawn'),
       {
         action: 'guide.checklist',
-        input: { title: 'Try it', todo: ['Press + until the counter says 5', 'Press Start over', 'Ask for a counter that starts at 100', 'Ask for the layouts card first'] },
+        input: { title: 'Try it', todo: ['Press + until the counter says 5', 'Press Reset', 'Ask for a counter that starts at 100', 'Ask for the layouts card first'] },
         intent: 'things to try in this lesson',
       },
     ],
