@@ -160,7 +160,7 @@ const canvasRefusals = (entry: Entry, where: string, catalog: Catalog): string[]
   const action = catalog.actions.find((candidate) => candidate.id === entry.action);
   if (action === undefined) return [`${where}: there is no action "${String(entry.action)}".`];
   const input = entry.input ?? {};
-  const parsed = action.input.safeParse(input);
+  const parsed = action.check.safeParse(input);
   if (!parsed.success) return parsed.error.issues.map((issue) => `${where}: input.${issue.path.join('.')}: ${issue.message}`);
   const refusals: string[] = [];
   const read = input['read'];

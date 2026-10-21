@@ -1,12 +1,6 @@
 import type { ActionDefinition } from '@niscorp/nova';
 import { z } from 'zod';
 
-export const formInput = z.object({
-  title: z.string().describe('The heading on the card.'),
-  write: z.string().describe('Which write saving it goes through, by fingerprint.'),
-  fields: z.array(z.object({ key: z.string(), label: z.string(), value: z.string() })).describe('The fields, in order: the key the write takes it under, its label, and what is in it.'),
-});
-
 // The model may fill it in; only the person saves it. Saved, it says so on the message `saved`, and the server takes
 // it off an answer that opened it.
 export const formAction: ActionDefinition = {
@@ -14,7 +8,21 @@ export const formAction: ActionDefinition = {
   title: 'Form',
   description: 'A form the person fills in and saves, to add a record.',
   data: { title: '', write: '', fields: [], saving: false, saved: false, error: '' },
-  input: z.toJSONSchema(formInput),
+  input: z.toJSONSchema(
+    z.object({
+      title: z.string().describe('The heading on the card.'),
+      write: z.string().describe('Which write saving it goes through, by fingerprint.'),
+      fields: z
+        .array(
+          z.object({
+            key: z.string().describe('The key the write takes it under.'),
+            label: z.string().describe('Its label.'),
+            value: z.string().describe('What is in it.'),
+          }),
+        )
+        .describe('The fields, in order.'),
+    }),
+  ),
   layout: {
     component: 'Card',
     props: { title: '{{$.title}}' },

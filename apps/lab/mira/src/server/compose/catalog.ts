@@ -1,54 +1,37 @@
-import type { z } from 'zod';
+import { z } from 'zod';
 import type { ActionDefinition } from '@niscorp/nova';
 import type { SeedEntry, SeedMutation } from '@niscorp/vex';
-import { barsAction, barsInput } from '../../app/actions/rows/bars.action';
-import { formAction, formInput } from '../../app/actions/rows/form.action';
-import { statAction, statInput } from '../../app/actions/rows/stat.action';
-import { tableAction, tableInput } from '../../app/actions/rows/table.action';
+import { barsAction } from '../../app/actions/rows/bars.action';
+import { formAction } from '../../app/actions/rows/form.action';
+import { statAction } from '../../app/actions/rows/stat.action';
+import { tableAction } from '../../app/actions/rows/table.action';
 import { ENTRIES } from '../../app/vex';
 
-// What an answer is composed from: the actions the model may place, each with the input it is opened with; the reads
-// they show, with the rows each answers; and the writes a form saves through. `context` is the values a read or a
-// write is asked with.
-export type Placeable = { id: string; description: string; input: z.ZodType; schema: unknown };
+// What an answer is composed from: the actions the model may place, each with its input's JSON Schema and the check built
+// from it; the reads they show; the writes a form saves through. `context` is the values a read or a write is asked with.
+export type Placeable = { id: string; description: string; schema: Record<string, unknown>; check: z.ZodType };
 export type Read = { fingerprint: string; intent: string; shape: unknown; context: string[] };
 export type Write = { fingerprint: string; intent: string; context: string[] };
 export type Catalog = { actions: Placeable[]; reads: Read[]; writes: Write[] };
 
-const contextOf = (node: unknown): string[] => {
-  if (Array.isArray(node)) return node.flatMap(contextOf);
-  if (node === null || typeof node !== 'object') return [];
-  const record = node as Record<string, unknown>;
-  return typeof record['$context'] === 'string' ? [record['$context']] : Object.values(record).flatMap(contextOf);
-};
-
-export const placeable = (action: ActionDefinition, input: z.ZodType): Placeable => ({ id: action.id, description: action.description ?? '', input, schema: action.input });
-
 const isRecord = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value);
 
-const keysOf = (schema: unknown): string[] => (isRecord(schema) && isRecord(schema['properties']) ? Object.keys(schema['properties']) : []);
-
-// An input's fields in a line, each with what goes in it: `title: …; columns [{ key, label }]: …`.
-export const fieldsOf = (schema: unknown): string =>
-  Object.entries(isRecord(schema) && isRecord(schema['properties']) ? schema['properties'] : {})
-    .map(([name, field]) => {
-      const own = isRecord(field) ? field : {};
-      const items = own['items'];
-      const shape = own['type'] === 'array' && keysOf(items).length > 0 ? ` [{ ${keysOf(items).join(', ')} }]` : own['type'] === 'object' ? ' {…}' : '';
-      return `${name}${shape}: ${typeof own['description'] === 'string' ? own['description'].replace(/\.$/, '') : ''}`.trim();
-    })
-    .join('; ');
-
-// What a read answers, in a few words: `rows of text, language`, or `{ value }`.
-export const rowsOf = (shape: unknown): string => {
-  if (Array.isArray(shape)) return `rows of ${Object.keys(isRecord(shape[0]) ? shape[0] : {}).join(', ')}`;
-  return isRecord(shape) ? `{ ${Object.keys(shape).join(', ')} }` : 'nothing';
+const contextOf = (node: unknown): string[] => {
+  if (Array.isArray(node)) return node.flatMap(contextOf);
+  if (!isRecord(node)) return [];
+  const named = node['$context'];
+  return typeof named === 'string' ? [named] : Object.values(node).flatMap(contextOf);
 };
 
-export const catalogOf = (actions: Placeable[], entries: readonly (SeedEntry | SeedMutation)[]): Catalog => ({
-  actions,
+const placeable = (action: ActionDefinition): Placeable => {
+  const schema = action.input ?? {};
+  return { id: action.id, description: action.description ?? '', schema, check: z.fromJSONSchema(schema) };
+};
+
+export const catalogOf = (actions: readonly ActionDefinition[], entries: readonly (SeedEntry | SeedMutation)[]): Catalog => ({
+  actions: actions.map(placeable),
   reads: entries.flatMap((entry) => ('dsl' in entry ? [{ fingerprint: entry.fingerprint, intent: entry.intent ?? '', shape: entry.shape, context: [...new Set(contextOf(entry.dsl))] }] : [])),
   writes: entries.flatMap((entry) => ('mutation' in entry ? [{ fingerprint: entry.fingerprint, intent: entry.intent ?? '', context: [...new Set(contextOf(entry.mutation))] }] : [])),
 });
 
-export const CATALOG: Catalog = catalogOf([placeable(tableAction, tableInput), placeable(statAction, statInput), placeable(barsAction, barsInput), placeable(formAction, formInput)], ENTRIES);
+export const CATALOG: Catalog = catalogOf([tableAction, statAction, barsAction, formAction], ENTRIES);

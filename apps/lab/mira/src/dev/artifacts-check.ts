@@ -95,7 +95,7 @@ for (const screen of SCREENS) {
     const extra = Object.keys(canvas.input).filter((key) => !propertiesOf(action?.input).includes(key));
     check(`${named} gives only inputs ${canvas.action} takes`, extra.length === 0, extra.join(', '));
     const placeable = CATALOG.actions.find((candidate) => candidate.id === canvas.action);
-    const parsed = placeable?.input.safeParse(canvas.input);
+    const parsed = placeable?.check.safeParse(canvas.input);
     check(`${named} is opened with an input its action’s schema takes`, parsed === undefined || parsed.success, parsed?.error?.message ?? '');
     check(`${named} says why it is there`, canvas.intent.trim() !== '');
   }
