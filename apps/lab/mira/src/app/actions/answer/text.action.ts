@@ -1,6 +1,6 @@
 import type { ActionDefinition } from '@niscorp/nova';
 import { z } from 'zod';
-import { examplesLayout } from './examples.layout';
+import { textLayout } from './text.layout';
 
 export const textAction: ActionDefinition = {
   id: 'answer.text',
@@ -14,6 +14,6 @@ export const textAction: ActionDefinition = {
       examples: z.array(z.string()).describe('Things to ask.'),
     }),
   ),
-  layout: { component: 'Card', props: { title: '{{$.title}}' }, children: [{ component: 'Text', children: '{{$.text}}' }, examplesLayout] },
+  layout: textLayout,
   triggers: [{ event: 'ui:click', ref: 'example', do: [{ emit: { channel: 'ask', payload: '@event.payload' } }] }],
 };

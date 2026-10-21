@@ -1,6 +1,7 @@
 import type { ActionDefinition } from '@niscorp/nova';
 import { z } from 'zod';
 import { readEndpoint, readInput } from './read';
+import { tableLayout } from './table.layout';
 
 export const tableAction: ActionDefinition = {
   id: 'rows.table',
@@ -15,17 +16,7 @@ export const tableAction: ActionDefinition = {
         .describe('The columns, in order.'),
     }),
   ),
-  layout: {
-    component: 'Card',
-    props: { title: '{{$.title}}' },
-    children: [
-      {
-        if: '$.error',
-        then: { component: 'Text', props: { tone: 'error' }, children: '{{$.error.message}}' },
-        else: { component: 'Table', props: { columns: '$.columns', rows: '$.rows' } },
-      },
-    ],
-  },
+  layout: tableLayout,
   endpoints: { rows: readEndpoint('rows') },
   lifecycle: { mount: [{ call: 'rows' }] },
 };

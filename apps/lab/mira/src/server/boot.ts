@@ -18,6 +18,8 @@ const fromEnvFile = (): Models => {
 };
 
 // The checks hand in models and a run sink of their own; the app reads its keys from .env and logs each run.
-export const boot = async (models: Models = fromEnvFile(), runs: RunSink = logRun): Promise<{ server: MossServer }> => ({
-  server: await createServer(buildApp(composer(models), runs), { ...(await runtime()), tables: [APP_SEQUENCE] }),
+export type BootConfig = { models?: Models; runs?: RunSink };
+
+export const boot = async (config: BootConfig = {}): Promise<{ server: MossServer }> => ({
+  server: await createServer(buildApp({ functions: composer(config.models ?? fromEnvFile()), runs: config.runs ?? logRun }), { ...(await runtime()), tables: [APP_SEQUENCE] }),
 });

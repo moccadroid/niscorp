@@ -38,8 +38,8 @@ const GoSchema = z.looseObject({ going: z.coerce.number() });
 const reasonOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));
 
 export const composer =
-  (models: Models) =>
-  (session: FunctionSession): FunctionDefinition[] => {
+  (models: Models): ((session: FunctionSession) => FunctionDefinition[]) =>
+  (session) => {
     const held = new Set(session.actions);
     const catalog: Catalog = { ...CATALOG, actions: CATALOG.actions.filter((action) => held.has(action.id)) };
     const system = systemPrompt(catalog, SCREENS, ARRANGEMENTS);

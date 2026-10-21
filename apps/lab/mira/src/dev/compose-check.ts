@@ -110,7 +110,7 @@ const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 
 const runs: RunRecord[] = [];
 const models: Models = { decide: { provider: 'scripted', model: 'jev', call: decide }, compose: { provider: 'scripted', model: 'chat', call: compose }, missing: [] };
-const { server } = await boot(models, (run) => runs.push(run));
+const { server } = await boot({ models, runs: (run) => runs.push(run) });
 try {
   const shells = server.shells;
   if (shells === undefined) throw new Error('the manifest has no shell');
@@ -354,8 +354,8 @@ try {
 }
 
 asked = [];
-const { server: jevless } = await boot(
-  {
+const { server: jevless } = await boot({
+  models: {
     decide: {
       provider: 'scripted',
       model: 'jev',
@@ -366,8 +366,8 @@ const { server: jevless } = await boot(
     compose: { provider: 'scripted', model: 'chat', call: compose },
     missing: [],
   },
-  () => {},
-);
+  runs: () => {},
+});
 try {
   const shells = jevless.shells;
   if (shells === undefined) throw new Error('the manifest has no shell');
@@ -381,7 +381,7 @@ try {
   jevless.close();
 }
 
-const { server: keyless } = await boot({ missing: ['GROQ_API_KEY'] }, () => {});
+const { server: keyless } = await boot({ models: { missing: ['GROQ_API_KEY'] }, runs: () => {} });
 try {
   const shells = keyless.shells;
   if (shells === undefined) throw new Error('the manifest has no shell');

@@ -142,7 +142,7 @@ const scores: number[] = [];
 const misses = new Map<string, number>();
 for (let run = 1; run <= runs; run += 1) {
   const { decide: _jev, ...withoutJev } = models;
-  const { server } = await boot({ ...withoutJev, ...(decide !== undefined ? { decide } : {}), ...(compose !== undefined ? { compose } : {}) }, () => {});
+  const { server } = await boot({ models: { ...withoutJev, ...(decide !== undefined ? { decide } : {}), ...(compose !== undefined ? { compose } : {}) }, runs: () => {} });
   const shells = server.shells;
   if (shells === undefined) throw new Error('the manifest has no shell');
   const session = await shells.session(null, null);

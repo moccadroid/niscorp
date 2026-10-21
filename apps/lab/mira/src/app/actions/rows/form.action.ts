@@ -1,6 +1,7 @@
 import type { ActionDefinition } from '@niscorp/nova';
 import { z } from 'zod';
 import { saveRequest } from './form.prism';
+import { formLayout } from './form.layout';
 
 // The model may fill it in; only the person saves it. Saved, it says so on the message `saved`, and the server takes
 // it off an answer that opened it.
@@ -24,21 +25,7 @@ export const formAction: ActionDefinition = {
         .describe('The fields, in order.'),
     }),
   ),
-  layout: {
-    component: 'Card',
-    props: { title: '{{$.title}}' },
-    children: [
-      { for: '$.fields', as: 'field', key: 'key', do: { component: 'Field', props: { label: '$field.label' }, children: [{ component: 'Input', model: '$field.value' }] } },
-      {
-        component: 'Row',
-        children: [
-          { component: 'Button', ref: 'save', props: { label: { $if: '$.saving', $then: 'Saving…', $else: 'Save' } } },
-          { if: '$.saved', then: { component: 'Text', props: { tone: 'muted' }, children: 'Saved.' } },
-        ],
-      },
-      { if: '$.error', then: { component: 'Text', props: { tone: 'error' }, children: '{{$.error}}' } },
-    ],
-  },
+  layout: formLayout,
   endpoints: { save: { url: '/api/vex', method: 'POST', request: saveRequest } },
   triggers: [
     {
