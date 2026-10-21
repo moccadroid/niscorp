@@ -32,11 +32,7 @@ const form = (text: string, language: string) => ({
 const keep = (area: string, from = area) => ({ area, keep: from });
 const put = (area: string, canvas: object) => ({ area, ...canvas });
 const say = (area: string, title: string, text: string) => ({ area, say: { title, text } });
-const written = (areas: readonly [string, number][], columns: number): unknown => ({
-  component: 'Answers',
-  props: { columns },
-  children: areas.map(([name, span]) => ({ component: 'Area', props: { name, span }, children: [{ component: 'CanvasSlot', props: { canvasId: name } }] })),
-});
+const gridOf = (columns: number, ...areas: [string, number][]): unknown => ({ columns, areas: areas.map(([name, span]) => ({ name, span })) });
 
 const REPLIES: Record<string, unknown[]> = {
   'Guten Tag is german': [{ reasoning: 'Filled in the add form with Guten Tag, German; the rest stays.', title: 'German greeting form', areas: [put('e', form('Guten Tag', 'German'))] }],
@@ -51,8 +47,8 @@ const REPLIES: Record<string, unknown[]> = {
   'the count in German': [{ areas: [put('b', { ...count, input: { ...count.input, params: { language: 'German' } } })] }, { areas: [keep('a'), keep('b')] }],
   'the count twice': [{ areas: [keep('a'), keep('b'), keep('c', 'b')] }, { areas: [keep('a'), keep('b')] }],
   'Show me a pie chart': [{ areas: [put('a', { action: 'rows.pie', input: {}, intent: 'a pie' })] }, { areas: [put('a', { action: 'rows.pie', input: {}, intent: 'a pie' })] }],
-  'The count and the languages, with the table wide beneath': [{ areas: [put('a', count), put('b', bars), put('c', table)], layout: written([['a', 1], ['b', 1], ['c', 2]], 2) }],
-  'The count and the table, laid out by hand': [{ areas: [put('a', count), put('b', table), { area: 'c', drop: true }], layout: { component: 'Answers', props: { columns: 2 }, children: [{ component: 'Script', props: { src: 'x' } }] } }],
+  'The count and the languages, with the table wide beneath': [{ areas: [put('a', count), put('b', bars), put('c', table)], grid: gridOf(2, ['a', 1], ['b', 1], ['c', 2]) }],
+  'The count and the table, in a grid of my own': [{ areas: [put('a', count), put('b', table), { area: 'c', drop: true }], grid: gridOf(2, ['a', 1], ['a', 1]) }, { areas: [put('a', count), put('b', table), { area: 'c', drop: true }] }],
   'bon jour is french': [{ areas: [keep('a'), put('b', form('bon jour', 'French'))] }],
   'Add a greeting that says Hej': [{ areas: [put('a', form('Hej', 'Swedish'))], arrangement: 'single' }],
   'What can you do?': [{ areas: [say('a', 'What this app shows', 'Greetings: every one, how many, and per language. Ask, or add one.')], arrangement: 'single' }],
@@ -267,8 +263,9 @@ try {
   await ask('The count and the languages, with the table wide beneath');
   check('a layout the model wrote is the one the answer is laid out in', current().arrangement === 'written' && grid() === '2: a b c×2' && areas() === 'rows.stat rows.bars rows.table', `${String(current().arrangement)} — ${grid()} — ${areas()}`);
 
-  await ask('The count and the table, laid out by hand');
-  check('a layout the model wrote that is not a grid of areas is ignored, and the arrangement on screen stays', current().arrangement === 'written' && areas() === 'rows.stat rows.table', `${String(current().arrangement)} — ${areas()}`);
+  prompts = [];
+  await ask('The count and the table, in a grid of my own');
+  check('a grid that names an area twice is sent back saying so, and the arrangement on screen stays', (prompts[1] ?? '').includes('the grid names an area twice') && current().arrangement === 'written' && areas() === 'rows.stat rows.table', `${String(current().arrangement)} — ${areas()}`);
 
   await openMenu('greetings');
   const greetingsIds = ids();

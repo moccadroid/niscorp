@@ -81,7 +81,7 @@ export const composer =
       const started = performance.now();
       const open = openScreen(session.shell, before);
       const decide = models.decide;
-      const picks: Picks | undefined = decide === undefined ? undefined : await pick(message, open, catalog, screens, arrangements, decide).catch((error: unknown) => {
+      const picks: Picks | undefined = decide === undefined ? undefined : await pick(message, open, catalog, screens, decide).catch((error: unknown) => {
         console.error(`[ask] Jev could not answer "${message}": ${reasonOf(error)}`);
         return undefined;
       });

@@ -4,9 +4,9 @@ import { greetingAdd, greetingsCount, greetingsList, greetingsPerLanguage } from
 // when the next message arrives.
 export type Canvas = { action: string; input: Record<string, unknown>; intent: string };
 
-// A screen is canvases shown together, in an arrangement of its own, opened from the dock without asking
-// anything. The first is the one the app opens on.
-export type Screen = { id: string; label: string; arrangement: string; canvases: Canvas[] };
+// A screen is canvases shown together, in an arrangement of its own, opened from the dock without asking anything. The
+// first is the one the app opens on.
+export type Screen = { id: string; label: string; description: string; arrangement: string; canvases: Canvas[] };
 
 export const EXAMPLES: readonly string[] = ['Show me every greeting', 'How many greetings are there?', 'Greetings per language', 'Which greetings are in German?', 'Add a greeting that says Servus'];
 
@@ -48,7 +48,7 @@ const ADD: Canvas = {
 };
 
 export const SCREENS: readonly Screen[] = [
-  { id: 'overview', label: 'Overview', arrangement: 'hero', canvases: [ABOUT, COUNT, PER_LANGUAGE, TABLE, ADD] },
-  { id: 'greetings', label: 'Greetings', arrangement: 'pair', canvases: [TABLE, ADD] },
-  { id: 'languages', label: 'Languages', arrangement: 'pair', canvases: [PER_LANGUAGE, COUNT] },
+  { id: 'overview', label: 'Overview', description: 'What the app is, how many greetings there are, the greetings per language, every greeting, and a form to add one.', arrangement: 'hero', canvases: [ABOUT, COUNT, PER_LANGUAGE, TABLE, ADD] },
+  { id: 'greetings', label: 'Greetings', description: 'Every greeting, and a form to add one.', arrangement: 'pair', canvases: [TABLE, ADD] },
+  { id: 'languages', label: 'Languages', description: 'The greetings per language, and how many there are.', arrangement: 'pair', canvases: [PER_LANGUAGE, COUNT] },
 ];
