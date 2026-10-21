@@ -11,7 +11,7 @@ const first = SCREENS[0];
 export const barAction: ActionDefinition = {
   id: 'answer.bar',
   title: 'You asked',
-  description: 'The app’s name, its screens, what was asked, and the stack of answers: back, forward, or any of them from the list.',
+  description: 'The app’s name, its screens, what was asked and what the model said it did, and the stack of answers: back, forward, or any of them from the list.',
   data: {
     name: 'mira',
     screens: SCREENS.map(({ id, label }) => ({ id, label })),
@@ -37,6 +37,7 @@ export const barAction: ActionDefinition = {
         ],
       },
       { if: '$.current.question', then: { component: 'Text', props: { tone: 'muted' }, children: 'You asked: {{$.current.question}}' } },
+      { if: '$.current.reasoning', then: { component: 'Text', children: '{{$.current.reasoning}}' } },
       {
         component: 'Row',
         children: [

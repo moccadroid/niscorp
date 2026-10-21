@@ -27,7 +27,9 @@ const Entry = z.object({
   drop: z.boolean().optional(),
 });
 
+// `reasoning` comes first, so the model says what it will do before it writes the areas.
 const Reply = z.object({
+  reasoning: z.string().max(120),
   areas: z.array(Entry).max(AREAS.length).optional(),
   arrangement: z.string().optional(),
   layout: z.unknown().optional(),
@@ -39,7 +41,7 @@ type Entry = z.infer<typeof Entry>;
 
 // What the model answered, once it holds: one of the app's screens as it is, or what each area holds, laid out as it
 // said; no arrangement keeps the one on screen.
-export type Answer = { screen?: string; placed: Placed; said: Partial<Record<AreaId, Said>>; arrangement?: string | Written };
+export type Answer = { reasoning: string; screen?: string; placed: Placed; said: Partial<Record<AreaId, Said>>; arrangement?: string | Written };
 
 const isRecord = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value);
 const onlyKeys = (value: unknown, keys: readonly string[]): boolean => isRecord(value) && Object.keys(value).every((key) => keys.includes(key));
@@ -99,7 +101,8 @@ ${screens.map((screen) => `- ${screen.id} — ${screen.label}: ${screen.canvases
 ARRANGEMENTS (id — what it suits — its areas, row by row):
 ${arrangements.map((arrangement) => `- ${arrangement.id} — ${arrangement.suits} — ${whereOf(arrangement.layout)}`).join('\n')}
 
-Reply with { "areas": [ … ] }, adding "arrangement" or "screen" only as below.
+Reply with { "reasoning": "…", "areas": [ … ] }, adding "arrangement" or "screen" only as below.
+- reasoning: first, one plain sentence for the person, at most 120 characters: what you change and why, or why nothing changes. Name what they see, never area letters, arrangement names or fingerprints.
 - areas: an entry for each area that changes. An area you leave out stays as it is, unless the arrangement has no such area.
   { "area": "a", "keep": "c" } moves the canvas of area c to area a; area c is then empty, unless you give it something.
   { "area": "e", "drop": true } empties area e.
@@ -228,10 +231,11 @@ const resultOf = (reply: Reply, open: Placed, room: readonly AreaId[], catalog: 
 };
 
 const answerOf = (reply: Reply, open: Placed, current: string | Written, catalog: Catalog, arrangements: readonly Arrangement[]): Answer => {
-  if (reply.screen !== undefined) return { screen: reply.screen, placed: {}, said: {} };
+  const reasoning = reply.reasoning.trim();
+  if (reply.screen !== undefined) return { reasoning, screen: reply.screen, placed: {}, said: {} };
   const arrangement = arrangementOf(reply, arrangements);
   const { placed, said } = resultOf(reply, open, areasOfArrangement(arrangement ?? current, arrangements), catalog);
-  return { placed, said, ...(arrangement !== undefined ? { arrangement } : {}) };
+  return { reasoning, placed, said, ...(arrangement !== undefined ? { arrangement } : {}) };
 };
 
 // One call; an answer that does not hold is sent back once with what is wrong with it. `calls` says how many it took.

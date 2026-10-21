@@ -6,9 +6,11 @@ import { AREAS } from '../../app/shell/areas';
 import type { AreaId } from '../../app/shell/areas';
 
 // What a message, or a screen opened from the menu, was answered with: the canvas of each area, in an array as nova's
-// `reconcile` takes it; where it stands among the answers given, and what they all were (`stack`).
+// `reconcile` takes it; what the model said it did (`reasoning`); where it stands among the answers given, and what they
+// all were (`stack`).
 export type Plan = {
   question: string;
+  reasoning?: string;
   label: string;
   screen?: string;
   position: number;

@@ -39,7 +39,7 @@ const written = (areas: readonly [string, number][], columns: number): unknown =
 });
 
 const REPLIES: Record<string, unknown[]> = {
-  'Guten Tag is german': [{ areas: [put('e', form('Guten Tag', 'German'))] }],
+  'Guten Tag is german': [{ reasoning: 'Filled in the add form with Guten Tag, German; the rest stays.', areas: [put('e', form('Guten Tag', 'German'))] }],
   'drop the bars': [{ areas: [{ area: 'c', drop: true }] }],
   'Show me every greeting': [{ areas: [put('a', table)], arrangement: 'single' }],
   'How many greetings are there?': [{ areas: [put('a', count)] }],
@@ -58,7 +58,7 @@ const REPLIES: Record<string, unknown[]> = {
   'What can you do?': [{ areas: [say('a', 'What this app shows', 'Greetings: every one, how many, and per language. Ask, or add one.')], arrangement: 'single' }],
   'the count, and say what it is': [{ areas: [say('a', 'Greetings', 'How many greetings the app keeps.'), put('b', count)], arrangement: 'pair' }],
   'Show the overview': [{ screen: 'overview' }],
-  'What is the weather in Vienna?': [{ areas: [] }],
+  'What is the weather in Vienna?': [{ reasoning: 'Nothing in this app shows the weather.', areas: [] }],
 };
 
 let asked: { state: Record<string, unknown>; questions: Record<string, unknown> }[] = [];
@@ -77,7 +77,7 @@ const fill: Fill = async <T>(_system: string, user: string, schema: z.ZodType<T>
   const turn = turns.get(message) ?? 0;
   turns.set(message, turn + 1);
   const replies = REPLIES[message] ?? [{ areas: [] }];
-  return schema.parse(replies[Math.min(turn, replies.length - 1)]);
+  return schema.parse({ reasoning: 'Scripted.', ...(replies[Math.min(turn, replies.length - 1)] as object) });
 };
 
 let failures = 0;
@@ -122,7 +122,7 @@ try {
   };
   const areas = (): string => AREAS.map((area) => on(area).action).filter((action) => action !== '').join(' ');
   const ids = (): string => AREAS.map((area) => `${area}:${on(area).id}`).join(' ');
-  type Shown = { question?: string; screen?: string; arrangement?: string; position?: number; total?: number; stack?: { position: number; label: string }[] };
+  type Shown = { question?: string; reasoning?: string; screen?: string; arrangement?: string; position?: number; total?: number; stack?: { position: number; label: string }[] };
   // The grid the frame's `answers` region holds, as the shell draws it: its columns, and each area's name and span.
   const grid = (): string => {
     const find = (nodes: unknown): Record<string, unknown> | undefined => {
@@ -190,6 +190,7 @@ try {
     ids() === overviewIds && current().arrangement === 'hero' && grid() === '2: a×2 b c d e' && fields('e')[0]?.value === 'Guten Tag' && fields('e')[1]?.value === 'German',
     `${ids()} vs ${overviewIds} — ${grid()} — ${JSON.stringify(fields('e'))}`,
   );
+  check('what the model said it did is in the bar, under what was asked', current().reasoning === 'Filled in the add form with Guten Tag, German; the rest stays.' && JSON.stringify(shell.flattenRenderTree(shell.getShellRenderTree())).includes('the rest stays'), String(current().reasoning));
   const filledIds = ids();
   await ask('drop the bars');
   check('an area the model drops is emptied, and every other stays as it was', on('c').id === '' && ids().replace(/c:\S*/, '') === filledIds.replace(/c:\S*/, '') && current().arrangement === 'hero', `${ids()} vs ${filledIds}`);
@@ -287,6 +288,7 @@ try {
   const stackBeforeWeather = total();
   await ask('What is the weather in Vienna?');
   check('an answer that changes nothing leaves the screen as it was, and adds nothing to the stack', ids() === beforeWeather && total() === stackBeforeWeather && said() === '', `${ids()} — ${String(total())} — ${said()}`);
+  check('and the bar says what was asked, and why nothing changed', current().question === 'What is the weather in Vienna?' && current().reasoning === 'Nothing in this app shows the weather.', JSON.stringify(current()).slice(0, 200));
 
   unreachable = true;
   await ask('Show me every greeting');

@@ -62,10 +62,12 @@ export const composer =
       return plan;
     };
 
-    // A screen already in the stack is gone back to, not stacked again; one that is not is shown as it is written.
-    const openScreenOf = (screen: Screen): Plan => {
+    // A screen already in the stack is gone back to, not stacked again; one that is not is shown as it is written. What
+    // the model said when it answered with the screen is shown with it, and not kept.
+    const openScreenOf = (screen: Screen, reasoning?: string): Plan => {
       const there = history.indexOf((plan) => plan.screen === screen.id);
-      return show(there >= 0 ? history.go(there + 1) : history.add(planOf('', areasOf(screen.canvases), { screen, arrangement: screen.arrangement })));
+      const plan = there >= 0 ? history.go(there + 1) : history.add(planOf('', areasOf(screen.canvases), { screen, arrangement: screen.arrangement }));
+      return show(reasoning === undefined ? plan : { ...plan, reasoning });
     };
 
     // A message that gets no screen leaves the screen as it is: what went wrong is said under the line it was typed in.
@@ -101,16 +103,17 @@ export const composer =
       }
       const { answer } = filled;
       const screen = answer.screen === undefined ? undefined : screens.find((candidate) => candidate.id === answer.screen);
-      if (screen !== undefined) return openScreenOf(screen);
+      if (screen !== undefined) return openScreenOf(screen, answer.reasoning);
       const placed: Placed = { ...answer.placed };
       for (const area of AREAS) {
         const said = answer.said[area];
         if (said !== undefined) placed[area] = textOf(said, EXAMPLES);
       }
       if (Object.keys(placed).length === 0) throw new Error('Nothing here answers that yet.');
-      const plan = planOf(message, placed, { arrangement: answer.arrangement ?? current });
-      // An answer that leaves the screen as it is adds nothing to the stack.
-      if (JSON.stringify([plan.canvases, plan.layout]) === JSON.stringify([before.canvases, before.layout])) return before;
+      const plan = { ...planOf(message, placed, { arrangement: answer.arrangement ?? current }), reasoning: answer.reasoning };
+      // An answer that leaves the screen as it is adds nothing to the stack; what was asked, and why nothing changed, are
+      // shown in the bar all the same.
+      if (JSON.stringify([plan.canvases, plan.layout]) === JSON.stringify([before.canvases, before.layout])) return show({ ...before, question: message, reasoning: answer.reasoning });
       return show(history.add(plan));
     };
 
