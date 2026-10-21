@@ -19,7 +19,7 @@ export const createHistory = (first: Plan | undefined): History => {
   let at = plans.length - 1;
   const shown = (index: number): ShownPlan => {
     const plan = plans[index];
-    return plan === undefined ? NOTHING : { ...plan, position: index + 1, total: plans.length, stack: plans.map((one, at) => ({ position: at + 1, label: one.label })) };
+    return plan === undefined ? NOTHING : { ...plan, position: index + 1, total: plans.length, stack: plans.map((one, offset) => ({ position: offset + 1, label: one.label })) };
   };
   const showAt = (index: number): ShownPlan => {
     at = index;

@@ -11,7 +11,7 @@ Made 2026-10-20 by `npm create nisc`, on nisc 0.8.1. This is the record AGENTS.m
 | D3 Reads | answered | **Vex entries.** An answer's action reads one by its fingerprint (`/api/vex`), under the person's policy, and again whenever what it read changes (`refresh: 'reactive'`). |
 | D4 Writes | answered | **Vex mutation entries**, posted to `/api/vex` by a form an answer opened (`form.prism.ts`) — by the person, never by the model. |
 | D5 Routing | derived · **partly open** | The first screen is drawn on the server and adopted by the terminal — it costs nothing while nobody can sign in. Open: once sign-in exists, the browser keeps the session in a cookie no script can read, and the page is drawn for whoever it says (AGENTS.md rule 12) — a page drawn for somebody is theirs alone (`private, no-store`). Open: which paths are **pages** rather than the app, and whether the app's shell state syncs to the address bar. |
-| D6 Who answers a message | answered | Jev reads the message and the open screen (`TYPESAFE_API_KEY`), then gpt-oss-120b on Groq composes the screen (`GROQ_API_KEY`), with what Jev picked as a hint. Without a TypeSafe key there is no Jev pass. Jev may take 2 s and the model 8 s; past that, the model answers alone, or the line says it could not be reached and the screen stays as it is. |
+| D6 Who answers a message | answered | Jev reads the message and the open screen (`TYPESAFE_API_KEY`), then gpt-oss-120b on Groq composes the screen (`GROQ_API_KEY`), with what Jev picked as a hint. Without a TypeSafe key there is no Jev pass. Jev may take 2 s and the model 8 s; past that, the model answers alone, or the line says it could not be reached and the screen stays as it is. Measured on the cases asked of mira (`src/dev/live-ask.ts`): 58/60 with Jev, 52/60 without. |
 | D7 What a screen is made of | answered | Canvases: an action from the catalog (`src/server/compose/catalog.ts`: the actions the model may place, the reads they show, the writes a form saves through), opened with an input its schema takes, and why it is there. Up to six, on the areas `a`–`f`; the screens in the dock are canvases too (`src/app/screens.ts`). |
 | D8 History | derived · **open** | The answers one shell was given, kept while it lives; a reload starts again. Open: whether a person's answers outlive the shell, and memory beyond that. |
 | D10 Layout swaps | derived · **open: sign-in** | An answer’s arrangement is swapped into the frame’s `answers` region through moss’s unverified shell (`@niscorp/moss/unverified`, in `src/server/compose/index.ts`), because moss lets a session change a layout only through a draft, and a draft needs a signed-in person. **When the app has sign-in, the swap moves to `session.draft`, where moss checks it.** |
@@ -36,9 +36,9 @@ Made 2026-10-20 by `npm create nisc`, on nisc 0.8.1. This is the record AGENTS.m
 ## Order of work
 
 1. **The interview** — every open item above, answered or delegated by name. ← here
-2. **Scaffold** — done: the frame, the message loop, seven actions, three screens over hello-world rows, and their checks.
+2. **Scaffold** — done: the frame, the message loop, six actions, three screens over hello-world rows, and their checks.
 3. **Data** — per D2/D3: your tables in `src/db/schema.ts`, your reads and writes in `src/app/vex/`; the greetings go.
-4. **Screens** — the ones a person will want in the menu, each its canvases; the first the one the app opens on.
+4. **Screens** — the ones a person will want in the dock, each its canvases; the first the one the app opens on.
 5. **Actions** — your own, small: one purpose each, a description that says what it shows, an `input` schema for what the model fills in; the ones the model may place go in the catalog.
 6. **Writes** — per D4; a form an answer opens, filled in by the model, saved by the person.
 7. **Checks** — `src/dev/compose-check.ts` runs the loop offline; `src/dev/live-ask.ts` asks the real models a run of messages and counts the right screens.

@@ -10,7 +10,7 @@ export const AreaIdSchema = z.enum(AREAS);
 
 export type WrittenLayout = { layout: LayoutNode; areas: AreaId[] };
 
-export type Grid = { columns: number; areas: readonly { name: AreaId; span?: number | null | undefined }[] };
+type Grid = { columns: number; areas: readonly { name: AreaId; span?: number | null | undefined }[] };
 
 export const areasInLayout = (layout: unknown): AreaId[] => {
   if (Array.isArray(layout)) return layout.flatMap(areasInLayout);
@@ -40,13 +40,13 @@ export const areaRows = (layout: unknown): string => {
 };
 
 export const areasOfArrangement = (arrangement: string | WrittenLayout, arrangements: readonly Arrangement[]): AreaId[] =>
-  typeof arrangement === 'object' ? arrangement.areas : AREAS.slice(0, arrangements.find((candidate) => candidate.id === arrangement)?.slots ?? 0);
+  typeof arrangement === 'object' ? arrangement.areas : AREAS.slice(0, arrangements.find((candidate) => candidate.id === arrangement)?.areaCount ?? 0);
 
 // The arrangement asked for — by name, or written — when it holds every area used; else the smallest one that does.
-export const arrangementFor = (asked: string | WrittenLayout | undefined, slotsNeeded: number, arrangements: readonly Arrangement[]): { arrangement: string; layout: LayoutNode } => {
+export const arrangementFor = (asked: string | WrittenLayout | undefined, areasNeeded: number, arrangements: readonly Arrangement[]): { arrangement: string; layout: LayoutNode } => {
   if (typeof asked === 'object') return { arrangement: 'written', layout: asked.layout };
-  const named = arrangements.find((arrangement) => arrangement.id === asked && arrangement.slots >= slotsNeeded);
-  const fits = named ?? [...arrangements].filter((arrangement) => arrangement.slots >= slotsNeeded).sort((one, other) => one.slots - other.slots)[0] ?? arrangements[arrangements.length - 1];
+  const named = arrangements.find((arrangement) => arrangement.id === asked && arrangement.areaCount >= areasNeeded);
+  const fits = named ?? [...arrangements].filter((arrangement) => arrangement.areaCount >= areasNeeded).sort((one, other) => one.areaCount - other.areaCount)[0] ?? arrangements[arrangements.length - 1];
   return { arrangement: fits?.id ?? '', layout: fits?.layout ?? { component: 'Grid' } };
 };
 

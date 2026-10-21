@@ -21,10 +21,10 @@ ACTIONS — what a person sees, and the input schema
 ${catalog.actions.map((action) => `- ${action.id}: ${action.description} Input: ${json(withoutDialect(action.schema))}`).join('\n')}
 
 READS — what it answers, its rows, and the params it is asked with
-${catalog.reads.map((read) => `- ${read.fingerprint}: ${read.intent}. Rows: ${json(read.shape)}. Params: ${json(read.context)}`).join('\n')}
+${catalog.reads.map((read) => `- ${read.fingerprint}: ${read.intent}. Rows: ${json(read.shape)}. Params: ${json(read.contextKeys)}`).join('\n')}
 
 WRITES — what it does, and the keys of the fields a form saves through it
-${catalog.writes.map((write) => `- ${write.fingerprint}: ${write.intent}. Fields: ${json(write.context)}`).join('\n')}
+${catalog.writes.map((write) => `- ${write.fingerprint}: ${write.intent}. Fields: ${json(write.contextKeys)}`).join('\n')}
 
 SCREENS
 ${screens.map((screen) => `- ${screen.id}: ${screen.description}`).join('\n')}

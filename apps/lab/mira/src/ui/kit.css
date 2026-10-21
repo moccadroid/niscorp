@@ -1,6 +1,3 @@
-/* The look — the only place it lives. A different look is a different
-   stylesheet over the same layouts. */
-
 :root {
   --k-bg: #f6f4ef;
   --k-surface: #ffffff;
@@ -58,9 +55,6 @@ html, body, #root { margin: 0; min-height: 100%; }
 .k-button.k-summary { flex-shrink: 1; min-width: 0; max-width: 42vw; overflow: hidden; text-overflow: ellipsis; }
 .k-button.k-step { padding: 5px 10px; }
 
-/* An app a model leads: the answer, and the dock under it. The answer scrolls; the dock stays at the bottom, in
-   reading order down to the hands: the screens and the answer shown, then the line to ask in. */
-
 .k-frame { min-height: 100vh; display: flex; flex-direction: column; }
 
 .k-dock {
@@ -101,10 +95,8 @@ html, body, #root { margin: 0; min-height: 100%; }
 .k-menu > .k-text + .k-button, .k-menu > .k-muted { margin-bottom: 4px; }
 .k-menu > .k-muted { padding-bottom: 10px; border-bottom: 1px solid var(--k-line); }
 
-/* What the last answer changed is outlined, until the next. */
 .k-area-changed > .k-card { box-shadow: 0 0 0 2px var(--k-accent); }
 
-/* An answer's grid: its columns and each area's span are the arrangement's. An area with nothing in it takes no room. */
 .k-grid {
   flex: 1;
   width: 100%;
@@ -122,6 +114,7 @@ html, body, #root { margin: 0; min-height: 100%; }
 .k-area { min-width: 0; }
 .k-span-2 { grid-column: span 2; }
 .k-span-3 { grid-column: span 3; }
+/* An area with nothing in it takes no room. */
 .k-area:not(:has(.k-card)) { display: none; }
 
 .k-card {

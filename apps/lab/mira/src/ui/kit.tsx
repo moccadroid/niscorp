@@ -90,7 +90,7 @@ const AreaProps = z.object({
 export const Area: NovaComponent = ({ children, novaRef: _ref, novaModel: _model, ...props }) => {
   const { name, span, changed } = parsed(AreaProps, props, { name: '' });
   return (
-    <section className={`k-area k-area-${name} k-span-${span ?? 1}${changed === true ? ' k-area-changed' : ''}`}>
+    <section className={`k-area k-span-${span ?? 1}${changed === true ? ' k-area-changed' : ''}`}>
       {children}
     </section>
   );

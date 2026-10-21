@@ -38,8 +38,8 @@ const canvasRefusals = (entry: Entry, where: string, catalog: Catalog): string[]
     const params = isRecord(input['params']) ? input['params'] : {};
     if (known === undefined) refusals.push(`${where}: there is no read "${read}".`);
     else {
-      for (const key of known.context) if (params[key] === undefined || params[key] === '') refusals.push(`${where}: the read "${read}" is asked with params.${key}, and it is missing.`);
-      for (const key of Object.keys(params)) if (!known.context.includes(key)) refusals.push(`${where}: the read "${read}" takes no params.${key}; it takes ${known.context.length > 0 ? known.context.join(', ') : 'none'}.`);
+      for (const key of known.contextKeys) if (params[key] === undefined || params[key] === '') refusals.push(`${where}: the read "${read}" is asked with params.${key}, and it is missing.`);
+      for (const key of Object.keys(params)) if (!known.contextKeys.includes(key)) refusals.push(`${where}: the read "${read}" takes no params.${key}; it takes ${known.contextKeys.length > 0 ? known.contextKeys.join(', ') : 'none'}.`);
     }
   }
   const write = input['write'];
@@ -47,7 +47,7 @@ const canvasRefusals = (entry: Entry, where: string, catalog: Catalog): string[]
     const known = catalog.writes.find((candidate) => candidate.fingerprint === write);
     const keys = (Array.isArray(input['fields']) ? input['fields'] : []).map((field: unknown) => (isRecord(field) ? field['key'] : undefined));
     if (known === undefined) refusals.push(`${where}: there is no write "${write}".`);
-    else for (const key of known.context) if (!keys.includes(key)) refusals.push(`${where}: the write "${write}" saves a field "${key}", and the form has none.`);
+    else for (const key of known.contextKeys) if (!keys.includes(key)) refusals.push(`${where}: the write "${write}" saves a field "${key}", and the form has none.`);
   }
   return refusals;
 };

@@ -35,15 +35,14 @@ export const changedAreas = (now: Plan, before: Plan): AreaId[] =>
 
 export const arrangementOfPlan = (plan: Plan): string | WrittenLayout => (plan.arrangement === 'written' ? { layout: plan.layout, areas: areasInLayout(plan.layout) } : plan.arrangement);
 
-const slotsNeeded = (canvases: AreaCanvases): number => AREAS.reduce((last, area, at) => (canvases[area] !== undefined ? at + 1 : last), 0);
+const areasNeeded = (canvases: AreaCanvases): number => AREAS.reduce((last, area, at) => (canvases[area] !== undefined ? at + 1 : last), 0);
 
-export type PlanOptions = { arrangements: readonly Arrangement[]; arrangement?: string | WrittenLayout; label?: string; screen?: { id: string; label: string } };
+type PlanOptions = { arrangements: readonly Arrangement[]; arrangement?: string | WrittenLayout; label?: string; screen?: { id: string; label: string } };
 
-// A plan is named by the title the model gave its answer, a screen's by its label, else by what was asked.
 export const planOf = (question: string, canvases: AreaCanvases, options: PlanOptions): Plan => ({
   question,
   label: options.screen?.label ?? options.label ?? question,
   ...(options.screen !== undefined ? { screen: options.screen.id } : {}),
   canvases: Object.fromEntries(AREAS.flatMap((area) => (canvases[area] !== undefined ? [[area, [canvases[area]]]] : []))),
-  ...arrangementFor(options.arrangement, slotsNeeded(canvases), options.arrangements),
+  ...arrangementFor(options.arrangement, areasNeeded(canvases), options.arrangements),
 });

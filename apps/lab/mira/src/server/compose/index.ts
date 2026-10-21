@@ -22,7 +22,7 @@ import { messagePrompt, systemPrompt } from './prompt';
 import { readOpenScreen } from './screen';
 
 export type { Compose } from './answer';
-export type { Decide, Picked, Question } from './pick';
+export type { Decide } from './pick';
 export type { ShownPlan } from './plan';
 
 // Who runs a model is said in every run it is recorded in.

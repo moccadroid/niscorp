@@ -8,7 +8,7 @@ export type Canvas = { action: string; input: Record<string, unknown>; intent: s
 // first is the one the app opens on.
 export type Screen = { id: string; label: string; description: string; arrangement: string; canvases: Canvas[] };
 
-export const EXAMPLES: readonly string[] = ['Show me every greeting', 'How many greetings are there?', 'Greetings per language', 'Which greetings are in German?', 'Add a greeting that says Servus'];
+const EXAMPLES: readonly string[] = ['Show me every greeting', 'How many greetings are there?', 'Greetings per language', 'Which greetings are in German?', 'Add a greeting that says Servus'];
 
 const ABOUT: Canvas = {
   action: 'answer.text',
