@@ -24,6 +24,27 @@ const contextOf = (node: unknown): string[] => {
 
 export const placeable = (action: ActionDefinition, input: z.ZodType): Placeable => ({ id: action.id, description: action.description ?? '', input, schema: action.input });
 
+const isRecord = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value);
+
+const keysOf = (schema: unknown): string[] => (isRecord(schema) && isRecord(schema['properties']) ? Object.keys(schema['properties']) : []);
+
+// An input's fields in a line, each with what goes in it: `title: …; columns [{ key, label }]: …`.
+export const fieldsOf = (schema: unknown): string =>
+  Object.entries(isRecord(schema) && isRecord(schema['properties']) ? schema['properties'] : {})
+    .map(([name, field]) => {
+      const own = isRecord(field) ? field : {};
+      const items = own['items'];
+      const shape = own['type'] === 'array' && keysOf(items).length > 0 ? ` [{ ${keysOf(items).join(', ')} }]` : own['type'] === 'object' ? ' {…}' : '';
+      return `${name}${shape}: ${typeof own['description'] === 'string' ? own['description'].replace(/\.$/, '') : ''}`.trim();
+    })
+    .join('; ');
+
+// What a read answers, in a few words: `rows of text, language`, or `{ value }`.
+export const rowsOf = (shape: unknown): string => {
+  if (Array.isArray(shape)) return `rows of ${Object.keys(isRecord(shape[0]) ? shape[0] : {}).join(', ')}`;
+  return isRecord(shape) ? `{ ${Object.keys(shape).join(', ')} }` : 'nothing';
+};
+
 export const catalogOf = (actions: Placeable[], entries: readonly (SeedEntry | SeedMutation)[]): Catalog => ({
   actions,
   reads: entries.flatMap((entry) => ('dsl' in entry ? [{ fingerprint: entry.fingerprint, intent: entry.intent ?? '', shape: entry.shape, context: [...new Set(contextOf(entry.dsl))] }] : [])),

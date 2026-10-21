@@ -4,7 +4,8 @@ import { unverifiedShell } from '@niscorp/moss/unverified';
 import { ARRANGEMENTS } from '../../app/arrangements';
 import type { Arrangement } from '../../app/arrangements';
 import { EXAMPLES, SCREENS } from '../../app/screens';
-import type { Canvas, Screen } from '../../app/screens';
+import type { Screen } from '../../app/screens';
+import { AREAS } from '../../app/shell/areas';
 import { CATALOG } from './catalog';
 import type { Catalog } from './catalog';
 import { fill, systemOf, userOf } from './fill';
@@ -12,8 +13,8 @@ import type { Fill } from './fill';
 import { createHistory } from './history';
 import { pick } from './pick';
 import type { Decide, Picks } from './pick';
-import { planOf, textOf } from './plan';
-import type { Plan, Said, Unnumbered } from './plan';
+import { areasIn, areasOf, placedOf, planOf, textOf } from './plan';
+import type { Placed, Plan, Unnumbered, Written } from './plan';
 import { openScreen } from './screen';
 
 export type { Decide, Picked, Question } from './pick';
@@ -36,6 +37,9 @@ const ms = (from: number, to: number): string => `${Math.round(to - from)} ms`;
 
 const reasonOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));
 
+// The arrangement a plan is laid out in: its name, or the grid the model wrote.
+const arrangementOfPlan = (plan: Unnumbered): string | Written => (plan.arrangement === 'written' ? { layout: plan.layout, areas: areasIn(plan.layout) } : plan.arrangement);
+
 export const composer =
   (models: Models, catalog: Catalog = CATALOG, screens: readonly Screen[] = SCREENS, arrangements: readonly Arrangement[] = ARRANGEMENTS) =>
   (session: FunctionSession): FunctionDefinition[] => {
@@ -44,7 +48,7 @@ export const composer =
     let asked = 0;
 
     const home = screens[0];
-    const homePlan = (): Unnumbered => planOf('', home?.canvases ?? [], { ...(home !== undefined ? { screen: home } : {}), arrangement: home?.arrangement });
+    const homePlan = (): Unnumbered => planOf('', areasOf(home?.canvases ?? []), { ...(home !== undefined ? { screen: home } : {}), arrangement: home?.arrangement });
     // The stack starts at the first screen, as the shell opened it.
     const history = createHistory(home === undefined ? undefined : homePlan());
 
@@ -61,22 +65,15 @@ export const composer =
     // A screen already in the stack is gone back to, not stacked again; one that is not is shown as it is written.
     const openScreenOf = (screen: Screen): Plan => {
       const there = history.indexOf((plan) => plan.screen === screen.id);
-      return show(there >= 0 ? history.go(there + 1) : history.add(planOf('', screen.canvases, { screen, arrangement: screen.arrangement })));
+      return show(there >= 0 ? history.go(there + 1) : history.add(planOf('', areasOf(screen.canvases), { screen, arrangement: screen.arrangement })));
     };
 
-    // Words above what is on screen, which stays as it is: when nothing else answers.
-    const saidOver = (message: string, said: Said, before: Plan): Plan => {
-      const kept = Object.values(before.canvases).flatMap((canvases): Canvas[] => (canvases ?? []).filter((canvas) => canvas.action !== 'answer.text'));
-      return show(history.add(planOf(message, [textOf(said, EXAMPLES), ...kept], { arrangement: before.arrangement })));
-    };
-
+    // A message that gets no screen leaves the screen as it is: what went wrong is said under the line it was typed in.
     const ask = async (data: unknown): Promise<Plan> => {
       const message = AskSchema.parse(data).text.trim();
       if (message === '') return history.current();
       const before = history.current();
-      if (models.fill === undefined) {
-        return saidOver(message, { title: 'Nothing to answer with', text: `Set ${models.missing.join(' and ')} in .env, and start the app again.` }, before);
-      }
+      if (models.fill === undefined) throw new Error(`Set ${models.missing.join(' and ')} in .env, and start the app again.`);
       const turn = (asked += 1);
       const started = performance.now();
       const open = openScreen(session.shell, before);
@@ -86,7 +83,9 @@ export const composer =
         return undefined;
       });
       const picked = performance.now();
-      const filled = await fill(system, userOf(message, open, before.arrangement, picks), catalog, screens, arrangements, models.fill).catch((error: unknown) => {
+      const current = arrangementOfPlan(before);
+      const user = userOf(message, open, { id: before.arrangement, layout: before.layout }, picks);
+      const filled = await fill(system, user, placedOf(before), current, catalog, screens, arrangements, models.fill).catch((error: unknown) => {
         console.error(`[ask] the model could not answer "${message}": ${reasonOf(error)}`);
         return undefined;
       });
@@ -95,17 +94,24 @@ export const composer =
       // A later message is being answered: this one's answer would only flash past.
       if (turn !== asked) return history.current();
 
-      if (filled === undefined) return saidOver(message, { title: 'No answer this time', text: 'The model could not be reached. Ask again in a moment.' }, before);
+      if (filled === undefined) throw new Error('The model could not be reached. Ask again in a moment.');
       if ('refused' in filled) {
         console.error(`[ask] "${message}" was answered twice with what this app cannot show: ${filled.refused.join(' | ')}`);
-        return saidOver(message, { title: 'That did not come together', text: 'The answer did not fit this app’s actions. Ask again, or put it differently.' }, before);
+        throw new Error('That answer did not fit this app’s actions. Ask again, or put it differently.');
       }
       const { answer } = filled;
       const screen = answer.screen === undefined ? undefined : screens.find((candidate) => candidate.id === answer.screen);
       if (screen !== undefined) return openScreenOf(screen);
-      const canvases = answer.said === undefined ? answer.canvases : [textOf(answer.said, EXAMPLES), ...answer.canvases];
-      if (canvases.length === 0) return saidOver(message, { title: 'Nothing here answers that yet', text: 'Ask for something this app shows, or try one of these.' }, before);
-      return show(history.add(planOf(message, canvases, { ...(answer.arrangement !== undefined ? { arrangement: answer.arrangement } : {}) })));
+      const placed: Placed = { ...answer.placed };
+      for (const area of AREAS) {
+        const said = answer.said[area];
+        if (said !== undefined) placed[area] = textOf(said, EXAMPLES);
+      }
+      if (Object.keys(placed).length === 0) throw new Error('Nothing here answers that yet.');
+      const plan = planOf(message, placed, { arrangement: answer.arrangement ?? current });
+      // An answer that leaves the screen as it is adds nothing to the stack.
+      if (JSON.stringify([plan.canvases, plan.layout]) === JSON.stringify([before.canvases, before.layout])) return before;
+      return show(history.add(plan));
     };
 
     const open = async (data: unknown): Promise<Plan> => {
@@ -113,16 +119,14 @@ export const composer =
       return screen === undefined ? history.current() : openScreenOf(screen);
     };
 
-    // A form an answer opened has done its work once saved, and goes; on a screen it stays, emptied, for the next one.
-    // An answer left with nothing leaves the stack, and the first screen is gone back to.
+    // A form an answer opened has done its work once saved, and goes; the rest stays where it is. On a screen it stays,
+    // emptied, for the next one. An answer left with nothing leaves the stack, and the first screen is gone back to.
     const saved = async (data: unknown): Promise<Plan> => {
       const fingerprint = SavedSchema.parse(data).saved;
       const now = history.current();
       if (now.screen !== undefined) return now;
-      const kept = Object.values(now.canvases)
-        .flatMap((canvases) => canvases ?? [])
-        .filter((canvas) => canvas.input['write'] !== fingerprint);
-      if (kept.length > 0) return show(history.replace(history.showing(), planOf(now.question, kept, { arrangement: now.arrangement })));
+      const kept = Object.fromEntries(Object.entries(placedOf(now)).filter(([, canvas]) => canvas.input['write'] !== fingerprint));
+      if (Object.keys(kept).length > 0) return show(history.replace(history.showing(), planOf(now.question, kept, { arrangement: arrangementOfPlan(now) })));
       history.drop(history.showing());
       return home === undefined ? history.current() : openScreenOf(home);
     };
