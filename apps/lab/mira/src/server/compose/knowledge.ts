@@ -1,5 +1,4 @@
 import type { Producer } from '@niscorp/cortex';
-import { z } from 'zod';
 import type { LayoutNode } from '@niscorp/nova';
 import type { Arrangement } from '../../app/arrangements';
 import type { Screen } from '../../app/screens';
@@ -8,7 +7,6 @@ import type { Catalog } from './catalog';
 import { areaRows } from './layout';
 import type { Picks } from './pick';
 import { recordOf } from './record';
-import { ReplySchema } from './reply.schema';
 import type { OpenCanvas } from './screen';
 
 export type ComposerDeps = { catalog: Catalog; screens: readonly Screen[]; arrangements: readonly Arrangement[] };
@@ -33,9 +31,6 @@ export const screenCatalog = (({ deps }) => `SCREENS\n${deps.screens.map((screen
 
 export const arrangementCatalog = (({ deps }) =>
   `ARRANGEMENTS — and their areas, row by row\n${deps.arrangements.map((arrangement) => `- ${arrangement.id}: ${arrangement.description} Areas: ${areaRows(arrangement.layout)}`).join('\n')}`) satisfies Producer<ComposerDeps>;
-
-// Groq's grammar keeps the reply's shape, and may not show the model what each field means: the schema is said here too.
-export const replyData = (() => `DATA — what the envelope's "data" holds, its JSON Schema\n${json(withoutDialect(z.toJSONSchema(ReplySchema)))}`) satisfies Producer<ComposerDeps>;
 
 const canvasLine = (canvas: OpenCanvas): string => {
   const what = canvas.action === 'answer.text' ? `words ${json({ title: canvas.input['title'], text: canvas.input['text'] })}` : `input ${json(canvas.input)}`;
