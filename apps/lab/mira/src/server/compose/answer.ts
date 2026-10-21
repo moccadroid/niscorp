@@ -1,22 +1,17 @@
-import type { z } from 'zod';
 import type { Arrangement } from '../../app/arrangements';
 import type { Screen } from '../../app/screens';
 import { AREAS } from '../../app/shell/areas';
 import type { AreaId } from '../../app/shell/areas';
-import type { Usage } from '../runs';
 import type { Catalog } from './catalog';
 import { areasOfArrangement, gridLayout } from './layout';
 import type { WrittenLayout } from './layout';
 import type { AreaCanvases, Said } from './plan';
 import { isRecord } from './record';
-import { entriesOf, ReplySchema } from './reply.schema';
+import { entriesOf } from './reply.schema';
 import type { Entry, Reply } from './reply.schema';
 
-// A reply that does not fit the schema is `unfit`, with what is wrong with it.
-export type Compose = <T>(system: string, user: string, schema: z.ZodType<T>) => Promise<{ reply: T; usage: Usage } | { unfit: string; usage: Usage }>;
-
 // No arrangement keeps the one on screen.
-export type Answer = { reasoning: string; title: string; screen?: string; canvases: AreaCanvases; said: Partial<Record<AreaId, Said>>; arrangement?: string | WrittenLayout };
+export type Answer = { title: string; screen?: string; canvases: AreaCanvases; said: Partial<Record<AreaId, Said>>; arrangement?: string | WrittenLayout };
 
 export type AnswerContext = { open: AreaCanvases; current: string | WrittenLayout; catalog: Catalog; screens: readonly Screen[]; arrangements: readonly Arrangement[] };
 
@@ -78,7 +73,7 @@ const sameThingKey = (canvas: { action: string; input: Record<string, unknown> }
   return JSON.stringify(read !== undefined ? [canvas.action, read, params] : write !== undefined ? [canvas.action, write] : [canvas.action, canvas.input]);
 };
 
-const refusalsOf = (reply: Reply, context: AnswerContext): string[] => {
+export const refusalsOf = (reply: Reply, context: AnswerContext): string[] => {
   const { open, current, catalog, screens, arrangements } = context;
   if (reply.screen) return screens.some((screen) => screen.id === reply.screen) ? [] : [`"${reply.screen}" is not one of the app's screens.`];
   const refusals: string[] = [];
@@ -112,23 +107,10 @@ const refusalsOf = (reply: Reply, context: AnswerContext): string[] => {
   return refusals;
 };
 
-const answerOf = (reply: Reply, context: AnswerContext): Answer => {
-  const reasoning = reply.reasoning.trim();
+export const answerOf = (reply: Reply, context: AnswerContext): Answer => {
   const title = reply.title.trim();
-  if (reply.screen) return { reasoning, title, screen: reply.screen, canvases: {}, said: {} };
+  if (reply.screen) return { title, screen: reply.screen, canvases: {}, said: {} };
   const arrangement = arrangementOfReply(reply, context.arrangements);
   const { canvases, said } = applyEntries(entriesOf(reply), context.open, areasOfArrangement(arrangement ?? context.current, context.arrangements), context.catalog);
-  return { reasoning, title, canvases, said, ...(arrangement !== undefined ? { arrangement } : {}) };
-};
-
-export const composeAnswer = async (prompts: { system: string; user: string }, context: AnswerContext, compose: Compose): Promise<({ answer: Answer } | { refused: string[] }) & { usage: Usage[] }> => {
-  const first = await compose(prompts.system, prompts.user, ReplySchema);
-  if ('unfit' in first) return { refused: [first.unfit], usage: [first.usage] };
-  const refused = refusalsOf(first.reply, context);
-  if (refused.length === 0) return { answer: answerOf(first.reply, context), usage: [first.usage] };
-  const again = await compose(prompts.system, `${prompts.user}\n\nYOUR LAST ANSWER WAS REFUSED:\n${refused.map((reason) => `- ${reason}`).join('\n')}\nAnswer again.`, ReplySchema);
-  const usage = [first.usage, again.usage];
-  if ('unfit' in again) return { refused: [again.unfit], usage };
-  const still = refusalsOf(again.reply, context);
-  return still.length === 0 ? { answer: answerOf(again.reply, context), usage } : { refused: still, usage };
+  return { title, canvases, said, ...(arrangement !== undefined ? { arrangement } : {}) };
 };

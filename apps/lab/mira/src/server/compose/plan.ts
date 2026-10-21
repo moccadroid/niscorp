@@ -13,7 +13,7 @@ export type Said = { title: string; text: string };
 // Each area's canvas sits in an array, as nova's `reconcile` takes it.
 export type Plan = {
   question: string;
-  reasoning?: string;
+  response?: string;
   label: string;
   screen?: string;
   canvases: Partial<Record<AreaId, Canvas[]>>;

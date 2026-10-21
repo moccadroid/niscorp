@@ -499,6 +499,9 @@ importers:
       '@niscorp/charter':
         specifier: workspace:^
         version: link:../../../packages/charter
+      '@niscorp/cortex':
+        specifier: workspace:^
+        version: link:../../../packages/cortex
       '@niscorp/moss':
         specifier: workspace:^
         version: link:../../../packages/moss

@@ -1,8 +1,8 @@
 import { existsSync } from 'node:fs';
-import { z } from 'zod';
 import { AREAS } from '../app/shell/areas';
 import { boot } from '../server/boot';
-import type { Compose, Decide, Model } from '../server/compose';
+import type { SignalClient } from '@niscorp/cortex';
+import type { Chat, Jev } from '../server/compose';
 import { modelsFromEnv } from '../server/models';
 
 const isRecord = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -19,7 +19,7 @@ const recordOf = (value: unknown): Record<string, unknown> => (isRecord(value) ?
 //   messages    messages of your own instead, unscored; --screen=<id> opens that screen from the menu
 
 type Shown = { area: string; id: string; action: string; read: string; params: Record<string, unknown>; fields: string[]; title: string };
-type Screen = { canvases: Shown[]; arrangement: string; screen: string; said: string; reasoning: string; title: string };
+type Screen = { canvases: Shown[]; arrangement: string; screen: string; said: string; response: string; title: string };
 type Step = { ask: string; want?: (now: Screen, before: Screen) => string | undefined } | { open: string };
 
 const lower = (value: unknown): string => String(value ?? '').toLowerCase();
@@ -92,12 +92,11 @@ const steps: readonly Step[] = own.length > 0 ? own.map((arg): Step => (arg.star
 if (existsSync('.env')) process.loadEnvFile('.env');
 const models = modelsFromEnv(process.env);
 const said: string[] = [];
-const decideWith = noJev ? undefined : models.decide;
-const composeWith = models.compose;
-const decide: Model<Decide> | undefined = decideWith && {
-  ...decideWith,
-  call: async (state, questions) => {
-    const answered = await decideWith.call(state, questions);
+const jevWith = noJev ? undefined : models.jev;
+const jev: Jev | undefined = jevWith && {
+  ...jevWith,
+  decide: async (state, questions) => {
+    const answered = await jevWith.decide(state, questions);
     const picked = answered.picked;
     if (prompts) said.push(`──── JEV STATE
 ${JSON.stringify(state, null, 2)}
@@ -110,23 +109,19 @@ ${JSON.stringify(picked, null, 2)}`);
     return answered;
   },
 };
-const compose: Model<Compose> | undefined = composeWith && {
-  ...composeWith,
-  call: async (system, user, schema) => {
-    const answered = await composeWith.call(system, user, schema);
-    const reply = 'reply' in answered ? answered.reply : { unfit: answered.unfit };
-    if (prompts) said.push(`──── MODEL SYSTEM
-${system}
-──── MODEL USER
-${user}
-──── MODEL REPLY SCHEMA
-${JSON.stringify(z.toJSONSchema(schema))}
-──── MODEL ANSWERED
-${JSON.stringify(reply, null, 2)}`);
-    said.push(`  model: ${JSON.stringify(reply)}`);
-    return answered;
-  },
-};
+// Every step the composer's run takes: what it was sent, and what the model wrote.
+const told = (llm: SignalClient): SignalClient => ({
+  ...llm,
+  stepStream: (request, options) =>
+    (async function* () {
+      if (prompts) said.push(request.messages.map((message) => `──── ${message.role.toUpperCase()}\n${typeof message.content === 'string' ? message.content : JSON.stringify(message.content)}`).join('\n'));
+      for await (const event of llm.stepStream(request, options)) {
+        if (event.type === 'done') said.push(`  model: ${event.result.content}`);
+        yield event;
+      }
+    })(),
+});
+const chat: Chat | undefined = models.chat && { ...models.chat, llm: told(models.chat.llm) };
 
 const until = async (condition: () => boolean, ms = 60_000): Promise<boolean> => {
   const deadline = Date.now() + ms;
@@ -141,8 +136,7 @@ const times: number[] = [];
 const scores: number[] = [];
 const misses = new Map<string, number>();
 for (let run = 1; run <= runs; run += 1) {
-  const { decide: _jev, ...withoutJev } = models;
-  const { server } = await boot({ models: { ...withoutJev, ...(decide !== undefined ? { decide } : {}), ...(compose !== undefined ? { compose } : {}) }, runs: () => {} });
+  const { server } = await boot({ models: { missing: models.missing, ...(jev !== undefined ? { jev } : {}), ...(chat !== undefined ? { chat } : {}) }, runs: () => {} });
   const shells = server.shells;
   if (shells === undefined) throw new Error('the manifest has no shell');
   const session = await shells.session(null, null);
@@ -168,7 +162,7 @@ for (let run = 1; run <= runs; run += 1) {
     arrangement: String(current()['arrangement'] ?? ''),
     screen: String(current()['screen'] ?? ''),
     said: String(dataOf('dock')['error'] ?? ''),
-    reasoning: String(current()['reasoning'] ?? ''),
+    response: String(current()['response'] ?? ''),
     title: String(current()['label'] ?? ''),
   });
   const print = (screen: Screen): string => screen.canvases.map((shown) => `  ${shown.area}: ${shown.action} — ${[shown.title, shown.read, JSON.stringify(shown.params) !== '{}' ? JSON.stringify(shown.params) : '', shown.fields.length > 0 ? JSON.stringify(shown.fields) : ''].filter((part) => part !== '').join(' · ')}`).join('\n');
@@ -204,7 +198,7 @@ for (let run = 1; run <= runs; run += 1) {
         else misses.set(step.ask, (misses.get(step.ask) ?? 0) + 1);
       }
       const verdict = step.want === undefined ? '' : miss === undefined ? ' ✓' : ` ✗ ${miss}`;
-      console.log(`» "${step.ask}" — ${Math.round(took)} ms · ${screen.arrangement}${verdict}${screen.said !== '' ? ` · the line says: ${screen.said}` : ''}\n  title: ${screen.title} · reasoning: ${screen.reasoning}\n${print(screen)}`);
+      console.log(`» "${step.ask}" — ${Math.round(took)} ms · ${screen.arrangement}${verdict}${screen.said !== '' ? ` · the line says: ${screen.said}` : ''}\n  title: ${screen.title} · response: ${screen.response}\n${print(screen)}`);
       if (why) console.log(said.join('\n'));
       said.length = 0;
     }

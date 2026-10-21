@@ -33,7 +33,7 @@ export const dockLayout: LayoutNode = {
         component: 'Menu',
         children: [
           { if: '$.current.question', then: { component: 'Text', props: { tone: 'strong' }, children: '{{$.current.question}}' } },
-          { if: '$.current.reasoning', then: { component: 'Text', props: { tone: 'muted' }, children: '{{$.current.reasoning}}' } },
+          { if: '$.current.response', then: { component: 'Text', props: { tone: 'muted' }, children: '{{$.current.response}}' } },
           {
             for: '$.current.stack',
             as: 'entry',

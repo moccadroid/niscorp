@@ -1,12 +1,14 @@
+import type { SignalClient, Usage } from '@niscorp/cortex';
 import { renderDocument } from '@niscorp/moss';
 import type { RunRecord } from '@niscorp/moss';
+import { routeResponse } from '@niscorp/signal';
+import type { StepRequest, StepResult } from '@niscorp/signal';
 import { z } from 'zod';
 import { SCREENS } from '../app/screens';
 import { AREAS } from '../app/shell/areas';
 import { greetingAdd, greetingsCount, greetingsInLanguage, greetingsList, greetingsPerLanguage } from '../app/vex/greetings.entries';
 import { boot } from '../server/boot';
-import type { Compose, Decide, Models } from '../server/compose';
-import type { Usage } from '../server/runs';
+import type { Decide, Models } from '../server/compose';
 import { drawing } from '../server/document';
 
 const isRecord = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -40,7 +42,7 @@ const say = (area: string, title: string, text: string) => ({ area, say: { title
 const gridOf = (columns: number, ...areas: [string, number][]): unknown => ({ columns, areas: areas.map(([name, span]) => ({ name, span })) });
 
 const REPLIES: Record<string, Record<string, unknown>[]> = {
-  'Guten Tag is german': [{ reasoning: 'Filled in the add form with Guten Tag, German; the rest stays.', title: 'German greeting form', areas: [put('e', form('Guten Tag', 'German'))] }],
+  'Guten Tag is german': [{ response: 'Filled in the add form with Guten Tag, German; the rest stays.', title: 'German greeting form', areas: [put('e', form('Guten Tag', 'German'))] }],
   'drop the bars': [{ areas: [{ area: 'c', drop: true }] }],
   'Show me every greeting': [{ areas: [put('a', table)], arrangement: 'single' }],
   'How many greetings are there?': [{ areas: [put('a', count)] }],
@@ -59,11 +61,11 @@ const REPLIES: Record<string, Record<string, unknown>[]> = {
   'What can you do?': [{ areas: [say('a', 'What this app shows', 'Greetings: every one, how many, and per language. Ask, or add one.')], arrangement: 'single' }],
   'the count, and say what it is': [{ areas: [say('a', 'Greetings', 'How many greetings the app keeps.'), put('b', count)], arrangement: 'pair' }],
   'Show the overview': [{ screen: 'overview' }],
-  'What is the weather in Vienna?': [{ reasoning: 'Nothing in this app shows the weather.', areas: [] }],
-  'Say it at length': [{ reasoning: 'A sentence for the person that runs on well past the hundred and twenty characters the reply’s schema allows for it, and on.', areas: [] }],
+  'What is the weather in Vienna?': [{ response: 'Nothing in this app shows the weather.', areas: [] }],
+  'Name it at length': [{ title: 'A title that runs on well past the forty characters a title may have', areas: [] }],
 };
 
-const SPENT: Usage = { inputTokens: 100, outputTokens: 10, totalTokens: 110, reported: true, calls: 1 };
+const SPENT: Usage = { inputTokens: 100, outputTokens: 10, totalTokens: 110, reported: true };
 
 // The ids Jev finds likely: a question naming one is answered yes.
 let likely: readonly string[] = [];
@@ -77,15 +79,34 @@ const decide: Decide = async (state, questions) => {
 let prompts: string[] = [];
 const turns = new Map<string, number>();
 let unreachable = false;
-const compose: Compose = async <T>(_system: string, user: string, schema: z.ZodType<T>): Promise<{ reply: T; usage: Usage } | { unfit: string; usage: Usage }> => {
+// The chat model, scripted as relay's checks script one: each step answers the message in the run's input with the next
+// envelope scripted for it, the last one again and again.
+const scripted = (request: StepRequest): StepResult => {
+  const user = request.messages.map((message) => (typeof message.content === 'string' ? message.content : '')).join('\n\n');
   prompts.push(user);
   if (unreachable) throw new Error('the provider did not answer');
   const message = /^MESSAGE: (.*)$/m.exec(user)?.[1] ?? '';
   const turn = turns.get(message) ?? 0;
   turns.set(message, turn + 1);
   const replies = REPLIES[message] ?? [{ areas: [] }];
-  const parsed = schema.safeParse({ reasoning: 'Scripted.', title: 'Scripted', ...replies[Math.min(turn, replies.length - 1)] });
-  return parsed.success ? { reply: parsed.data, usage: SPENT } : { unfit: parsed.error.message, usage: SPENT };
+  const { response = 'Scripted.', ...data } = replies[Math.min(turn, replies.length - 1)] ?? {};
+  const content = JSON.stringify({ response, data: { title: 'Scripted', ...data } });
+  const base: StepResult = { content, toolCalls: [], usage: SPENT, finishReason: 'stop', raw: null };
+  if (request.output === undefined) return base;
+  const routed = routeResponse({ content, toolCalls: [], declared: new Set(), accept: request.output.accept, responseStrategies: [] });
+  return { ...base, outcome: routed.outcome, wire: routed.wire };
+};
+const chat: SignalClient = {
+  step: async (request) => scripted(request),
+  stepStream: (request) => {
+    const result = scripted(request);
+    return (async function* () {
+      yield { type: 'text' as const, text: result.content };
+      yield { type: 'done' as const, result };
+    })();
+  },
+  count: async () => 1,
+  describe: () => ({ provider: 'scripted', model: 'chat', kind: 'chat', modelKnown: false, capabilities: { nativeTools: true, nativeJsonSchema: false, nativeJsonMode: true, toolsWithStructuredOutput: false, validatesToolArgs: true, manglesNestedToolArgs: false, multimodal: false, supportsEmbedding: false } }),
 };
 
 let failures = 0;
@@ -109,7 +130,7 @@ const OVERVIEW = actionsOf(SCREENS[0]?.canvases ?? []);
 const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 
 const runs: RunRecord[] = [];
-const models: Models = { decide: { provider: 'scripted', model: 'jev', call: decide }, compose: { provider: 'scripted', model: 'chat', call: compose }, missing: [] };
+const models: Models = { jev: { provider: 'scripted', model: 'jev', decide }, chat: { provider: 'scripted', model: 'chat', llm: chat, timeoutMs: 5000 }, missing: [] };
 const { server } = await boot({ models, runs: (run) => runs.push(run) });
 try {
   const shells = server.shells;
@@ -133,7 +154,7 @@ try {
   const ids = (): string => AREAS.map((area) => `${area}:${on(area).id}`).join(' ');
   const ShownSchema = z.looseObject({
     question: z.string().optional(),
-    reasoning: z.string().optional(),
+    response: z.string().optional(),
     screen: z.string().optional(),
     arrangement: z.string().optional(),
     position: z.number().optional(),
@@ -217,7 +238,7 @@ try {
   check('the chip in the dock names the answer shown by its title, and where it stands among the answers', drawn().includes('"German greeting form · 2/2"'), drawn().match(/"label":"[^"]*· \d+\/\d+"/)?.[0] ?? '');
   session.dispatch('dock', { type: 'ui:click', ref: 'stack' });
   await settle();
-  check('opening the chip shows what was asked, what the model said it did, and the answers to go back to', current().reasoning === 'Filled in the add form with Guten Tag, German; the rest stays.' && drawn().includes('the rest stays') && drawn().includes('1. Overview') && drawn().includes('2. German greeting form') && drawn().includes('Guten Tag is german'), String(current().reasoning));
+  check('opening the chip shows what was asked, what the model said it did, and the answers to go back to', current().response === 'Filled in the add form with Guten Tag, German; the rest stays.' && drawn().includes('the rest stays') && drawn().includes('1. Overview') && drawn().includes('2. German greeting form') && drawn().includes('Guten Tag is german'), String(current().response));
   session.dispatch('dock', { type: 'ui:click', ref: 'stack' });
   const filledIds = ids();
   await ask('drop the bars');
@@ -270,11 +291,11 @@ try {
   runs.length = 0;
   await ask('Show me a pie chart');
   check(
-    'an answer refused twice leaves the screen as it was, and the line says so',
-    prompts.length === 2 && ids() === beforePie && total() === stackBeforePie && said().includes('did not fit'),
+    'an answer refused three times leaves the screen as it was, and the line says so',
+    prompts.length === 3 && ids() === beforePie && total() === stackBeforePie && said().includes('did not fit'),
     `${ids()} — ${said()}`,
   );
-  check('a model run refused twice is recorded as failed, with both calls', runs[1]?.outcome === 'failed' && runs[1]?.steps === 2 && runs[1]?.totalTokens === 220, JSON.stringify(runs[1]));
+  check('a model run refused three times is recorded as failed, with its three steps', runs[1]?.outcome === 'failed' && runs[1]?.steps === 3 && runs[1]?.totalTokens === 330, JSON.stringify(runs[1]));
 
   await ask('The count and the languages, with the table wide beneath');
   check('a layout the model wrote is the one the answer is laid out in', current().arrangement === 'written' && grid() === '2: a b c×2' && areas() === 'rows.stat rows.bars rows.table', `${String(current().arrangement)} — ${grid()} — ${areas()}`);
@@ -321,19 +342,19 @@ try {
   const stackBeforeWeather = total();
   await ask('What is the weather in Vienna?');
   check('an answer that changes nothing leaves the screen as it was, and adds nothing to the stack', ids() === beforeWeather && total() === stackBeforeWeather && said() === '', `${ids()} — ${String(total())} — ${said()}`);
-  check('and the bar says what was asked, and why nothing changed', current().question === 'What is the weather in Vienna?' && current().reasoning === 'Nothing in this app shows the weather.', JSON.stringify(current()).slice(0, 200));
+  check('and the bar says what was asked, and why nothing changed', current().question === 'What is the weather in Vienna?' && current().response === 'Nothing in this app shows the weather.', JSON.stringify(current()).slice(0, 200));
 
   unreachable = true;
   runs.length = 0;
   await ask('Show me every greeting');
   check('a model that cannot be reached leaves the screen as it was, and the line says so', ids() === beforeWeather && said().includes('could not be reached'), said());
-  check('and its run is recorded as failed, with no call answered', runs[1]?.agentId === 'mira.compose' && runs[1]?.outcome === 'failed' && runs[1]?.steps === 0, JSON.stringify(runs[1]));
+  check('and its run is recorded as failed: one step, nothing spent', runs[1]?.agentId === 'mira.compose' && runs[1]?.outcome === 'failed' && runs[1]?.steps === 1 && runs[1]?.totalTokens === 0, JSON.stringify(runs[1]));
   unreachable = false;
 
   runs.length = 0;
-  await ask('Say it at length');
+  await ask('Name it at length');
   check('a reply that does not fit the reply’s schema is refused: the screen stays, and the line says it did not fit', ids() === beforeWeather && said().includes('did not fit'), said());
-  check('and its run is recorded as failed, with the call that answered', runs[1]?.outcome === 'failed' && runs[1]?.steps === 1, JSON.stringify(runs[1]));
+  check('and its run is recorded as failed, with its three steps', runs[1]?.outcome === 'failed' && runs[1]?.steps === 3, JSON.stringify(runs[1]));
 
   session.dispatch('dock', { type: 'ui:click', ref: 'forward' });
   check('forward from the first screen is the answer after it, as it was', await until(() => current().position === 2 && current().question === 'Guten Tag is german' && fields('e')[0]?.value === 'Guten Tag'), `position ${String(current().position)}, ${areas()}`);
@@ -356,14 +377,14 @@ try {
 asked = [];
 const { server: jevless } = await boot({
   models: {
-    decide: {
+    jev: {
       provider: 'scripted',
       model: 'jev',
-      call: async () => {
+      decide: async () => {
         throw new Error('Jev did not answer');
       },
     },
-    compose: { provider: 'scripted', model: 'chat', call: compose },
+    chat: { provider: 'scripted', model: 'chat', llm: chat, timeoutMs: 5000 },
     missing: [],
   },
   runs: () => {},

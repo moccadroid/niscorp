@@ -18,6 +18,7 @@
   "dependencies": {
     "@electric-sql/pglite": "^0.5.1",
     "@niscorp/charter": "workspace:^",
+    "@niscorp/cortex": "workspace:^",
     "@niscorp/moss": "workspace:^",
     "@niscorp/nova": "workspace:^",
     "@niscorp/prism": "workspace:^",

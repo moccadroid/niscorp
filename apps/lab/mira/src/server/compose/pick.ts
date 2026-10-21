@@ -1,5 +1,5 @@
+import type { Usage } from '@niscorp/cortex';
 import type { Screen } from '../../app/screens';
-import type { Usage } from '../runs';
 import type { Catalog } from './catalog';
 import type { OpenCanvas } from './screen';
 

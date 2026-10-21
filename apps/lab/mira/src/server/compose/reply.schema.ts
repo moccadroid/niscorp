@@ -43,13 +43,8 @@ const EntrySchema = z
   .strict()
   .describe('What one area holds after the answer: exactly one of keep, action with input and intent, say, or drop.');
 
-// `reasoning` and `title` come first, so the model says what it will do before it writes the areas.
 export const ReplySchema = z
   .object({
-    reasoning: z
-      .string()
-      .max(120)
-      .describe('One plain sentence for the person, at most 120 characters: what you change and why, or why nothing changes. Name what they see, never area letters, arrangement names or fingerprints.'),
     title: z.string().max(40).describe('What the answer is, in at most four words ("German greetings", "A joke"), never the message repeated. It names the answer among the others.'),
     areas: z.array(EntrySchema).max(AREAS.length).nullish().describe('An entry for each area that changes. An area left out stays as it is, unless the arrangement has no such area.'),
     arrangement: z.string().nullish().describe('The id of one of the ARRANGEMENTS, only when the answer needs other room than the one on screen; every area used must be in it.'),
