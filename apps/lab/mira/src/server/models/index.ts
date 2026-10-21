@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { createSignal } from '@niscorp/signal';
-import type { Compose, Decide, Embed, Model, Models } from '../compose';
+import type { Compose, Decide, Model, Models } from '../compose';
 
 type Env = Readonly<Record<string, string | undefined>>;
 
@@ -18,19 +18,12 @@ const within = <T>(ms: number, work: Promise<T>): Promise<T> =>
 
 const DecisionsSchema = z.record(z.string(), z.looseObject({ answer: z.boolean(), noul: z.number().optional() }));
 
-const EMBEDDERS: Record<string, { provider: 'openai' | 'openrouter'; key: string; model: string; name: string }> = {
-  openai: { provider: 'openai', key: 'OPENAI_API_KEY', model: 'text-embedding-3-small', name: 'OpenAI text-embedding-3-small' },
-  openrouter: { provider: 'openrouter', key: 'OPENROUTER_API_KEY', model: 'qwen/qwen3-embedding-8b', name: 'OpenRouter qwen3-embedding-8b' },
-};
-
 // Without a TypeSafe key there is no Jev pass: the chat model could answer its questions too, but far slower than its
 // budget allows.
 export const modelsFromEnv = (env: Env): Models & { summary: string } => {
   const has = (name: string): boolean => (env[name] ?? '').trim() !== '';
   const chat = has('GROQ_API_KEY') ? createSignal('groq').model(CHAT.model) : undefined;
   const jev = has('TYPESAFE_API_KEY') ? createSignal('typesafe').model(JEV.model) : undefined;
-  const embedder = EMBEDDERS[env['EMBEDDINGS'] ?? ''];
-  const embeds = embedder !== undefined && has(embedder.key) ? createSignal(embedder.provider).model(embedder.model) : undefined;
 
   const decide: Model<Decide> | undefined = jev && {
     ...JEV,
@@ -48,12 +41,7 @@ export const modelsFromEnv = (env: Env): Models & { summary: string } => {
       return { reply: result.response, usage: { ...result.meta.usage, reported: false } };
     },
   };
-  const embed: Embed | undefined = embeds && ((texts) => embeds.embed(texts));
 
-  const summary = [
-    jev !== undefined ? 'Jev picks' : 'no Jev pass (no TYPESAFE_API_KEY)',
-    chat !== undefined ? 'gpt-oss-120b composes' : 'nothing composes (no GROQ_API_KEY)',
-    embeds !== undefined && embedder !== undefined ? `embeddings: ${embedder.name}` : 'no embeddings',
-  ].join(' · ');
-  return { ...(decide !== undefined ? { decide } : {}), ...(compose !== undefined ? { compose } : {}), ...(embed !== undefined ? { embed } : {}), missing: has('GROQ_API_KEY') ? [] : ['GROQ_API_KEY'], summary };
+  const summary = [jev !== undefined ? 'Jev picks' : 'no Jev pass (no TYPESAFE_API_KEY)', chat !== undefined ? 'gpt-oss-120b composes' : 'nothing composes (no GROQ_API_KEY)'].join(' · ');
+  return { ...(decide !== undefined ? { decide } : {}), ...(compose !== undefined ? { compose } : {}), missing: has('GROQ_API_KEY') ? [] : ['GROQ_API_KEY'], summary };
 };

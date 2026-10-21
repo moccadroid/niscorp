@@ -24,12 +24,10 @@ export type { Compose } from './answer';
 export type { Decide, Picked, Question } from './pick';
 export type { ShownPlan } from './plan';
 
-export type Embed = (texts: string[]) => Promise<number[][]>;
-
 // Who runs a model is said in every run it is recorded in.
 export type Model<F> = { provider: string; model: string; call: F };
 
-export type Models = { decide?: Model<Decide>; compose?: Model<Compose>; embed?: Embed; missing: readonly string[] };
+export type Models = { decide?: Model<Decide>; compose?: Model<Compose>; missing: readonly string[] };
 
 const AskSchema = z.looseObject({ text: z.string() });
 const OpenSchema = z.looseObject({ opening: z.string() });
