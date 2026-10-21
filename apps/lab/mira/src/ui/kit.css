@@ -46,12 +46,17 @@ html, body, #root { margin: 0; min-height: 100%; }
   cursor: pointer;
 }
 .k-button:active { transform: translateY(1px); }
-.k-button.k-quiet {
-  padding: 6px 12px;
+.k-button.k-quiet, .k-button.k-pill, .k-button.k-chip, .k-button.k-icon {
+  padding: 5px 12px;
+  border-radius: 999px;
   font-weight: 500;
-  background: var(--k-accent-soft);
-  color: var(--k-accent);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
+.k-button.k-quiet { background: var(--k-accent-soft); color: var(--k-accent); }
+.k-button.k-pill, .k-button.k-chip, .k-button.k-icon { background: var(--k-surface); color: var(--k-ink); border: 1px solid var(--k-line); }
+.k-button.k-chip { flex-shrink: 1; min-width: 0; max-width: 42vw; overflow: hidden; text-overflow: ellipsis; }
+.k-button.k-icon { padding: 5px 10px; }
 
 /* An app a model leads: the answer, and the dock under it. The answer scrolls; the dock stays at the bottom, in
    reading order down to the hands: the screens and the answer shown, then the line to ask in. */
@@ -72,18 +77,6 @@ html, body, #root { margin: 0; min-height: 100%; }
 .k-dock > .k-row { justify-content: space-between; flex-wrap: nowrap; gap: 12px; }
 .k-dock > .k-row > .k-row { flex-wrap: nowrap; gap: 6px; min-width: 0; }
 .k-dock > .k-row > .k-row:first-child { overflow-x: auto; scrollbar-width: none; }
-.k-dock .k-button { padding: 5px 12px; border-radius: 999px; font-weight: 500; white-space: nowrap; flex-shrink: 0; }
-.k-dock [data-ref='stack'] { flex-shrink: 1; min-width: 0; }
-.k-dock .k-prompt .k-button { padding: 10px 18px; border-radius: var(--k-radius); font-weight: 600; }
-
-.k-button.k-chip {
-  background: var(--k-surface);
-  color: var(--k-ink);
-  border: 1px solid var(--k-line);
-  max-width: 42vw;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
 
 .k-menu {
   position: absolute;
@@ -103,7 +96,7 @@ html, body, #root { margin: 0; min-height: 100%; }
   border-radius: calc(var(--k-radius) + 4px);
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.1);
 }
-.k-menu .k-button { text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: none; border-radius: var(--k-radius); }
+.k-menu .k-button { text-align: left; overflow: hidden; text-overflow: ellipsis; border-radius: var(--k-radius); }
 .k-menu > .k-text { padding: 0 10px; }
 .k-menu > .k-text + .k-button, .k-menu > .k-muted { margin-bottom: 4px; }
 .k-menu > .k-muted { padding-bottom: 10px; border-bottom: 1px solid var(--k-line); }
@@ -111,8 +104,7 @@ html, body, #root { margin: 0; min-height: 100%; }
 /* What the last answer changed is outlined, until the next. */
 .k-area-changed > .k-card { box-shadow: 0 0 0 2px var(--k-accent); }
 
-/* An answer's grid: its columns and each area's span are the arrangement's,
-   set as --k-columns and --k-span. An area with nothing in it takes no room. */
+/* An answer's grid: its columns and each area's span are the arrangement's. An area with nothing in it takes no room. */
 .k-answers {
   flex: 1;
   width: 100%;
@@ -121,11 +113,15 @@ html, body, #root { margin: 0; min-height: 100%; }
   box-sizing: border-box;
   padding: 24px;
   display: grid;
-  grid-template-columns: repeat(var(--k-columns, 2), minmax(0, 1fr));
   align-content: start;
   gap: 16px;
 }
-.k-area { min-width: 0; grid-column: span var(--k-span, 1); }
+.k-columns-1 { grid-template-columns: minmax(0, 1fr); }
+.k-columns-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.k-columns-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.k-area { min-width: 0; }
+.k-span-2 { grid-column: span 2; }
+.k-span-3 { grid-column: span 3; }
 .k-area:not(:has(.k-card)) { display: none; }
 
 .k-card {
@@ -182,6 +178,6 @@ html, body, #root { margin: 0; min-height: 100%; }
   .k-dock { padding-left: 16px; padding-right: 16px; }
   .k-dock > .k-row { flex-wrap: wrap; gap: 8px; }
   .k-dock > .k-row > .k-row { width: 100%; }
-  .k-dock [data-ref='stack'] { flex: 1; max-width: none; }
+  .k-button.k-chip { flex: 1; max-width: none; }
   .k-menu { right: 16px; }
 }

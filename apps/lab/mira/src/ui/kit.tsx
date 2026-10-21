@@ -1,4 +1,4 @@
-import { useState, type ChangeEvent, type CSSProperties, type KeyboardEvent } from 'react';
+import { useState, type ChangeEvent, type KeyboardEvent } from 'react';
 import { z } from 'zod';
 import { useNovaDispatch } from '@niscorp/nova/adapters/react';
 import type { NovaComponent } from '@niscorp/nova/adapters/react';
@@ -31,7 +31,7 @@ Text.meta = { description: 'A paragraph.', propsSchema: TextProps };
 
 const ButtonProps = z.object({
   label: z.string().optional().describe('What the button says; falls back to its children.'),
-  tone: z.enum(['primary', 'quiet', 'chip']).optional().describe('primary | quiet | chip'),
+  tone: z.enum(['primary', 'quiet', 'pill', 'chip', 'icon']).optional().describe('primary | quiet: the one chosen, or a thing to ask | pill: one of a set to choose from | chip: names what is shown, and opens to more | icon: a single sign'),
   value: z.unknown().optional().describe('Sent with the click as its payload.'),
 });
 export const Button: NovaComponent = ({ children, novaRef, novaModel: _model, ...props }) => {
@@ -40,8 +40,7 @@ export const Button: NovaComponent = ({ children, novaRef, novaModel: _model, ..
   return (
     <button
       type="button"
-      className={tone === 'quiet' || tone === 'chip' ? `k-button k-${tone}` : 'k-button'}
-      data-ref={novaRef}
+      className={tone === undefined || tone === 'primary' ? 'k-button' : `k-button k-${tone}`}
       onClick={() => dispatch({ type: 'ui:click', ...(novaRef !== undefined ? { ref: novaRef } : {}), ...(value !== undefined ? { payload: value } : {}) })}
     >
       {label ?? children}
@@ -66,7 +65,7 @@ const AnswersProps = z.object({ columns: z.number().int().min(1).max(3).optional
 export const Answers: NovaComponent = ({ children, novaRef: _ref, novaModel: _model, ...props }) => {
   const { columns } = parsed(AnswersProps, props, {});
   return (
-    <main className="k-answers" style={{ '--k-columns': columns ?? 2 } as CSSProperties}>
+    <main className={`k-answers k-columns-${columns ?? 2}`}>
       {children}
     </main>
   );
@@ -81,7 +80,7 @@ const AreaProps = z.object({
 export const Area: NovaComponent = ({ children, novaRef: _ref, novaModel: _model, ...props }) => {
   const { name, span, changed } = parsed(AreaProps, props, { name: '' });
   return (
-    <section className={`k-area k-area-${name}${changed === true ? ' k-area-changed' : ''}`} style={{ '--k-span': span ?? 1 } as CSSProperties}>
+    <section className={`k-area k-area-${name} k-span-${span ?? 1}${changed === true ? ' k-area-changed' : ''}`}>
       {children}
     </section>
   );

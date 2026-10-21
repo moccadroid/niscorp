@@ -48,16 +48,16 @@ export const dockAction: ActionDefinition = {
                 for: '$.screens',
                 as: 'screen',
                 key: 'id',
-                do: { component: 'Button', ref: 'screen', props: { label: '$screen.label', value: '$screen.id', tone: { $if: { $eq: ['$screen.id', '$.current.screen'] }, $then: 'quiet', $else: 'chip' } } },
+                do: { component: 'Button', ref: 'screen', props: { label: '$screen.label', value: '$screen.id', tone: { $if: { $eq: ['$screen.id', '$.current.screen'] }, $then: 'quiet', $else: 'pill' } } },
               },
             ],
           },
           {
             component: 'Row',
             children: [
-              { component: 'Button', ref: 'back', props: { label: '←', tone: 'chip' } },
+              { component: 'Button', ref: 'back', props: { label: '←', tone: 'icon' } },
               { component: 'Button', ref: 'stack', props: { label: '{{$.current.label}} · {{$.current.position}}/{{$.current.total}}', tone: 'chip' } },
-              { component: 'Button', ref: 'forward', props: { label: '→', tone: 'chip' } },
+              { component: 'Button', ref: 'forward', props: { label: '→', tone: 'icon' } },
             ],
           },
         ],
@@ -76,7 +76,7 @@ export const dockAction: ActionDefinition = {
               do: {
                 component: 'Button',
                 ref: 'entry',
-                props: { label: '{{$entry.position}}. {{$entry.label}}', value: '$entry.position', tone: { $if: { $eq: ['$entry.position', '$.current.position'] }, $then: 'quiet', $else: 'chip' } },
+                props: { label: '{{$entry.position}}. {{$entry.label}}', value: '$entry.position', tone: { $if: { $eq: ['$entry.position', '$.current.position'] }, $then: 'quiet', $else: 'pill' } },
               },
             },
           ],
