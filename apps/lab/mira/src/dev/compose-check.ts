@@ -1,10 +1,11 @@
 import { renderDocument } from '@niscorp/moss';
-import type { z } from 'zod';
+import { z } from 'zod';
 import { SCREENS } from '../app/screens';
 import { AREAS } from '../app/shell/areas';
 import { greetingAdd, greetingsCount, greetingsInLanguage, greetingsList, greetingsPerLanguage } from '../app/vex/greetings.entries';
 import { boot } from '../server/boot';
-import type { Decide, Fill, Models } from '../server/compose';
+import type { Compose, Decide, Models } from '../server/compose';
+import { recordOf } from '../server/compose/record';
 import { drawing } from '../server/document';
 
 // Offline, and the same every run: a decision model that finds nothing likely, and a chat model that answers each
@@ -34,7 +35,7 @@ const put = (area: string, canvas: object) => ({ area, ...canvas });
 const say = (area: string, title: string, text: string) => ({ area, say: { title, text } });
 const gridOf = (columns: number, ...areas: [string, number][]): unknown => ({ columns, areas: areas.map(([name, span]) => ({ name, span })) });
 
-const REPLIES: Record<string, unknown[]> = {
+const REPLIES: Record<string, Record<string, unknown>[]> = {
   'Guten Tag is german': [{ reasoning: 'Filled in the add form with Guten Tag, German; the rest stays.', title: 'German greeting form', areas: [put('e', form('Guten Tag', 'German'))] }],
   'drop the bars': [{ areas: [{ area: 'c', drop: true }] }],
   'Show me every greeting': [{ areas: [put('a', table)], arrangement: 'single' }],
@@ -60,20 +61,20 @@ const REPLIES: Record<string, unknown[]> = {
 let asked: { state: Record<string, unknown>; questions: Record<string, unknown> }[] = [];
 const decide: Decide = async (state, questions) => {
   asked.push({ state, questions });
-  return Object.fromEntries(Object.entries(questions).map(([name, question]) => [name, question.type === 'choice' ? { choice: Object.keys(question.criteria)[0] ?? '', p: 0.9 } : { yes: false, p: 0.1 }]));
+  return Object.fromEntries(Object.keys(questions).map((name) => [name, { yes: false, probability: 0.1 }]));
 };
 
 let prompts: string[] = [];
 const turns = new Map<string, number>();
 let unreachable = false;
-const fill: Fill = async <T>(_system: string, user: string, schema: z.ZodType<T>): Promise<T> => {
+const compose: Compose = async <T>(_system: string, user: string, schema: z.ZodType<T>): Promise<T> => {
   prompts.push(user);
   if (unreachable) throw new Error('the provider did not answer');
   const message = /^MESSAGE: (.*)$/m.exec(user)?.[1] ?? '';
   const turn = turns.get(message) ?? 0;
   turns.set(message, turn + 1);
   const replies = REPLIES[message] ?? [{ areas: [] }];
-  return schema.parse({ reasoning: 'Scripted.', title: 'Scripted', ...(replies[Math.min(turn, replies.length - 1)] as object) });
+  return schema.parse({ reasoning: 'Scripted.', title: 'Scripted', ...replies[Math.min(turn, replies.length - 1)] });
 };
 
 let failures = 0;
@@ -96,7 +97,7 @@ const actionsOf = (canvases: readonly { action: string }[]): string => canvases.
 const OVERVIEW = actionsOf(SCREENS[0]?.canvases ?? []);
 const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 
-const models: Models = { decide, fill, missing: [] };
+const models: Models = { decide, compose, missing: [] };
 const { server } = await boot(models);
 try {
   const shells = server.shells;
@@ -118,43 +119,35 @@ try {
   };
   const areas = (): string => AREAS.map((area) => on(area).action).filter((action) => action !== '').join(' ');
   const ids = (): string => AREAS.map((area) => `${area}:${on(area).id}`).join(' ');
-  type Shown = { question?: string; reasoning?: string; screen?: string; arrangement?: string; position?: number; total?: number; stack?: { position: number; label: string }[] };
+  const ShownSchema = z.looseObject({
+    question: z.string().optional(),
+    reasoning: z.string().optional(),
+    screen: z.string().optional(),
+    arrangement: z.string().optional(),
+    position: z.number().optional(),
+    total: z.number().optional(),
+    stack: z.array(z.looseObject({ position: z.number(), label: z.string() })).optional(),
+  });
+  const nodesOf = (value: unknown): Record<string, unknown>[] => (Array.isArray(value) ? value.map(recordOf) : []);
+  const named = (name: string, nodes: unknown): Record<string, unknown>[] => nodesOf(nodes).flatMap((node) => (node['name'] === name ? [node] : named(name, node['children'])));
   // The grid the frame's `answers` region holds, as the shell draws it: its columns, and each area's name and span.
   const grid = (): string => {
-    const find = (nodes: unknown): Record<string, unknown> | undefined => {
-      for (const node of Array.isArray(nodes) ? nodes : []) {
-        if (node !== null && typeof node === 'object') {
-          const record = node as Record<string, unknown>;
-          if (record['name'] === 'Answers') return record;
-          const inner = find(record['children']);
-          if (inner !== undefined) return inner;
-        }
-      }
-      return undefined;
-    };
-    const answers = find(shell.getShellRenderTree());
-    const props = (answers?.['props'] ?? {}) as Record<string, unknown>;
-    const held = ((answers?.['children'] ?? []) as Record<string, unknown>[]).map((area) => {
-      const own = (area['props'] ?? {}) as Record<string, unknown>;
+    const answers = named('Answers', shell.getShellRenderTree())[0] ?? {};
+    const held = nodesOf(answers['children']).map((area) => {
+      const own = recordOf(area['props']);
       return `${String(own['name'])}${Number(own['span'] ?? 1) > 1 ? `×${String(own['span'])}` : ''}`;
     });
-    return `${String(props['columns'])}: ${held.join(' ')}`;
+    return `${String(recordOf(answers['props'])['columns'])}: ${held.join(' ')}`;
   };
   // The areas the layout on screen marks as changed by the last answer.
-  const marked = (): string => {
-    const areasOf = (nodes: unknown): Record<string, unknown>[] =>
-      (Array.isArray(nodes) ? nodes : []).flatMap((node: unknown) => {
-        if (node === null || typeof node !== 'object') return [];
-        const record = node as Record<string, unknown>;
-        return record['name'] === 'Area' ? [record] : areasOf(record['children']);
-      });
-    return areasOf(shell.getShellRenderTree())
-      .filter((area) => (area['props'] as Record<string, unknown> | undefined)?.['changed'] === true)
-      .map((area) => String((area['props'] as Record<string, unknown>)['name']))
+  const marked = (): string =>
+    named('Area', shell.getShellRenderTree())
+      .map((area) => recordOf(area['props']))
+      .filter((props) => props['changed'] === true)
+      .map((props) => String(props['name']))
       .join(' ');
-  };
   const drawn = (): string => JSON.stringify(shell.flattenRenderTree(shell.getShellRenderTree()));
-  const current = (): Shown => (on('dock').data['current'] ?? {}) as Shown;
+  const current = (): z.infer<typeof ShownSchema> => ShownSchema.safeParse(on('dock').data['current']).data ?? {};
   const total = (): number => Number(current().total);
   const said = (): string => String(on('dock').data['error'] ?? '');
   // What a terminal does whenever the screen changes: draw every action on it. An input takes what is typed into it
@@ -178,8 +171,8 @@ try {
     const value = on(canvas).data[key];
     return Array.isArray(value) ? value : [];
   };
-  const value = (canvas: string): unknown => (on(canvas).data['result'] as { value?: unknown } | undefined)?.value;
-  const fields = (canvas: string): { key: string; value: string }[] => rows(canvas, 'fields') as { key: string; value: string }[];
+  const value = (canvas: string): unknown => recordOf(on(canvas).data['result'])['value'];
+  const fields = (canvas: string): { key: string; value: string }[] => rows(canvas, 'fields').map((field) => ({ key: String(recordOf(field)['key']), value: String(recordOf(field)['value'] ?? '') }));
 
   check('the app opens on the first screen, every one of its canvases an area of its own, and the stack starts there', areas() === OVERVIEW && on('dock').action === 'ask.dock' && current().position === 1 && total() === 1, areas());
   check('the frame’s region holds the first screen’s arrangement', current().arrangement === SCREENS[0]?.arrangement && grid() === '2: a×2 b c d e', `${String(current().arrangement)} — ${grid()}`);
@@ -188,7 +181,7 @@ try {
   const overviewIds = ids();
   await ask('Guten Tag is german');
   const jev = asked[asked.length - 1];
-  check('Jev is asked about the message with the open screen: an intent for each canvas, the words too', jev?.state['message'] === 'Guten Tag is german' && Object.keys((jev?.state['open_screen'] ?? {}) as object).join(',') === 'a,b,c,d,e', JSON.stringify(jev?.state['open_screen']));
+  check('Jev is asked about the message with the open screen: an intent for each canvas, the words too', jev?.state['message'] === 'Guten Tag is german' && Object.keys(recordOf(jev?.state['open_screen'])).join(',') === 'a,b,c,d,e', JSON.stringify(jev?.state['open_screen']));
   check(
     'the model is given the open screen by area — where each area is, what each holds, the words too — and what Jev thinks',
     lastPrompt().includes('arrangement hero: a (the whole width); b c; d e') && lastPrompt().includes('- a: answer.text') && lastPrompt().includes('"count":5') && lastPrompt().includes('A FAST PICKER THINKS'),
@@ -335,7 +328,7 @@ const { server: jevless } = await boot({
   decide: async () => {
     throw new Error('Jev did not answer');
   },
-  fill,
+  compose,
   missing: [],
 });
 try {

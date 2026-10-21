@@ -2,26 +2,23 @@ import type { Screen } from '../../app/screens';
 import type { Catalog } from './catalog';
 import type { OpenCanvas } from './screen';
 
-export type Question = { type: 'noul'; instructions: string } | { type: 'choice'; instructions: string; criteria: Record<string, string> };
+export type Question = { type: 'noul'; instructions: string };
 
-// One decision: `yes` for a yes/no (a probability of 0.5 or more is yes), `choice` for a choice, and `p` the
-// probability, where the model gave one.
-export type Picked = { yes?: boolean; choice?: string; p?: number };
+// A yes is a probability of 0.5 or more.
+export type Picked = { yes: boolean; probability?: number };
 
 export type Decide = (state: Record<string, unknown>, questions: Record<string, Question>) => Promise<Record<string, Picked>>;
 
-// What Jev made of a message: each action, read, write and screen with how likely it belongs in the answer.
 export type Picks = {
-  actions: { id: string; p: number }[];
-  reads: { fingerprint: string; p: number }[];
-  writes: { fingerprint: string; p: number }[];
-  screens: { id: string; p: number }[];
+  actions: { id: string; probability: number }[];
+  reads: { fingerprint: string; probability: number }[];
+  writes: { fingerprint: string; probability: number }[];
+  screens: { id: string; probability: number }[];
 };
 
-const probability = (picked: Picked | undefined): number => picked?.p ?? (picked?.yes === true ? 1 : 0);
+const probabilityOf = (picked: Picked | undefined): number => picked?.probability ?? (picked?.yes === true ? 1 : 0);
 
-// One pass over the message and the open screen. The state carries what each candidate is, in words; each question
-// names its candidate by key.
+// The state carries what each candidate is, in words; each question names its candidate by key.
 export const pick = async (message: string, open: readonly OpenCanvas[], catalog: Catalog, screens: readonly Screen[], decide: Decide): Promise<Picks> => {
   const state = {
     message,
@@ -47,9 +44,9 @@ export const pick = async (message: string, open: readonly OpenCanvas[], catalog
 
   const picked = await decide(state, questions);
   return {
-    actions: catalog.actions.map((action, at) => ({ id: action.id, p: probability(picked[`action${at}`]) })),
-    reads: catalog.reads.map((read, at) => ({ fingerprint: read.fingerprint, p: probability(picked[`read${at}`]) })),
-    writes: catalog.writes.map((write, at) => ({ fingerprint: write.fingerprint, p: probability(picked[`write${at}`]) })),
-    screens: screens.map((screen, at) => ({ id: screen.id, p: probability(picked[`screen${at}`]) })),
+    actions: catalog.actions.map((action, at) => ({ id: action.id, probability: probabilityOf(picked[`action${at}`]) })),
+    reads: catalog.reads.map((read, at) => ({ fingerprint: read.fingerprint, probability: probabilityOf(picked[`read${at}`]) })),
+    writes: catalog.writes.map((write, at) => ({ fingerprint: write.fingerprint, probability: probabilityOf(picked[`write${at}`]) })),
+    screens: screens.map((screen, at) => ({ id: screen.id, probability: probabilityOf(picked[`screen${at}`]) })),
   };
 };

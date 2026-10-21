@@ -80,7 +80,7 @@ const canvasesIn = (node: unknown): string[] => {
 for (const arrangement of ARRANGEMENTS) {
   parses(`arrangement "${arrangement.id}"`, () => LayoutNodeSchema.parse(arrangement.layout));
   const held = canvasesIn(arrangement.layout);
-  check(`arrangement "${arrangement.id}" holds only areas the shell has, each once`, held.every((name) => (AREAS as readonly string[]).includes(name)) && new Set(held).size === held.length, held.join(', '));
+  check(`arrangement "${arrangement.id}" holds only areas the shell has, each once`, held.every((name) => AREAS.some((area) => area === name)) && new Set(held).size === held.length, held.join(', '));
   check(`arrangement "${arrangement.id}" holds the ${arrangement.slots} it says, the first areas in order`, held.join(',') === AREAS.slice(0, arrangement.slots).join(','), held.join(', '));
 }
 check('the frame has the region an arrangement is swapped into, and the first one in it', JSON.stringify(shell.layout).includes('"ref":"answers"') && shell.layoutStore?.['answers'] !== undefined);

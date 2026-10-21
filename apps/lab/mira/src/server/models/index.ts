@@ -1,11 +1,11 @@
+import { z } from 'zod';
 import { createSignal } from '@niscorp/signal';
-import type { Decide, Embed, Fill, Models, Picked } from '../compose';
+import type { Compose, Decide, Embed, Models } from '../compose';
 
 type Env = Readonly<Record<string, string | undefined>>;
 
-// How long a call may take before it is given up: Jev answers in about 300 ms and the chat model in about one second,
-// its slowest measured near 3.5 s. A Jev pass given up is answered by the chat model alone; a chat call given up is a
-// line saying the model could not be reached.
+// Jev answers in about 200 ms and the chat model in about one second, its slowest measured near 4 s. A Jev pass given up
+// is answered by the chat model alone; a chat call given up is a line saying the model could not be reached.
 const JEV_MS = 2_000;
 const CHAT_MS = 8_000;
 
@@ -13,14 +13,16 @@ const CHAT_MS = 8_000;
 const within = <T>(ms: number, work: Promise<T>): Promise<T> =>
   Promise.race([work, new Promise<never>((_, reject) => setTimeout(() => reject(new Error(`no answer in ${ms} ms`)), ms).unref())]);
 
-const EMBEDDERS: Record<string, { provider: 'openai' | 'openrouter'; key: string; model: string; named: string }> = {
-  openai: { provider: 'openai', key: 'OPENAI_API_KEY', model: 'text-embedding-3-small', named: 'OpenAI text-embedding-3-small' },
-  openrouter: { provider: 'openrouter', key: 'OPENROUTER_API_KEY', model: 'qwen/qwen3-embedding-8b', named: 'OpenRouter qwen3-embedding-8b' },
+const DecisionsSchema = z.record(z.string(), z.looseObject({ answer: z.boolean(), noul: z.number().optional() }));
+
+const EMBEDDERS: Record<string, { provider: 'openai' | 'openrouter'; key: string; model: string; name: string }> = {
+  openai: { provider: 'openai', key: 'OPENAI_API_KEY', model: 'text-embedding-3-small', name: 'OpenAI text-embedding-3-small' },
+  openrouter: { provider: 'openrouter', key: 'OPENROUTER_API_KEY', model: 'qwen/qwen3-embedding-8b', name: 'OpenRouter qwen3-embedding-8b' },
 };
 
-// The models the keys in .env allow, and a line saying what they are. Without a TypeSafe key there is no Jev pass: the
-// chat model could answer its questions too, but far slower than its budget allows.
-export const modelsFromEnv = (env: Env): Models & { said: string } => {
+// Without a TypeSafe key there is no Jev pass: the chat model could answer its questions too, but far slower than its
+// budget allows.
+export const modelsFromEnv = (env: Env): Models & { summary: string } => {
   const has = (name: string): boolean => (env[name] ?? '').trim() !== '';
   const chat = has('GROQ_API_KEY') ? createSignal('groq').model('openai/gpt-oss-120b') : undefined;
   const jev = has('TYPESAFE_API_KEY') ? createSignal('typesafe') : undefined;
@@ -31,25 +33,15 @@ export const modelsFromEnv = (env: Env): Models & { said: string } => {
     jev &&
     (async (state, questions) => {
       const result = await jev.decide({ state, questions, options: { signal: AbortSignal.timeout(JEV_MS) } });
-      return Object.fromEntries(
-        Object.entries(result.decisions as Record<string, Record<string, unknown>>).map(([name, decision]): [string, Picked] => [
-          name,
-          {
-            ...(typeof decision['answer'] === 'boolean' ? { yes: decision['answer'] } : {}),
-            ...(typeof decision['choice'] === 'string' ? { choice: decision['choice'] } : {}),
-            ...(typeof decision['noul'] === 'number' ? { p: decision['noul'] } : typeof decision['confidence'] === 'number' ? { p: decision['confidence'] } : {}),
-          },
-        ]),
-      );
+      return Object.fromEntries(Object.entries(DecisionsSchema.parse(result.decisions)).map(([name, decision]) => [name, { yes: decision.answer, ...(decision.noul !== undefined ? { probability: decision.noul } : {}) }]));
     });
-  const fill: Fill | undefined = chat && (async (system, user, schema) => (await within(CHAT_MS, chat.systemPrompt(system).schema(schema).options({ reasoningEffort: 'low' }).complete(user))).response);
+  const compose: Compose | undefined = chat && (async (system, user, schema) => (await within(CHAT_MS, chat.systemPrompt(system).schema(schema).options({ reasoningEffort: 'low' }).complete(user))).response);
   const embed: Embed | undefined = embeds && ((texts) => embeds.embed(texts));
 
-  const missing = has('GROQ_API_KEY') ? [] : ['GROQ_API_KEY'];
-  const said = [
+  const summary = [
     jev !== undefined ? 'Jev picks' : 'no Jev pass (no TYPESAFE_API_KEY)',
     chat !== undefined ? 'gpt-oss-120b composes' : 'nothing composes (no GROQ_API_KEY)',
-    embeds !== undefined && embedder !== undefined ? `embeddings: ${embedder.named}` : 'no embeddings',
+    embeds !== undefined && embedder !== undefined ? `embeddings: ${embedder.name}` : 'no embeddings',
   ].join(' · ');
-  return { ...(decide !== undefined ? { decide } : {}), ...(fill !== undefined ? { fill } : {}), ...(embed !== undefined ? { embed } : {}), missing, said };
+  return { ...(decide !== undefined ? { decide } : {}), ...(compose !== undefined ? { compose } : {}), ...(embed !== undefined ? { embed } : {}), missing: has('GROQ_API_KEY') ? [] : ['GROQ_API_KEY'], summary };
 };

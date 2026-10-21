@@ -1,6 +1,6 @@
 import type { ActionDefinition } from '@niscorp/nova';
 import { z } from 'zod';
-import { askExample, examplesLayout } from './examples.layout';
+import { examplesLayout } from './examples.layout';
 
 export const textAction: ActionDefinition = {
   id: 'answer.text',
@@ -15,5 +15,5 @@ export const textAction: ActionDefinition = {
     }),
   ),
   layout: { component: 'Card', props: { title: '{{$.title}}' }, children: [{ component: 'Text', children: '{{$.text}}' }, examplesLayout] },
-  triggers: [{ event: 'ui:click', ref: 'example', do: askExample }],
+  triggers: [{ event: 'ui:click', ref: 'example', do: [{ emit: { channel: 'ask', payload: '@event.payload' } }] }],
 };

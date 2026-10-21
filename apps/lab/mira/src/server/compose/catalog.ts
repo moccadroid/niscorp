@@ -6,15 +6,13 @@ import { formAction } from '../../app/actions/rows/form.action';
 import { statAction } from '../../app/actions/rows/stat.action';
 import { tableAction } from '../../app/actions/rows/table.action';
 import { ENTRIES } from '../../app/vex';
+import { isRecord } from './record';
 
-// What an answer is composed from: the actions the model may place, each with its input's JSON Schema and the check built
-// from it; the reads they show; the writes a form saves through. `context` is the values a read or a write is asked with.
+// `context` is the values a read or a write is asked with.
 export type Placeable = { id: string; description: string; schema: Record<string, unknown>; check: z.ZodType };
 export type Read = { fingerprint: string; intent: string; shape: unknown; context: string[] };
 export type Write = { fingerprint: string; intent: string; context: string[] };
 export type Catalog = { actions: Placeable[]; reads: Read[]; writes: Write[] };
-
-const isRecord = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value);
 
 const contextOf = (node: unknown): string[] => {
   if (Array.isArray(node)) return node.flatMap(contextOf);

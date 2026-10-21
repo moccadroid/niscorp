@@ -1,113 +1,49 @@
 import type { LayoutNode } from '@niscorp/nova';
-import { ARRANGEMENTS } from '../../app/arrangements';
 import type { Arrangement } from '../../app/arrangements';
 import type { Canvas } from '../../app/screens';
 import { AREAS } from '../../app/shell/areas';
 import type { AreaId } from '../../app/shell/areas';
+import { areasInLayout, arrangementFor } from './layout';
+import type { WrittenLayout } from './layout';
 
-// What a message, or a screen opened from the menu, was answered with: the canvas of each area, in an array as nova's
-// `reconcile` takes it; what the model said it did (`reasoning`); where it stands among the answers given, and what they
-// all were (`stack`).
+export type AreaCanvases = Partial<Record<AreaId, Canvas>>;
+
+export type Said = { title: string; text: string };
+
+// Each area's canvas sits in an array, as nova's `reconcile` takes it.
 export type Plan = {
   question: string;
   reasoning?: string;
   label: string;
   screen?: string;
-  position: number;
-  total: number;
-  stack: { position: number; label: string }[];
   canvases: Partial<Record<AreaId, Canvas[]>>;
   arrangement: string;
   layout: LayoutNode;
 };
 
-export type Unnumbered = Omit<Plan, 'position' | 'total' | 'stack'>;
-
-export type Placed = Partial<Record<AreaId, Canvas>>;
-
-export type Said = { title: string; text: string };
-
-// A layout the model wrote, and the areas it holds.
-export type Written = { layout: LayoutNode; areas: AreaId[] };
+export type ShownPlan = Plan & { position: number; total: number; stack: { position: number; label: string }[] };
 
 // Words the model says carry no things to ask: those are the app's own card's.
-export const textOf = (said: Said): Canvas => ({ action: 'answer.text', input: { title: said.title, text: said.text, examples: [] }, intent: `the words "${said.title}"` });
+export const wordsCanvas = (said: Said): Canvas => ({ action: 'answer.text', input: { title: said.title, text: said.text, examples: [] }, intent: `the words "${said.title}"` });
 
-// A screen's canvases, an area each, in order.
-export const areasOf = (canvases: readonly Canvas[]): Placed => Object.fromEntries(canvases.slice(0, AREAS.length).map((canvas, at) => [AREAS[at], canvas]));
+export const canvasesInAreas = (canvases: readonly Canvas[]): AreaCanvases => Object.fromEntries(canvases.slice(0, AREAS.length).map((canvas, at) => [AREAS[at], canvas]));
 
-// The areas a layout holds, in the order it draws them.
-export const areasIn = (layout: unknown): AreaId[] => {
-  if (Array.isArray(layout)) return layout.flatMap(areasIn);
-  if (layout === null || typeof layout !== 'object') return [];
-  const node = layout as Record<string, unknown>;
-  const props = node['props'] as Record<string, unknown> | undefined;
-  const own = node['component'] === 'Area' && (AREAS as readonly unknown[]).includes(props?.['name']) ? [props?.['name'] as AreaId] : [];
-  return [...own, ...areasIn(node['children'])];
-};
+export const canvasesOfPlan = (plan: Plan): AreaCanvases => Object.fromEntries(AREAS.flatMap((area) => plan.canvases[area]?.slice(0, 1).map((canvas) => [area, canvas]) ?? []));
 
-// Where a layout puts its areas, row by row: "a (the whole width); b c; d e".
-const recordOf = (value: unknown): Record<string, unknown> => (value !== null && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {});
-
-export const whereOf = (layout: unknown): string => {
-  const node = recordOf(layout);
-  const props = recordOf(node['props']);
-  const columns = typeof props['columns'] === 'number' ? props['columns'] : 1;
-  const rows: string[][] = [[]];
-  let used = 0;
-  for (const area of Array.isArray(node['children']) ? node['children'] : []) {
-    const own = recordOf(recordOf(area)['props']);
-    const span = Math.min(typeof own['span'] === 'number' ? own['span'] : 1, columns);
-    if (used + span > columns) {
-      rows.push([]);
-      used = 0;
-    }
-    rows[rows.length - 1]?.push(`${String(own['name'])}${span === columns && columns > 1 ? ' (the whole width)' : span > 1 ? ` (${span} columns)` : ''}`);
-    used += span;
-  }
-  return rows.map((row) => row.join(' ')).join('; ');
-};
-
-const used = (placed: Placed): number => AREAS.reduce((last, area, at) => (placed[area] !== undefined ? at + 1 : last), 0);
-
-// The arrangement asked for — by name, or written — else the one the plan had, when it holds every area used; else the
-// smallest one that does.
-const laidOut = (asked: string | Written | undefined, count: number): { arrangement: string; layout: LayoutNode } => {
-  if (typeof asked === 'object') return { arrangement: 'written', layout: asked.layout };
-  const named = ARRANGEMENTS.find((arrangement) => arrangement.id === asked && arrangement.slots >= count);
-  const fits = named ?? [...ARRANGEMENTS].filter((arrangement) => arrangement.slots >= count).sort((one, other) => one.slots - other.slots)[0] ?? ARRANGEMENTS[ARRANGEMENTS.length - 1];
-  return { arrangement: fits?.id ?? '', layout: fits?.layout ?? { component: 'Answers' } };
-};
-
-// The areas an arrangement holds: a named one its first, a written one those it draws.
-export const areasOfArrangement = (arrangement: string | Written, arrangements: readonly Arrangement[] = ARRANGEMENTS): AreaId[] =>
-  typeof arrangement === 'object' ? arrangement.areas : AREAS.slice(0, arrangements.find((candidate) => candidate.id === arrangement)?.slots ?? 0);
-
-// A plan is named by the title the model gave its answer, a screen's by its label, else by what was asked.
-export const planOf = (question: string, placed: Placed, how: { screen?: { id: string; label: string }; arrangement?: string | Written; label?: string } = {}): Unnumbered => ({
-  question,
-  label: how.screen?.label ?? how.label ?? question,
-  ...(how.screen !== undefined ? { screen: how.screen.id } : {}),
-  canvases: Object.fromEntries(AREAS.flatMap((area) => (placed[area] !== undefined ? [[area, [placed[area]]]] : []))),
-  ...laidOut(how.arrangement, used(placed)),
-});
-
-// A layout with these areas marked as changed by the answer, for the kit to outline.
-export const markedLayout = (layout: LayoutNode, changed: readonly AreaId[]): LayoutNode => {
-  const mark = (node: unknown): unknown => {
-    if (Array.isArray(node)) return node.map(mark);
-    const own = recordOf(node);
-    if (Object.keys(own).length === 0) return node;
-    const props = recordOf(own['props']);
-    const marked = own['component'] === 'Area' && (changed as readonly unknown[]).includes(props['name']) ? { ...own, props: { ...props, changed: true } } : own;
-    return 'children' in marked ? { ...marked, children: mark(marked['children']) } : marked;
-  };
-  return mark(layout) as LayoutNode;
-};
-
-// The areas of a plan whose canvas is not the one another plan had there.
-export const changedAreas = (now: Unnumbered, before: Unnumbered): AreaId[] =>
+export const changedAreas = (now: Plan, before: Plan): AreaId[] =>
   AREAS.filter((area) => now.canvases[area] !== undefined && JSON.stringify(now.canvases[area]) !== JSON.stringify(before.canvases[area]));
 
-// What a plan holds, an area each.
-export const placedOf = (plan: Unnumbered): Placed => Object.fromEntries(AREAS.flatMap((area) => (plan.canvases[area]?.[0] !== undefined ? [[area, plan.canvases[area]?.[0]]] : [])));
+export const arrangementOfPlan = (plan: Plan): string | WrittenLayout => (plan.arrangement === 'written' ? { layout: plan.layout, areas: areasInLayout(plan.layout) } : plan.arrangement);
+
+const slotsNeeded = (canvases: AreaCanvases): number => AREAS.reduce((last, area, at) => (canvases[area] !== undefined ? at + 1 : last), 0);
+
+export type PlanOptions = { arrangements: readonly Arrangement[]; arrangement?: string | WrittenLayout; label?: string; screen?: { id: string; label: string } };
+
+// A plan is named by the title the model gave its answer, a screen's by its label, else by what was asked.
+export const planOf = (question: string, canvases: AreaCanvases, options: PlanOptions): Plan => ({
+  question,
+  label: options.screen?.label ?? options.label ?? question,
+  ...(options.screen !== undefined ? { screen: options.screen.id } : {}),
+  canvases: Object.fromEntries(AREAS.flatMap((area) => (canvases[area] !== undefined ? [[area, [canvases[area]]]] : []))),
+  ...arrangementFor(options.arrangement, slotsNeeded(canvases), options.arrangements),
+});

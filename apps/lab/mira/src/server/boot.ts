@@ -11,7 +11,7 @@ import { runtime } from './runtime';
 const fromEnvFile = (): Models => {
   if (existsSync('.env')) process.loadEnvFile('.env');
   const models = modelsFromEnv(process.env);
-  console.log(`[app] ${models.said}`);
+  console.log(`[app] ${models.summary}`);
   if (models.missing.length > 0) console.log(`[app] ${models.missing.join(', ')} is empty in .env: until it is set, a message is answered with a notice saying so.`);
   return models;
 };

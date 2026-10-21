@@ -2,7 +2,8 @@ import { existsSync } from 'node:fs';
 import { z } from 'zod';
 import { AREAS } from '../app/shell/areas';
 import { boot } from '../server/boot';
-import type { Decide, Fill } from '../server/compose';
+import type { Compose, Decide } from '../server/compose';
+import { recordOf } from '../server/compose/record';
 import { modelsFromEnv } from '../server/models';
 
 // Asks the real models, with the keys in .env, the cases asked of mira — each from the screen it was asked on — and
@@ -90,7 +91,7 @@ if (existsSync('.env')) process.loadEnvFile('.env');
 const models = modelsFromEnv(process.env);
 const said: string[] = [];
 const decideWith = noJev ? undefined : models.decide;
-const fillWith = models.fill;
+const composeWith = models.compose;
 const decide: Decide | undefined =
   decideWith &&
   (async (state, questions) => {
@@ -101,14 +102,14 @@ ${JSON.stringify(state, null, 2)}
 ${JSON.stringify(questions, null, 2)}
 ──── JEV ANSWERED
 ${JSON.stringify(picked, null, 2)}`);
-    const yes = Object.entries(picked).flatMap(([name, one]) => (one.choice !== undefined ? [`${name}=${one.choice}`] : one.yes === true ? [name] : []));
+    const yes = Object.entries(picked).flatMap(([name, one]) => (one.yes ? [name] : []));
     said.push(`  Jev: ${yes.join(' ')}`);
     return picked;
   });
-const fill: Fill | undefined =
-  fillWith &&
+const compose: Compose | undefined =
+  composeWith &&
   (async (system, user, schema) => {
-    const reply = await fillWith(system, user, schema);
+    const reply = await composeWith(system, user, schema);
     if (prompts) said.push(`──── MODEL SYSTEM
 ${system}
 ──── MODEL USER
@@ -135,7 +136,7 @@ const scores: number[] = [];
 const misses = new Map<string, number>();
 for (let run = 1; run <= runs; run += 1) {
   const { decide: _jev, ...withoutJev } = models;
-  const { server } = await boot({ ...withoutJev, ...(decide !== undefined ? { decide } : {}), ...(fill !== undefined ? { fill } : {}) });
+  const { server } = await boot({ ...withoutJev, ...(decide !== undefined ? { decide } : {}), ...(compose !== undefined ? { compose } : {}) });
   const shells = server.shells;
   if (shells === undefined) throw new Error('the manifest has no shell');
   const session = await shells.session(null, null);
@@ -149,14 +150,14 @@ for (let run = 1; run <= runs; run += 1) {
     const active = shell.getState().canvases[canvas]?.active;
     return active === undefined ? {} : (shell.getRuntime(active.id)?.getData() ?? {});
   };
-  const current = (): Record<string, unknown> => (dataOf('dock')['current'] ?? {}) as Record<string, unknown>;
+  const current = (): Record<string, unknown> => recordOf(dataOf('dock')['current']);
   const screenOf = (): Screen => ({
     canvases: AREAS.flatMap((area): Shown[] => {
       const active = shell.getState().canvases[area]?.active;
       if (active === undefined) return [];
       const data = dataOf(area);
-      const fields = Array.isArray(data['fields']) ? (data['fields'] as { value: string }[]).map((field) => field.value) : [];
-      return [{ area, id: active.id, action: active.definitionId, read: String(data['read'] ?? ''), params: (data['params'] ?? {}) as Record<string, unknown>, fields, title: String(data['title'] ?? '') }];
+      const fields = Array.isArray(data['fields']) ? data['fields'].map((field: unknown) => String(recordOf(field)['value'] ?? '')) : [];
+      return [{ area, id: active.id, action: active.definitionId, read: String(data['read'] ?? ''), params: recordOf(data['params']), fields, title: String(data['title'] ?? '') }];
     }),
     arrangement: String(current()['arrangement'] ?? ''),
     screen: String(current()['screen'] ?? ''),
@@ -166,7 +167,7 @@ for (let run = 1; run <= runs; run += 1) {
   });
   const print = (screen: Screen): string => screen.canvases.map((shown) => `  ${shown.area}: ${shown.action} — ${[shown.title, shown.read, JSON.stringify(shown.params) !== '{}' ? JSON.stringify(shown.params) : '', shown.fields.length > 0 ? JSON.stringify(shown.fields) : ''].filter((part) => part !== '').join(' · ')}`).join('\n');
 
-  await until(() => (dataOf('b')['result'] as { value?: unknown } | undefined)?.value !== null);
+  await until(() => recordOf(dataOf('b')['result'])['value'] !== undefined);
   let right = 0;
   let scored = 0;
   console.log(`\n═══ run ${run}`);

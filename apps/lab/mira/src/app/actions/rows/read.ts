@@ -1,7 +1,5 @@
 import { z } from 'zod';
 
-// What every action that shows a read is opened with, and how it asks vex for it: the read's fingerprint, and the
-// values it is asked with. The engine answers it under the person's policy, and again when what it read changes.
 // `answers` is what the read must answer for the action to show it.
 export const readInput = (answers: string) => ({
   title: z.string().describe('The heading on the card.'),

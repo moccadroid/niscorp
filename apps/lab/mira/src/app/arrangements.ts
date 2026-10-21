@@ -2,7 +2,7 @@ import type { LayoutNode } from '@niscorp/nova';
 import { AREAS } from './shell/areas';
 import type { AreaId } from './shell/areas';
 
-// How an answer's areas are laid out: a layout for the frame's `answers` region. `slots` is how many areas it holds.
+// `slots` is how many areas it holds.
 export type Arrangement = { id: string; description: string; slots: number; layout: LayoutNode };
 
 const area = (name: AreaId, span = 1): LayoutNode => ({ component: 'Area', props: { name, span }, children: [{ component: 'CanvasSlot', props: { canvasId: name } }] });

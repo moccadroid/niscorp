@@ -4,7 +4,6 @@ import { SCREENS } from '../screens';
 import { AREAS } from './areas';
 import { frameLayout } from './frame.layout';
 
-// The app opens on the first screen: its canvases, an area each, in its arrangement.
 const first = SCREENS[0];
 const arranged = ARRANGEMENTS.find((arrangement) => arrangement.id === first?.arrangement) ?? ARRANGEMENTS[0];
 
