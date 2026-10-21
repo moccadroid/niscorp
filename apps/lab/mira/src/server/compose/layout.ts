@@ -47,12 +47,12 @@ export const arrangementFor = (asked: string | WrittenLayout | undefined, slotsN
   if (typeof asked === 'object') return { arrangement: 'written', layout: asked.layout };
   const named = arrangements.find((arrangement) => arrangement.id === asked && arrangement.slots >= slotsNeeded);
   const fits = named ?? [...arrangements].filter((arrangement) => arrangement.slots >= slotsNeeded).sort((one, other) => one.slots - other.slots)[0] ?? arrangements[arrangements.length - 1];
-  return { arrangement: fits?.id ?? '', layout: fits?.layout ?? { component: 'Answers' } };
+  return { arrangement: fits?.id ?? '', layout: fits?.layout ?? { component: 'Grid' } };
 };
 
 export const gridLayout = (grid: Grid): WrittenLayout => ({
   layout: {
-    component: 'Answers',
+    component: 'Grid',
     props: { columns: grid.columns },
     children: grid.areas.map(({ name, span }) => ({ component: 'Area', props: { name, span: span ?? 1 }, children: [{ component: 'CanvasSlot', props: { canvasId: name } }] })),
   },

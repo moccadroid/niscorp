@@ -3,8 +3,10 @@ import { z } from 'zod';
 import { AREAS } from '../app/shell/areas';
 import { boot } from '../server/boot';
 import type { Compose, Decide, Model } from '../server/compose';
-import { recordOf } from '../server/compose/record';
 import { modelsFromEnv } from '../server/models';
+
+const isRecord = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value);
+const recordOf = (value: unknown): Record<string, unknown> => (isRecord(value) ? value : {});
 
 // Asks the real models, with the keys in .env, the cases asked of mira — each from the screen it was asked on — and
 // prints each screen, how long it took, and whether it is the screen the message wants: what it asked for, and every

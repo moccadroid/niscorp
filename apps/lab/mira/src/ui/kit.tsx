@@ -61,16 +61,16 @@ const MenuProps = z.object({}).describe('A list that opens above the dock: one c
 export const Menu: NovaComponent = ({ children }) => <nav className="k-menu">{children}</nav>;
 Menu.meta = { description: 'A list that opens above the dock.', propsSchema: MenuProps };
 
-const AnswersProps = z.object({ columns: z.number().int().min(1).max(3).optional().describe('How many columns its areas are laid out in: 1 to 3.') });
-export const Answers: NovaComponent = ({ children, novaRef: _ref, novaModel: _model, ...props }) => {
-  const { columns } = parsed(AnswersProps, props, {});
+const GridProps = z.object({ columns: z.number().int().min(1).max(3).optional().describe('How many columns its areas are laid out in: 1 to 3.') });
+export const Grid: NovaComponent = ({ children, novaRef: _ref, novaModel: _model, ...props }) => {
+  const { columns } = parsed(GridProps, props, {});
   return (
-    <main className={`k-answers k-columns-${columns ?? 2}`}>
+    <main className={`k-grid k-columns-${columns ?? 2}`}>
       {children}
     </main>
   );
 };
-Answers.meta = { description: 'The grid an answer is drawn in.', propsSchema: AnswersProps };
+Grid.meta = { description: 'Areas in columns, row by row.', propsSchema: GridProps };
 
 const AreaProps = z.object({
   name: z.string().describe('Which canvas it holds.'),

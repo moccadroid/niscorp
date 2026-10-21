@@ -6,9 +6,11 @@ import { AREAS } from '../app/shell/areas';
 import { greetingAdd, greetingsCount, greetingsInLanguage, greetingsList, greetingsPerLanguage } from '../app/vex/greetings.entries';
 import { boot } from '../server/boot';
 import type { Compose, Decide, Models } from '../server/compose';
-import { recordOf } from '../server/compose/record';
 import type { Usage } from '../server/runs';
 import { drawing } from '../server/document';
+
+const isRecord = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value);
+const recordOf = (value: unknown): Record<string, unknown> => (isRecord(value) ? value : {});
 
 // Offline, and the same every run: a decision model that finds nothing likely, and a chat model that answers each
 // message with the replies scripted for it, one per call.
@@ -137,7 +139,7 @@ try {
   const named = (name: string, nodes: unknown): Record<string, unknown>[] => nodesOf(nodes).flatMap((node) => (node['name'] === name ? [node] : named(name, node['children'])));
   // The grid the frame's `answers` region holds, as the shell draws it: its columns, and each area's name and span.
   const grid = (): string => {
-    const answers = named('Answers', shell.getShellRenderTree())[0] ?? {};
+    const answers = named('Grid', shell.getShellRenderTree())[0] ?? {};
     const held = nodesOf(answers['children']).map((area) => {
       const own = recordOf(area['props']);
       return `${String(own['name'])}${Number(own['span'] ?? 1) > 1 ? `×${String(own['span'])}` : ''}`;

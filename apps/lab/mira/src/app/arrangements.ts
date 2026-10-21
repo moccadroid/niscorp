@@ -6,7 +6,7 @@ import type { AreaId } from './shell/areas';
 export type Arrangement = { id: string; description: string; slots: number; layout: LayoutNode };
 
 const area = (name: AreaId, span = 1): LayoutNode => ({ component: 'Area', props: { name, span }, children: [{ component: 'CanvasSlot', props: { canvasId: name } }] });
-const answers = (columns: number, areas: LayoutNode[]): LayoutNode => ({ component: 'Answers', props: { columns }, children: areas });
+const answers = (columns: number, areas: LayoutNode[]): LayoutNode => ({ component: 'Grid', props: { columns }, children: areas });
 
 export const ARRANGEMENTS: readonly Arrangement[] = [
   { id: 'single', description: 'One thing, the whole width.', slots: 1, layout: answers(1, [area('a')]) },

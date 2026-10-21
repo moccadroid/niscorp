@@ -2,7 +2,6 @@ import { z } from 'zod';
 import type { FunctionDefinition, FunctionSession } from '@niscorp/moss';
 import { unverifiedShell } from '@niscorp/moss/unverified';
 import { ARRANGEMENTS } from '../../app/arrangements';
-import type { Arrangement } from '../../app/arrangements';
 import { SCREENS } from '../../app/screens';
 import type { Screen } from '../../app/screens';
 import { AREAS } from '../../app/shell/areas';
@@ -12,7 +11,6 @@ import type { Usage } from '../runs';
 import { composeAnswer } from './answer';
 import type { Compose } from './answer';
 import { CATALOG } from './catalog';
-import type { Catalog } from './catalog';
 import { createHistory } from './history';
 import { markChanged } from './layout';
 import { pick } from './pick';
@@ -42,17 +40,17 @@ const WriteSchema = z.looseObject({ write: z.string(), fields: z.array(z.looseOb
 const reasonOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));
 
 export const composer =
-  (models: Models, catalog: Catalog = CATALOG, screens: readonly Screen[] = SCREENS, arrangements: readonly Arrangement[] = ARRANGEMENTS) =>
+  (models: Models) =>
   (session: FunctionSession): FunctionDefinition[] => {
-    const writes = new Set(catalog.writes.map((write) => write.fingerprint));
-    const system = systemPrompt(catalog, screens, arrangements);
+    const writes = new Set(CATALOG.writes.map((write) => write.fingerprint));
+    const system = systemPrompt(CATALOG, SCREENS, ARRANGEMENTS);
     let asked = 0;
 
     const record = (agentId: string, model: Model<unknown>, label: string, usage: readonly Usage[], since: number, ok: boolean): void =>
       recordModelRun(session, { agentId, label, provider: model.provider, model: model.model, usage, elapsedMs: performance.now() - since, outcome: ok ? 'ok' : 'failed' });
 
-    const home = screens[0];
-    const screenPlan = (screen: Screen): Plan => planOf('', canvasesInAreas(screen.canvases), { arrangements, screen, arrangement: screen.arrangement });
+    const home = SCREENS[0];
+    const screenPlan = (screen: Screen): Plan => planOf('', canvasesInAreas(screen.canvases), { arrangements: ARRANGEMENTS, screen, arrangement: screen.arrangement });
     const history = createHistory(home === undefined ? undefined : screenPlan(home));
 
     // The swap goes around moss (`unverifiedShell`): moss lets a session change a layout only through a draft, and a
@@ -85,7 +83,7 @@ export const composer =
       const picked =
         jev === undefined
           ? undefined
-          : await pick(message, open, catalog, screens, jev.call).catch((error: unknown) => {
+          : await pick(message, open, CATALOG, SCREENS, jev.call).catch((error: unknown) => {
               console.error(`[ask] Jev could not answer "${message}": ${reasonOf(error)}`);
               return undefined;
             });
@@ -93,7 +91,7 @@ export const composer =
       const composing = performance.now();
       const current = arrangementOfPlan(before);
       const user = messagePrompt(message, open, { id: before.arrangement, layout: before.layout }, picked?.picks);
-      const composed = await composeAnswer({ system, user }, { open: canvasesOfPlan(before), current, catalog, screens, arrangements }, chat.call).catch((error: unknown) => {
+      const composed = await composeAnswer({ system, user }, { open: canvasesOfPlan(before), current, catalog: CATALOG, screens: SCREENS, arrangements: ARRANGEMENTS }, chat.call).catch((error: unknown) => {
         console.error(`[ask] the model could not answer "${message}": ${reasonOf(error)}`);
         return undefined;
       });
@@ -107,7 +105,7 @@ export const composer =
         throw new Error('That answer did not fit this app’s actions. Ask again, or put it differently.');
       }
       const { answer } = composed;
-      const screen = answer.screen === undefined ? undefined : screens.find((candidate) => candidate.id === answer.screen);
+      const screen = answer.screen === undefined ? undefined : SCREENS.find((candidate) => candidate.id === answer.screen);
       if (screen !== undefined) return showScreen(screen, answer.reasoning);
       const canvases: AreaCanvases = { ...answer.canvases };
       for (const area of AREAS) {
@@ -115,7 +113,7 @@ export const composer =
         if (said !== undefined) canvases[area] = wordsCanvas(said);
       }
       if (Object.keys(canvases).length === 0) throw new Error('Nothing here answers that yet.');
-      const plan = { ...planOf(message, canvases, { arrangements, arrangement: answer.arrangement ?? current, label: answer.title }), reasoning: answer.reasoning };
+      const plan = { ...planOf(message, canvases, { arrangements: ARRANGEMENTS, arrangement: answer.arrangement ?? current, label: answer.title }), reasoning: answer.reasoning };
       // An answer that leaves the screen as it is adds nothing to the stack; the dock still names what was asked, and why
       // nothing changed.
       if (JSON.stringify([plan.canvases, plan.layout]) === JSON.stringify([before.canvases, before.layout])) return show({ ...before, question: message, label: answer.title, reasoning: answer.reasoning });
@@ -123,7 +121,7 @@ export const composer =
     };
 
     const open = async (data: unknown): Promise<ShownPlan> => {
-      const screen = screens.find((candidate) => candidate.id === OpenSchema.parse(data).opening);
+      const screen = SCREENS.find((candidate) => candidate.id === OpenSchema.parse(data).opening);
       return screen === undefined ? history.current() : showScreen(screen);
     };
 
@@ -134,7 +132,7 @@ export const composer =
       const now = history.current();
       if (now.screen !== undefined) return now;
       const kept = Object.fromEntries(Object.entries(canvasesOfPlan(now)).filter(([, canvas]) => canvas.input['write'] !== fingerprint));
-      if (Object.keys(kept).length > 0) return show(history.replace(history.showing(), planOf(now.question, kept, { arrangements, arrangement: arrangementOfPlan(now), label: now.label })));
+      if (Object.keys(kept).length > 0) return show(history.replace(history.showing(), planOf(now.question, kept, { arrangements: ARRANGEMENTS, arrangement: arrangementOfPlan(now), label: now.label })));
       history.drop(history.showing());
       return home === undefined ? history.current() : showScreen(home);
     };

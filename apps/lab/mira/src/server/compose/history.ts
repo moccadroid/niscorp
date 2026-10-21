@@ -12,14 +12,14 @@ export type History = {
   forward: () => ShownPlan;
 };
 
-const NOTHING: ShownPlan = { question: '', label: '', position: 0, total: 0, stack: [], canvases: {}, arrangement: '', layout: { component: 'Answers' } };
+const NOTHING: ShownPlan = { question: '', label: '', position: 0, total: 0, stack: [], canvases: {}, arrangement: '', layout: { component: 'Grid' } };
 
 export const createHistory = (first: Plan | undefined): History => {
   const plans: Plan[] = first === undefined ? [] : [first];
   let at = plans.length - 1;
   const shown = (index: number): ShownPlan => {
     const plan = plans[index];
-    return plan === undefined ? NOTHING : { ...plan, position: index + 1, total: plans.length, stack: plans.map((one, i) => ({ position: i + 1, label: one.label })) };
+    return plan === undefined ? NOTHING : { ...plan, position: index + 1, total: plans.length, stack: plans.map((one, at) => ({ position: at + 1, label: one.label })) };
   };
   const showAt = (index: number): ShownPlan => {
     at = index;
