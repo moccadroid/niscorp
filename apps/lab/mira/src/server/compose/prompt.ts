@@ -41,20 +41,29 @@ const canvasLine = (canvas: OpenCanvas): string => {
   return `- ${canvas.area}: ${canvas.action} — ${canvas.intent} — ${what}${shows}`;
 };
 
-const picksLine = (picks: Picks): string => {
-  const likely = <T extends { probability: number }>(list: readonly T[], name: (item: T) => string): string =>
-    list
-      .filter((item) => item.probability >= 0.5)
-      .map((item) => `${name(item)} ${item.probability.toFixed(2)}`)
-      .join(', ') || 'none';
-  return `actions ${likely(picks.actions, (item) => item.id)}; reads ${likely(picks.reads, (item) => item.fingerprint)}; writes ${likely(picks.writes, (item) => item.fingerprint)}; screens ${likely(picks.screens, (item) => item.id)}`;
+// A hint that finds nothing likely reads as "nothing belongs in the answer", so the model is not given one.
+const picksLine = (picks: Picks): string | undefined => {
+  const likely = <T extends { probability: number }>(list: readonly T[], name: (item: T) => string): string[] =>
+    list.filter((item) => item.probability >= 0.5).map((item) => `${name(item)} ${item.probability.toFixed(2)}`);
+  const kinds = {
+    actions: likely(picks.actions, (item) => item.id),
+    reads: likely(picks.reads, (item) => item.fingerprint),
+    writes: likely(picks.writes, (item) => item.fingerprint),
+    screens: likely(picks.screens, (item) => item.id),
+  };
+  if (Object.values(kinds).every((names) => names.length === 0)) return undefined;
+  return Object.entries(kinds)
+    .map(([kind, names]) => `${kind} ${names.length > 0 ? names.join(', ') : 'none'}`)
+    .join('; ');
 };
 
-export const messagePrompt = (message: string, open: readonly OpenCanvas[], arrangement: { id: string; layout: LayoutNode }, picks: Picks | undefined): string =>
-  [
+export const messagePrompt = (message: string, open: readonly OpenCanvas[], arrangement: { id: string; layout: LayoutNode }, picks: Picks | undefined): string => {
+  const hint = picks === undefined ? undefined : picksLine(picks);
+  return [
     `OPEN SCREEN — arrangement ${arrangement.id}: ${areaRows(arrangement.layout)}`,
     ...(open.length === 0 ? ['nothing'] : open.map(canvasLine)),
-    ...(picks === undefined ? [] : ['', `A FAST PICKER THINKS (a hint; how likely each belongs in the answer): ${picksLine(picks)}`]),
+    ...(hint === undefined ? [] : ['', `A FAST PICKER THINKS (a hint; how likely each belongs in the answer): ${hint}`]),
     '',
     `MESSAGE: ${message}`,
   ].join('\n');
+};

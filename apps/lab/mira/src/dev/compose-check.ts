@@ -64,10 +64,13 @@ const REPLIES: Record<string, Record<string, unknown>[]> = {
 
 const SPENT: Usage = { inputTokens: 100, outputTokens: 10, totalTokens: 110, reported: true };
 
+// The ids Jev finds likely: a question naming one is answered yes.
+let likely: readonly string[] = [];
 let asked: { state: Record<string, unknown>; questions: Record<string, unknown> }[] = [];
 const decide: Decide = async (state, questions) => {
   asked.push({ state, questions });
-  return { picked: Object.fromEntries(Object.keys(questions).map((name) => [name, { yes: false, probability: 0.1 }])), usage: SPENT };
+  const answer = (instructions: string): { yes: boolean; probability: number } => (likely.some((id) => instructions.includes(`"${id}"`)) ? { yes: true, probability: 0.9 } : { yes: false, probability: 0.1 });
+  return { picked: Object.fromEntries(Object.entries(questions).map(([name, question]) => [name, answer(question.instructions)])), usage: SPENT };
 };
 
 let prompts: string[] = [];
@@ -187,7 +190,9 @@ try {
 
   const overviewIds = ids();
   runs.length = 0;
+  likely = ['rows.form'];
   await ask('Guten Tag is german');
+  likely = [];
   const jev = asked[asked.length - 1];
   check(
     'each message is recorded as two runs: Jev\'s pass and the model\'s, each with its model, what it spent and how it ended',
@@ -197,7 +202,7 @@ try {
   check('Jev is asked about the message with the open screen: an intent for each canvas, the words too', jev?.state['message'] === 'Guten Tag is german' && Object.keys(recordOf(jev?.state['open_screen'])).join(',') === 'a,b,c,d,e', JSON.stringify(jev?.state['open_screen']));
   check(
     'the model is given the open screen by area — where each area is, what each holds, the words too — and what Jev thinks',
-    lastPrompt().includes('arrangement hero: a (the whole width); b c; d e') && lastPrompt().includes('- a: answer.text') && lastPrompt().includes('"count":5') && lastPrompt().includes('A FAST PICKER THINKS'),
+    lastPrompt().includes('arrangement hero: a (the whole width); b c; d e') && lastPrompt().includes('- a: answer.text') && lastPrompt().includes('"count":5') && lastPrompt().includes('A FAST PICKER THINKS (a hint; how likely each belongs in the answer): actions rows.form 0.90; reads none; writes none; screens none'),
     lastPrompt().slice(0, 600),
   );
   check('what the model is given of the rows leaves their ids out', !UUID.test(lastPrompt()), lastPrompt().match(UUID)?.[0] ?? '');
@@ -214,6 +219,7 @@ try {
   session.dispatch('dock', { type: 'ui:click', ref: 'stack' });
   const filledIds = ids();
   await ask('drop the bars');
+  check('when Jev finds nothing likely, the model is given no hint', !lastPrompt().includes('FAST PICKER'), lastPrompt().slice(-300));
   check('an answer that only empties an area outlines nothing', marked() === '', marked());
   check('an area the model drops is emptied, and every other stays as it was', on('c').id === '' && ids().replace(/c:\S*/, '') === filledIds.replace(/c:\S*/, '') && current().arrangement === 'hero', `${ids()} vs ${filledIds}`);
 
