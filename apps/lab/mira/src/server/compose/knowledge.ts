@@ -19,13 +19,13 @@ export const INSTRUCTIONS = `You answer a person's message with a screen: up to 
 Your \`response\` is one plain sentence for the person, at most 120 characters: what you change and why, or why nothing changes. Name what they see, never area letters, arrangement names or fingerprints.`;
 
 export const actionCatalog = (({ deps }) =>
-  `ACTIONS — what a person sees, and the input schema\n${deps.catalog.actions.map((action) => `- ${action.id}: ${action.description} Input: ${json(withoutDialect(action.schema))}`).join('\n')}`) satisfies Producer<ComposerDeps>;
+  `ACTIONS — what a person sees, and the input schema\n${deps.catalog.actions.map((action) => `- ${action.id}: ${action.description} Input: ${json(withoutDialect(action.schema))}`).join('\n') || 'none'}`) satisfies Producer<ComposerDeps>;
 
 export const readCatalog = (({ deps }) =>
-  `READS — what it answers, its rows, and the params it is asked with\n${deps.catalog.reads.map((read) => `- ${read.fingerprint}: ${read.intent}. Rows: ${json(read.shape)}. Params: ${json(read.contextKeys)}`).join('\n')}`) satisfies Producer<ComposerDeps>;
+  `READS — what it answers, its rows, and the params it is asked with\n${deps.catalog.reads.map((read) => `- ${read.fingerprint}: ${read.intent}. Rows: ${json(read.shape)}. Params: ${json(read.contextKeys)}`).join('\n') || 'none'}`) satisfies Producer<ComposerDeps>;
 
 export const writeCatalog = (({ deps }) =>
-  `WRITES — what it does, and the keys of the fields a form saves through it\n${deps.catalog.writes.map((write) => `- ${write.fingerprint}: ${write.intent}. Fields: ${json(write.contextKeys)}`).join('\n')}`) satisfies Producer<ComposerDeps>;
+  `WRITES — what it does, and the keys of the fields a form saves through it\n${deps.catalog.writes.map((write) => `- ${write.fingerprint}: ${write.intent}. Fields: ${json(write.contextKeys)}`).join('\n') || 'none'}`) satisfies Producer<ComposerDeps>;
 
 export const screenCatalog = (({ deps }) => `SCREENS\n${deps.screens.map((screen) => `- ${screen.id}: ${screen.description}`).join('\n')}`) satisfies Producer<ComposerDeps>;
 

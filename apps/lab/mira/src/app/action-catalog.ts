@@ -1,11 +1,6 @@
 import type { ActionDefinition } from '@niscorp/nova';
 import { textAction } from './actions/answer/text.action';
 import { dockAction } from './actions/ask/dock.action';
-import { barsAction } from './actions/rows/bars.action';
-import { formAction } from './actions/rows/form.action';
-import { statAction } from './actions/rows/stat.action';
-import { tableAction } from './actions/rows/table.action';
+import { GUIDE } from './actions/guide/guide.actions';
 
-export const actions: Record<string, ActionDefinition> = Object.fromEntries(
-  [dockAction, textAction, tableAction, statAction, barsAction, formAction].map((action) => [action.id, action]),
-);
+export const actions: Record<string, ActionDefinition> = Object.fromEntries([dockAction, textAction, ...GUIDE].map((action) => [action.id, action]));

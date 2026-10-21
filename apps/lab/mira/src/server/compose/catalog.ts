@@ -1,10 +1,7 @@
 import { z } from 'zod';
 import type { ActionDefinition } from '@niscorp/nova';
 import type { SeedEntry, SeedMutation } from '@niscorp/vex';
-import { barsAction } from '../../app/actions/rows/bars.action';
-import { formAction } from '../../app/actions/rows/form.action';
-import { statAction } from '../../app/actions/rows/stat.action';
-import { tableAction } from '../../app/actions/rows/table.action';
+import { GUIDE } from '../../app/actions/guide/guide.actions';
 import { ENTRIES } from '../../app/vex';
 import { isRecord } from './record';
 
@@ -31,4 +28,4 @@ const catalogOf = (actions: readonly ActionDefinition[], entries: readonly (Seed
   writes: entries.flatMap((entry) => ('mutation' in entry ? [{ fingerprint: entry.fingerprint, intent: entry.intent ?? '', contextKeys: [...new Set(contextOf(entry.mutation))] }] : [])),
 });
 
-export const CATALOG: Catalog = catalogOf([tableAction, statAction, barsAction, formAction], ENTRIES);
+export const CATALOG: Catalog = catalogOf(GUIDE, ENTRIES);

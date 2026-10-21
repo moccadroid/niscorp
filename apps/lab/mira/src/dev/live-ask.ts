@@ -22,64 +22,57 @@ type Shown = { area: string; id: string; action: string; read: string; params: R
 type Screen = { canvases: Shown[]; arrangement: string; screen: string; said: string; response: string; title: string };
 type Step = { ask: string; want?: (now: Screen, before: Screen) => string | undefined } | { open: string };
 
-const lower = (value: unknown): string => String(value ?? '').toLowerCase();
 const at = (screen: Screen, area: string): Shown | undefined => screen.canvases.find((shown) => shown.area === area);
-const is = (shown: Shown | undefined, action: string, read?: string): boolean => shown?.action === action && (read === undefined || shown.read === read);
-const has = (screen: Screen, action: string, read?: string): boolean => screen.canvases.some((shown) => is(shown, action, read));
+const is = (shown: Shown | undefined, action: string): boolean => shown?.action === action;
+const has = (screen: Screen, action: string): boolean => screen.canvases.some((shown) => is(shown, action));
 
 // Two areas showing the same thing is never the screen a message wants.
 const twice = (now: Screen): string | undefined => {
-  const seen = now.canvases.filter((shown) => shown.action !== 'answer.text').map((shown) => JSON.stringify([shown.action, shown.read, shown.params, shown.fields]));
-  return new Set(seen).size === seen.length ? undefined : 'the same thing is shown twice';
+  const seen = now.canvases.filter((shown) => shown.action !== 'answer.text').map((shown) => shown.action);
+  return new Set(seen).size === seen.length ? undefined : 'the same card is shown twice';
 };
 
-// Every one of these areas holds the canvas it held before, and the arrangement is the one it was.
-const untouched = (now: Screen, before: Screen, ...areas: string[]): string | undefined => {
-  const moved = areas.filter((area) => at(now, area)?.id === undefined || at(now, area)?.id !== at(before, area)?.id);
-  if (moved.length > 0) return `area ${moved.join(', ')} changed`;
+// What the message asked for, with at most one area of the screen changed, in the same arrangement.
+const placed = (now: Screen, before: Screen, action: string): string | undefined => {
+  if (!has(now, action)) return `want ${action}`;
+  const changed = [...new Set([...now.canvases, ...before.canvases].map((shown) => shown.area))].filter((area) => at(now, area)?.id !== at(before, area)?.id);
+  if (changed.length > 1) return `areas ${changed.join(', ')} changed`;
   return now.arrangement === before.arrangement ? undefined : `the arrangement went from ${before.arrangement} to ${now.arrangement}`;
 };
 
-// The form in an area, filled in with these values, in place.
-const filled = (now: Screen, before: Screen, area: string, text: string, language?: string): string | undefined => {
-  const form = at(now, area);
-  if (form?.id !== at(before, area)?.id) return `the form in ${area} was replaced`;
-  return lower(form?.fields[0]) === text && (language === undefined || lower(form?.fields[1]) === language) ? undefined : `the form holds ${JSON.stringify(form?.fields)}`;
-};
-
 const RUN: readonly Step[] = [
-  { open: 'overview' },
-  { ask: 'Guten Tag is german', want: (now, before) => untouched(now, before, 'a', 'b', 'c', 'd') ?? filled(now, before, 'e', 'guten tag', 'german') },
-  { open: 'overview' },
-  { ask: 'bon jour is french', want: (now, before) => untouched(now, before, 'a', 'b', 'c', 'd') ?? filled(now, before, 'e', 'bon jour', 'french') },
-  { open: 'overview' },
-  { ask: 'Add a greeting that says Servus', want: (now, before) => untouched(now, before, 'a', 'b', 'c', 'd') ?? filled(now, before, 'e', 'servus') },
-  { open: 'greetings' },
-  { ask: 'bon jour is french', want: (now, before) => untouched(now, before, 'a') ?? filled(now, before, 'b', 'bon jour', 'french') },
-  { open: 'overview' },
-  { ask: 'show overview + app overview', want: (now) => (now.screen === 'overview' ? undefined : 'want the overview') },
-  { open: 'overview' },
+  { open: 'start' },
+  { ask: 'What is the charter?', want: (now, before) => placed(now, before, 'guide.charter') },
+  { open: 'start' },
+  { ask: 'Who may do what in this app?', want: (now, before) => placed(now, before, 'guide.charter') },
+  { open: 'inside' },
+  { ask: 'How does my message become a screen?', want: (now, before) => placed(now, before, 'guide.answers') },
+  { open: 'start' },
+  { ask: 'show start + intro', want: (now) => (now.screen === 'start' ? undefined : 'want the start screen') },
+  { open: 'start' },
   { ask: 'What can you do?', want: (now) => (has(now, 'answer.text') ? undefined : 'want words') },
-  { open: 'overview' },
-  { ask: 'the count big at the top, the bars and the table below it', want: (now) => (is(now.canvases[0], 'rows.stat', 'greetings/count') && has(now, 'rows.bars') && has(now, 'rows.table') ? undefined : 'want the count first, the bars and the table beneath') },
-  { open: 'overview' },
-  { ask: 'Which greetings are in German?', want: (now) => (now.canvases.some((shown) => is(shown, 'rows.table', 'greetings/in-language') && shown.params['language'] === 'German') ? undefined : 'want the greetings in German') },
+  { open: 'start' },
+  { ask: 'the nisc card big at the top, the actions and the yours card below it', want: (now) => (is(now.canvases[0], 'guide.nisc') && has(now, 'guide.actions') && has(now, 'guide.yours') ? undefined : 'want the nisc card first, the actions and the yours card beneath') },
+  { open: 'start' },
+  { ask: 'What are layouts?', want: (now) => (has(now, 'guide.layouts') ? undefined : 'want the layouts card') },
   {
-    ask: 'and the count beside it',
+    ask: 'and the shell beside it',
     want: (now, before) => {
-      const german = before.canvases.find((shown) => shown.params['language'] === 'German');
-      return german !== undefined && at(now, german.area)?.id === german.id && has(now, 'rows.stat', 'greetings/count') ? undefined : 'want the German greetings where they were, and the count';
+      const layouts = before.canvases.find((shown) => shown.action === 'guide.layouts');
+      return layouts !== undefined && at(now, layouts.area)?.id === layouts.id && has(now, 'guide.shell') ? undefined : 'want the layouts card where it was, and the shell';
     },
   },
   {
-    ask: 'only the Italian ones',
+    ask: 'now the charter instead of the shell',
     want: (now, before) => {
-      const german = before.canvases.find((shown) => shown.params['language'] === 'German');
-      const count = before.canvases.find((shown) => shown.action === 'rows.stat');
-      const there = german === undefined ? undefined : at(now, german.area);
-      return there?.params['language'] === 'Italian' && (count === undefined || at(now, count.area)?.id === count.id) ? undefined : 'want the Italian greetings where the German were, and the count untouched';
+      const shell = before.canvases.find((shown) => shown.action === 'guide.shell');
+      const layouts = before.canvases.find((shown) => shown.action === 'guide.layouts');
+      const there = shell === undefined ? undefined : at(now, shell.area);
+      return is(there, 'guide.charter') && (layouts === undefined || at(now, layouts.area)?.id === layouts.id) ? undefined : 'want the charter where the shell was, and the layouts card untouched';
     },
   },
+  { open: 'inside' },
+  { ask: 'How do I make this app mine?', want: (now, before) => placed(now, before, 'guide.yours') },
 ];
 
 const prompts = process.argv.includes('--prompts');
@@ -167,7 +160,6 @@ for (let run = 1; run <= runs; run += 1) {
   });
   const print = (screen: Screen): string => screen.canvases.map((shown) => `  ${shown.area}: ${shown.action} — ${[shown.title, shown.read, JSON.stringify(shown.params) !== '{}' ? JSON.stringify(shown.params) : '', shown.fields.length > 0 ? JSON.stringify(shown.fields) : ''].filter((part) => part !== '').join(' · ')}`).join('\n');
 
-  await until(() => recordOf(dataOf('b')['result'])['value'] !== undefined);
   let right = 0;
   let scored = 0;
   console.log(`\n═══ run ${run}`);

@@ -1,10 +1,10 @@
 import type { Charter } from '@niscorp/charter';
 
-// Everybody is `public` until the app has a sign-in: they may ask, read the greetings and add one.
+// Everybody is `public` until the app has a sign-in: they may ask, and read the guide.
 export const charter: Charter = {
   public: {
-    actions: ['ask.*', 'answer.*', 'rows.*'],
-    data: ['greetings.read', 'greetings.write.insert'],
+    actions: ['ask.*', 'answer.*', 'guide.*'],
+    data: [],
     functions: ['ask', 'screens.open', 'answers.back', 'answers.forward', 'answers.go', 'answers.current'],
   },
 };

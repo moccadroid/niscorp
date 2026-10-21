@@ -109,69 +109,6 @@ export const Card: NovaComponent = ({ children, novaRef: _ref, novaModel: _model
 };
 Card.meta = { description: 'One part of an answer, with its title.', propsSchema: CardProps };
 
-const TableProps = z.object({
-  columns: z.array(z.object({ key: z.string(), label: z.string() })).describe('The columns, in order: the row field and its heading.'),
-  rows: z.array(z.record(z.string(), z.unknown())).describe('The rows.'),
-});
-export const Table: NovaComponent = ({ novaRef: _ref, novaModel: _model, ...props }) => {
-  const { columns, rows } = parsed(TableProps, props, { columns: [], rows: [] });
-  return (
-    <div className="k-table-wrap">
-      <table className="k-table">
-        <thead>
-          <tr>
-            {columns.map((column) => (
-              <th key={column.key}>{column.label}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row, at) => (
-            <tr key={at}>
-              {columns.map((column) => (
-                <td key={column.key}>{cell(row[column.key])}</td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-};
-Table.meta = { description: 'Rows as a table.', propsSchema: TableProps };
-
-const StatProps = z.object({ value: z.unknown().describe('The number.'), label: z.string().optional().describe('What it counts.') });
-export const Stat: NovaComponent = ({ novaRef: _ref, novaModel: _model, ...props }) => {
-  const { value, label } = parsed(StatProps, props, { value: '' });
-  return (
-    <div className="k-stat">
-      <strong className="k-stat-value">{cell(value)}</strong>
-      {label !== undefined ? <span className="k-stat-label">{label}</span> : null}
-    </div>
-  );
-};
-Stat.meta = { description: 'One number, and what it counts.', propsSchema: StatProps };
-
-const BarsProps = z.object({ items: z.array(z.object({ label: z.unknown(), value: z.number() })).describe('One bar per item, as long as its value.') });
-export const Bars: NovaComponent = ({ novaRef: _ref, novaModel: _model, ...props }) => {
-  const { items } = parsed(BarsProps, props, { items: [] });
-  const most = Math.max(1, ...items.map((item) => item.value));
-  return (
-    <ul className="k-bars">
-      {items.map((item, at) => (
-        <li key={at} className="k-bars-item">
-          <span className="k-bars-label">{cell(item.label)}</span>
-          <span className="k-bars-track">
-            <span className="k-bars-fill" style={{ width: `${(item.value / most) * 100}%` }} />
-          </span>
-          <span className="k-bars-value">{item.value}</span>
-        </li>
-      ))}
-    </ul>
-  );
-};
-Bars.meta = { description: 'Values side by side as bars.', propsSchema: BarsProps };
-
 const InputProps = z.object({
   placeholder: z.string().optional(),
   value: z.unknown().optional(),
@@ -209,15 +146,3 @@ Input.meta = { description: 'A line of text, bound to data with the node’s `mo
 const PromptProps = z.object({}).describe('The line to ask in, and the button that sends it.');
 export const Prompt: NovaComponent = ({ children }) => <div className="k-prompt">{children}</div>;
 Prompt.meta = { description: 'The line to ask in.', propsSchema: PromptProps };
-
-const FieldProps = z.object({ label: z.string().describe('What the field is for.') });
-export const Field: NovaComponent = ({ children, novaRef: _ref, novaModel: _model, ...props }) => {
-  const { label } = parsed(FieldProps, props, { label: '' });
-  return (
-    <label className="k-field">
-      <span className="k-field-label">{label}</span>
-      {children}
-    </label>
-  );
-};
-Field.meta = { description: 'A labelled field of a form.', propsSchema: FieldProps };

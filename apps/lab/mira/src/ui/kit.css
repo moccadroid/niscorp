@@ -128,25 +128,6 @@ html, body, #root { margin: 0; min-height: 100%; }
 }
 .k-card-title { margin: 0; font-size: 15px; font-weight: 650; letter-spacing: 0.01em; }
 
-.k-table-wrap { overflow-x: auto; }
-.k-table { width: 100%; border-collapse: collapse; font-size: 14px; }
-.k-table th { text-align: left; font-weight: 600; color: var(--k-muted); padding: 6px 8px; border-bottom: 1px solid var(--k-line); }
-.k-table td { padding: 8px; border-bottom: 1px solid var(--k-line); }
-.k-table tr:last-child td { border-bottom: 0; }
-
-.k-stat { display: flex; align-items: baseline; gap: 10px; }
-.k-stat-value { font-size: 44px; font-weight: 700; letter-spacing: -0.02em; line-height: 1; }
-.k-stat-label { color: var(--k-muted); }
-
-.k-bars { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-.k-bars-item { display: grid; grid-template-columns: minmax(80px, 30%) 1fr auto; align-items: center; gap: 10px; font-size: 14px; }
-.k-bars-track { height: 10px; border-radius: 5px; background: var(--k-accent-soft); overflow: hidden; }
-.k-bars-fill { display: block; height: 100%; border-radius: 5px; background: var(--k-accent); }
-.k-bars-value { font-variant-numeric: tabular-nums; color: var(--k-muted); }
-
-.k-field { display: flex; flex-direction: column; gap: 6px; }
-.k-field-label { font-size: 13px; font-weight: 600; color: var(--k-muted); }
-
 .k-input {
   flex: 1;
   min-width: 0;

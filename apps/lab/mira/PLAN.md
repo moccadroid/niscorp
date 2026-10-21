@@ -8,8 +8,8 @@ Made 2026-10-20 by `npm create nisc`, on nisc 0.8.1. This is the record AGENTS.m
 |---|---|---|
 | D1 Posture | answered | **A moss server app.** The shell runs on the server, one per person; the browser is a canvas terminal over a socket. The charter is enforced there: a principal reaches only the actions and the data it is granted. |
 | D2 Environment | derived · **open for deployment** | Development and the checks run on PGlite, an in-memory Postgres that starts empty every boot (`src/server/runtime.ts`). Open: the Postgres a deployment hands it, and where it runs. |
-| D3 Reads | answered | **Vex entries.** An answer's action reads one by its fingerprint (`/api/vex`), under the person's policy, and again whenever what it read changes (`refresh: 'reactive'`). |
-| D4 Writes | answered | **Vex mutation entries**, posted to `/api/vex` by a form an answer opened (`form.prism.ts`) — by the person, never by the model. |
+| D3 Reads | answered | **Vex entries**, read by an action by its fingerprint (`/api/vex`), under the person's policy. None yet: the guide the app starts with is text in its actions. |
+| D4 Writes | answered | **Vex mutation entries**, posted to `/api/vex` by a form the person saves, never by the model. None yet. |
 | D5 Routing | derived · **partly open** | The first screen is drawn on the server and adopted by the terminal — it costs nothing while nobody can sign in. Open: once sign-in exists, the browser keeps the session in a cookie no script can read, and the page is drawn for whoever it says (AGENTS.md rule 12) — a page drawn for somebody is theirs alone (`private, no-store`). Open: which paths are **pages** rather than the app, and whether the app's shell state syncs to the address bar. |
 | D6 Who answers a message | answered | Jev reads the message and the open screen (`TYPESAFE_API_KEY`), then gpt-oss-120b on Groq composes the screen as a cortex agent (`GROQ_API_KEY`), with what Jev picked as a hint. Without a TypeSafe key there is no Jev pass. Jev may take 2 s and the model 8 s; past that, the model answers alone, or the line says it could not be reached and the screen stays as it is. Measured on the cases asked of mira (`src/dev/live-ask.ts`): 58/60 with Jev, 52/60 without. |
 | D7 What a screen is made of | answered | Canvases: an action from the catalog (`src/server/compose/catalog.ts`: the actions the model may place, the reads they show, the writes a form saves through), opened with an input its schema takes, and why it is there. Up to six, on the areas `a`–`f`; the screens in the dock are canvases too (`src/app/screens.ts`). |
@@ -36,8 +36,8 @@ Made 2026-10-20 by `npm create nisc`, on nisc 0.8.1. This is the record AGENTS.m
 ## Order of work
 
 1. **The interview** — every open item above, answered or delegated by name. ← here
-2. **Scaffold** — done: the frame, the message loop, six actions, three screens over hello-world rows, and their checks.
-3. **Data** — per D2/D3: your tables in `src/db/schema.ts`, your reads and writes in `src/app/vex/`; the greetings go.
+2. **Scaffold** — done: the frame, the message loop, the dock, a guide to nisc in eight cards on two screens, and their checks.
+3. **Data** — per D2/D3: your tables in `src/db/schema.ts`, your reads and writes in `src/app/vex/`; the guide (`src/app/actions/guide/`) goes.
 4. **Screens** — the ones a person will want in the dock, each its canvases; the first the one the app opens on.
 5. **Actions** — your own, small: one purpose each, a description that says what it shows, an `input` schema for what the model fills in; the ones the model may place go in the catalog.
 6. **Writes** — per D4; a form an answer opens, filled in by the model, saved by the person.

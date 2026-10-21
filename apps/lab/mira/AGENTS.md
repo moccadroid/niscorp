@@ -9,6 +9,7 @@ What is particular to this app:
 - **Where things go:**
 
 ```
+src/app/actions/guide/  the guide to nisc the app starts with: a card a topic, text in an action — delete it to start your own
 src/app/screens.ts  the screens in the dock: canvases shown together; the first is the one the app opens on
 src/app/arrangements.ts  how an answer is laid out: layouts for the frame’s `answers` region, and what each is for
 src/server/compose/ the message loop: the open screen read, Jev's pass, gpt-oss-120b composes, the plan is placed
@@ -24,7 +25,7 @@ src/server/compose/ the message loop: the open screen read, Jev's pass, gpt-oss-
                     index.ts         the functions the dock calls
 src/server/models/  the models, from .env
 src/server/runs/    each model's part in a message recorded as a run, and the line the server logs for it
-src/db/         the tables, and the hello-world rows
+src/db/         your tables, as a strata sequence (none yet)
 src/app/        ARTIFACTS ONLY — the manifest (app.ts), the charter, the actions, the shell
 src/server/     the environment (runtime.ts), the boot, how a screen is drawn (document.ts)
 src/ui/         the kit — the only renderer code, with src/main.tsx, the terminal entry
@@ -38,7 +39,7 @@ strata.lock.json  the grammar versions the source is written at (rule 20) — mo
 
 ## How the model leads
 
-There is no chat history: the screen open when a message arrives is the conversation. The answer fills the page and scrolls; one dock stays at the bottom (`src/app/actions/ask/dock.action.ts`). Read from the screen down to the hands, it holds the **screens** (`src/app/screens.ts`: canvases shown together, opened without asking); a chip naming the answer shown by its title and where it stands ("German greetings · 2/5"), with back and forward beside it, which opens upward to what was asked, what the model said it did, and every answer to go back to, each by its title; and the line to ask in. A person types there, and the answer is a screen: up to six canvases — an action opened with an input, and why it is there — on the areas `a`–`f`. The canvas an answer changed is outlined until the next one. The first screen is what the app opens on, and the first in the stack. A screen already in the stack is gone back to, not stacked again.
+There is no chat history: the screen open when a message arrives is the conversation. The answer fills the page and scrolls; one dock stays at the bottom (`src/app/actions/ask/dock.action.ts`). Read from the screen down to the hands, it holds the **screens** (`src/app/screens.ts`: canvases shown together, opened without asking); a chip naming the answer shown by its title and where it stands ("The charter · 2/5"), with back and forward beside it, which opens upward to what was asked, what the model said it did, and every answer to go back to, each by its title; and the line to ask in. A person types there, and the answer is a screen: up to six canvases — an action opened with an input, and why it is there — on the areas `a`–`f`. The canvas an answer changed is outlined until the next one. The first screen is what the app opens on, and the first in the stack. A screen already in the stack is gone back to, not stacked again.
 
 - **The message loop is `src/server/compose/`**, the function `ask`:
   1. **The open screen is read** (`screen.ts`), area by area, the words too: each canvas's action, input and intent, and what its live data holds beyond its input — a list as its count and its first three rows, ids left out; what the person typed into a form.
@@ -50,8 +51,8 @@ There is no chat history: the screen open when a message arrives is the conversa
 - **A message that gets no screen leaves the screen as it is,** and the line says why: the model's reply did not fit, it could not be reached, or there is no key.
 - **Jev may take 2 s and the model 8 s.** A Jev pass given up leaves the model to answer alone.
 - **Every message is recorded as two runs,** through moss (`session.recordRun`): `mira.jev` and `mira.compose`, each with its provider and model, the tokens it spent (`reported: false` where signal estimated them), its steps and how long it took — for the composer, cortex's run meta — and whether it ended in an answer. The server logs a line for each (`src/server/runs/`).
-- **A saved form resets itself to how it was opened:** one the model filled in where it stood is empty again; one an answer opened shows what it was opened with.
-- **The actions are small, with one purpose each:** a table, a number, bars, a form. Each says what it shows (`description`) and declares its input as a JSON Schema written with zod, every field described; the model's answers are checked against that same schema (`z.fromJSONSchema`). A new kind of view is a new action, not a bigger one; the ones the model may place are listed in `catalog.ts`.
-- **The model never presses anything.** It can open a form filled in; only the person saves it. The form posts the write it names to vex (`/api/vex`), its body a Prism config (`form.prism.ts`): vex refuses a write the app does not ship, and the charter one the person may not make.
+- **The app starts as a guide to nisc** (`src/app/actions/guide/`): a card a topic, its text in the action's own data, no input, no reads. The model places the cards a question needs. To start your own app, delete the folder and its lines in the action catalog, `catalog.ts`, the charter and the screens.
+- **An action you add is small, with one purpose:** it says what it shows (`description`), and declares what the model may open it with as a JSON Schema written with zod, every field described; the model's answers are checked against that same schema (`z.fromJSONSchema`). A read or a write it names must be one the app ships, asked with the values it takes. The ones the model may place are listed in `catalog.ts`.
+- **The model never presses anything.** It can open a form filled in; only the person saves it.
 - **The keys are in `.env`:** `GROQ_API_KEY` (gpt-oss-120b; without it, a message is answered with a notice saying so), and `TYPESAFE_API_KEY` (Jev; without it there is no Jev pass).
 - **`src/dev/compose-check.ts` runs the loop offline**, with a scripted Jev and a scripted model. **`src/dev/live-ask.ts` asks the real models** the cases asked of mira, each from the screen it was asked on, and counts the right screens: what was asked for, every area it did not ask about holding the same canvas, nothing shown twice (`--runs=<n>`, `--why`, `--prompts` for everything the models were sent, `--no-jev`, or messages of your own). It costs a Jev pass and a chat call a message.

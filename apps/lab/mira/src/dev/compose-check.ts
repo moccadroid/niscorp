@@ -6,7 +6,6 @@ import type { StepRequest, StepResult } from '@niscorp/signal';
 import { z } from 'zod';
 import { SCREENS } from '../app/screens';
 import { AREAS } from '../app/shell/areas';
-import { greetingAdd, greetingsCount, greetingsInLanguage, greetingsList, greetingsPerLanguage } from '../app/vex/greetings.entries';
 import { boot } from '../server/boot';
 import type { Decide, Models } from '../server/compose';
 import { drawing } from '../server/document';
@@ -16,51 +15,30 @@ const recordOf = (value: unknown): Record<string, unknown> => (isRecord(value) ?
 
 // Offline, and the same every run: a decision model that finds nothing likely, and a chat model that answers each
 // message with the replies scripted for it, one per call.
-const COLUMNS = [
-  { key: 'text', label: 'Greeting' },
-  { key: 'language', label: 'Language' },
-];
-const table = { action: 'rows.table', input: { title: 'Greetings', read: greetingsList.fingerprint, params: {}, columns: COLUMNS }, intent: 'every greeting' };
-const count = { action: 'rows.stat', input: { title: 'Greetings', read: greetingsCount.fingerprint, params: {}, label: 'greetings' }, intent: 'how many greetings there are' };
-const bars = { action: 'rows.bars', input: { title: 'Greetings per language', read: greetingsPerLanguage.fingerprint, params: {} }, intent: 'greetings per language' };
-const german = { action: 'rows.table', input: { title: 'Greetings in German', read: greetingsInLanguage.fingerprint, params: { language: 'German' }, columns: COLUMNS }, intent: 'the greetings in German' };
-const form = (text: string, language: string) => ({
-  action: 'rows.form',
-  input: {
-    title: 'Add a greeting',
-    write: greetingAdd.fingerprint,
-    fields: [
-      { key: 'text', label: 'Greeting', value: text },
-      { key: 'language', label: 'Language', value: language },
-    ],
-  },
-  intent: 'a form to add a greeting',
-});
+const card = (action: string) => ({ action, input: {}, intent: action.replace('guide.', 'the guide on ') });
 const keep = (area: string, from = area) => ({ area, keep: from });
 const put = (area: string, canvas: object) => ({ area, ...canvas });
 const say = (area: string, title: string, text: string) => ({ area, say: { title, text } });
 const gridOf = (columns: number, ...areas: [string, number][]): unknown => ({ columns, areas: areas.map(([name, span]) => ({ name, span })) });
 
 const REPLIES: Record<string, Record<string, unknown>[]> = {
-  'Guten Tag is german': [{ response: 'Filled in the add form with Guten Tag, German; the rest stays.', title: 'German greeting form', areas: [put('e', form('Guten Tag', 'German'))] }],
-  'drop the bars': [{ areas: [{ area: 'c', drop: true }] }],
-  'Show me every greeting': [{ areas: [put('a', table)], arrangement: 'single' }],
-  'How many greetings are there?': [{ areas: [put('a', count)] }],
-  'Which greetings are in German?': [{ areas: [put('a', german)] }],
-  'and the count beside it': [{ areas: [keep('a'), put('b', count)], arrangement: 'pair' }],
-  'the count first': [{ areas: [keep('a', 'b'), keep('b', 'a')] }],
-  'Greetings in a language': [{ areas: [put('a', { ...german, input: { ...german.input, params: {} } }), { area: 'b', drop: true }] }, { areas: [put('a', german), { area: 'b', drop: true }] }],
-  'keep what is not there': [{ areas: [keep('a', 'f'), put('c', count)] }, { areas: [keep('a')] }],
-  'the count in German': [{ areas: [put('b', { ...count, input: { ...count.input, params: { language: 'German' } } })] }, { areas: [keep('a'), keep('b')] }],
-  'the count twice': [{ areas: [keep('a'), keep('b'), keep('c', 'b')] }, { areas: [keep('a'), keep('b')] }],
-  'Show me a pie chart': [{ areas: [put('a', { action: 'rows.pie', input: {}, intent: 'a pie' })] }, { areas: [put('a', { action: 'rows.pie', input: {}, intent: 'a pie' })] }],
-  'The count and the languages, with the table wide beneath': [{ areas: [put('a', count), put('b', bars), put('c', table)], grid: gridOf(2, ['a', 1], ['b', 1], ['c', 2]) }],
-  'The count and the table, in a grid of my own': [{ areas: [put('a', count), put('b', table), { area: 'c', drop: true }], grid: gridOf(2, ['a', 1], ['a', 1]) }, { areas: [put('a', count), put('b', table), { area: 'c', drop: true }] }],
-  'bon jour is french': [{ areas: [keep('a'), put('b', form('bon jour', 'French'))] }],
-  'Add a greeting that says Hej': [{ areas: [put('a', form('Hej', 'Swedish'))], arrangement: 'single' }],
-  'What can you do?': [{ areas: [say('a', 'What this app shows', 'Greetings: every one, how many, and per language. Ask, or add one.')], arrangement: 'single' }],
-  'the count, and say what it is': [{ areas: [say('a', 'Greetings', 'How many greetings the app keeps.'), put('b', count)], arrangement: 'pair' }],
-  'Show the overview': [{ screen: 'overview' }],
+  'What is the charter?': [{ response: 'Put the charter where the nisc card was; the rest stays.', title: 'The charter', areas: [put('b', card('guide.charter'))] }],
+  'drop how to make it yours': [{ areas: [{ area: 'e', drop: true }] }],
+  'Only the charter': [{ areas: [put('a', card('guide.charter'))], arrangement: 'single' }],
+  'What is an action?': [{ areas: [put('a', card('guide.actions'))] }],
+  'and the charter beside it': [{ areas: [keep('a'), put('b', card('guide.charter'))], arrangement: 'pair' }],
+  'the charter first': [{ areas: [keep('a', 'b'), keep('b', 'a')] }],
+  'keep what is not there': [{ areas: [keep('a', 'f'), put('c', card('guide.shell'))] }, { areas: [keep('a')] }],
+  'actions twice': [{ areas: [put('a', card('guide.actions')), keep('b')] }, { areas: [keep('a'), keep('b')] }],
+  'Show me the weather card': [{ areas: [put('a', card('guide.weather'))] }],
+  'Three cards, the last wide beneath': [{ areas: [put('a', card('guide.nisc')), put('b', card('guide.shell')), put('c', card('guide.data'))], grid: gridOf(2, ['a', 1], ['b', 1], ['c', 2]) }],
+  'Two cards, in a grid of my own': [
+    { areas: [put('a', card('guide.nisc')), put('b', card('guide.data')), { area: 'c', drop: true }], grid: gridOf(2, ['a', 1], ['a', 1]) },
+    { areas: [put('a', card('guide.nisc')), put('b', card('guide.data')), { area: 'c', drop: true }] },
+  ],
+  'What can you do?': [{ areas: [say('a', 'What this app does', 'It explains nisc: ask about it, and the answer is a screen of cards.')], arrangement: 'single' }],
+  'the shell, and say what it is': [{ areas: [say('a', 'The shell', 'Where the app runs.'), put('b', card('guide.shell'))], arrangement: 'pair' }],
+  'Show the start screen': [{ screen: 'start' }],
   'What is the weather in Vienna?': [{ response: 'Nothing in this app shows the weather.', areas: [] }],
   'Name it at length': [{ title: 'A title that runs on well past the forty characters a title may have', areas: [] }],
 };
@@ -130,8 +108,7 @@ const until = async (condition: () => boolean, ms = 5000): Promise<boolean> => {
 const settle = (): Promise<void> => new Promise((done) => setTimeout(done, 150));
 
 const actionsOf = (canvases: readonly { action: string }[]): string => canvases.map((canvas) => canvas.action).join(' ');
-const OVERVIEW = actionsOf(SCREENS[0]?.canvases ?? []);
-const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+const START = actionsOf(SCREENS[0]?.canvases ?? []);
 
 const runs: RunRecord[] = [];
 const models: Models = { jev: { provider: 'scripted', model: 'jev', decide }, chat: { provider: 'scripted', model: 'chat', llm: chat, timeoutMs: 5000 }, missing: [] };
@@ -142,7 +119,7 @@ try {
 
   const template = '<!doctype html><html><head></head><body><div id="root"></div></body></html>';
   const page = await renderDocument({ ...drawing, server, template, request: { path: '/', cookie: null } });
-  check('the page arrives drawn: the first screen, and the dock with the screens and the line to ask in', page.drawn && ['k-frame', 'k-dock', 'k-prompt', 'Overview', 'Greetings per language'].every((part) => page.html.includes(part)), page.html.slice(0, 300));
+  check('the page arrives drawn: the first screen, and the dock with the screens and the line to ask in', page.drawn && ['k-frame', 'k-dock', 'k-prompt', 'Welcome to nisc', 'What nisc is', 'Under the hood'].every((part) => page.html.includes(part)), page.html.slice(0, 300));
 
   const session = await shells.session(null, null);
   const shell = session.shell;
@@ -218,71 +195,56 @@ try {
     const value = on(canvas).data[key];
     return Array.isArray(value) ? value : [];
   };
-  const value = (canvas: string): unknown => recordOf(on(canvas).data['result'])['value'];
-  const fields = (canvas: string): { key: string; value: string }[] => rows(canvas, 'fields').map((field) => ({ key: String(recordOf(field)['key']), value: String(recordOf(field)['value'] ?? '') }));
+  const without = (area: string, of: string): string => of.replace(new RegExp(`${area}:\\S*`), '');
 
-  check('the app opens on the first screen, every one of its canvases an area of its own, and the stack starts there', areas() === OVERVIEW && on('dock').action === 'ask.dock' && current().position === 1 && total() === 1, areas());
+  check('the app opens on the first screen, every one of its canvases an area of its own, and the stack starts there', areas() === START && on('dock').action === 'ask.dock' && current().position === 1 && total() === 1, areas());
   check('the frame’s region holds the first screen’s arrangement', current().arrangement === SCREENS[0]?.arrangement && grid() === '2: a×2 b c d e', `${String(current().arrangement)} — ${grid()}`);
-  check('the first screen loads what it shows', await until(() => value('b') === 5), JSON.stringify(on('b').data));
+  check('a guide card holds its own text', on('b').data['title'] === 'What nisc is' && rows('b', 'paragraphs').length === 2, JSON.stringify(on('b').data));
 
-  const overviewIds = ids();
+  const startIds = ids();
   runs.length = 0;
-  likely = ['rows.form'];
-  await ask('Guten Tag is german');
+  likely = ['guide.charter'];
+  await ask('What is the charter?');
   likely = [];
   const jev = asked[asked.length - 1];
   check(
     'each message is recorded as two runs: Jev\'s pass and the model\'s, each with its model, what it spent and how it ended',
-    runs.map((run) => `${run.agentId} ${run.model} ${run.outcome} ${run.steps} ${run.totalTokens} ${run.label}`).join(' | ') === 'mira.jev jev ok 1 110 Guten Tag is german | mira.compose chat ok 1 110 Guten Tag is german',
+    runs.map((run) => `${run.agentId} ${run.model} ${run.outcome} ${run.steps} ${run.totalTokens} ${run.label}`).join(' | ') === 'mira.jev jev ok 1 110 What is the charter? | mira.compose chat ok 1 110 What is the charter?',
     JSON.stringify(runs),
   );
-  check('Jev is asked about the message with the open screen: an intent for each canvas, the words too', jev?.state['message'] === 'Guten Tag is german' && Object.keys(recordOf(jev?.state['open_screen'])).join(',') === 'a,b,c,d,e', JSON.stringify(jev?.state['open_screen']));
+  check('Jev is asked about the message with the open screen: an intent for each canvas, the words too', jev?.state['message'] === 'What is the charter?' && Object.keys(recordOf(jev?.state['open_screen'])).join(',') === 'a,b,c,d,e', JSON.stringify(jev?.state['open_screen']));
   check(
     'the model is given the open screen by area — where each area is, what each holds, the words too — and what Jev thinks',
-    lastPrompt().includes('arrangement hero: a (the whole width); b c; d e') && lastPrompt().includes('- a: answer.text') && lastPrompt().includes('"count":5') && lastPrompt().includes('A FAST PICKER THINKS (a hint; how likely each belongs in the answer): actions rows.form 0.90; reads none; writes none; screens none'),
+    lastPrompt().includes('arrangement hero: a (the whole width); b c; d e') && lastPrompt().includes('- a: answer.text') && lastPrompt().includes('- b: guide.nisc') && lastPrompt().includes('A FAST PICKER THINKS (a hint; how likely each belongs in the answer): actions guide.charter 0.90; reads none; writes none; screens none'),
     lastPrompt().slice(0, 600),
   );
-  check('what the model is given of the rows leaves their ids out', !UUID.test(lastPrompt()), lastPrompt().match(UUID)?.[0] ?? '');
   check(
-    'from the overview, "Guten Tag is german" fills in the form where it stands, and nothing else moves',
-    ids() === overviewIds && current().arrangement === 'hero' && grid() === '2: a×2 b c d e' && fields('e')[0]?.value === 'Guten Tag' && fields('e')[1]?.value === 'German',
-    `${ids()} vs ${overviewIds} — ${grid()} — ${JSON.stringify(fields('e'))}`,
+    'from the first screen, "What is the charter?" puts the charter where the model says, and nothing else moves',
+    without('b', ids()) === without('b', startIds) && on('b').action === 'guide.charter' && current().arrangement === 'hero' && grid() === '2: a×2 b c d e',
+    `${ids()} vs ${startIds} — ${grid()}`,
   );
-  check('the area the answer changed is outlined, and only that one', marked() === 'e', marked());
-  check('the chip in the dock names the answer shown by its title, and where it stands among the answers', drawn().includes('"German greeting form · 2/2"'), drawn().match(/"label":"[^"]*· \d+\/\d+"/)?.[0] ?? '');
+  check('the area the answer changed is outlined, and only that one', marked() === 'b', marked());
+  check('the chip in the dock names the answer shown by its title, and where it stands among the answers', drawn().includes('"The charter · 2/2"'), drawn().match(/"label":"[^"]*· \d+\/\d+"/)?.[0] ?? '');
   session.dispatch('dock', { type: 'ui:click', ref: 'stack' });
   await settle();
-  check('opening the chip shows what was asked, what the model said it did, and the answers to go back to', current().response === 'Filled in the add form with Guten Tag, German; the rest stays.' && drawn().includes('the rest stays') && drawn().includes('1. Overview') && drawn().includes('2. German greeting form') && drawn().includes('Guten Tag is german'), String(current().response));
+  check('opening the chip shows what was asked, what the model said it did, and the answers to go back to', current().response === 'Put the charter where the nisc card was; the rest stays.' && drawn().includes('the rest stays') && drawn().includes('1. Start') && drawn().includes('2. The charter') && drawn().includes('What is the charter?'), String(current().response));
   session.dispatch('dock', { type: 'ui:click', ref: 'stack' });
-  const filledIds = ids();
-  await ask('drop the bars');
+  const charterIds = ids();
+  await ask('drop how to make it yours');
   check('when Jev finds nothing likely, the model is given no hint', !lastPrompt().includes('FAST PICKER'), lastPrompt().slice(-300));
   check('an answer that only empties an area outlines nothing', marked() === '', marked());
-  check('an area the model drops is emptied, and every other stays as it was', on('c').id === '' && ids().replace(/c:\S*/, '') === filledIds.replace(/c:\S*/, '') && current().arrangement === 'hero', `${ids()} vs ${filledIds}`);
+  check('an area the model drops is emptied, and every other stays as it was', on('e').id === '' && without('e', ids()) === without('e', charterIds) && current().arrangement === 'hero', `${ids()} vs ${charterIds}`);
 
-  await ask('Show me every greeting');
-  check('"Show me every greeting" is the table alone, laid out as one thing', areas() === 'rows.table' && grid() === '1: a', `${areas()} — ${grid()}`);
-  check('the table reads the five hello-worlds', await until(() => rows('a', 'rows').length === 5), JSON.stringify(on('a').data['rows']));
-
-  await ask('How many greetings are there?');
-  check('an answer that names no arrangement keeps the one on screen', on('a').action === 'rows.stat' && current().arrangement === 'single' && (await until(() => value('a') === 5)), `${areas()} — ${String(current().arrangement)}`);
-
-  await ask('Which greetings are in German?');
-  check('a read asked with a value reads only what the value names', await until(() => on('a').action === 'rows.table' && rows('a', 'rows').length === 1), JSON.stringify(on('a').data['params']));
-  const germanTable = on('a').id;
-  await ask('and the count beside it');
-  check('a canvas kept stays the same canvas, in its area; what is new goes where the model puts it', on('a').id === germanTable && areas() === 'rows.table rows.stat' && grid() === '2: a b', `${areas()} — ${grid()}`);
-  await ask('the count first');
+  await ask('Only the charter');
+  check('"Only the charter" is that card alone, laid out as one thing', areas() === 'guide.charter' && grid() === '1: a', `${areas()} — ${grid()}`);
+  await ask('What is an action?');
+  check('an answer that names no arrangement keeps the one on screen', on('a').action === 'guide.actions' && current().arrangement === 'single', `${areas()} — ${String(current().arrangement)}`);
+  const actionsCard = on('a').id;
+  await ask('and the charter beside it');
+  check('a canvas kept stays the same canvas, in its area; what is new goes where the model puts it', on('a').id === actionsCard && areas() === 'guide.actions guide.charter' && grid() === '2: a b', `${areas()} — ${grid()}`);
+  await ask('the charter first');
   check('the answer streams in: an area is placed while the rest of the reply is still being written', streamed > 0, String(streamed));
-  check('a canvas the model keeps from another area moves there', areas() === 'rows.stat rows.table', areas());
-
-  prompts = [];
-  await ask('Greetings in a language');
-  check(
-    'an answer that leaves out a value its read is asked with is sent back once, saying so, and the second answer stands',
-    prompts.length === 2 && (prompts[1] ?? '').includes('params.language, and it is missing') && on('a').action === 'rows.table' && rows('a', 'rows').length === 1,
-    prompts[1]?.slice(-300) ?? '',
-  );
+  check('a canvas the model keeps from another area moves there', areas() === 'guide.charter guide.actions', areas());
 
   prompts = [];
   await ask('keep what is not there');
@@ -291,73 +253,44 @@ try {
     (prompts[1] ?? '').includes('there is nothing in area f to keep') && (prompts[1] ?? '').includes('has no area c'),
     prompts[1]?.slice(-400) ?? '',
   );
-
-  await ask('and the count beside it');
   prompts = [];
-  await ask('the count in German');
-  check('a value a read does not take is sent back saying so', (prompts[1] ?? '').includes('takes no params.language'), prompts[1]?.slice(-300) ?? '');
-  prompts = [];
-  await ask('the count twice');
-  check('the same canvas kept in two areas is sent back saying so', (prompts[1] ?? '').includes('show the same thing; show it once'), prompts[1]?.slice(-300) ?? '');
+  await ask('actions twice');
+  check('the same card in two areas is sent back saying so', (prompts[1] ?? '').includes('show the same thing; show it once'), prompts[1]?.slice(-300) ?? '');
 
-  const beforePie = ids();
-  const stackBeforePie = total();
+  const beforeWeatherCard = ids();
+  const stackBeforeWeatherCard = total();
   prompts = [];
   runs.length = 0;
-  await ask('Show me a pie chart');
+  await ask('Show me the weather card');
   check(
     'an answer refused three times leaves the screen as it was, and the line says so',
-    prompts.length === 3 && ids() === beforePie && total() === stackBeforePie && said().includes('did not fit'),
+    prompts.length === 3 && ids() === beforeWeatherCard && total() === stackBeforeWeatherCard && said().includes('did not fit'),
     `${ids()} — ${said()}`,
   );
   check('a model run refused three times is recorded as failed, with its three steps', runs[1]?.outcome === 'failed' && runs[1]?.steps === 3 && runs[1]?.totalTokens === 330, JSON.stringify(runs[1]));
 
-  await ask('The count and the languages, with the table wide beneath');
-  check('a layout the model wrote is the one the answer is laid out in', current().arrangement === 'written' && grid() === '2: a b c×2' && areas() === 'rows.stat rows.bars rows.table', `${String(current().arrangement)} — ${grid()} — ${areas()}`);
+  await ask('Three cards, the last wide beneath');
+  check('a layout the model wrote is the one the answer is laid out in', current().arrangement === 'written' && grid() === '2: a b c×2' && areas() === 'guide.nisc guide.shell guide.data', `${String(current().arrangement)} — ${grid()} — ${areas()}`);
 
   prompts = [];
-  await ask('The count and the table, in a grid of my own');
-  check('a grid that names an area twice is sent back saying so, and the arrangement on screen stays', (prompts[1] ?? '').includes('the grid names an area twice') && current().arrangement === 'written' && areas() === 'rows.stat rows.table', `${String(current().arrangement)} — ${areas()}`);
+  await ask('Two cards, in a grid of my own');
+  check('a grid that names an area twice is sent back saying so, and the arrangement on screen stays', (prompts[1] ?? '').includes('the grid names an area twice') && current().arrangement === 'written' && areas() === 'guide.nisc guide.data', `${String(current().arrangement)} — ${areas()}`);
 
-  await openMenu('greetings');
-  const greetingsIds = ids();
-  await ask('bon jour is french');
-  check('with the greetings open, "bon jour is french" fills in the form where it stands, and nothing else moves', ids() === greetingsIds && fields('b')[0]?.value === 'bon jour' && fields('b')[1]?.value === 'French', `${ids()} vs ${greetingsIds} — ${JSON.stringify(fields('b'))}`);
-  const tableThere = on('a').id;
-  const formThere = on('b').id;
-  session.dispatch('b', { type: 'ui:click', ref: 'save' });
-  check(
-    'saved, a form filled in where it stood is empty again, in its place, and what is beside it reads the new row',
-    await until(() => areas() === 'rows.table rows.form' && on('a').id === tableThere && on('b').id === formThere && fields('b')[0]?.value === '' && rows('a', 'rows').length === 6),
-    `${areas()}, ${JSON.stringify(fields('b'))}, ${rows('a', 'rows').length} rows`,
-  );
-
-  await ask('Add a greeting that says Hej');
-  const withForm = total();
-  session.dispatch('a', { type: 'ui:click', ref: 'save' });
-  check(
-    'saved, a form an answer opened shows what it was opened with again, and the answer stays where it is in the stack',
-    await until(() => areas() === 'rows.form' && on('a').data['saved'] === true && fields('a')[0]?.value === 'Hej' && total() === withForm),
-    `${areas()}, ${JSON.stringify(fields('a'))}, ${String(current().position)} of ${total()}`,
-  );
-  await openMenu(SCREENS[0]?.id ?? '');
-  check('the first screen counts both: 7', await until(() => value('b') === 7), JSON.stringify(on('b').data));
-
-  const languages = SCREENS.find((screen) => screen.id === 'languages');
-  await openMenu('languages');
-  check('a screen from the menu shows its canvases in its arrangement', areas() === actionsOf(languages?.canvases ?? []) && current().arrangement === languages?.arrangement, `${areas()} — ${grid()}`);
+  const inside = SCREENS.find((screen) => screen.id === 'inside');
+  await openMenu('inside');
+  check('a screen from the dock shows its canvases in its arrangement', areas() === actionsOf(inside?.canvases ?? []) && current().arrangement === inside?.arrangement, `${areas()} — ${grid()}`);
   const stacked = total();
-  await openMenu('overview');
+  await openMenu('start');
   check('a screen already in the stack is gone back to, not stacked again', current().position === 1 && total() === stacked, `${String(current().position)} of ${total()}`);
 
   await ask('What can you do?');
-  check('words the model says are placed where it says, with no things to ask under them', on('a').action === 'answer.text' && on('a').data['title'] === 'What this app shows' && rows('a', 'examples').length === 0 && areas() === 'answer.text', areas());
+  check('words the model says are placed where it says, with no things to ask under them', on('a').action === 'answer.text' && on('a').data['title'] === 'What this app does' && rows('a', 'examples').length === 0 && areas() === 'answer.text', areas());
 
-  await ask('the count, and say what it is');
-  check('words and canvases together, each in its area', areas() === 'answer.text rows.stat' && on('a').data['title'] === 'Greetings', areas());
+  await ask('the shell, and say what it is');
+  check('words and canvases together, each in its area', areas() === 'answer.text guide.shell' && on('a').data['title'] === 'The shell', areas());
 
-  await ask('Show the overview');
-  check('the model can answer with one of the app’s screens: gone back to where it is in the stack', current().screen === 'overview' && current().position === 1, `${String(current().position)} of ${total()}`);
+  await ask('Show the start screen');
+  check('the model can answer with one of the app’s screens: gone back to where it is in the stack', current().screen === 'start' && current().position === 1, `${String(current().position)} of ${total()}`);
 
   const beforeWeather = ids();
   const stackBeforeWeather = total();
@@ -367,7 +300,7 @@ try {
 
   unreachable = true;
   runs.length = 0;
-  await ask('Show me every greeting');
+  await ask('Only the charter');
   check('a model that cannot be reached leaves the screen as it was, and the line says so', ids() === beforeWeather && said().includes('could not be reached'), said());
   check('and its run is recorded as failed: one step, nothing spent', runs[1]?.agentId === 'mira.compose' && runs[1]?.outcome === 'failed' && runs[1]?.steps === 1 && runs[1]?.totalTokens === 0, JSON.stringify(runs[1]));
   unreachable = false;
@@ -378,19 +311,19 @@ try {
   check('and its run is recorded as failed, with its three steps', runs[1]?.outcome === 'failed' && runs[1]?.steps === 3, JSON.stringify(runs[1]));
 
   session.dispatch('dock', { type: 'ui:click', ref: 'forward' });
-  check('forward from the first screen is the answer after it, as it was', await until(() => current().position === 2 && current().question === 'Guten Tag is german' && fields('e')[0]?.value === 'Guten Tag'), `position ${String(current().position)}, ${areas()}`);
+  check('forward from the first screen is the answer after it, as it was', await until(() => current().position === 2 && current().question === 'What is the charter?' && on('b').action === 'guide.charter'), `position ${String(current().position)}, ${areas()}`);
   session.dispatch('dock', { type: 'ui:click', ref: 'back' });
-  check('back is the first screen again', await until(() => current().position === 1 && current().screen === 'overview'), `position ${String(current().position)}`);
+  check('back is the first screen again', await until(() => current().position === 1 && current().screen === 'start'), `position ${String(current().position)}`);
 
   session.dispatch('dock', { type: 'ui:click', ref: 'stack' });
   const stack = current().stack ?? [];
   check(
     'the chip opens the stack: every answer, by its title or the screen it is',
-    on('dock').data['listing'] === true && stack.length === total() && stack[0]?.label === SCREENS[0]?.label && stack[1]?.label === 'German greeting form',
+    on('dock').data['listing'] === true && stack.length === total() && stack[0]?.label === SCREENS[0]?.label && stack[1]?.label === 'The charter',
     JSON.stringify(stack.slice(0, 3)),
   );
   session.dispatch('dock', { type: 'ui:click', ref: 'entry', payload: 4 });
-  check('an answer picked from the stack is shown as it was, and the list closes', await until(() => current().position === 4 && areas() === 'rows.table' && on('dock').data['listing'] === false), `${String(current().position)}, ${areas()}`);
+  check('an answer picked from the stack is shown as it was, and the list closes', await until(() => current().position === 4 && areas() === 'guide.charter' && on('dock').data['listing'] === false), `${String(current().position)}, ${areas()}`);
 } finally {
   server.close();
 }
@@ -415,10 +348,10 @@ try {
   if (shells === undefined) throw new Error('the manifest has no shell');
   const session = await shells.session(null, null);
   session.shell.flattenRenderTree(session.shell.getShellRenderTree());
-  session.dispatch('dock', { type: 'ui:model', ref: 'text', payload: 'Show me every greeting' });
+  session.dispatch('dock', { type: 'ui:model', ref: 'text', payload: 'Only the charter' });
   session.dispatch('dock', { type: 'ui:key', ref: 'text', key: 'Enter' });
   const first = (): string => AREAS.map((area) => session.shell.getState().canvases[area]?.active?.definitionId ?? '').filter((action) => action !== '').join(' ');
-  check('when Jev cannot answer, the model answers alone', await until(() => first() === 'rows.table'), first());
+  check('when Jev cannot answer, the model answers alone', await until(() => first() === 'guide.charter'), first());
 } finally {
   jevless.close();
 }
@@ -429,7 +362,7 @@ try {
   if (shells === undefined) throw new Error('the manifest has no shell');
   const session = await shells.session(null, null);
   session.shell.flattenRenderTree(session.shell.getShellRenderTree());
-  session.dispatch('dock', { type: 'ui:model', ref: 'text', payload: 'Show me every greeting' });
+  session.dispatch('dock', { type: 'ui:model', ref: 'text', payload: 'Only the charter' });
   session.dispatch('dock', { type: 'ui:key', ref: 'text', key: 'Enter' });
   const line = (): Record<string, unknown> => {
     const active = session.shell.getState().canvases['dock']?.active;
