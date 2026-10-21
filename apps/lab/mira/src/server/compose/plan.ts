@@ -30,7 +30,8 @@ export type Said = { title: string; text: string };
 // A layout the model wrote, and the areas it holds.
 export type Written = { layout: LayoutNode; areas: AreaId[] };
 
-export const textOf = (said: Said, examples: readonly string[]): Canvas => ({ action: 'answer.text', input: { title: said.title, text: said.text, examples: [...examples] }, intent: `the words "${said.title}"` });
+// Words the model says carry no things to ask: those are the app's own card's.
+export const textOf = (said: Said): Canvas => ({ action: 'answer.text', input: { title: said.title, text: said.text, examples: [] }, intent: `the words "${said.title}"` });
 
 // A screen's canvases, an area each, in order.
 export const areasOf = (canvases: readonly Canvas[]): Placed => Object.fromEntries(canvases.slice(0, AREAS.length).map((canvas, at) => [AREAS[at], canvas]));
@@ -82,10 +83,10 @@ const laidOut = (asked: string | Written | undefined, count: number): { arrangem
 export const areasOfArrangement = (arrangement: string | Written, arrangements: readonly Arrangement[] = ARRANGEMENTS): AreaId[] =>
   typeof arrangement === 'object' ? arrangement.areas : AREAS.slice(0, arrangements.find((candidate) => candidate.id === arrangement)?.slots ?? 0);
 
-// A plan for a message is named by it, and one for a screen by the screen's label.
-export const planOf = (question: string, placed: Placed, how: { screen?: { id: string; label: string }; arrangement?: string | Written } = {}): Unnumbered => ({
+// A plan is named by the title the model gave its answer, a screen's by its label, else by what was asked.
+export const planOf = (question: string, placed: Placed, how: { screen?: { id: string; label: string }; arrangement?: string | Written; label?: string } = {}): Unnumbered => ({
   question,
-  label: how.screen?.label ?? question,
+  label: how.screen?.label ?? how.label ?? question,
   ...(how.screen !== undefined ? { screen: how.screen.id } : {}),
   canvases: Object.fromEntries(AREAS.flatMap((area) => (placed[area] !== undefined ? [[area, [placed[area]]]] : []))),
   ...laidOut(how.arrangement, used(placed)),

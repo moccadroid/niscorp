@@ -3,7 +3,7 @@ import type { FunctionDefinition, FunctionSession } from '@niscorp/moss';
 import { unverifiedShell } from '@niscorp/moss/unverified';
 import { ARRANGEMENTS } from '../../app/arrangements';
 import type { Arrangement } from '../../app/arrangements';
-import { EXAMPLES, SCREENS } from '../../app/screens';
+import { SCREENS } from '../../app/screens';
 import type { Screen } from '../../app/screens';
 import { AREAS } from '../../app/shell/areas';
 import { CATALOG } from './catalog';
@@ -108,13 +108,13 @@ export const composer =
       const placed: Placed = { ...answer.placed };
       for (const area of AREAS) {
         const said = answer.said[area];
-        if (said !== undefined) placed[area] = textOf(said, EXAMPLES);
+        if (said !== undefined) placed[area] = textOf(said);
       }
       if (Object.keys(placed).length === 0) throw new Error('Nothing here answers that yet.');
-      const plan = { ...planOf(message, placed, { arrangement: answer.arrangement ?? current }), reasoning: answer.reasoning };
+      const plan = { ...planOf(message, placed, { arrangement: answer.arrangement ?? current, label: answer.title }), reasoning: answer.reasoning };
       // An answer that leaves the screen as it is adds nothing to the stack; what was asked, and why nothing changed, are
       // shown in the bar all the same.
-      if (JSON.stringify([plan.canvases, plan.layout]) === JSON.stringify([before.canvases, before.layout])) return show({ ...before, question: message, label: message, reasoning: answer.reasoning });
+      if (JSON.stringify([plan.canvases, plan.layout]) === JSON.stringify([before.canvases, before.layout])) return show({ ...before, question: message, label: answer.title, reasoning: answer.reasoning });
       return show(history.add(plan), changedAreas(plan, before));
     };
 
@@ -130,7 +130,7 @@ export const composer =
       const now = history.current();
       if (now.screen !== undefined) return now;
       const kept = Object.fromEntries(Object.entries(placedOf(now)).filter(([, canvas]) => canvas.input['write'] !== fingerprint));
-      if (Object.keys(kept).length > 0) return show(history.replace(history.showing(), planOf(now.question, kept, { arrangement: arrangementOfPlan(now) })));
+      if (Object.keys(kept).length > 0) return show(history.replace(history.showing(), planOf(now.question, kept, { arrangement: arrangementOfPlan(now), label: now.label })));
       history.drop(history.showing());
       return home === undefined ? history.current() : openScreenOf(home);
     };

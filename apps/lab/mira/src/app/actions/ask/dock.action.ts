@@ -23,7 +23,7 @@ export const dockAction: ActionDefinition = {
   id: 'ask.dock',
   title: 'Dock',
   description:
-    'Everything a person does, at the bottom: the screens; the chip naming the answer shown, which opens what was asked, what the model said it did, and every answer to go back to; back and forward; and the line to ask in.',
+    'Everything a person does, at the bottom: the screens; the chip naming the answer shown and where it stands, which opens what was asked, what the model said it did, and every answer to go back to; back and forward; and the line to ask in.',
   data: {
     screens: SCREENS.map(({ id, label }) => ({ id, label })),
     current: { question: '', reasoning: '', label: first?.label ?? '', screen: first?.id ?? '', arrangement: first?.arrangement ?? '', position: 1, total: 1, stack: [{ position: 1, label: first?.label ?? '' }], canvases: {} },

@@ -16,7 +16,7 @@ import { modelsFromEnv } from '../server/models';
 //   messages    messages of your own instead, unscored; --screen=<id> opens that screen from the menu
 
 type Shown = { area: string; id: string; action: string; read: string; params: Record<string, unknown>; fields: string[]; title: string };
-type Screen = { canvases: Shown[]; arrangement: string; screen: string; said: string; reasoning: string };
+type Screen = { canvases: Shown[]; arrangement: string; screen: string; said: string; reasoning: string; title: string };
 type Step = { ask: string; want?: (now: Screen, before: Screen) => string | undefined } | { open: string };
 
 const lower = (value: unknown): string => String(value ?? '').toLowerCase();
@@ -162,6 +162,7 @@ for (let run = 1; run <= runs; run += 1) {
     screen: String(current()['screen'] ?? ''),
     said: String(dataOf('dock')['error'] ?? ''),
     reasoning: String(current()['reasoning'] ?? ''),
+    title: String(current()['label'] ?? ''),
   });
   const print = (screen: Screen): string => screen.canvases.map((shown) => `  ${shown.area}: ${shown.action} — ${[shown.title, shown.read, JSON.stringify(shown.params) !== '{}' ? JSON.stringify(shown.params) : '', shown.fields.length > 0 ? JSON.stringify(shown.fields) : ''].filter((part) => part !== '').join(' · ')}`).join('\n');
 
@@ -196,7 +197,7 @@ for (let run = 1; run <= runs; run += 1) {
         else misses.set(step.ask, (misses.get(step.ask) ?? 0) + 1);
       }
       const verdict = step.want === undefined ? '' : miss === undefined ? ' ✓' : ` ✗ ${miss}`;
-      console.log(`» "${step.ask}" — ${Math.round(took)} ms · ${screen.arrangement}${verdict}${screen.said !== '' ? ` · the line says: ${screen.said}` : ''}\n  reasoning: ${screen.reasoning}\n${print(screen)}`);
+      console.log(`» "${step.ask}" — ${Math.round(took)} ms · ${screen.arrangement}${verdict}${screen.said !== '' ? ` · the line says: ${screen.said}` : ''}\n  title: ${screen.title} · reasoning: ${screen.reasoning}\n${print(screen)}`);
       if (why) console.log(said.join('\n'));
       said.length = 0;
     }

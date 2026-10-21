@@ -5,7 +5,7 @@ import { askExample, examplesLayout } from './examples.layout';
 export const textAction: ActionDefinition = {
   id: 'answer.text',
   title: 'Text',
-  description: 'A few words: a title, at most two short sentences, and things to ask.',
+  description: 'A few words: a title, at most two short sentences, and on the app’s own card, things to ask.',
   data: { title: '', text: '', examples: [] },
   input: z.toJSONSchema(
     z.object({

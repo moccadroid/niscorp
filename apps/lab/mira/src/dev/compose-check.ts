@@ -1,6 +1,6 @@
 import { renderDocument } from '@niscorp/moss';
 import type { z } from 'zod';
-import { EXAMPLES, SCREENS } from '../app/screens';
+import { SCREENS } from '../app/screens';
 import { AREAS } from '../app/shell/areas';
 import { greetingAdd, greetingsCount, greetingsInLanguage, greetingsList, greetingsPerLanguage } from '../app/vex/greetings.entries';
 import { boot } from '../server/boot';
@@ -39,7 +39,7 @@ const written = (areas: readonly [string, number][], columns: number): unknown =
 });
 
 const REPLIES: Record<string, unknown[]> = {
-  'Guten Tag is german': [{ reasoning: 'Filled in the add form with Guten Tag, German; the rest stays.', areas: [put('e', form('Guten Tag', 'German'))] }],
+  'Guten Tag is german': [{ reasoning: 'Filled in the add form with Guten Tag, German; the rest stays.', title: 'German greeting form', areas: [put('e', form('Guten Tag', 'German'))] }],
   'drop the bars': [{ areas: [{ area: 'c', drop: true }] }],
   'Show me every greeting': [{ areas: [put('a', table)], arrangement: 'single' }],
   'How many greetings are there?': [{ areas: [put('a', count)] }],
@@ -77,7 +77,7 @@ const fill: Fill = async <T>(_system: string, user: string, schema: z.ZodType<T>
   const turn = turns.get(message) ?? 0;
   turns.set(message, turn + 1);
   const replies = REPLIES[message] ?? [{ areas: [] }];
-  return schema.parse({ reasoning: 'Scripted.', ...(replies[Math.min(turn, replies.length - 1)] as object) });
+  return schema.parse({ reasoning: 'Scripted.', title: 'Scripted', ...(replies[Math.min(turn, replies.length - 1)] as object) });
 };
 
 let failures = 0;
@@ -205,10 +205,10 @@ try {
     `${ids()} vs ${overviewIds} — ${grid()} — ${JSON.stringify(fields('e'))}`,
   );
   check('the area the answer changed is outlined, and only that one', marked() === 'e', marked());
-  check('the chip in the dock names the answer shown, and where it stands among the answers', drawn().includes('Guten Tag is german · 2/2'), drawn().match(/"label":"[^"]*· \d+\/\d+"/)?.[0] ?? '');
+  check('the chip in the dock names the answer shown by its title, and where it stands among the answers', drawn().includes('"German greeting form · 2/2"'), drawn().match(/"label":"[^"]*· \d+\/\d+"/)?.[0] ?? '');
   session.dispatch('dock', { type: 'ui:click', ref: 'stack' });
   await settle();
-  check('opening the chip shows what was asked, what the model said it did, and the answers to go back to', current().reasoning === 'Filled in the add form with Guten Tag, German; the rest stays.' && drawn().includes('the rest stays') && drawn().includes('1. Overview') && drawn().includes('2. Guten Tag is german'), String(current().reasoning));
+  check('opening the chip shows what was asked, what the model said it did, and the answers to go back to', current().reasoning === 'Filled in the add form with Guten Tag, German; the rest stays.' && drawn().includes('the rest stays') && drawn().includes('1. Overview') && drawn().includes('2. German greeting form') && drawn().includes('Guten Tag is german'), String(current().reasoning));
   session.dispatch('dock', { type: 'ui:click', ref: 'stack' });
   const filledIds = ids();
   await ask('drop the bars');
@@ -296,7 +296,7 @@ try {
   check('a screen already in the stack is gone back to, not stacked again', current().position === 1 && total() === stacked, `${String(current().position)} of ${total()}`);
 
   await ask('What can you do?');
-  check('words the model says are placed where it says, with things to ask', on('a').action === 'answer.text' && on('a').data['title'] === 'What this app shows' && rows('a', 'examples').length === EXAMPLES.length && areas() === 'answer.text', areas());
+  check('words the model says are placed where it says, with no things to ask under them', on('a').action === 'answer.text' && on('a').data['title'] === 'What this app shows' && rows('a', 'examples').length === 0 && areas() === 'answer.text', areas());
 
   await ask('the count, and say what it is');
   check('words and canvases together, each in its area', areas() === 'answer.text rows.stat' && on('a').data['title'] === 'Greetings', areas());
@@ -323,8 +323,8 @@ try {
   session.dispatch('dock', { type: 'ui:click', ref: 'stack' });
   const stack = current().stack ?? [];
   check(
-    'the counter opens the stack: every answer, by what was asked or the screen it is',
-    on('dock').data['listing'] === true && stack.length === total() && stack[0]?.label === SCREENS[0]?.label && stack[1]?.label === 'Guten Tag is german',
+    'the chip opens the stack: every answer, by its title or the screen it is',
+    on('dock').data['listing'] === true && stack.length === total() && stack[0]?.label === SCREENS[0]?.label && stack[1]?.label === 'German greeting form',
     JSON.stringify(stack.slice(0, 3)),
   );
   session.dispatch('dock', { type: 'ui:click', ref: 'entry', payload: 4 });
