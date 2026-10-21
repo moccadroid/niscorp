@@ -7,16 +7,18 @@ const links: LayoutNode = {
   then: { component: 'Row', children: [{ for: '$.links', as: 'link', do: { component: 'Button', ref: 'link', props: { label: '$link.label', tone: 'link', value: '$link.screen' } } }] },
 };
 
+const toAsk: LayoutNode = {
+  component: 'Row',
+  children: [{ for: '$.examples', as: 'example', do: { component: 'Button', ref: 'example', props: { label: '$example', tone: 'suggestion', value: '$example' } } }],
+};
+
 export const welcomeLayout: LayoutNode = {
   component: 'Card',
   props: { title: '{{$.title}}', tone: 'hero' },
-  children: [
-    lead,
-    links,
-    { component: 'Text', props: { tone: 'muted' }, children: 'Or ask for something in the line below:' },
-    { component: 'Row', children: [{ for: '$.examples', as: 'example', do: { component: 'Button', ref: 'example', props: { label: '$example', tone: 'suggestion', value: '$example' } } }] },
-  ],
+  children: [lead, links, { component: 'Text', props: { tone: 'muted' }, children: 'Or ask for something in the line below:' }, toAsk],
 };
+
+export const askLayout: LayoutNode = { component: 'Card', props: { title: '{{$.title}}' }, children: [lead, toAsk] };
 
 export const pointsLayout: LayoutNode = { component: 'Card', props: { title: '{{$.title}}' }, children: [lead, { component: 'Points', props: { items: '$.points' } }, links] };
 

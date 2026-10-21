@@ -12,7 +12,7 @@ export const checklistAction: ActionDefinition = {
     z.object({
       title: z.string().describe('What the steps are for, in a few words.'),
       todo: z.array(z.string()).min(1).describe('The steps still to do, in order, each a few words.'),
-      done: z.array(z.string()).optional().describe('The steps already done.'),
+      done: z.array(z.string()).nullish().describe('The steps already done.'),
     }),
   ),
   layout: checklistLayout,

@@ -23,8 +23,7 @@ export type Plan = {
 
 export type ShownPlan = Plan & { position: number; total: number; stack: { position: number; label: string }[] };
 
-// Words the model says carry no things to ask: those are the app's own card's.
-export const wordsCanvas = (said: Said): Canvas => ({ action: 'answer.text', input: { title: said.title, text: said.text, examples: [] }, intent: `the words "${said.title}"` });
+export const wordsCanvas = (said: Said): Canvas => ({ action: 'answer.text', input: { title: said.title, text: said.text }, intent: `the words "${said.title}"` });
 
 export const canvasesInAreas = (canvases: readonly Canvas[]): AreaCanvases => Object.fromEntries(canvases.slice(0, AREAS.length).map((canvas, at) => [AREAS[at], canvas]));
 
@@ -35,14 +34,12 @@ export const changedAreas = (now: Plan, before: Plan): AreaId[] =>
 
 export const arrangementOfPlan = (plan: Plan): string | WrittenLayout => (plan.arrangement === 'written' ? { layout: plan.layout, areas: areasInLayout(plan.layout) } : plan.arrangement);
 
-const areasNeeded = (canvases: AreaCanvases): number => AREAS.reduce((last, area, at) => (canvases[area] !== undefined ? at + 1 : last), 0);
-
-type PlanOptions = { arrangements: readonly Arrangement[]; arrangement?: string | WrittenLayout; label?: string; screen?: { id: string; label: string } };
+type PlanOptions = { arrangements: readonly Arrangement[]; arrangement: string | WrittenLayout; label?: string; screen?: { id: string; label: string } };
 
 export const planOf = (question: string, canvases: AreaCanvases, options: PlanOptions): Plan => ({
   question,
   label: options.screen?.label ?? options.label ?? question,
   ...(options.screen !== undefined ? { screen: options.screen.id } : {}),
   canvases: Object.fromEntries(AREAS.flatMap((area) => (canvases[area] !== undefined ? [[area, [canvases[area]]]] : []))),
-  ...arrangementFor(options.arrangement, areasNeeded(canvases), options.arrangements),
+  ...arrangementFor(options.arrangement, options.arrangements),
 });

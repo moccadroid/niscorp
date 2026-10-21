@@ -95,7 +95,7 @@ const AreaProps = z.object({
   changed: z.boolean().optional().describe('Whether the last answer changed what it holds.'),
 });
 export const Area: NovaComponent = ({ children, novaRef: _ref, novaModel: _model, ...props }) => {
-  const { name, span, changed } = parsed(AreaProps, props, { name: '' });
+  const { span, changed } = parsed(AreaProps, props, { name: '' });
   return (
     <section className={`k-area k-span-${span ?? 1}${changed === true ? ' k-area-changed' : ''}`}>
       {children}

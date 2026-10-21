@@ -1,20 +1,21 @@
 import type { Arrangement } from '../../app/arrangements';
-import type { Screen } from '../../app/screens';
 import { AREAS } from '../../app/shell/areas';
 import type { AreaId } from '../../app/shell/areas';
 import { opened } from './catalog';
 import type { Catalog } from './catalog';
+import type { ComposerDeps } from './knowledge';
 import { areasOfArrangement, gridLayout } from './layout';
 import type { WrittenLayout } from './layout';
-import type { AreaCanvases, Said } from './plan';
+import { wordsCanvas } from './plan';
+import type { AreaCanvases } from './plan';
 import { isRecord, recordOf } from './record';
 import { entriesOf, EntrySchema, entryOf } from './reply.schema';
 import type { Entry, Reply } from './reply.schema';
 
 // No arrangement keeps the one on screen.
-export type Answer = { title: string; screen?: string; canvases: AreaCanvases; said: Partial<Record<AreaId, Said>>; arrangement?: string | WrittenLayout };
+export type Answer = { title: string; screen?: string; canvases: AreaCanvases; arrangement?: string | WrittenLayout };
 
-export type AnswerContext = { open: AreaCanvases; current: string | WrittenLayout; catalog: Catalog; screens: readonly Screen[]; arrangements: readonly Arrangement[] };
+export type AnswerContext = ComposerDeps & { open: AreaCanvases; current: string | WrittenLayout };
 
 const arrangementOfReply = (reply: Reply, arrangements: readonly Arrangement[]): string | WrittenLayout | undefined => {
   if (reply.grid) return gridLayout(reply.grid);
@@ -48,7 +49,6 @@ const canvasRefusals = (entry: Entry, where: string, catalog: Catalog): string[]
   return refusals;
 };
 
-// What is wrong with one entry, whatever else the reply holds.
 const entryRefusals = (entry: Entry, where: string, room: readonly AreaId[], named: string, open: AreaCanvases, catalog: Catalog): string[] => {
   const refusals = room.includes(entry.area) ? [] : [`${where}: the arrangement ${named} has no area ${entry.area}; its areas are ${room.join(', ')}.`];
   const kinds = [entry.keep !== undefined, entry.action !== undefined || entry.input !== undefined, entry.say !== undefined, entry.drop].filter(Boolean).length;
@@ -62,22 +62,21 @@ const nameOf = (arrangement: string | WrittenLayout): string => (typeof arrangem
 
 // What was there stays, in the areas the arrangement has, unless an entry drops it, moves it (an area another entry
 // keeps from is empty unless it is given something), or puts another canvas or words there.
-const applyEntries = (entries: readonly Entry[], open: AreaCanvases, room: readonly AreaId[], catalog: Catalog): { canvases: AreaCanvases; said: Partial<Record<AreaId, Said>> } => {
+const applyEntries = (entries: readonly Entry[], open: AreaCanvases, room: readonly AreaId[], catalog: Catalog): AreaCanvases => {
   const canvases: AreaCanvases = Object.fromEntries(room.flatMap((area) => (open[area] !== undefined ? [[area, open[area]]] : [])));
-  const said: Partial<Record<AreaId, Said>> = {};
   for (const entry of entries) if (entry.keep !== undefined && entry.keep !== entry.area && !entries.some((other) => other.area === entry.keep)) delete canvases[entry.keep];
   for (const entry of entries) {
     delete canvases[entry.area];
     if (entry.keep !== undefined) {
       const kept = open[entry.keep];
       if (kept !== undefined) canvases[entry.area] = kept;
-    } else if (entry.say !== undefined) said[entry.area] = entry.say;
+    } else if (entry.say !== undefined) canvases[entry.area] = wordsCanvas(entry.say);
     else if (entry.action !== undefined) {
       const intent = entry.intent?.trim() ?? '';
       canvases[entry.area] = opened({ action: entry.action, input: entry.input ?? {}, intent: intent !== '' ? intent : (catalog.actions.find((action) => action.id === entry.action)?.description ?? '') }, catalog);
     }
   }
-  return { canvases, said };
+  return canvases;
 };
 
 // A read shown again with the same values is the same thing under another heading; so is a second form for one write.
@@ -103,7 +102,7 @@ export const refusalsOf = (reply: Reply, context: AnswerContext): string[] => {
     refusals.push(...entryRefusals(entry, where, room, nameOf(arrangement), open, catalog));
   });
   const shown = new Map<string, AreaId>();
-  const { canvases } = applyEntries(entries, open, room, catalog);
+  const canvases = applyEntries(entries, open, room, catalog);
   for (const area of AREAS) {
     const canvas = canvases[area];
     if (canvas === undefined) continue;
@@ -116,10 +115,10 @@ export const refusalsOf = (reply: Reply, context: AnswerContext): string[] => {
 
 export const answerOf = (reply: Reply, context: AnswerContext): Answer => {
   const title = reply.title.trim();
-  if (reply.screen) return { title, screen: reply.screen, canvases: {}, said: {} };
+  if (reply.screen) return { title, screen: reply.screen, canvases: {} };
   const arrangement = arrangementOfReply(reply, context.arrangements);
-  const { canvases, said } = applyEntries(entriesOf(reply), context.open, areasOfArrangement(arrangement ?? context.current, context.arrangements), context.catalog);
-  return { title, canvases, said, ...(arrangement !== undefined ? { arrangement } : {}) };
+  const canvases = applyEntries(entriesOf(reply), context.open, areasOfArrangement(arrangement ?? context.current, context.arrangements), context.catalog);
+  return { title, canvases, ...(arrangement !== undefined ? { arrangement } : {}) };
 };
 
 // While the reply streams, solid writes it left to right: an entry is finished once the next one has begun, or once the
@@ -141,7 +140,6 @@ export const answerSoFar = (output: unknown, context: AnswerContext): Answer | u
     seen.add(entry.area);
     return [entry];
   });
-  const { canvases, said } = applyEntries(entries, context.open, room, context.catalog);
   const title = typeof data['title'] === 'string' ? data['title'].trim() : '';
-  return { title, canvases, said };
+  return { title, canvases: applyEntries(entries, context.open, room, context.catalog) };
 };

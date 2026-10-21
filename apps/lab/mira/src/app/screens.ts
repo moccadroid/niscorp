@@ -1,9 +1,5 @@
-// What an area holds: an action opened with its input, and why it is there, in words — what the model and Jev read
-// when the next message arrives.
 export type Canvas = { action: string; input: Record<string, unknown>; intent: string };
 
-// A screen is canvases shown together, in an arrangement of its own, opened from the dock or a card's link without
-// asking anything. The first is the one the app opens on.
 export type Screen = { id: string; label: string; description: string; arrangement: string; canvases: Canvas[] };
 
 const card = (action: string, intent: string): Canvas => ({ action, input: {}, intent });
@@ -16,17 +12,7 @@ const quiz = (question: string, options: string[], answer: number, explanation: 
   intent: `a quick check: ${question}`,
 });
 
-const TRY_ASKING: Canvas = {
-  action: 'answer.text',
-  input: {
-    title: 'Ask for a screen',
-    text: 'What you type goes to the model, and it answers with a screen of this app’s cards, filled in for you. Links and buttons never wait for it.',
-    examples: ['A checklist for adding a table', 'Quiz me on the shell', 'Put the counter beside the steps', 'Only the steps, please'],
-  },
-  intent: 'things to ask the model',
-};
-
-export const SCREENS: readonly Screen[] = [
+export const SCREENS: readonly [Screen, ...Screen[]] = [
   {
     id: 'start',
     label: 'Start',
@@ -35,7 +21,7 @@ export const SCREENS: readonly Screen[] = [
     canvases: [
       card('guide.welcome', 'what this app is, and where to start'),
       COUNTER,
-      quiz('You press a link on this screen. What changes the view?', ['The model', 'The app, straight away', 'Your browser, on its own'], 1, 'Links and buttons act at once. Only what you type below goes to the model.'),
+      quiz('You press a link on this screen. What changes the view?', ['The model', 'The app, straight away', 'Your browser, on its own'], 1, 'Links act at once. Only what you ask — typed, or a thing to ask pressed — goes to the model.'),
       {
         action: 'guide.checklist',
         input: { title: 'Your tour', todo: ['Press the counter', 'Answer the quick check', 'Follow a link to a lesson', 'Ask for a screen in the line below', 'Ask the model to change a card'] },
@@ -68,7 +54,7 @@ export const SCREENS: readonly Screen[] = [
     arrangement: 'hero',
     canvases: [
       card('guide.answers', 'how a message becomes a screen'),
-      TRY_ASKING,
+      card('guide.ask', 'things to ask the model'),
       quiz('What does the model write when you ask for a screen?', ['Which cards go where, filled in', 'React code', 'A chat reply'], 0, 'It answers with actions and their inputs, area by area, and the app checks them before they are shown.'),
     ],
   },

@@ -1,8 +1,10 @@
-import { checks, recordOf, settle, startApp, until } from './scripted';
+import { GUIDE } from '../app/actions/guide/guide.actions';
+import { SCREENS } from '../app/screens';
+import { recordOf } from '../server/compose/record';
+import { checks } from './checks';
+import { scriptedModels, settle, startApp, until } from './scripted';
 import type { Script } from './scripted';
 
-// The tour of nisc the app starts with: its cards pressed, ticked and picked, its links, and what the model sees of
-// them and changes. Deleted with src/app/actions/guide/.
 const card = (action: string) => ({ action, input: {}, intent: action });
 const counter = (title: string, count: number) => ({ action: 'guide.counter', input: { title, count }, intent: 'a counter' });
 const checklist = (title: string, todo: string[]) => ({ action: 'guide.checklist', input: { title, todo }, intent: 'a checklist' });
@@ -12,11 +14,19 @@ const SCRIPT: Script = {
   'A counter that starts at 100': [{ areas: [{ area: 'b', ...counter('From 100', 100) }] }],
   'A checklist with no steps': [{ areas: [{ area: 'd', ...checklist('Empty', []) }] }, { areas: [{ area: 'd', ...checklist('Mine', ['One step']) }] }],
   'the nisc card at the top too': [{ areas: [{ area: 'a', ...card('guide.nisc') }] }, { areas: [] }],
+  'a counter at 5, no title': [{ areas: [{ area: 'b', action: 'guide.counter', input: { title: null, count: 5 }, intent: 'a counter' }] }],
 };
 
 const { check, finish } = checks('guide');
-const app = await startApp(SCRIPT);
-const { on, rows, ids, without, current, drawn, areas, prompts, lastPrompt, ask, session } = app;
+
+const nowhere = GUIDE.flatMap((action) => (Array.isArray(action.data?.['links']) ? action.data['links'] : []).map((link: unknown) => recordOf(link)['screen'])).filter((screen) => !SCREENS.some((one) => one.id === screen));
+check('every link on a card opens a screen there is', nowhere.length === 0, nowhere.join(', '));
+
+const scripted = scriptedModels(SCRIPT);
+const { prompts } = scripted;
+const lastPrompt = (): string => prompts[prompts.length - 1] ?? '';
+const app = await startApp(scripted.models);
+const { on, rows, ids, without, current, drawn, areas, ask, session } = app;
 try {
   app.draw();
   session.dispatch('b', { type: 'ui:click', ref: 'up' });
@@ -25,7 +35,7 @@ try {
   session.dispatch('b', { type: 'ui:click', ref: 'up' });
   check('the counter counts what is pressed, up and down', await until(() => on('b').data['count'] === 2), JSON.stringify(on('b').data));
   session.dispatch('c', { type: 'ui:click', ref: 'pick', payload: 1 });
-  check('the quick check, picked right, says so and why', await until(() => drawn().includes('Right. Links and buttons act at once')), JSON.stringify(on('c').data));
+  check('the quick check, picked right, says so and why', await until(() => drawn().includes('Right. Links act at once')), JSON.stringify(on('c').data));
   session.dispatch('d', { type: 'ui:click', ref: 'tick', payload: 0 });
   check('a step ticked off moves from the steps to do to the ones done', await until(() => rows('d', 'done').join() === 'Press the counter' && rows('d', 'todo').length === 4), JSON.stringify(on('d').data));
   app.draw();
@@ -71,6 +81,8 @@ try {
   prompts.length = 0;
   await ask('the nisc card at the top too');
   check('the same card in two areas is sent back saying so', (prompts[1] ?? '').includes('areas a and e would show the same thing; show it once'), prompts[1]?.slice(-300) ?? '');
+  await ask('a counter at 5, no title');
+  check('a value the model says is null is its card’s default', on('b').data['count'] === 5 && on('b').data['title'] === 'Press me', JSON.stringify(on('b').data));
 } finally {
   app.server.close();
 }

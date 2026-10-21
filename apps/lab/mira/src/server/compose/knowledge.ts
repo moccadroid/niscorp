@@ -40,21 +40,11 @@ const canvasLine = (canvas: OpenCanvas): string => {
 
 // A hint that finds nothing likely reads as "nothing belongs in the answer", so the model is not given one.
 const picksLine = (picks: Picks): string | undefined => {
-  const likely = <T extends { probability: number }>(list: readonly T[], name: (item: T) => string): string[] =>
-    list.filter((item) => item.probability >= 0.5).map((item) => `${name(item)} ${item.probability.toFixed(2)}`);
-  const kinds = {
-    actions: likely(picks.actions, (item) => item.id),
-    reads: likely(picks.reads, (item) => item.fingerprint),
-    writes: likely(picks.writes, (item) => item.fingerprint),
-    screens: likely(picks.screens, (item) => item.id),
-  };
-  if (Object.values(kinds).every((names) => names.length === 0)) return undefined;
-  return Object.entries(kinds)
-    .map(([kind, names]) => `${kind} ${names.length > 0 ? names.join(', ') : 'none'}`)
-    .join('; ');
+  const kinds = Object.entries(picks).map(([kind, scored]) => ({ kind, likely: scored.filter((item) => item.probability >= 0.5).map((item) => `${item.name} ${item.probability.toFixed(2)}`) }));
+  if (kinds.every(({ likely }) => likely.length === 0)) return undefined;
+  return kinds.map(({ kind, likely }) => `${kind} ${likely.length > 0 ? likely.join(', ') : 'none'}`).join('; ');
 };
 
-// The run's input: what is open, what Jev thinks, and the message.
 export const messageInput = (message: string, open: readonly OpenCanvas[], arrangement: { id: string; layout: LayoutNode }, picks: Picks | undefined): string => {
   const hint = picks === undefined ? undefined : picksLine(picks);
   return [

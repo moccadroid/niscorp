@@ -1,8 +1,9 @@
 import type { Shell } from '@niscorp/nova';
 import { AREAS } from '../../app/shell/areas';
 import type { AreaId } from '../../app/shell/areas';
+import { inputKeysOf } from './catalog';
 import type { Plan } from './plan';
-import { isRecord, recordOf } from './record';
+import { isRecord } from './record';
 
 // The screen as it stands. A canvas's input is what it was opened with, and what the person pressed, ticked or typed
 // into what its input carries; `shows` is the rest of its live data beyond what it was opened with — rows that loaded,
@@ -29,7 +30,7 @@ export const readOpenScreen = (shell: Shell, plan: Plan): OpenCanvas[] =>
     if (runtime === undefined || runtime.definition.id !== placed.action) return [{ area, ...placed, shows: {} }];
     const data = runtime.getData();
     const opened = { ...runtime.definition.data, ...placed.input };
-    const carried = Object.keys(recordOf(recordOf(runtime.definition.input)['properties']));
+    const carried = inputKeysOf(runtime.definition.input);
     const moved = Object.keys(data).filter((key) => JSON.stringify(data[key]) !== JSON.stringify(opened[key]));
     const input = { ...placed.input, ...Object.fromEntries(moved.filter((key) => carried.includes(key)).map((key) => [key, data[key]])) };
     const shows = Object.fromEntries(moved.filter((key) => !carried.includes(key) && !isEmpty(data[key])).map((key) => [key, summarised(data[key])]));

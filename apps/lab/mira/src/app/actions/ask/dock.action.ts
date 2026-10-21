@@ -3,8 +3,6 @@ import { SCREENS } from '../../screens';
 import { AREAS } from '../../shell/areas';
 import { dockLayout } from './dock.layout';
 
-// Every call answers the plan shown into `current`: each area then holds exactly what it lists for that area, and
-// nothing where it lists nothing.
 const shown: Step[] = [{ set: 'listing', value: false }, ...AREAS.map((area) => ({ reconcile: { canvas: area, to: `$.current.canvases.${area}`, action: 'action', input: 'input', own: 'canvas' as const } }))];
 
 const ask: Step[] = [
@@ -19,7 +17,7 @@ const ask: Step[] = [
 
 const open: Step[] = [{ set: 'opening', value: '@event.payload' }, { call: 'open', onSuccess: shown }];
 
-const first = SCREENS[0];
+const [first] = SCREENS;
 
 export const dockAction: ActionDefinition = {
   id: 'ask.dock',
@@ -28,7 +26,7 @@ export const dockAction: ActionDefinition = {
     'Everything a person does, at the bottom: the screens; the chip naming the answer shown and where it stands, which opens what was asked, what the model said it did, and every answer to go back to; back and forward; and the line to ask in.',
   data: {
     screens: SCREENS.map(({ id, label }) => ({ id, label })),
-    current: { question: '', response: '', label: first?.label ?? '', screen: first?.id ?? '', arrangement: first?.arrangement ?? '', position: 1, total: 1, stack: [{ position: 1, label: first?.label ?? '' }], canvases: {} },
+    current: { question: '', response: '', label: first.label, screen: first.id, arrangement: first.arrangement, position: 1, total: 1, stack: [{ position: 1, label: first.label }], canvases: {} },
     listing: false,
     opening: '',
     going: 0,

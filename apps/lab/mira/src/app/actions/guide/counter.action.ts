@@ -9,8 +9,8 @@ export const counterAction: ActionDefinition = {
   data: { title: 'Press me', count: 0 },
   input: z.toJSONSchema(
     z.object({
-      title: z.string().optional().describe('What it counts, in a few words.'),
-      count: z.number().int().optional().describe('The number it starts at.'),
+      title: z.string().nullish().describe('What it counts, in a few words.'),
+      count: z.number().int().nullish().describe('The number it shows.'),
     }),
   ),
   layout: counterLayout,

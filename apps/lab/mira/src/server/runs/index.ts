@@ -1,7 +1,7 @@
 import type { Usage } from '@niscorp/cortex';
 import type { FunctionSession, RunSink } from '@niscorp/moss';
 
-export type ModelRun = { agentId: string; label: string; provider: string; model: string; usage: Usage; steps: number; elapsedMs: number; outcome: 'ok' | 'failed' };
+type ModelRun = { agentId: string; label: string; provider: string; model: string; usage: Usage; steps: number; elapsedMs: number; outcome: 'ok' | 'failed' };
 
 export const recordModelRun = (session: FunctionSession, run: ModelRun): void =>
   session.recordRun({

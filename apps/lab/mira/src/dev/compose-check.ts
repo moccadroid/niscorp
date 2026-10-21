@@ -2,14 +2,13 @@ import { renderDocument } from '@niscorp/moss';
 import { ARRANGEMENTS } from '../app/arrangements';
 import { SCREENS } from '../app/screens';
 import { AREAS } from '../app/shell/areas';
+import { recordOf } from '../server/compose/record';
 import { drawing } from '../server/document';
-import { checks, recordOf, settle, startApp, until } from './scripted';
+import { checks } from './checks';
+import { scriptedModels, settle, startApp, until } from './scripted';
 import type { Script } from './scripted';
 
-// The message loop, offline, with nothing of the app but its first screen: every answer here is words, a screen, or an
-// action the app does not have, so the check holds whatever actions the app ships.
-const FIRST = SCREENS[0];
-if (FIRST === undefined) throw new Error('the app has no screens');
+const [FIRST] = SCREENS;
 
 const keep = (area: string, from = area) => ({ area, keep: from });
 const say = (area: string, title: string, text = `About ${title}.`) => ({ area, say: { title, text } });
@@ -39,8 +38,11 @@ const { check, finish } = checks('compose');
 const START = FIRST.canvases.map((canvas) => canvas.action).join(' ');
 const opened = AREAS.slice(0, FIRST.canvases.length);
 
-const app = await startApp(SCRIPT);
-const { on, current, total, grid, areas, ids, without, said, drawn, marked, prompts, runs, lastPrompt, ask, session } = app;
+const scripted = scriptedModels(SCRIPT);
+const { prompts } = scripted;
+const lastPrompt = (): string => prompts[prompts.length - 1] ?? '';
+const app = await startApp(scripted.models);
+const { on, current, total, grid, areas, ids, without, said, drawn, marked, runs, ask, session } = app;
 try {
   const template = '<!doctype html><html><head></head><body><div id="root"></div></body></html>';
   const page = await renderDocument({ ...drawing, server: app.server, template, request: { path: '/', cookie: null } });
@@ -51,10 +53,10 @@ try {
   check('the frame’s region holds the first screen’s arrangement', current().arrangement === FIRST.arrangement && grid().split(' ').length - 1 === room, `${String(current().arrangement)} — ${grid()}`);
 
   runs.length = 0;
-  app.likely([FIRST.id]);
+  scripted.likely([FIRST.id]);
   await ask('Two things side by side');
-  app.likely([]);
-  const jev = app.asked[app.asked.length - 1];
+  scripted.likely([]);
+  const jev = scripted.asked[scripted.asked.length - 1];
   check(
     'each message is recorded as two runs: Jev\'s pass and the model\'s, each with its model, what it spent and how it ended',
     runs.map((run) => `${run.agentId} ${run.model} ${run.outcome} ${run.steps} ${run.totalTokens} ${run.label}`).join(' | ') === 'mira.jev jev ok 1 110 Two things side by side | mira.compose chat ok 1 110 Two things side by side',
@@ -133,7 +135,7 @@ try {
   session.shell.publish('ask', 'What can you do?');
   check('a message sent on `ask` — a card’s thing to ask — is asked as if typed', (await until(() => app.answered() > answeredBefore)) && lastPrompt().includes('MESSAGE: What can you do?'), lastPrompt().slice(-200));
   await settle();
-  check('words the model says carry no things to ask under them', areas() === 'answer.text' && on('a').data['title'] === 'What this app does' && app.rows('a', 'examples').length === 0, areas());
+  check('words the model says are shown as words', areas() === 'answer.text' && on('a').data['title'] === 'What this app does', areas());
 
   await ask('Show the first screen');
   check('the model can answer with one of the app’s screens: gone back to where it is in the stack', current().screen === FIRST.id && current().position === 1, `${String(current().position)} of ${total()}`);
@@ -144,12 +146,12 @@ try {
   check('an answer that changes nothing leaves the screen as it was, and adds nothing to the stack', ids() === beforeWeather && total() === stackBeforeWeather && said() === '', `${ids()} — ${String(total())} — ${said()}`);
   check('and the bar says what was asked, and why nothing changed', current().question === 'What is the weather in Vienna?' && current().response === 'Nothing in this app shows the weather.', JSON.stringify(current()).slice(0, 200));
 
-  app.unreachable(true);
+  scripted.unreachable(true);
   runs.length = 0;
   await ask('Only one thing');
   check('a model that cannot be reached leaves the screen as it was, and the line says so', ids() === beforeWeather && said().includes('could not be reached'), said());
   check('and its run is recorded as failed: one step, nothing spent', runs[1]?.agentId === 'mira.compose' && runs[1]?.outcome === 'failed' && runs[1]?.steps === 1 && runs[1]?.totalTokens === 0, JSON.stringify(runs[1]));
-  app.unreachable(false);
+  scripted.unreachable(false);
 
   runs.length = 0;
   await ask('Name it at length');
@@ -170,22 +172,18 @@ try {
   app.server.close();
 }
 
-const jevless = await startApp(SCRIPT, { jevFails: true });
+const jevless = await startApp(scriptedModels(SCRIPT, { jevFails: true }).models);
 try {
-  jevless.draw();
-  jevless.session.dispatch('dock', { type: 'ui:model', ref: 'text', payload: 'Only one thing' });
-  jevless.session.dispatch('dock', { type: 'ui:key', ref: 'text', key: 'Enter' });
-  check('when Jev cannot answer, the model answers alone', await until(() => jevless.areas() === 'answer.text' && jevless.on('a').data['title'] === 'One'), jevless.areas());
+  await jevless.ask('Only one thing');
+  check('when Jev cannot answer, the model answers alone', jevless.areas() === 'answer.text' && jevless.on('a').data['title'] === 'One', jevless.areas());
 } finally {
   jevless.server.close();
 }
 
-const keyless = await startApp(SCRIPT, { keyless: true });
+const keyless = await startApp(scriptedModels(SCRIPT, { keyless: true }).models);
 try {
-  keyless.draw();
-  keyless.session.dispatch('dock', { type: 'ui:model', ref: 'text', payload: 'Only one thing' });
-  keyless.session.dispatch('dock', { type: 'ui:key', ref: 'text', key: 'Enter' });
-  check('with no key, the line names the key, and the screen stays as it was', await until(() => keyless.said().includes('GROQ_API_KEY')), keyless.said());
+  await keyless.ask('Only one thing');
+  check('with no key, the line names the key, and the screen stays as it was', keyless.said().includes('GROQ_API_KEY'), keyless.said());
 } finally {
   keyless.server.close();
 }

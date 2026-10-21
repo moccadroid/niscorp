@@ -1,14 +1,12 @@
 import type { SignalClient, Usage } from '@niscorp/cortex';
-import type { RunRecord } from '@niscorp/moss';
+import type { MossServer, RunRecord } from '@niscorp/moss';
 import { routeResponse } from '@niscorp/signal';
 import type { StepRequest, StepResult } from '@niscorp/signal';
 import { z } from 'zod';
 import { AREAS } from '../app/shell/areas';
 import { boot } from '../server/boot';
 import type { Decide, Models } from '../server/compose';
-
-const isRecord = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value);
-export const recordOf = (value: unknown): Record<string, unknown> => (isRecord(value) ? value : {});
+import { recordOf } from '../server/compose/record';
 
 // Each message, and the replies the chat model gives it, one a call: the last one again and again.
 export type Script = Record<string, Record<string, unknown>[]>;
@@ -23,43 +21,23 @@ export const until = async (condition: () => boolean, ms = 5000): Promise<boolea
 };
 export const settle = (): Promise<void> => new Promise((done) => setTimeout(done, 150));
 
-export const checks = (name: string): { check: (what: string, passed: boolean, detail?: string) => void; finish: () => never } => {
-  let failures = 0;
-  return {
-    check: (what, passed, detail = '') => {
-      console.log(`${passed ? '[pass]' : '[fail]'} ${what}${!passed && detail !== '' ? ` — ${detail}` : ''}`);
-      if (!passed) failures += 1;
-    },
-    finish: () => {
-      console.log(failures === 0 ? `[pass] ${name}: all checks passed` : `[fail] ${name}: ${failures} check(s) failed`);
-      process.exit(failures === 0 ? 0 : 1);
-    },
-  };
-};
-
 const SPENT: Usage = { inputTokens: 100, outputTokens: 10, totalTokens: 110, reported: true };
 
-const ShownSchema = z.looseObject({
-  question: z.string().optional(),
-  response: z.string().optional(),
-  screen: z.string().optional(),
-  arrangement: z.string().optional(),
-  position: z.number().optional(),
-  total: z.number().optional(),
-  stack: z.array(z.looseObject({ position: z.number(), label: z.string() })).optional(),
-});
+export type Scripted = {
+  models: Models;
+  prompts: string[];
+  asked: { state: Record<string, unknown>; questions: Record<string, unknown> }[];
+  likely: (ids: readonly string[]) => void;
+  unreachable: (is: boolean) => void;
+};
 
-type Options = { jevFails?: boolean; keyless?: boolean };
-
-// The app booted offline, the same every run: a decision model that finds likely only the ids it is told to, and a
-// chat model scripted as relay's checks script one. Whatever drives the shell is the dock's own: what it types, presses
-// and is sent.
-export const startApp = async (script: Script, options: Options = {}) => {
+// Offline, and the same every run: a decision model that finds likely only the ids it is told to, and a chat model that
+// answers each message in the run's input with its script.
+export const scriptedModels = (script: Script, options: { jevFails?: boolean; keyless?: boolean } = {}): Scripted => {
   let likely: readonly string[] = [];
   let unreachable = false;
   const prompts: string[] = [];
-  const asked: { state: Record<string, unknown>; questions: Record<string, unknown> }[] = [];
-  const runs: RunRecord[] = [];
+  const asked: Scripted['asked'] = [];
   const turns = new Map<string, number>();
 
   const decide: Decide = async (state, questions) => {
@@ -101,9 +79,49 @@ export const startApp = async (script: Script, options: Options = {}) => {
     describe: () => ({ provider: 'scripted', model: 'chat', kind: 'chat', modelKnown: false, capabilities: { nativeTools: true, nativeJsonSchema: false, nativeJsonMode: true, toolsWithStructuredOutput: false, validatesToolArgs: true, manglesNestedToolArgs: false, multimodal: false, supportsEmbedding: false } }),
   };
 
-  const models: Models = options.keyless
-    ? { missing: ['GROQ_API_KEY'] }
-    : { jev: { provider: 'scripted', model: 'jev', decide }, chat: { provider: 'scripted', model: 'chat', llm: chat, timeoutMs: 5000 }, missing: [] };
+  const models: Models = options.keyless === true ? { missing: ['GROQ_API_KEY'] } : { jev: { provider: 'scripted', model: 'jev', decide }, chat: { provider: 'scripted', model: 'chat', llm: chat, timeoutMs: 5000 }, missing: [] };
+  return { models, prompts, asked, likely: (ids) => void (likely = ids), unreachable: (is) => void (unreachable = is) };
+};
+
+const ShownSchema = z.looseObject({
+  question: z.string().optional(),
+  response: z.string().optional(),
+  label: z.string().optional(),
+  screen: z.string().optional(),
+  arrangement: z.string().optional(),
+  position: z.number().optional(),
+  total: z.number().optional(),
+  stack: z.array(z.looseObject({ position: z.number(), label: z.string() })).optional(),
+});
+
+type Session = Awaited<ReturnType<NonNullable<MossServer['shells']>['session']>>;
+type Canvas = { action: string; id: string; data: Record<string, unknown> };
+
+export type App = {
+  server: MossServer;
+  session: Session;
+  runs: RunRecord[];
+  on: (canvas: string) => Canvas;
+  current: () => z.infer<typeof ShownSchema>;
+  draw: () => void;
+  answered: () => number;
+  streamed: () => number;
+  areas: () => string;
+  ids: () => string;
+  without: (area: string, of: string) => string;
+  rows: (canvas: string, key: string) => unknown[];
+  total: () => number;
+  said: () => string;
+  drawn: () => string;
+  grid: () => string;
+  marked: () => string;
+  ask: (text: string) => Promise<number | undefined>;
+  openScreen: (id: string) => Promise<void>;
+};
+
+// The app booted with the models given, driven as a terminal drives it: what the dock is typed, pressed and sent.
+export const startApp = async (models: Models, answerWithinMs = 5000): Promise<App> => {
+  const runs: RunRecord[] = [];
   const { server } = await boot({ models, runs: (run) => runs.push(run) });
   const shells = server.shells;
   if (shells === undefined) throw new Error('the manifest has no shell');
@@ -122,44 +140,38 @@ export const startApp = async (script: Script, options: Options = {}) => {
     }
   });
 
-  const on = (canvas: string): { action: string; id: string; data: Record<string, unknown> } => {
+  const on = (canvas: string): Canvas => {
     const active = shell.getState().canvases[canvas]?.active;
     return { action: active?.definitionId ?? '', id: active?.id ?? '', data: active === undefined ? {} : (shell.getRuntime(active.id)?.getData() ?? {}) };
   };
   const nodesOf = (value: unknown): Record<string, unknown>[] => (Array.isArray(value) ? value.map(recordOf) : []);
   const named = (name: string, nodes: unknown): Record<string, unknown>[] => nodesOf(nodes).flatMap((node) => (node['name'] === name ? [node] : named(name, node['children'])));
   const current = (): z.infer<typeof ShownSchema> => ShownSchema.safeParse(on('dock').data['current']).data ?? {};
-  // What a terminal does whenever the screen changes: draw every action on it. An input takes what is typed into it
-  // once it has been drawn.
+  // An input takes what is typed into it once it has been drawn.
   const draw = (): void => void shell.flattenRenderTree(shell.getShellRenderTree());
   let streamed = 0;
 
   return {
     server,
     session,
-    prompts,
-    asked,
     runs,
-    likely: (ids: readonly string[]): void => void (likely = ids),
-    unreachable: (is: boolean): void => void (unreachable = is),
     on,
     current,
     draw,
-    answered: (): number => answered,
-    streamed: (): number => streamed,
-    lastPrompt: (): string => prompts[prompts.length - 1] ?? '',
-    areas: (): string => AREAS.map((area) => on(area).action).filter((action) => action !== '').join(' '),
-    ids: (): string => AREAS.map((area) => `${area}:${on(area).id}`).join(' '),
-    without: (area: string, of: string): string => of.replace(new RegExp(`${area}:\\S*`), ''),
-    rows: (canvas: string, key: string): unknown[] => {
+    answered: () => answered,
+    streamed: () => streamed,
+    areas: () => AREAS.map((area) => on(area).action).filter((action) => action !== '').join(' '),
+    ids: () => AREAS.map((area) => `${area}:${on(area).id}`).join(' '),
+    without: (area, of) => of.replace(new RegExp(`${area}:\\S*`), ''),
+    rows: (canvas, key) => {
       const value = on(canvas).data[key];
       return Array.isArray(value) ? value : [];
     },
-    total: (): number => Number(current().total),
-    said: (): string => String(on('dock').data['error'] ?? ''),
-    drawn: (): string => JSON.stringify(shell.flattenRenderTree(shell.getShellRenderTree())),
-    // The grid the frame's `answers` region holds, as the shell draws it: its columns, and each area's name and span.
-    grid: (): string => {
+    total: () => Number(current().total),
+    said: () => String(on('dock').data['error'] ?? ''),
+    drawn: () => JSON.stringify(shell.flattenRenderTree(shell.getShellRenderTree())),
+    // The frame's `answers` region as the shell draws it: its columns, and each area's name and span.
+    grid: () => {
       const answers = named('Grid', shell.getShellRenderTree())[0] ?? {};
       const held = nodesOf(answers['children']).map((area) => {
         const own = recordOf(area['props']);
@@ -167,25 +179,27 @@ export const startApp = async (script: Script, options: Options = {}) => {
       });
       return `${String(recordOf(answers['props'])['columns'])}: ${held.join(' ')}`;
     },
-    // The areas the layout on screen marks as changed by the last answer.
-    marked: (): string =>
+    marked: () =>
       named('Area', shell.getShellRenderTree())
         .map((area) => recordOf(area['props']))
         .filter((props) => props['changed'] === true)
         .map((props) => String(props['name']))
         .join(' '),
-    // A message is answered when the line's `ask` call ends, whatever it leaves on screen.
-    ask: async (text: string): Promise<void> => {
+    // A message is answered when the line's `ask` call ends, whatever it leaves on screen: how long that took, if it did.
+    ask: async (text) => {
       draw();
       const seen = answered;
       const movesBefore = moves;
+      const started = performance.now();
       session.dispatch('dock', { type: 'ui:model', ref: 'text', payload: text });
       session.dispatch('dock', { type: 'ui:key', ref: 'text', key: 'Enter' });
-      await until(() => answered > seen);
+      const done = await until(() => answered > seen, answerWithinMs);
+      const took = performance.now() - started;
       streamed = movesWhenAnswered - movesBefore;
       await settle();
+      return done ? took : undefined;
     },
-    openScreen: async (id: string): Promise<void> => {
+    openScreen: async (id) => {
       session.dispatch('dock', { type: 'ui:click', ref: 'screen', payload: id });
       await until(() => current().screen === id);
       await settle();

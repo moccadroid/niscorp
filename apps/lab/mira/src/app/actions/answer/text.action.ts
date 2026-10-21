@@ -5,15 +5,13 @@ import { textLayout } from './text.layout';
 export const textAction: ActionDefinition = {
   id: 'answer.text',
   title: 'Text',
-  description: 'A few words: a title, at most two short sentences, and on the app’s own card, things to ask.',
-  data: { title: '', text: '', examples: [] },
+  description: 'A few words: a title, and at most two short sentences.',
+  data: { title: '', text: '' },
   input: z.toJSONSchema(
     z.object({
       title: z.string().describe('A few words.'),
       text: z.string().describe('At most two short sentences.'),
-      examples: z.array(z.string()).describe('Things to ask.'),
     }),
   ),
   layout: textLayout,
-  triggers: [{ event: 'ui:click', ref: 'example', do: [{ emit: { channel: 'ask', payload: '@event.payload' } }] }],
 };

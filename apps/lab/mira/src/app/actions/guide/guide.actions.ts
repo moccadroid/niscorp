@@ -1,10 +1,9 @@
 import type { ActionDefinition, LayoutNode, TriggerConfig } from '@niscorp/nova';
 import { checklistAction } from './checklist.action';
 import { counterAction } from './counter.action';
-import { exampleLayout, pointsLayout, stepsLayout, welcomeLayout } from './guide.layouts';
+import { askLayout, exampleLayout, pointsLayout, stepsLayout, welcomeLayout } from './guide.layouts';
 import { quizAction } from './quiz.action';
 
-// A tour of nisc, in actions: cards to read, and cards to use. Delete this folder to start your own app.
 type Link = { label: string; screen: string };
 
 // A link opens one of the app's screens, as the dock's own buttons do; nothing is asked of the model.
@@ -73,11 +72,22 @@ export const GUIDE: readonly ActionDefinition[] = [
     ],
     links: [{ label: 'Next: who may do what →', screen: 'rules' }],
   }),
+  card(
+    'guide.ask',
+    'Things to ask the model, each asked when pressed: a checklist written for you, a quick check, cards moved or left alone.',
+    askLayout,
+    {
+      title: 'Ask for a screen',
+      lead: 'What you ask goes to the model, and it answers with a screen of this app’s cards, filled in for you. Links open their screen without it.',
+      examples: ['A checklist for adding a table', 'Quiz me on the shell', 'Put the counter beside the steps', 'Only the steps, please'],
+    },
+    [asks],
+  ),
   card('guide.shell', 'The shell and moss: moss keeps one shell per person, on the server, which holds the cards and runs what they do; the browser only draws the frames moss sends over a socket.', pointsLayout, {
     title: 'The shell and moss',
     lead: 'The shell holds the cards and runs what they do.',
     points: [
-      { title: 'One per person', text: 'moss keeps a shell for each person, on the server.' },
+      { title: 'One per person', text: 'moss keeps a shell for each person who signs in; until then, one a connection.' },
       { title: 'Drawn where you are', text: 'Your browser draws the frames moss sends over a socket.' },
       { title: 'Rules on the server', text: 'What you may do is decided there, never in the browser.' },
     ],
@@ -123,7 +133,7 @@ export const GUIDE: readonly ActionDefinition[] = [
       'Delete src/app/actions/guide/ and src/dev/guide-check.ts, and the lines that name them: AGENTS.md lists them.',
       'Put your tables in src/db/schema.ts.',
       'Put your reads and writes in src/app/vex/.',
-      'Add your actions in src/app/actions/, each with a description the model chooses by.',
+      'Add your actions in src/app/actions/, each with a description the model chooses by, and the ones it may place in placeable.',
       'Run npm run check after each step.',
     ],
     links: [{ label: 'Back to the start →', screen: 'start' }],

@@ -1,21 +1,9 @@
 import { existsSync } from 'node:fs';
-import { AREAS } from '../app/shell/areas';
-import { boot } from '../server/boot';
 import type { SignalClient } from '@niscorp/cortex';
+import { AREAS } from '../app/shell/areas';
 import type { Chat, Jev } from '../server/compose';
 import { modelsFromEnv } from '../server/models';
-
-const isRecord = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value);
-const recordOf = (value: unknown): Record<string, unknown> => (isRecord(value) ? value : {});
-
-// Asks the real models, with the keys in .env, the cases in RUN — each from the screen it was asked on — and prints each
-// screen, how long it took, and whether it is the screen the case wants, and nothing shown twice. The cases are the
-// tour's: write your own when it goes. It costs a Jev pass and a chat call a message.
-//   --runs=<n>  the cases, n times over, with the count of right screens at the end
-//   --why       each message also prints what Jev said yes to and what the model replied
-//   --prompts   each message also prints everything Jev and the model were sent, and what each answered
-//   --no-jev    the chat model alone, with no Jev pass
-//   messages    messages of your own instead, unscored; --screen=<id> opens that screen from the menu
+import { startApp } from './scripted';
 
 type Shown = { area: string; id: string; action: string; title: string; data: Record<string, unknown> };
 type Screen = { canvases: Shown[]; arrangement: string; screen: string; said: string; response: string; title: string };
@@ -122,7 +110,6 @@ ${JSON.stringify(picked, null, 2)}`);
     return answered;
   },
 };
-// Every step the composer's run takes: what it was sent, and what the model wrote.
 const told = (llm: SignalClient): SignalClient => ({
   ...llm,
   stepStream: (request, options) =>
@@ -136,46 +123,21 @@ const told = (llm: SignalClient): SignalClient => ({
 });
 const chat: Chat | undefined = models.chat && { ...models.chat, llm: told(models.chat.llm) };
 
-const until = async (condition: () => boolean, ms = 60_000): Promise<boolean> => {
-  const deadline = Date.now() + ms;
-  while (!condition()) {
-    if (Date.now() > deadline) return false;
-    await new Promise((done) => setTimeout(done, 5));
-  }
-  return true;
-};
-
 const times: number[] = [];
 const scores: number[] = [];
 const misses = new Map<string, number>();
 for (let run = 1; run <= runs; run += 1) {
-  const { server } = await boot({ models: { missing: models.missing, ...(jev !== undefined ? { jev } : {}), ...(chat !== undefined ? { chat } : {}) }, runs: () => {} });
-  const shells = server.shells;
-  if (shells === undefined) throw new Error('the manifest has no shell');
-  const session = await shells.session(null, null);
-  const shell = session.shell;
-  // Each message is answered when the line's `ask` call ends, whatever screen it leaves.
-  let answers = 0;
-  shell.onEndpoint((event) => {
-    if (event.canvasId === 'dock' && event.name === 'ask') answers += 1;
-  });
-  const dataOf = (canvas: string): Record<string, unknown> => {
-    const active = shell.getState().canvases[canvas]?.active;
-    return active === undefined ? {} : (shell.getRuntime(active.id)?.getData() ?? {});
-  };
-  const current = (): Record<string, unknown> => recordOf(dataOf('dock')['current']);
+  const app = await startApp({ missing: models.missing, ...(jev !== undefined ? { jev } : {}), ...(chat !== undefined ? { chat } : {}) }, 60_000);
   const screenOf = (): Screen => ({
     canvases: AREAS.flatMap((area): Shown[] => {
-      const active = shell.getState().canvases[area]?.active;
-      if (active === undefined) return [];
-      const data = dataOf(area);
-      return [{ area, id: active.id, action: active.definitionId, title: String(data['title'] ?? ''), data }];
+      const { id, action, data } = app.on(area);
+      return id === '' ? [] : [{ area, id, action, title: String(data['title'] ?? ''), data }];
     }),
-    arrangement: String(current()['arrangement'] ?? ''),
-    screen: String(current()['screen'] ?? ''),
-    said: String(dataOf('dock')['error'] ?? ''),
-    response: String(current()['response'] ?? ''),
-    title: String(current()['label'] ?? ''),
+    arrangement: app.current().arrangement ?? '',
+    screen: app.current().screen ?? '',
+    said: app.said(),
+    response: app.current().response ?? '',
+    title: app.current().label ?? '',
   });
   const print = (screen: Screen): string => screen.canvases.map((shown) => `  ${shown.area}: ${shown.action} — ${shown.title}`).join('\n');
 
@@ -185,36 +147,27 @@ for (let run = 1; run <= runs; run += 1) {
   try {
     for (const step of steps) {
       if ('open' in step) {
-        session.dispatch('dock', { type: 'ui:click', ref: 'screen', payload: step.open });
-        await until(() => current()['screen'] === step.open);
-        await new Promise((done) => setTimeout(done, 200));
+        await app.openScreen(step.open);
         console.log(`» opened "${step.open}"`);
         continue;
       }
-      shell.flattenRenderTree(shell.getShellRenderTree());
       const before = screenOf();
-      const seen = answers;
-      const started = performance.now();
-      session.dispatch('dock', { type: 'ui:model', ref: 'text', payload: step.ask });
-      session.dispatch('dock', { type: 'ui:key', ref: 'text', key: 'Enter' });
-      const answered = await until(() => answers > seen);
-      const took = performance.now() - started;
-      times.push(took);
-      await new Promise((done) => setTimeout(done, 300));
+      const took = await app.ask(step.ask);
+      if (took !== undefined) times.push(took);
       const screen = screenOf();
-      const miss = !answered ? 'no answer in 60 s' : screen.said !== '' ? `the line says: ${screen.said}` : (twice(screen) ?? step.want?.(screen, before));
+      const miss = took === undefined ? 'no answer in 60 s' : screen.said !== '' ? `the line says: ${screen.said}` : (twice(screen) ?? step.want?.(screen, before));
       if (step.want !== undefined) {
         scored += 1;
         if (miss === undefined) right += 1;
         else misses.set(step.ask, (misses.get(step.ask) ?? 0) + 1);
       }
       const verdict = step.want === undefined ? '' : miss === undefined ? ' ✓' : ` ✗ ${miss}`;
-      console.log(`» "${step.ask}" — ${Math.round(took)} ms · ${screen.arrangement}${verdict}${screen.said !== '' ? ` · the line says: ${screen.said}` : ''}\n  title: ${screen.title} · response: ${screen.response}\n${print(screen)}`);
+      console.log(`» "${step.ask}" — ${Math.round(took ?? 0)} ms ·${screen.arrangement}${verdict}${screen.said !== '' ? ` · the line says: ${screen.said}` : ''}\n  title: ${screen.title} · response: ${screen.response}\n${print(screen)}`);
       if (why) console.log(said.join('\n'));
       said.length = 0;
     }
   } finally {
-    server.close();
+    app.server.close();
   }
   if (scored > 0) {
     scores.push(right);

@@ -2,7 +2,6 @@ import type { LayoutNode } from '@niscorp/nova';
 
 const open = { $eq: ['$.picked', -1] };
 
-// Once picked, the right option shows itself, and a wrong pick shows it was wrong.
 const optionTone = {
   $if: open,
   $then: 'choice',

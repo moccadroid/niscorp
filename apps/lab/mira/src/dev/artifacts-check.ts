@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { ActionDefinitionSchema, LayoutNodeSchema } from '@niscorp/nova';
 import type { LayoutNode } from '@niscorp/nova';
+import { componentsOf, walkNodes } from '@niscorp/nova/reflect';
 import { actions } from '../app/action-catalog';
 import { ARRANGEMENTS } from '../app/arrangements';
 import { assignments } from '../app/charter/assignments';
@@ -8,13 +9,12 @@ import { charter } from '../app/charter/charter';
 import { SCREENS } from '../app/screens';
 import { AREAS } from '../app/shell/areas';
 import { shell } from '../app/shell/shell';
+import { inputKeysOf } from '../server/compose/catalog';
+import { isRecord } from '../server/compose/record';
 import { buildRegistry } from '../ui/registry';
+import { checks } from './checks';
 
-let failures = 0;
-const check = (name: string, passed: boolean, detail = ''): void => {
-  console.log(`${passed ? '[pass]' : '[fail]'} ${name}${!passed && detail !== '' ? ` — ${detail}` : ''}`);
-  if (!passed) failures += 1;
-};
+const { check, finish } = checks('artifacts');
 
 const impurity = (value: unknown, path: string): string => {
   if (value === null || typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return '';
@@ -35,16 +35,6 @@ const parses = (name: string, parse: () => unknown): void => {
     check(`${name} parses its schema`, false, error instanceof Error ? error.message.slice(0, 300) : String(error));
   }
 };
-const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
-const propertiesOf = (schema: unknown): string[] => (isRecord(schema) && isRecord(schema['properties']) ? Object.keys(schema['properties']) : []);
-
-const componentsIn = (node: unknown): string[] => {
-  if (Array.isArray(node)) return node.flatMap(componentsIn);
-  if (!isRecord(node)) return [];
-  const own = typeof node['component'] === 'string' ? [node['component']] : [];
-  return [...own, ...['children', 'then', 'else', 'do'].flatMap((key) => componentsIn(node[key]))];
-};
-
 pure('the action catalog', actions);
 pure('the charter', charter);
 pure('the assignments', assignments);
@@ -55,7 +45,7 @@ for (const [id, definition] of Object.entries(actions)) {
   check(`action "${id}" is catalogued under its own id`, definition.id === id, `its id is "${definition.id}"`);
   parses(`action "${id}"`, () => ActionDefinitionSchema.parse(definition));
   check(`action "${id}" says what it shows`, (definition.description ?? '') !== '');
-  const unknown = propertiesOf(definition.input).filter((key) => !(key in (definition.data ?? {})));
+  const unknown = inputKeysOf(definition.input).filter((key) => !(key in (definition.data ?? {})));
   check(`action "${id}" declares only inputs its data has`, unknown.length === 0, unknown.join(', '));
 }
 
@@ -66,16 +56,17 @@ const layouts: [string, LayoutNode | undefined][] = [
   ...ARRANGEMENTS.map((arrangement): [string, LayoutNode | undefined] => [`arrangement "${arrangement.id}"`, arrangement.layout]),
 ];
 for (const [name, layout] of layouts) {
-  const missing = [...new Set(componentsIn(layout))].filter((component) => !registered.has(component));
+  const missing = [...componentsOf(layout)].filter((component) => !registered.has(component));
   check(`${name} names only components the kit has`, missing.length === 0, missing.join(', '));
 }
 
 pure('the arrangements', ARRANGEMENTS);
-const canvasesIn = (node: unknown): string[] => {
-  if (Array.isArray(node)) return node.flatMap(canvasesIn);
-  if (!isRecord(node)) return [];
-  const own = node['component'] === 'CanvasSlot' && isRecord(node['props']) && typeof node['props']['canvasId'] === 'string' ? [node['props']['canvasId']] : [];
-  return [...own, ...['children', 'then', 'else', 'do'].flatMap((key) => canvasesIn(node[key]))];
+const canvasesIn = (layout: unknown): string[] => {
+  const held: string[] = [];
+  walkNodes(layout, (node) => {
+    if (node['component'] === 'CanvasSlot' && isRecord(node['props']) && typeof node['props']['canvasId'] === 'string') held.push(node['props']['canvasId']);
+  });
+  return held;
 };
 for (const arrangement of ARRANGEMENTS) {
   parses(`arrangement "${arrangement.id}"`, () => LayoutNodeSchema.parse(arrangement.layout));
@@ -86,13 +77,12 @@ for (const arrangement of ARRANGEMENTS) {
 check('the frame has the region an arrangement is swapped into, and the first one in it', JSON.stringify(shell.layout).includes('"ref":"answers"') && shell.layoutStore?.['answers'] !== undefined);
 
 pure('the screens', SCREENS);
-check('there is a first screen to open on', SCREENS.length > 0);
 for (const screen of SCREENS) {
   for (const [at, canvas] of screen.canvases.entries()) {
     const action = actions[canvas.action];
     const named = `screen "${screen.id}" canvas ${at + 1}`;
     check(`${named} opens an action the app has`, action !== undefined, canvas.action);
-    const extra = Object.keys(canvas.input).filter((key) => !propertiesOf(action?.input).includes(key));
+    const extra = Object.keys(canvas.input).filter((key) => !inputKeysOf(action?.input).includes(key));
     check(`${named} gives only inputs ${canvas.action} takes`, extra.length === 0, extra.join(', '));
     const parsed = action?.input === undefined ? undefined : z.fromJSONSchema(action.input).safeParse(canvas.input);
     check(`${named} is opened with an input its action’s schema takes`, parsed === undefined || parsed.success, parsed?.error?.message ?? '');
@@ -101,11 +91,5 @@ for (const screen of SCREENS) {
   const arrangement = ARRANGEMENTS.find((candidate) => candidate.id === screen.arrangement);
   check(`screen "${screen.id}" is laid out in an arrangement there is, with room for its canvases`, arrangement !== undefined && arrangement.areaCount >= screen.canvases.length, `${screen.arrangement}: ${screen.canvases.length} canvases`);
 }
-for (const definition of Object.values(actions)) {
-  const links = Array.isArray(definition.data?.['links']) ? definition.data['links'] : [];
-  const nowhere = links.map((link: unknown) => (isRecord(link) ? link['screen'] : undefined)).filter((screen: unknown) => !SCREENS.some((one) => one.id === screen));
-  if (links.length > 0) check(`action "${definition.id}" links only to screens there are`, nowhere.length === 0, nowhere.join(', '));
-}
 
-console.log(failures === 0 ? '[pass] artifacts: all checks passed' : `[fail] artifacts: ${failures} check(s) failed`);
-process.exit(failures === 0 ? 0 : 1);
+finish();
