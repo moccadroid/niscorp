@@ -4,6 +4,7 @@ export type History = {
   current: () => ShownPlan;
   showing: () => number;
   add: (plan: Plan) => ShownPlan;
+  next: (plan: Plan) => ShownPlan;
   replace: (index: number, plan: Plan) => ShownPlan;
   drop: (index: number) => void;
   indexOf: (test: (plan: Plan) => boolean) => number;
@@ -32,6 +33,7 @@ export const createHistory = (first: Plan | undefined): History => {
       plans.push(plan);
       return showAt(plans.length - 1);
     },
+    next: (plan) => ({ ...plan, position: plans.length + 1, total: plans.length + 1, stack: [...plans.map((one, offset) => ({ position: offset + 1, label: one.label })), { position: plans.length + 1, label: plan.label }] }),
     replace: (index, plan) => {
       plans[index] = plan;
       return shown(index);

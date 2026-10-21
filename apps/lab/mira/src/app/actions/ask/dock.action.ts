@@ -43,8 +43,10 @@ export const dockAction: ActionDefinition = {
     forward: { fn: 'answers.forward', target: 'current' },
     go: { fn: 'answers.go', target: 'current' },
     saved: { fn: 'answers.saved', target: 'current' },
+    current: { fn: 'answers.current', target: 'current' },
   },
   triggers: [
+    { message: 'answer-moved', do: [{ call: 'current', onSuccess: shown }] },
     { message: 'saved', do: [{ set: 'saved', value: '@event.payload' }, { call: 'saved', onSuccess: shown }] },
     { message: 'ask', do: [{ set: 'text', value: '@event.payload' }, ...ask] },
     { event: 'ui:key', key: 'Enter', ref: 'text', do: ask },

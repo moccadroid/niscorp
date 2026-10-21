@@ -4,7 +4,7 @@ import type { AreaId } from '../../app/shell/areas';
 import { AreaIdSchema } from './layout';
 import type { Said } from './plan';
 
-const GridSchema = z
+export const GridSchema = z
   .object({
     columns: z.number().int().min(1).max(3).describe('How many columns the areas are laid out in.'),
     areas: z
@@ -23,7 +23,7 @@ const GridSchema = z
   .strict()
   .describe('A layout of your own, only when no arrangement suits, or the message says where things go and no arrangement puts them there.');
 
-const EntrySchema = z
+export const EntrySchema = z
   .object({
     area: AreaIdSchema.describe('The area this entry is for.'),
     keep: AreaIdSchema.nullish().describe('Moves the canvas now in that area here, unchanged. That area is then empty, unless another entry gives it something.'),
@@ -46,10 +46,10 @@ const EntrySchema = z
 export const ReplySchema = z
   .object({
     title: z.string().max(40).describe('What the answer is, in at most four words ("German greetings", "A joke"), never the message repeated. It names the answer among the others.'),
-    areas: z.array(EntrySchema).max(AREAS.length).nullish().describe('An entry for each area that changes. An area left out stays as it is, unless the arrangement has no such area.'),
+    screen: z.string().nullish().describe('The id of one of the SCREENS, only when the message asks for that screen as it is; then no areas.'),
     arrangement: z.string().nullish().describe('The id of one of the ARRANGEMENTS, only when the answer needs other room than the one on screen; every area used must be in it.'),
     grid: GridSchema.nullish(),
-    screen: z.string().nullish().describe('The id of one of the SCREENS, only when the message asks for that screen as it is; then no areas.'),
+    areas: z.array(EntrySchema).max(AREAS.length).nullish().describe('An entry for each area that changes. An area left out stays as it is, unless the arrangement has no such area.'),
   })
   .strict();
 
@@ -57,13 +57,14 @@ export type Reply = z.infer<typeof ReplySchema>;
 
 export type Entry = { area: AreaId; keep?: AreaId; action?: string; input?: Record<string, unknown>; intent?: string; say?: Said; drop: boolean };
 
-export const entriesOf = (reply: Reply): Entry[] =>
-  (reply.areas ?? []).map(({ area, keep, action, input, intent, say, drop }) => ({
-    area,
-    ...(keep ? { keep } : {}),
-    ...(action ? { action } : {}),
-    ...(input ? { input } : {}),
-    ...(intent ? { intent } : {}),
-    ...(say ? { say: { title: say.title.trim(), text: say.text.trim() } } : {}),
-    drop: drop === true,
-  }));
+export const entryOf = ({ area, keep, action, input, intent, say, drop }: z.infer<typeof EntrySchema>): Entry => ({
+  area,
+  ...(keep ? { keep } : {}),
+  ...(action ? { action } : {}),
+  ...(input ? { input } : {}),
+  ...(intent ? { intent } : {}),
+  ...(say ? { say: { title: say.title.trim(), text: say.text.trim() } } : {}),
+  drop: drop === true,
+});
+
+export const entriesOf = (reply: Reply): Entry[] => (reply.areas ?? []).map(entryOf);

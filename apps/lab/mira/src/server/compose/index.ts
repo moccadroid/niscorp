@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { SignalClient, Usage } from '@niscorp/cortex';
+import type { CortexEvent, SignalClient, Usage } from '@niscorp/cortex';
 import type { FunctionDefinition, FunctionSession } from '@niscorp/moss';
 import { unverifiedShell } from '@niscorp/moss/unverified';
 import { ARRANGEMENTS } from '../../app/arrangements';
@@ -8,8 +8,8 @@ import type { Screen } from '../../app/screens';
 import { AREAS } from '../../app/shell/areas';
 import type { AreaId } from '../../app/shell/areas';
 import { recordModelRun } from '../runs';
-import { answerOf, refusalsOf } from './answer';
-import type { AnswerContext } from './answer';
+import { answerOf, answerSoFar, refusalsOf } from './answer';
+import type { Answer, AnswerContext } from './answer';
 import { CATALOG } from './catalog';
 import type { Catalog } from './catalog';
 import { composerAgent } from './composer.agent';
@@ -40,6 +40,17 @@ const reasonOf = (error: unknown): string => (error instanceof Error ? error.mes
 
 const NO_USAGE: Usage = { inputTokens: 0, outputTokens: 0, totalTokens: 0, reported: false };
 
+const canvasesOfAnswer = (answer: Answer): AreaCanvases => {
+  const canvases: AreaCanvases = { ...answer.canvases };
+  for (const area of AREAS) {
+    const said = answer.said[area];
+    if (said !== undefined) canvases[area] = wordsCanvas(said);
+  }
+  return canvases;
+};
+
+const screenOf = (plan: Plan): string => JSON.stringify([plan.canvases, plan.layout]);
+
 export const composer =
   (models: Models): ((session: FunctionSession) => FunctionDefinition[]) =>
   (session) => {
@@ -57,6 +68,14 @@ export const composer =
     const show = (plan: ShownPlan, changed: readonly AreaId[] = []): ShownPlan => {
       unverifiedShell(session).setLayout('answers', changed.length > 0 ? markChanged(plan.layout, changed) : plan.layout);
       return plan;
+    };
+
+    // The answer being written, while it streams: the dock re-reads it whenever the message `answer-moved` says it moved.
+    let soFar: ShownPlan | undefined;
+    const moveTo = (plan: ShownPlan | undefined, changed: readonly AreaId[] = []): void => {
+      soFar = plan;
+      show(plan ?? history.current(), changed);
+      session.shell.publish('answer-moved');
     };
 
     // A screen already in the stack is gone back to, not stacked again. What the model said when it answered with the
@@ -98,31 +117,41 @@ export const composer =
         return refused.length === 0 ? { ok: true } : { retry: refused.map((reason) => `- ${reason}`).join('\n') };
       });
       const input = messageInput(message, open, { id: before.arrangement, layout: before.layout }, picked?.picks);
-      const result = await agent.run(input, { llm: chat.llm, deps, signal: AbortSignal.timeout(chat.timeoutMs) }).result;
+      // A correction starts the answer again from the screen the message was asked on.
+      const streamed = (event: CortexEvent): void => {
+        if (turn !== asked) return;
+        if (event.type === 'retry' && soFar !== undefined) moveTo(undefined);
+        if (event.type !== 'output-partial') return;
+        const answer = answerSoFar(event.output, context);
+        if (answer === undefined) return;
+        const plan = history.next(planOf(message, canvasesOfAnswer(answer), { arrangements: ARRANGEMENTS, arrangement: answer.arrangement ?? current, label: answer.title }));
+        if (JSON.stringify([screenOf(plan), plan.label]) === JSON.stringify([screenOf(soFar ?? before), (soFar ?? before).label])) return;
+        moveTo(plan, changedAreas(plan, before));
+      };
+      const result = await agent.run(input, { llm: chat.llm, deps, signal: AbortSignal.timeout(chat.timeoutMs), onEvent: streamed }).result;
       const { usage, steps, elapsedMs } = result.meta;
       recordModelRun(session, { agentId: 'mira.compose', label: message, provider: chat.provider, model: chat.model, usage, steps, elapsedMs, outcome: result.ok ? 'ok' : 'failed' });
       // A later message is being answered: this one's answer would only flash past.
       if (turn !== asked) return history.current();
+      const placed = soFar !== undefined;
+      soFar = undefined;
 
       if (!result.ok) {
         const { code, stop, message: reason } = result.error;
         console.error(`[ask] "${message}" got no screen: ${code}${stop === undefined ? '' : ` (${stop})`}: ${reason}`);
+        if (placed) moveTo(undefined);
         throw new Error(code === 'aborted' || code === 'model_call_failed' ? 'The model could not be reached. Ask again in a moment.' : 'That answer did not fit this app’s actions. Ask again, or put it differently.');
       }
       const answer = answerOf(result.output.data, context);
       const response = result.output.response?.trim() ?? '';
       const screen = answer.screen === undefined ? undefined : SCREENS.find((candidate) => candidate.id === answer.screen);
       if (screen !== undefined) return showScreen(screen, response);
-      const canvases: AreaCanvases = { ...answer.canvases };
-      for (const area of AREAS) {
-        const said = answer.said[area];
-        if (said !== undefined) canvases[area] = wordsCanvas(said);
-      }
+      const canvases = canvasesOfAnswer(answer);
       if (Object.keys(canvases).length === 0) throw new Error('Nothing here answers that yet.');
       const plan = { ...planOf(message, canvases, { arrangements: ARRANGEMENTS, arrangement: answer.arrangement ?? current, label: answer.title }), response };
       // An answer that leaves the screen as it is adds nothing to the stack; the dock still names what was asked, and why
       // nothing changed.
-      if (JSON.stringify([plan.canvases, plan.layout]) === JSON.stringify([before.canvases, before.layout])) return show({ ...before, question: message, label: answer.title, response });
+      if (screenOf(plan) === screenOf(before)) return show({ ...before, question: message, label: answer.title, response });
       return show(history.add(plan), changedAreas(plan, before));
     };
 
@@ -149,6 +178,7 @@ export const composer =
       { id: 'answers.back', description: 'Shows the answer before the one shown, and answers its plan.', execute: async () => show(history.back()) },
       { id: 'answers.forward', description: 'Shows the answer after the one shown, and answers its plan.', execute: async () => show(history.forward()) },
       { id: 'answers.go', description: 'Shows one answer from the stack. Send { going: <its position> }; answers its plan.', execute: async (data) => show(history.go(GoSchema.parse(data).going)) },
+      { id: 'answers.current', description: 'Answers the plan shown, or, while an answer streams, the answer so far.', execute: async () => soFar ?? history.current() },
       { id: 'answers.saved', description: 'Takes a form that was saved off the answer shown. Send { saved: <the write it saved through> }; answers the plan.', execute: saved },
     ];
   };

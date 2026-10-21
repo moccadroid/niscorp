@@ -6,8 +6,8 @@ import type { Catalog } from './catalog';
 import { areasOfArrangement, gridLayout } from './layout';
 import type { WrittenLayout } from './layout';
 import type { AreaCanvases, Said } from './plan';
-import { isRecord } from './record';
-import { entriesOf } from './reply.schema';
+import { isRecord, recordOf } from './record';
+import { entriesOf, EntrySchema, entryOf, GridSchema } from './reply.schema';
 import type { Entry, Reply } from './reply.schema';
 
 // No arrangement keeps the one on screen.
@@ -47,6 +47,18 @@ const canvasRefusals = (entry: Entry, where: string, catalog: Catalog): string[]
   return refusals;
 };
 
+// What is wrong with one entry, whatever else the reply holds.
+const entryRefusals = (entry: Entry, where: string, room: readonly AreaId[], named: string, open: AreaCanvases, catalog: Catalog): string[] => {
+  const refusals = room.includes(entry.area) ? [] : [`${where}: the arrangement ${named} has no area ${entry.area}; its areas are ${room.join(', ')}.`];
+  const kinds = [entry.keep !== undefined, entry.action !== undefined || entry.input !== undefined, entry.say !== undefined, entry.drop].filter(Boolean).length;
+  if (kinds !== 1) return [...refusals, `${where}: give exactly one of "keep", "action" with "input", "say", or "drop".`];
+  if (entry.keep !== undefined) return open[entry.keep] === undefined ? [...refusals, `${where}: there is nothing in area ${entry.keep} to keep.`] : refusals;
+  if (entry.action !== undefined || entry.input !== undefined) return [...refusals, ...canvasRefusals(entry, where, catalog)];
+  return refusals;
+};
+
+const nameOf = (arrangement: string | WrittenLayout): string => (typeof arrangement === 'object' ? 'you wrote' : `"${arrangement}"`);
+
 // What was there stays, in the areas the arrangement has, unless an entry drops it, moves it (an area another entry
 // keeps from is empty unless it is given something), or puts another canvas or words there.
 const applyEntries = (entries: readonly Entry[], open: AreaCanvases, room: readonly AreaId[], catalog: Catalog): { canvases: AreaCanvases; said: Partial<Record<AreaId, Said>> } => {
@@ -81,19 +93,13 @@ export const refusalsOf = (reply: Reply, context: AnswerContext): string[] => {
   if (reply.grid && new Set(reply.grid.areas.map(({ name }) => name)).size !== reply.grid.areas.length) refusals.push('the grid names an area twice.');
   const arrangement = arrangementOfReply(reply, arrangements) ?? current;
   const room = areasOfArrangement(arrangement, arrangements);
-  const named = typeof arrangement === 'object' ? 'you wrote' : `"${arrangement}"`;
   const entries = entriesOf(reply);
   const seen = new Set<AreaId>();
   entries.forEach((entry, at) => {
     const where = `areas[${at}] (area ${entry.area})`;
     if (seen.has(entry.area)) refusals.push(`${where}: area ${entry.area} is given twice.`);
     seen.add(entry.area);
-    if (!room.includes(entry.area)) refusals.push(`${where}: the arrangement ${named} has no area ${entry.area}; its areas are ${room.join(', ')}.`);
-    const kinds = [entry.keep !== undefined, entry.action !== undefined || entry.input !== undefined, entry.say !== undefined, entry.drop].filter(Boolean).length;
-    if (kinds !== 1) refusals.push(`${where}: give exactly one of "keep", "action" with "input", "say", or "drop".`);
-    else if (entry.keep !== undefined) {
-      if (open[entry.keep] === undefined) refusals.push(`${where}: there is nothing in area ${entry.keep} to keep.`);
-    } else if (entry.action !== undefined || entry.input !== undefined) refusals.push(...canvasRefusals(entry, where, catalog));
+    refusals.push(...entryRefusals(entry, where, room, nameOf(arrangement), open, catalog));
   });
   const shown = new Map<string, AreaId>();
   const { canvases } = applyEntries(entries, open, room, catalog);
@@ -113,4 +119,29 @@ export const answerOf = (reply: Reply, context: AnswerContext): Answer => {
   const arrangement = arrangementOfReply(reply, context.arrangements);
   const { canvases, said } = applyEntries(entriesOf(reply), context.open, areasOfArrangement(arrangement ?? context.current, context.arrangements), context.catalog);
   return { title, canvases, said, ...(arrangement !== undefined ? { arrangement } : {}) };
+};
+
+// While the reply streams, solid writes it left to right: once an entry is followed by another, it is finished, and it
+// is placed if its own checks pass. The room is final by then, for it comes before the areas. Whether the whole reply
+// holds is the run's to say when it ends.
+export const answerSoFar = (output: unknown, context: AnswerContext): Answer | undefined => {
+  const data = recordOf(recordOf(output)['data']);
+  const written = data['areas'];
+  if (!Array.isArray(written) || typeof data['screen'] === 'string') return undefined;
+  const grid = GridSchema.safeParse(data['grid']);
+  const asked = grid.success ? gridLayout(grid.data) : context.arrangements.find((arrangement) => arrangement.id === data['arrangement'])?.id;
+  const arrangement = asked ?? context.current;
+  const room = areasOfArrangement(arrangement, context.arrangements);
+  const seen = new Set<AreaId>();
+  const entries = written.slice(0, -1).flatMap((raw: unknown) => {
+    const parsed = EntrySchema.safeParse(raw);
+    if (!parsed.success) return [];
+    const entry = entryOf(parsed.data);
+    if (seen.has(entry.area) || entryRefusals(entry, '', room, nameOf(arrangement), context.open, context.catalog).length > 0) return [];
+    seen.add(entry.area);
+    return [entry];
+  });
+  const { canvases, said } = applyEntries(entries, context.open, room, context.catalog);
+  const title = typeof data['title'] === 'string' ? data['title'].trim() : '';
+  return { title, canvases, said, ...(asked !== undefined ? { arrangement: asked } : {}) };
 };

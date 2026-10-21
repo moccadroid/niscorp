@@ -100,8 +100,12 @@ const chat: SignalClient = {
   step: async (request) => scripted(request),
   stepStream: (request) => {
     const result = scripted(request);
+    // In pieces, as a provider streams it, so the reply is read while it is written.
     return (async function* () {
-      yield { type: 'text' as const, text: result.content };
+      for (let at = 0; at < result.content.length; at += 24) {
+        yield { type: 'text' as const, text: result.content.slice(at, at + 24) };
+        await new Promise((done) => setTimeout(done, 1));
+      }
       yield { type: 'done' as const, result };
     })();
   },
@@ -143,8 +147,15 @@ try {
   const session = await shells.session(null, null);
   const shell = session.shell;
   let answered = 0;
+  let moves = 0;
+  let movesWhenAnswered = 0;
   shell.onEndpoint((event) => {
-    if (event.canvasId === 'dock' && event.name === 'ask') answered += 1;
+    if (event.canvasId !== 'dock') return;
+    if (event.name === 'current') moves += 1;
+    if (event.name === 'ask') {
+      answered += 1;
+      movesWhenAnswered = moves;
+    }
   });
   const on = (canvas: string): { action: string; id: string; data: Record<string, unknown> } => {
     const active = shell.getState().canvases[canvas]?.active;
@@ -187,12 +198,15 @@ try {
   // once it has been drawn. A message is answered when the line's `ask` call ends, whatever it leaves on screen.
   const draw = (): void => void shell.flattenRenderTree(shell.getShellRenderTree());
   const lastPrompt = (): string => prompts[prompts.length - 1] ?? '';
+  let streamed = 0;
   const ask = async (text: string): Promise<void> => {
     draw();
     const seen = answered;
+    const movesBefore = moves;
     session.dispatch('dock', { type: 'ui:model', ref: 'text', payload: text });
     session.dispatch('dock', { type: 'ui:key', ref: 'text', key: 'Enter' });
     await until(() => answered > seen);
+    streamed = movesWhenAnswered - movesBefore;
     await settle();
   };
   const openMenu = async (id: string): Promise<void> => {
@@ -257,6 +271,7 @@ try {
   check('a read asked with a value reads only what the value names', await until(() => on('a').action === 'rows.table' && rows('a', 'rows').length === 1), JSON.stringify(on('a').data['params']));
   const germanTable = on('a').id;
   await ask('and the count beside it');
+  check('the answer streams in: an area is placed while the rest of the reply is still being written', streamed > 0, String(streamed));
   check('a canvas kept stays the same canvas, in its area; what is new goes where the model puts it', on('a').id === germanTable && areas() === 'rows.table rows.stat' && grid() === '2: a b', `${areas()} — ${grid()}`);
   await ask('the count first');
   check('a canvas the model keeps from another area moves there', areas() === 'rows.stat rows.table', areas());
