@@ -29,7 +29,7 @@ const HeadingProps = z.object({}).describe('The page’s title.');
 export const Heading: NovaComponent = ({ children }) => <h1 className="k-heading">{children}</h1>;
 Heading.meta = { description: 'The page’s title.', propsSchema: HeadingProps };
 
-const TextProps = z.object({ tone: z.enum(['default', 'muted', 'strong', 'error']).optional().describe('default | muted | strong | error') });
+const TextProps = z.object({ tone: z.enum(['default', 'lead', 'muted', 'strong', 'error']).optional().describe('default | lead: the sentence a card opens with | muted | strong | error') });
 export const Text: NovaComponent = ({ children, novaRef: _ref, novaModel: _model, ...props }) => {
   const { tone } = parsed(TextProps, props, {});
   return <p className={tone === undefined || tone === 'default' ? 'k-text' : `k-text k-${tone}`}>{children}</p>;
@@ -108,6 +108,46 @@ export const Card: NovaComponent = ({ children, novaRef: _ref, novaModel: _model
   );
 };
 Card.meta = { description: 'One part of an answer, with its title.', propsSchema: CardProps };
+
+const CodeProps = z.object({ text: z.string().describe('The code, as it is to be read.') });
+export const Code: NovaComponent = ({ novaRef: _ref, novaModel: _model, ...props }) => {
+  const { text } = parsed(CodeProps, props, { text: '' });
+  return (
+    <pre className="k-code">
+      <code>{text}</code>
+    </pre>
+  );
+};
+Code.meta = { description: 'A block of code, kept as written.', propsSchema: CodeProps };
+
+const PointsProps = z.object({ items: z.array(z.object({ title: z.string(), text: z.string() })).describe('Each point: a few words, and a sentence.') });
+export const Points: NovaComponent = ({ novaRef: _ref, novaModel: _model, ...props }) => {
+  const { items } = parsed(PointsProps, props, { items: [] });
+  return (
+    <dl className="k-points">
+      {items.map((item) => (
+        <div key={item.title} className="k-point">
+          <dt>{item.title}</dt>
+          <dd>{item.text}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+};
+Points.meta = { description: 'A few points, each a few words and a sentence.', propsSchema: PointsProps };
+
+const StepsProps = z.object({ items: z.array(z.string()).describe('The steps, in order.') });
+export const Steps: NovaComponent = ({ novaRef: _ref, novaModel: _model, ...props }) => {
+  const { items } = parsed(StepsProps, props, { items: [] });
+  return (
+    <ol className="k-steps">
+      {items.map((item) => (
+        <li key={item}>{item}</li>
+      ))}
+    </ol>
+  );
+};
+Steps.meta = { description: 'Steps in order, numbered.', propsSchema: StepsProps };
 
 const InputProps = z.object({
   placeholder: z.string().optional(),

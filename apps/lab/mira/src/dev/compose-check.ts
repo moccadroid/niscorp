@@ -22,8 +22,9 @@ const say = (area: string, title: string, text: string) => ({ area, say: { title
 const gridOf = (columns: number, ...areas: [string, number][]): unknown => ({ columns, areas: areas.map(([name, span]) => ({ name, span })) });
 
 const REPLIES: Record<string, Record<string, unknown>[]> = {
-  'What is the charter?': [{ response: 'Put the charter where the nisc card was; the rest stays.', title: 'The charter', areas: [put('b', card('guide.charter'))] }],
-  'drop how to make it yours': [{ areas: [{ area: 'e', drop: true }] }],
+  'What is the charter?': [{ response: 'Put the charter beside the welcome.', title: 'The charter', areas: [keep('a'), put('b', card('guide.charter'))], arrangement: 'pair' }],
+  'drop the welcome': [{ areas: [{ area: 'a', drop: true }] }],
+  'What runs the screen?': [{ areas: [put('a', card('guide.shell'))] }],
   'Only the charter': [{ areas: [put('a', card('guide.charter'))], arrangement: 'single' }],
   'What is an action?': [{ areas: [put('a', card('guide.actions'))] }],
   'and the charter beside it': [{ areas: [keep('a'), put('b', card('guide.charter'))], arrangement: 'pair' }],
@@ -119,7 +120,7 @@ try {
 
   const template = '<!doctype html><html><head></head><body><div id="root"></div></body></html>';
   const page = await renderDocument({ ...drawing, server, template, request: { path: '/', cookie: null } });
-  check('the page arrives drawn: the first screen, and the dock with the screens and the line to ask in', page.drawn && ['k-frame', 'k-dock', 'k-prompt', 'Welcome to nisc', 'What nisc is', 'Under the hood'].every((part) => page.html.includes(part)), page.html.slice(0, 300));
+  check('the page arrives drawn: the first screen, and the dock with the screens and the line to ask in', page.drawn && ['k-frame', 'k-dock', 'k-prompt', 'Welcome to nisc', 'What is an action?'].every((part) => page.html.includes(part)), page.html.slice(0, 300));
 
   const session = await shells.session(null, null);
   const shell = session.shell;
@@ -198,10 +199,9 @@ try {
   const without = (area: string, of: string): string => of.replace(new RegExp(`${area}:\\S*`), '');
 
   check('the app opens on the first screen, every one of its canvases an area of its own, and the stack starts there', areas() === START && on('dock').action === 'ask.dock' && current().position === 1 && total() === 1, areas());
-  check('the frame’s region holds the first screen’s arrangement', current().arrangement === SCREENS[0]?.arrangement && grid() === '2: a×2 b c d e', `${String(current().arrangement)} — ${grid()}`);
-  check('a guide card holds its own text', on('b').data['title'] === 'What nisc is' && rows('b', 'paragraphs').length === 2, JSON.stringify(on('b').data));
+  check('the frame’s region holds the first screen’s arrangement', current().arrangement === SCREENS[0]?.arrangement && grid() === '1: a', `${String(current().arrangement)} — ${grid()}`);
 
-  const startIds = ids();
+  const welcome = on('a').id;
   runs.length = 0;
   likely = ['guide.charter'];
   await ask('What is the charter?');
@@ -212,31 +212,36 @@ try {
     runs.map((run) => `${run.agentId} ${run.model} ${run.outcome} ${run.steps} ${run.totalTokens} ${run.label}`).join(' | ') === 'mira.jev jev ok 1 110 What is the charter? | mira.compose chat ok 1 110 What is the charter?',
     JSON.stringify(runs),
   );
-  check('Jev is asked about the message with the open screen: an intent for each canvas, the words too', jev?.state['message'] === 'What is the charter?' && Object.keys(recordOf(jev?.state['open_screen'])).join(',') === 'a,b,c,d,e', JSON.stringify(jev?.state['open_screen']));
+  check('Jev is asked about the message with the open screen: an intent for each canvas, the words too', jev?.state['message'] === 'What is the charter?' && Object.keys(recordOf(jev?.state['open_screen'])).join(',') === 'a', JSON.stringify(jev?.state['open_screen']));
   check(
     'the model is given the open screen by area — where each area is, what each holds, the words too — and what Jev thinks',
-    lastPrompt().includes('arrangement hero: a (the whole width); b c; d e') && lastPrompt().includes('- a: answer.text') && lastPrompt().includes('- b: guide.nisc') && lastPrompt().includes('A FAST PICKER THINKS (a hint; how likely each belongs in the answer): actions guide.charter 0.90; reads none; writes none; screens none'),
+    lastPrompt().includes('arrangement single: a') && lastPrompt().includes('- a: answer.text') && lastPrompt().includes('A FAST PICKER THINKS (a hint; how likely each belongs in the answer): actions guide.charter 0.90; reads none; writes none; screens none'),
     lastPrompt().slice(0, 600),
   );
   check(
-    'from the first screen, "What is the charter?" puts the charter where the model says, and nothing else moves',
-    without('b', ids()) === without('b', startIds) && on('b').action === 'guide.charter' && current().arrangement === 'hero' && grid() === '2: a×2 b c d e',
-    `${ids()} vs ${startIds} — ${grid()}`,
+    'from the first screen, "What is the charter?" puts the charter beside the welcome, which stays the same card',
+    on('a').id === welcome && on('b').action === 'guide.charter' && current().arrangement === 'pair' && grid() === '2: a b',
+    `${ids()} — ${grid()}`,
   );
+  check('a guide card holds its own text: its lead, its example, and its next questions', on('b').data['title'] === 'The charter' && String(on('b').data['example']).includes('"public"') && rows('b', 'next').length === 2, JSON.stringify(on('b').data).slice(0, 200));
   check('the area the answer changed is outlined, and only that one', marked() === 'b', marked());
   check('the chip in the dock names the answer shown by its title, and where it stands among the answers', drawn().includes('"The charter · 2/2"'), drawn().match(/"label":"[^"]*· \d+\/\d+"/)?.[0] ?? '');
   session.dispatch('dock', { type: 'ui:click', ref: 'stack' });
   await settle();
-  check('opening the chip shows what was asked, what the model said it did, and the answers to go back to', current().response === 'Put the charter where the nisc card was; the rest stays.' && drawn().includes('the rest stays') && drawn().includes('1. Start') && drawn().includes('2. The charter') && drawn().includes('What is the charter?'), String(current().response));
+  check('opening the chip shows what was asked, what the model said it did, and the answers to go back to', current().response === 'Put the charter beside the welcome.' && drawn().includes('beside the welcome') && drawn().includes('1. Start') && drawn().includes('2. The charter') && drawn().includes('What is the charter?'), String(current().response));
   session.dispatch('dock', { type: 'ui:click', ref: 'stack' });
   const charterIds = ids();
-  await ask('drop how to make it yours');
+  await ask('drop the welcome');
   check('when Jev finds nothing likely, the model is given no hint', !lastPrompt().includes('FAST PICKER'), lastPrompt().slice(-300));
   check('an answer that only empties an area outlines nothing', marked() === '', marked());
-  check('an area the model drops is emptied, and every other stays as it was', on('e').id === '' && without('e', ids()) === without('e', charterIds) && current().arrangement === 'hero', `${ids()} vs ${charterIds}`);
+  check('an area the model drops is emptied, and every other stays as it was', on('a').id === '' && without('a', ids()) === without('a', charterIds) && current().arrangement === 'pair', `${ids()} vs ${charterIds}`);
 
   await ask('Only the charter');
   check('"Only the charter" is that card alone, laid out as one thing', areas() === 'guide.charter' && grid() === '1: a', `${areas()} — ${grid()}`);
+  const seenBeforeNext = answered;
+  session.dispatch('a', { type: 'ui:click', ref: 'next', payload: 'What runs the screen?' });
+  check('a card’s next question, pressed, is asked as if typed', (await until(() => answered > seenBeforeNext)) && lastPrompt().includes('MESSAGE: What runs the screen?') && (await until(() => on('a').action === 'guide.shell')), areas());
+  await settle();
   await ask('What is an action?');
   check('an answer that names no arrangement keeps the one on screen', on('a').action === 'guide.actions' && current().arrangement === 'single', `${areas()} — ${String(current().arrangement)}`);
   const actionsCard = on('a').id;
@@ -276,12 +281,9 @@ try {
   await ask('Two cards, in a grid of my own');
   check('a grid that names an area twice is sent back saying so, and the arrangement on screen stays', (prompts[1] ?? '').includes('the grid names an area twice') && current().arrangement === 'written' && areas() === 'guide.nisc guide.data', `${String(current().arrangement)} — ${areas()}`);
 
-  const inside = SCREENS.find((screen) => screen.id === 'inside');
-  await openMenu('inside');
-  check('a screen from the dock shows its canvases in its arrangement', areas() === actionsOf(inside?.canvases ?? []) && current().arrangement === inside?.arrangement, `${areas()} — ${grid()}`);
   const stacked = total();
   await openMenu('start');
-  check('a screen already in the stack is gone back to, not stacked again', current().position === 1 && total() === stacked, `${String(current().position)} of ${total()}`);
+  check('a screen from the dock, already in the stack, is gone back to, not stacked again', areas() === START && current().position === 1 && total() === stacked, `${areas()} — ${String(current().position)} of ${total()}`);
 
   await ask('What can you do?');
   check('words the model says are placed where it says, with no things to ask under them', on('a').action === 'answer.text' && on('a').data['title'] === 'What this app does' && rows('a', 'examples').length === 0 && areas() === 'answer.text', areas());

@@ -32,29 +32,25 @@ const twice = (now: Screen): string | undefined => {
   return new Set(seen).size === seen.length ? undefined : 'the same card is shown twice';
 };
 
-// What the message asked for, with at most one area of the screen changed, in the same arrangement.
-const placed = (now: Screen, before: Screen, action: string): string | undefined => {
-  if (!has(now, action)) return `want ${action}`;
-  const changed = [...new Set([...now.canvases, ...before.canvases].map((shown) => shown.area))].filter((area) => at(now, area)?.id !== at(before, area)?.id);
-  if (changed.length > 1) return `areas ${changed.join(', ')} changed`;
-  return now.arrangement === before.arrangement ? undefined : `the arrangement went from ${before.arrangement} to ${now.arrangement}`;
-};
+const shows = (action: string) => (now: Screen): string | undefined => (has(now, action) ? undefined : `want ${action}`);
 
 const RUN: readonly Step[] = [
   { open: 'start' },
-  { ask: 'What is the charter?', want: (now, before) => placed(now, before, 'guide.charter') },
+  { ask: 'What is an action?', want: shows('guide.actions') },
   { open: 'start' },
-  { ask: 'Who may do what in this app?', want: (now, before) => placed(now, before, 'guide.charter') },
-  { open: 'inside' },
-  { ask: 'How does my message become a screen?', want: (now, before) => placed(now, before, 'guide.answers') },
+  { ask: 'Who may do what?', want: shows('guide.charter') },
   { open: 'start' },
+  { ask: 'How does my message become a screen?', want: shows('guide.answers') },
+  { open: 'start' },
+  { ask: 'What is an action?' },
+  { ask: 'How is an action drawn?', want: shows('guide.layouts') },
   { ask: 'show start + intro', want: (now) => (now.screen === 'start' ? undefined : 'want the start screen') },
   { open: 'start' },
   { ask: 'What can you do?', want: (now) => (has(now, 'answer.text') ? undefined : 'want words') },
   { open: 'start' },
   { ask: 'the nisc card big at the top, the actions and the yours card below it', want: (now) => (is(now.canvases[0], 'guide.nisc') && has(now, 'guide.actions') && has(now, 'guide.yours') ? undefined : 'want the nisc card first, the actions and the yours card beneath') },
   { open: 'start' },
-  { ask: 'What are layouts?', want: (now) => (has(now, 'guide.layouts') ? undefined : 'want the layouts card') },
+  { ask: 'What are layouts?', want: shows('guide.layouts') },
   {
     ask: 'and the shell beside it',
     want: (now, before) => {
@@ -71,8 +67,8 @@ const RUN: readonly Step[] = [
       return is(there, 'guide.charter') && (layouts === undefined || at(now, layouts.area)?.id === layouts.id) ? undefined : 'want the charter where the shell was, and the layouts card untouched';
     },
   },
-  { open: 'inside' },
-  { ask: 'How do I make this app mine?', want: (now, before) => placed(now, before, 'guide.yours') },
+  { open: 'start' },
+  { ask: 'How do I make this app mine?', want: shows('guide.yours') },
 ];
 
 const prompts = process.argv.includes('--prompts');

@@ -36,7 +36,7 @@ Made 2026-10-20 by `npm create nisc`, on nisc 0.8.1. This is the record AGENTS.m
 ## Order of work
 
 1. **The interview** — every open item above, answered or delegated by name. ← here
-2. **Scaffold** — done: the frame, the message loop, the dock, a guide to nisc in eight cards on two screens, and their checks.
+2. **Scaffold** — done: the frame, the message loop, the dock, a guide to nisc in eight cards, Start the welcome alone, and their checks.
 3. **Data** — per D2/D3: your tables in `src/db/schema.ts`, your reads and writes in `src/app/vex/`; the guide (`src/app/actions/guide/`) goes.
 4. **Screens** — the ones a person will want in the dock, each its canvases; the first the one the app opens on.
 5. **Actions** — your own, small: one purpose each, a description that says what it shows, an `input` schema for what the model fills in; the ones the model may place go in the catalog.
