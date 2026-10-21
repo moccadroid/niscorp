@@ -10,12 +10,11 @@ const arranged = ARRANGEMENTS.find((arrangement) => arrangement.id === first?.ar
 
 export const shell: ShellManifest = {
   canvases: [
-    { id: 'bar', initial: 'answer.bar' },
     ...AREAS.map((area, at) => {
       const canvas = first?.canvases[at];
       return canvas === undefined ? { id: area } : { id: area, initial: { action: canvas.action, input: canvas.input } };
     }),
-    { id: 'line', initial: 'ask.line' },
+    { id: 'dock', initial: 'ask.dock' },
   ],
   layout: frameLayout,
   layoutStore: arranged === undefined ? {} : { answers: arranged.layout },

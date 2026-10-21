@@ -12,7 +12,7 @@ Made 2026-10-20 by `npm create nisc`, on nisc 0.8.1. This is the record AGENTS.m
 | D4 Writes | answered | **Vex mutation entries**, sent from a form an answer opened (`answers.write`) — by the person, never by the model. |
 | D5 Routing | derived · **partly open** | The first screen is drawn on the server and adopted by the terminal — it costs nothing while nobody can sign in. Open: once sign-in exists, the browser keeps the session in a cookie no script can read, and the page is drawn for whoever it says (AGENTS.md rule 12) — a page drawn for somebody is theirs alone (`private, no-store`). Open: which paths are **pages** rather than the app, and whether the app's shell state syncs to the address bar. |
 | D6 Who answers a message | answered | Jev reads the message and the open screen (`TYPESAFE_API_KEY`), then gpt-oss-120b on Groq composes the screen (`GROQ_API_KEY`), with what Jev picked as a hint. Without a TypeSafe key there is no Jev pass. Jev may take 2 s and the model 8 s; past that, the model answers alone, or the line says it could not be reached and the screen stays as it is. |
-| D7 What a screen is made of | answered | Canvases: an action from the catalog (`src/server/compose/catalog.ts`: the actions the model may place, the reads they show, the writes a form saves through), opened with an input its schema takes, and why it is there. Up to six, on the areas `a`–`f`; the screens in the bar’s menu are canvases too (`src/app/screens.ts`). |
+| D7 What a screen is made of | answered | Canvases: an action from the catalog (`src/server/compose/catalog.ts`: the actions the model may place, the reads they show, the writes a form saves through), opened with an input its schema takes, and why it is there. Up to six, on the areas `a`–`f`; the screens in the dock are canvases too (`src/app/screens.ts`). |
 | D8 History | derived · **open** | The answers one shell was given, kept while it lives; a reload starts again. Open: whether a person's answers outlive the shell, and memory beyond that. |
 | D9 Embeddings | answered · **open: memory** | `EMBEDDINGS` in `.env`, for memory. Nothing uses them yet. |
 | D10 Layout swaps | derived · **open: sign-in** | An answer’s arrangement is swapped into the frame’s `answers` region through moss’s unverified shell (`@niscorp/moss/unverified`, in `src/server/compose/index.ts`), because moss lets a session change a layout only through a draft, and a draft needs a signed-in person. **When the app has sign-in, the swap moves to `session.draft`, where moss checks it.** |
@@ -21,7 +21,7 @@ Made 2026-10-20 by `npm create nisc`, on nisc 0.8.1. This is the record AGENTS.m
 
 ## Answered when it was made
 
-- **Who leads:** a model. A message is answered with a screen: Jev reads the message and the open screen, gpt-oss-120b composes the screen from the app's actions, and the bar places it on the six areas. The keys are in `.env`.
+- **Who leads:** a model. A message is answered with a screen: Jev reads the message and the open screen, gpt-oss-120b composes the screen from the app's actions, and the dock places it on the six areas. The keys are in `.env`.
 - **What draws the screen:** React. The kit in `src/ui/` is where the look lives; a layout names components, never styles.
 
 ## The dial-in — open

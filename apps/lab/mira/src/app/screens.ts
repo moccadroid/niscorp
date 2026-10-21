@@ -4,7 +4,7 @@ import { greetingAdd, greetingsCount, greetingsList, greetingsPerLanguage } from
 // when the next message arrives.
 export type Canvas = { action: string; input: Record<string, unknown>; intent: string };
 
-// A screen is canvases shown together, in an arrangement of its own, opened from the menu in the bar without asking
+// A screen is canvases shown together, in an arrangement of its own, opened from the dock without asking
 // anything. The first is the one the app opens on.
 export type Screen = { id: string; label: string; arrangement: string; canvases: Canvas[] };
 
@@ -12,7 +12,7 @@ export const EXAMPLES: readonly string[] = ['Show me every greeting', 'How many 
 
 const ABOUT: Canvas = {
   action: 'answer.text',
-  input: { title: 'mira', text: 'Ask for something in the line below. The answer is a screen, put together from this app’s actions.', examples: [...EXAMPLES] },
+  input: { title: 'Greetings app', text: 'Ask for something in the line below. The answer is a screen, put together from this app’s actions.', examples: [...EXAMPLES] },
   intent: 'what this app is, and what can be asked of it',
 };
 

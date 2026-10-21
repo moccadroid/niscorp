@@ -91,5 +91,22 @@ export const planOf = (question: string, placed: Placed, how: { screen?: { id: s
   ...laidOut(how.arrangement, used(placed)),
 });
 
+// A layout with these areas marked as changed by the answer, for the kit to outline.
+export const markedLayout = (layout: LayoutNode, changed: readonly AreaId[]): LayoutNode => {
+  const mark = (node: unknown): unknown => {
+    if (Array.isArray(node)) return node.map(mark);
+    const own = recordOf(node);
+    if (Object.keys(own).length === 0) return node;
+    const props = recordOf(own['props']);
+    const marked = own['component'] === 'Area' && (changed as readonly unknown[]).includes(props['name']) ? { ...own, props: { ...props, changed: true } } : own;
+    return 'children' in marked ? { ...marked, children: mark(marked['children']) } : marked;
+  };
+  return mark(layout) as LayoutNode;
+};
+
+// The areas of a plan whose canvas is not the one another plan had there.
+export const changedAreas = (now: Unnumbered, before: Unnumbered): AreaId[] =>
+  AREAS.filter((area) => now.canvases[area] !== undefined && JSON.stringify(now.canvases[area]) !== JSON.stringify(before.canvases[area]));
+
 // What a plan holds, an area each.
 export const placedOf = (plan: Unnumbered): Placed => Object.fromEntries(AREAS.flatMap((area) => (plan.canvases[area]?.[0] !== undefined ? [[area, plan.canvases[area]?.[0]]] : [])));

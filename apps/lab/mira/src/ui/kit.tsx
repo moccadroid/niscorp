@@ -31,7 +31,7 @@ Text.meta = { description: 'A paragraph.', propsSchema: TextProps };
 
 const ButtonProps = z.object({
   label: z.string().optional().describe('What the button says; falls back to its children.'),
-  tone: z.enum(['primary', 'quiet']).optional().describe('primary | quiet'),
+  tone: z.enum(['primary', 'quiet', 'chip']).optional().describe('primary | quiet | chip'),
   value: z.unknown().optional().describe('Sent with the click as its payload.'),
 });
 export const Button: NovaComponent = ({ children, novaRef, novaModel: _model, ...props }) => {
@@ -40,7 +40,7 @@ export const Button: NovaComponent = ({ children, novaRef, novaModel: _model, ..
   return (
     <button
       type="button"
-      className={tone === 'quiet' ? 'k-button k-quiet' : 'k-button'}
+      className={tone === 'quiet' || tone === 'chip' ? `k-button k-${tone}` : 'k-button'}
       data-ref={novaRef}
       onClick={() => dispatch({ type: 'ui:click', ...(novaRef !== undefined ? { ref: novaRef } : {}), ...(value !== undefined ? { payload: value } : {}) })}
     >
@@ -50,17 +50,17 @@ export const Button: NovaComponent = ({ children, novaRef, novaModel: _model, ..
 };
 Button.meta = { description: 'A button; dispatches ui:click with its ref, and its value as the payload.', propsSchema: ButtonProps };
 
-const FrameProps = z.object({}).describe('The whole app: a bar, the answer, the line to ask in.');
+const FrameProps = z.object({}).describe('The whole app: the answer, and the dock under it.');
 export const Frame: NovaComponent = ({ children }) => <div className="k-frame">{children}</div>;
 Frame.meta = { description: 'The whole app, top to bottom.', propsSchema: FrameProps };
 
-const BarProps = z.object({}).describe('The strip across the top.');
-export const Bar: NovaComponent = ({ children }) => <header className="k-bar">{children}</header>;
-Bar.meta = { description: 'The strip across the top.', propsSchema: BarProps };
+const DockProps = z.object({}).describe('What stays at the bottom while the answer scrolls above it.');
+export const Dock: NovaComponent = ({ children }) => <footer className="k-dock">{children}</footer>;
+Dock.meta = { description: 'What stays at the bottom while the answer scrolls above it.', propsSchema: DockProps };
 
-const MenuProps = z.object({}).describe('A list that opens under the bar: one choice a line.');
+const MenuProps = z.object({}).describe('A list that opens above the dock: one choice a line.');
 export const Menu: NovaComponent = ({ children }) => <nav className="k-menu">{children}</nav>;
-Menu.meta = { description: 'A list that opens under the bar.', propsSchema: MenuProps };
+Menu.meta = { description: 'A list that opens above the dock.', propsSchema: MenuProps };
 
 const AnswersProps = z.object({ columns: z.number().int().min(1).max(3).optional().describe('How many columns its areas are laid out in: 1 to 3.') });
 export const Answers: NovaComponent = ({ children, novaRef: _ref, novaModel: _model, ...props }) => {
@@ -73,11 +73,15 @@ export const Answers: NovaComponent = ({ children, novaRef: _ref, novaModel: _mo
 };
 Answers.meta = { description: 'The grid an answer is drawn in.', propsSchema: AnswersProps };
 
-const AreaProps = z.object({ name: z.string().describe('Which canvas it holds.'), span: z.number().int().min(1).max(3).optional().describe('How many columns it takes.') });
+const AreaProps = z.object({
+  name: z.string().describe('Which canvas it holds.'),
+  span: z.number().int().min(1).max(3).optional().describe('How many columns it takes.'),
+  changed: z.boolean().optional().describe('Whether the last answer changed what it holds.'),
+});
 export const Area: NovaComponent = ({ children, novaRef: _ref, novaModel: _model, ...props }) => {
-  const { name, span } = parsed(AreaProps, props, { name: '' });
+  const { name, span, changed } = parsed(AreaProps, props, { name: '' });
   return (
-    <section className={`k-area k-area-${name}`} style={{ '--k-span': span ?? 1 } as CSSProperties}>
+    <section className={`k-area k-area-${name}${changed === true ? ' k-area-changed' : ''}`} style={{ '--k-span': span ?? 1 } as CSSProperties}>
       {children}
     </section>
   );
@@ -193,8 +197,8 @@ export const Input: NovaComponent = ({ novaRef, novaModel, ...props }) => {
 };
 Input.meta = { description: 'A line of text, bound to data with the node’s `model`; Enter is a ui:key.', propsSchema: InputProps };
 
-const PromptProps = z.object({}).describe('The line to ask in, across the bottom.');
-export const Prompt: NovaComponent = ({ children }) => <footer className="k-prompt">{children}</footer>;
+const PromptProps = z.object({}).describe('The line to ask in, and the button that sends it.');
+export const Prompt: NovaComponent = ({ children }) => <div className="k-prompt">{children}</div>;
 Prompt.meta = { description: 'The line to ask in.', propsSchema: PromptProps };
 
 const FieldProps = z.object({ label: z.string().describe('What the field is for.') });

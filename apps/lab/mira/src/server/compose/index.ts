@@ -13,7 +13,8 @@ import type { Fill } from './fill';
 import { createHistory } from './history';
 import { pick } from './pick';
 import type { Decide, Picks } from './pick';
-import { areasIn, areasOf, placedOf, planOf, textOf } from './plan';
+import { areasIn, areasOf, changedAreas, markedLayout, placedOf, planOf, textOf } from './plan';
+import type { AreaId } from '../../app/shell/areas';
 import type { Placed, Plan, Unnumbered, Written } from './plan';
 import { openScreen } from './screen';
 
@@ -52,12 +53,12 @@ export const composer =
     // The stack starts at the first screen, as the shell opened it.
     const history = createHistory(home === undefined ? undefined : homePlan());
 
-    // Each plan swaps its layout into the frame's `answers` region, then reaches the screen as the message `answer`,
-    // which the bar places.
+    // Each plan swaps its layout into the frame's `answers` region — the areas a new answer changed marked, for the kit to
+    // outline — then reaches the screen as the message `answer`, which the dock places.
     // The swap goes around moss (`unverifiedShell`): moss lets a session change a layout only through a draft, and a
     // draft needs a signed-in person. When the app has sign-in, this moves to `session.draft`, where moss checks it.
-    const show = (plan: Plan): Plan => {
-      unverifiedShell(session).setLayout('answers', plan.layout);
+    const show = (plan: Plan, changed: readonly AreaId[] = []): Plan => {
+      unverifiedShell(session).setLayout('answers', changed.length > 0 ? markedLayout(plan.layout, changed) : plan.layout);
       session.shell.publish('answer', plan);
       return plan;
     };
@@ -113,8 +114,8 @@ export const composer =
       const plan = { ...planOf(message, placed, { arrangement: answer.arrangement ?? current }), reasoning: answer.reasoning };
       // An answer that leaves the screen as it is adds nothing to the stack; what was asked, and why nothing changed, are
       // shown in the bar all the same.
-      if (JSON.stringify([plan.canvases, plan.layout]) === JSON.stringify([before.canvases, before.layout])) return show({ ...before, question: message, reasoning: answer.reasoning });
-      return show(history.add(plan));
+      if (JSON.stringify([plan.canvases, plan.layout]) === JSON.stringify([before.canvases, before.layout])) return show({ ...before, question: message, label: message, reasoning: answer.reasoning });
+      return show(history.add(plan), changedAreas(plan, before));
     };
 
     const open = async (data: unknown): Promise<Plan> => {

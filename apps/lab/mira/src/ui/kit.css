@@ -53,28 +53,41 @@ html, body, #root { margin: 0; min-height: 100%; }
   color: var(--k-accent);
 }
 
-/* An app a model leads: a bar, the answer, the line to ask in. */
+/* An app a model leads: the answer, and the dock under it. The answer scrolls; the dock stays at the bottom, in
+   reading order down to the hands: the screens and the answer shown, then the line to ask in. */
 
 .k-frame { min-height: 100vh; display: flex; flex-direction: column; }
 
-.k-bar {
+.k-dock {
   position: sticky;
-  top: 0;
+  bottom: 0;
   z-index: 1;
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px 16px;
-  padding: 12px 24px;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 24px;
   background: var(--k-bg);
-  border-bottom: 1px solid var(--k-line);
+  border-top: 1px solid var(--k-line);
 }
-.k-bar .k-row { gap: 8px; }
+.k-dock > .k-row { justify-content: space-between; flex-wrap: nowrap; gap: 12px; }
+.k-dock > .k-row > .k-row { flex-wrap: nowrap; gap: 6px; min-width: 0; }
+.k-dock > .k-row > .k-row:first-child { overflow-x: auto; scrollbar-width: none; }
+.k-dock .k-button { padding: 5px 12px; border-radius: 999px; font-weight: 500; white-space: nowrap; flex-shrink: 0; }
+.k-dock [data-ref='stack'] { flex-shrink: 1; min-width: 0; }
+.k-dock .k-prompt .k-button { padding: 10px 18px; border-radius: var(--k-radius); font-weight: 600; }
+
+.k-button.k-chip {
+  background: var(--k-surface);
+  color: var(--k-ink);
+  border: 1px solid var(--k-line);
+  max-width: 42vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
 .k-menu {
   position: absolute;
-  top: calc(100% + 4px);
+  bottom: calc(100% + 6px);
   right: 24px;
   z-index: 2;
   width: min(380px, calc(100vw - 32px));
@@ -90,7 +103,13 @@ html, body, #root { margin: 0; min-height: 100%; }
   border-radius: calc(var(--k-radius) + 4px);
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.1);
 }
-.k-menu .k-button { text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.k-menu .k-button { text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: none; border-radius: var(--k-radius); }
+.k-menu > .k-text { padding: 0 10px; }
+.k-menu > .k-text + .k-button, .k-menu > .k-muted { margin-bottom: 4px; }
+.k-menu > .k-muted { padding-bottom: 10px; border-bottom: 1px solid var(--k-line); }
+
+/* What the last answer changed is outlined, until the next. */
+.k-area-changed > .k-card { box-shadow: 0 0 0 2px var(--k-accent); }
 
 /* An answer's grid: its columns and each area's span are the arrangement's,
    set as --k-columns and --k-span. An area with nothing in it takes no room. */
@@ -153,22 +172,16 @@ html, body, #root { margin: 0; min-height: 100%; }
 }
 .k-input:focus { border-color: var(--k-accent); box-shadow: 0 0 0 3px var(--k-accent-soft); }
 
-.k-prompt {
-  position: sticky;
-  bottom: 0;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-  padding: 16px 24px;
-  background: var(--k-bg);
-  border-top: 1px solid var(--k-line);
-}
+.k-prompt { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .k-prompt > .k-input { flex: 1 1 240px; }
 .k-prompt > .k-text { flex-basis: 100%; }
 
 @media (max-width: 720px) {
   .k-answers { grid-template-columns: 1fr; padding: 16px; }
   .k-area { grid-column: auto; }
-  .k-bar, .k-prompt { padding-left: 16px; padding-right: 16px; }
+  .k-dock { padding-left: 16px; padding-right: 16px; }
+  .k-dock > .k-row { flex-wrap: wrap; gap: 8px; }
+  .k-dock > .k-row > .k-row { width: 100%; }
+  .k-dock [data-ref='stack'] { flex: 1; max-width: none; }
+  .k-menu { right: 16px; }
 }

@@ -143,13 +143,13 @@ for (let run = 1; run <= runs; run += 1) {
   // Each message is answered when the line's `ask` call ends, whatever screen it leaves.
   let answers = 0;
   shell.onEndpoint((event) => {
-    if (event.canvasId === 'line' && event.name === 'ask') answers += 1;
+    if (event.canvasId === 'dock' && event.name === 'ask') answers += 1;
   });
   const dataOf = (canvas: string): Record<string, unknown> => {
     const active = shell.getState().canvases[canvas]?.active;
     return active === undefined ? {} : (shell.getRuntime(active.id)?.getData() ?? {});
   };
-  const current = (): Record<string, unknown> => (dataOf('bar')['current'] ?? {}) as Record<string, unknown>;
+  const current = (): Record<string, unknown> => (dataOf('dock')['current'] ?? {}) as Record<string, unknown>;
   const screenOf = (): Screen => ({
     canvases: AREAS.flatMap((area): Shown[] => {
       const active = shell.getState().canvases[area]?.active;
@@ -160,7 +160,7 @@ for (let run = 1; run <= runs; run += 1) {
     }),
     arrangement: String(current()['arrangement'] ?? ''),
     screen: String(current()['screen'] ?? ''),
-    said: String(dataOf('line')['error'] ?? ''),
+    said: String(dataOf('dock')['error'] ?? ''),
     reasoning: String(current()['reasoning'] ?? ''),
   });
   const print = (screen: Screen): string => screen.canvases.map((shown) => `  ${shown.area}: ${shown.action} — ${[shown.title, shown.read, JSON.stringify(shown.params) !== '{}' ? JSON.stringify(shown.params) : '', shown.fields.length > 0 ? JSON.stringify(shown.fields) : ''].filter((part) => part !== '').join(' · ')}`).join('\n');
@@ -172,7 +172,7 @@ for (let run = 1; run <= runs; run += 1) {
   try {
     for (const step of steps) {
       if ('open' in step) {
-        session.dispatch('bar', { type: 'ui:click', ref: 'screen', payload: step.open });
+        session.dispatch('dock', { type: 'ui:click', ref: 'screen', payload: step.open });
         await until(() => current()['screen'] === step.open);
         await new Promise((done) => setTimeout(done, 200));
         console.log(`» opened "${step.open}"`);
@@ -182,8 +182,8 @@ for (let run = 1; run <= runs; run += 1) {
       const before = screenOf();
       const seen = answers;
       const started = performance.now();
-      session.dispatch('line', { type: 'ui:model', ref: 'text', payload: step.ask });
-      session.dispatch('line', { type: 'ui:key', ref: 'text', key: 'Enter' });
+      session.dispatch('dock', { type: 'ui:model', ref: 'text', payload: step.ask });
+      session.dispatch('dock', { type: 'ui:key', ref: 'text', key: 'Enter' });
       const answered = await until(() => answers > seen);
       const took = performance.now() - started;
       times.push(took);

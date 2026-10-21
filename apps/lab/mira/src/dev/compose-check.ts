@@ -108,13 +108,13 @@ try {
 
   const template = '<!doctype html><html><head></head><body><div id="root"></div></body></html>';
   const page = await renderDocument({ ...drawing, server, template, request: { path: '/', cookie: null } });
-  check('the page arrives drawn: the frame, the screens, the first screen, the line to ask in', page.drawn && ['k-frame', 'k-prompt', 'Overview', 'Greetings per language'].every((part) => page.html.includes(part)), page.html.slice(0, 300));
+  check('the page arrives drawn: the first screen, and the dock with the screens and the line to ask in', page.drawn && ['k-frame', 'k-dock', 'k-prompt', 'Overview', 'Greetings per language'].every((part) => page.html.includes(part)), page.html.slice(0, 300));
 
   const session = await shells.session(null, null);
   const shell = session.shell;
   let answered = 0;
   shell.onEndpoint((event) => {
-    if (event.canvasId === 'line' && event.name === 'ask') answered += 1;
+    if (event.canvasId === 'dock' && event.name === 'ask') answered += 1;
   });
   const on = (canvas: string): { action: string; id: string; data: Record<string, unknown> } => {
     const active = shell.getState().canvases[canvas]?.active;
@@ -144,9 +144,23 @@ try {
     });
     return `${String(props['columns'])}: ${held.join(' ')}`;
   };
-  const current = (): Shown => (on('bar').data['current'] ?? {}) as Shown;
+  // The areas the layout on screen marks as changed by the last answer.
+  const marked = (): string => {
+    const areasOf = (nodes: unknown): Record<string, unknown>[] =>
+      (Array.isArray(nodes) ? nodes : []).flatMap((node: unknown) => {
+        if (node === null || typeof node !== 'object') return [];
+        const record = node as Record<string, unknown>;
+        return record['name'] === 'Area' ? [record] : areasOf(record['children']);
+      });
+    return areasOf(shell.getShellRenderTree())
+      .filter((area) => (area['props'] as Record<string, unknown> | undefined)?.['changed'] === true)
+      .map((area) => String((area['props'] as Record<string, unknown>)['name']))
+      .join(' ');
+  };
+  const drawn = (): string => JSON.stringify(shell.flattenRenderTree(shell.getShellRenderTree()));
+  const current = (): Shown => (on('dock').data['current'] ?? {}) as Shown;
   const total = (): number => Number(current().total);
-  const said = (): string => String(on('line').data['error'] ?? '');
+  const said = (): string => String(on('dock').data['error'] ?? '');
   // What a terminal does whenever the screen changes: draw every action on it. An input takes what is typed into it
   // once it has been drawn. A message is answered when the line's `ask` call ends, whatever it leaves on screen.
   const draw = (): void => void shell.flattenRenderTree(shell.getShellRenderTree());
@@ -154,13 +168,13 @@ try {
   const ask = async (text: string): Promise<void> => {
     draw();
     const seen = answered;
-    session.dispatch('line', { type: 'ui:model', ref: 'text', payload: text });
-    session.dispatch('line', { type: 'ui:key', ref: 'text', key: 'Enter' });
+    session.dispatch('dock', { type: 'ui:model', ref: 'text', payload: text });
+    session.dispatch('dock', { type: 'ui:key', ref: 'text', key: 'Enter' });
     await until(() => answered > seen);
     await settle();
   };
   const openMenu = async (id: string): Promise<void> => {
-    session.dispatch('bar', { type: 'ui:click', ref: 'screen', payload: id });
+    session.dispatch('dock', { type: 'ui:click', ref: 'screen', payload: id });
     await until(() => current().screen === id);
     await settle();
   };
@@ -171,7 +185,7 @@ try {
   const value = (canvas: string): unknown => (on(canvas).data['result'] as { value?: unknown } | undefined)?.value;
   const fields = (canvas: string): { key: string; value: string }[] => rows(canvas, 'fields') as { key: string; value: string }[];
 
-  check('the app opens on the first screen, every one of its canvases an area of its own, and the stack starts there', areas() === OVERVIEW && on('bar').action === 'answer.bar' && on('line').action === 'ask.line' && current().position === 1 && total() === 1, areas());
+  check('the app opens on the first screen, every one of its canvases an area of its own, and the stack starts there', areas() === OVERVIEW && on('dock').action === 'ask.dock' && current().position === 1 && total() === 1, areas());
   check('the frame’s region holds the first screen’s arrangement', current().arrangement === SCREENS[0]?.arrangement && grid() === '2: a×2 b c d e', `${String(current().arrangement)} — ${grid()}`);
   check('the first screen loads what it shows', await until(() => value('b') === 5), JSON.stringify(on('b').data));
 
@@ -190,9 +204,15 @@ try {
     ids() === overviewIds && current().arrangement === 'hero' && grid() === '2: a×2 b c d e' && fields('e')[0]?.value === 'Guten Tag' && fields('e')[1]?.value === 'German',
     `${ids()} vs ${overviewIds} — ${grid()} — ${JSON.stringify(fields('e'))}`,
   );
-  check('what the model said it did is in the bar, under what was asked', current().reasoning === 'Filled in the add form with Guten Tag, German; the rest stays.' && JSON.stringify(shell.flattenRenderTree(shell.getShellRenderTree())).includes('the rest stays'), String(current().reasoning));
+  check('the area the answer changed is outlined, and only that one', marked() === 'e', marked());
+  check('the chip in the dock names the answer shown, and where it stands among the answers', drawn().includes('Guten Tag is german · 2/2'), drawn().match(/"label":"[^"]*· \d+\/\d+"/)?.[0] ?? '');
+  session.dispatch('dock', { type: 'ui:click', ref: 'stack' });
+  await settle();
+  check('opening the chip shows what was asked, what the model said it did, and the answers to go back to', current().reasoning === 'Filled in the add form with Guten Tag, German; the rest stays.' && drawn().includes('the rest stays') && drawn().includes('1. Overview') && drawn().includes('2. Guten Tag is german'), String(current().reasoning));
+  session.dispatch('dock', { type: 'ui:click', ref: 'stack' });
   const filledIds = ids();
   await ask('drop the bars');
+  check('an answer that only empties an area outlines nothing', marked() === '', marked());
   check('an area the model drops is emptied, and every other stays as it was', on('c').id === '' && ids().replace(/c:\S*/, '') === filledIds.replace(/c:\S*/, '') && current().arrangement === 'hero', `${ids()} vs ${filledIds}`);
 
   await ask('Show me every greeting');
@@ -295,20 +315,20 @@ try {
   check('a model that cannot be reached leaves the screen as it was, and the line says so', ids() === beforeWeather && said().includes('could not be reached'), said());
   unreachable = false;
 
-  session.dispatch('bar', { type: 'ui:click', ref: 'forward' });
+  session.dispatch('dock', { type: 'ui:click', ref: 'forward' });
   check('forward from the first screen is the answer after it, as it was', await until(() => current().position === 2 && current().question === 'Guten Tag is german' && fields('e')[0]?.value === 'Guten Tag'), `position ${String(current().position)}, ${areas()}`);
-  session.dispatch('bar', { type: 'ui:click', ref: 'back' });
+  session.dispatch('dock', { type: 'ui:click', ref: 'back' });
   check('back is the first screen again', await until(() => current().position === 1 && current().screen === 'overview'), `position ${String(current().position)}`);
 
-  session.dispatch('bar', { type: 'ui:click', ref: 'stack' });
+  session.dispatch('dock', { type: 'ui:click', ref: 'stack' });
   const stack = current().stack ?? [];
   check(
     'the counter opens the stack: every answer, by what was asked or the screen it is',
-    on('bar').data['listing'] === true && stack.length === total() && stack[0]?.label === SCREENS[0]?.label && stack[1]?.label === 'Guten Tag is german',
+    on('dock').data['listing'] === true && stack.length === total() && stack[0]?.label === SCREENS[0]?.label && stack[1]?.label === 'Guten Tag is german',
     JSON.stringify(stack.slice(0, 3)),
   );
-  session.dispatch('bar', { type: 'ui:click', ref: 'entry', payload: 4 });
-  check('an answer picked from the stack is shown as it was, and the list closes', await until(() => current().position === 4 && areas() === 'rows.table' && on('bar').data['listing'] === false), `${String(current().position)}, ${areas()}`);
+  session.dispatch('dock', { type: 'ui:click', ref: 'entry', payload: 4 });
+  check('an answer picked from the stack is shown as it was, and the list closes', await until(() => current().position === 4 && areas() === 'rows.table' && on('dock').data['listing'] === false), `${String(current().position)}, ${areas()}`);
 } finally {
   server.close();
 }
@@ -326,8 +346,8 @@ try {
   if (shells === undefined) throw new Error('the manifest has no shell');
   const session = await shells.session(null, null);
   session.shell.flattenRenderTree(session.shell.getShellRenderTree());
-  session.dispatch('line', { type: 'ui:model', ref: 'text', payload: 'Show me every greeting' });
-  session.dispatch('line', { type: 'ui:key', ref: 'text', key: 'Enter' });
+  session.dispatch('dock', { type: 'ui:model', ref: 'text', payload: 'Show me every greeting' });
+  session.dispatch('dock', { type: 'ui:key', ref: 'text', key: 'Enter' });
   const first = (): string => AREAS.map((area) => session.shell.getState().canvases[area]?.active?.definitionId ?? '').filter((action) => action !== '').join(' ');
   check('when Jev cannot answer, the model answers alone', await until(() => first() === 'rows.table'), first());
 } finally {
@@ -340,10 +360,10 @@ try {
   if (shells === undefined) throw new Error('the manifest has no shell');
   const session = await shells.session(null, null);
   session.shell.flattenRenderTree(session.shell.getShellRenderTree());
-  session.dispatch('line', { type: 'ui:model', ref: 'text', payload: 'Show me every greeting' });
-  session.dispatch('line', { type: 'ui:key', ref: 'text', key: 'Enter' });
+  session.dispatch('dock', { type: 'ui:model', ref: 'text', payload: 'Show me every greeting' });
+  session.dispatch('dock', { type: 'ui:key', ref: 'text', key: 'Enter' });
   const line = (): Record<string, unknown> => {
-    const active = session.shell.getState().canvases['line']?.active;
+    const active = session.shell.getState().canvases['dock']?.active;
     return active === undefined ? {} : (session.shell.getRuntime(active.id)?.getData() ?? {});
   };
   check('with no key, the line names the key, and the screen stays as it was', await until(() => String(line()['error'] ?? '').includes('GROQ_API_KEY')), JSON.stringify(line()));
