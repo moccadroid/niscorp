@@ -114,7 +114,7 @@ const compose: Model<Compose> | undefined = composeWith && {
   ...composeWith,
   call: async (system, user, schema) => {
     const answered = await composeWith.call(system, user, schema);
-    const reply = answered.reply;
+    const reply = 'reply' in answered ? answered.reply : { unfit: answered.unfit };
     if (prompts) said.push(`──── MODEL SYSTEM
 ${system}
 ──── MODEL USER

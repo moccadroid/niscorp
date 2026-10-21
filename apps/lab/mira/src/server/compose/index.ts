@@ -11,6 +11,7 @@ import type { Usage } from '../runs';
 import { composeAnswer } from './answer';
 import type { Compose } from './answer';
 import { CATALOG } from './catalog';
+import type { Catalog } from './catalog';
 import { createHistory } from './history';
 import { markChanged } from './layout';
 import { pick } from './pick';
@@ -39,7 +40,9 @@ const reasonOf = (error: unknown): string => (error instanceof Error ? error.mes
 export const composer =
   (models: Models) =>
   (session: FunctionSession): FunctionDefinition[] => {
-    const system = systemPrompt(CATALOG, SCREENS, ARRANGEMENTS);
+    const held = new Set(session.actions);
+    const catalog: Catalog = { ...CATALOG, actions: CATALOG.actions.filter((action) => held.has(action.id)) };
+    const system = systemPrompt(catalog, SCREENS, ARRANGEMENTS);
     let asked = 0;
 
     const record = (agentId: string, model: Model<unknown>, label: string, usage: readonly Usage[], since: number, ok: boolean): void =>
@@ -78,7 +81,7 @@ export const composer =
       const picked =
         jev === undefined
           ? undefined
-          : await pick(message, open, CATALOG, SCREENS, jev.call).catch((error: unknown) => {
+          : await pick(message, open, catalog, SCREENS, jev.call).catch((error: unknown) => {
               console.error(`[ask] Jev could not answer "${message}": ${reasonOf(error)}`);
               return undefined;
             });
@@ -86,7 +89,7 @@ export const composer =
       const composing = performance.now();
       const current = arrangementOfPlan(before);
       const user = messagePrompt(message, open, { id: before.arrangement, layout: before.layout }, picked?.picks);
-      const composed = await composeAnswer({ system, user }, { open: canvasesOfPlan(before), current, catalog: CATALOG, screens: SCREENS, arrangements: ARRANGEMENTS }, chat.call).catch((error: unknown) => {
+      const composed = await composeAnswer({ system, user }, { open: canvasesOfPlan(before), current, catalog, screens: SCREENS, arrangements: ARRANGEMENTS }, chat.call).catch((error: unknown) => {
         console.error(`[ask] the model could not answer "${message}": ${reasonOf(error)}`);
         return undefined;
       });

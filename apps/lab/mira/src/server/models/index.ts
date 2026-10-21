@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createSignal } from '@niscorp/signal';
+import { createSignal, ErrorCode, SignalError } from '@niscorp/signal';
 import type { Compose, Decide, Model, Models } from '../compose';
 
 type Env = Readonly<Record<string, string | undefined>>;
@@ -11,6 +11,7 @@ const CHAT = { provider: 'groq', model: 'openai/gpt-oss-120b' };
 // is answered by the chat model alone; a chat call given up is a line saying the model could not be reached.
 const JEV_MS = 2_000;
 const CHAT_MS = 8_000;
+const SCHEMA_RETRIES = 2;
 
 // signal's complete() takes no abort, so the chat call is raced against the clock: its request runs on, unwaited for.
 const within = <T>(ms: number, work: Promise<T>): Promise<T> =>
@@ -30,15 +31,21 @@ export const modelsFromEnv = (env: Env): Models & { summary: string } => {
     call: async (state, questions) => {
       const result = await jev.decide({ state, questions, options: { signal: AbortSignal.timeout(JEV_MS) } });
       const picked = Object.fromEntries(Object.entries(DecisionsSchema.parse(result.decisions)).map(([name, decision]) => [name, { yes: decision.answer, ...(decision.noul !== undefined ? { probability: decision.noul } : {}) }]));
-      return { picked, usage: result.meta.usage };
+      return { picked, usage: { ...result.meta.usage, calls: 1 } };
     },
   };
-  // complete() adds the usage the provider reported to what it estimated, and does not say which.
+  // complete() adds the usage the provider reported to what it estimated, and does not say which. A reply that still
+  // fails the schema after signal's retries is unfit, and its tokens are not told.
   const compose: Model<Compose> | undefined = chat && {
     ...CHAT,
     call: async (system, user, schema) => {
-      const result = await within(CHAT_MS, chat.systemPrompt(system).schema(schema).options({ reasoningEffort: 'low' }).complete(user));
-      return { reply: result.response, usage: { ...result.meta.usage, reported: false } };
+      try {
+        const result = await within(CHAT_MS, chat.systemPrompt(system).schema(schema).retries(SCHEMA_RETRIES).options({ reasoningEffort: 'low' }).complete(user));
+        return { reply: result.response, usage: { ...result.meta.usage, reported: false, calls: 1 + result.meta.retries } };
+      } catch (error) {
+        if (!(error instanceof SignalError) || error.code !== ErrorCode.VALIDATION_FAILED) throw error;
+        return { unfit: error.message, usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0, reported: false, calls: 1 + SCHEMA_RETRIES } };
+      }
     },
   };
 

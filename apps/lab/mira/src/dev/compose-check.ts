@@ -60,9 +60,10 @@ const REPLIES: Record<string, Record<string, unknown>[]> = {
   'the count, and say what it is': [{ areas: [say('a', 'Greetings', 'How many greetings the app keeps.'), put('b', count)], arrangement: 'pair' }],
   'Show the overview': [{ screen: 'overview' }],
   'What is the weather in Vienna?': [{ reasoning: 'Nothing in this app shows the weather.', areas: [] }],
+  'Say it at length': [{ reasoning: 'A sentence for the person that runs on well past the hundred and twenty characters the reply’s schema allows for it, and on.', areas: [] }],
 };
 
-const SPENT: Usage = { inputTokens: 100, outputTokens: 10, totalTokens: 110, reported: true };
+const SPENT: Usage = { inputTokens: 100, outputTokens: 10, totalTokens: 110, reported: true, calls: 1 };
 
 // The ids Jev finds likely: a question naming one is answered yes.
 let likely: readonly string[] = [];
@@ -76,14 +77,15 @@ const decide: Decide = async (state, questions) => {
 let prompts: string[] = [];
 const turns = new Map<string, number>();
 let unreachable = false;
-const compose: Compose = async <T>(_system: string, user: string, schema: z.ZodType<T>): Promise<{ reply: T; usage: Usage }> => {
+const compose: Compose = async <T>(_system: string, user: string, schema: z.ZodType<T>): Promise<{ reply: T; usage: Usage } | { unfit: string; usage: Usage }> => {
   prompts.push(user);
   if (unreachable) throw new Error('the provider did not answer');
   const message = /^MESSAGE: (.*)$/m.exec(user)?.[1] ?? '';
   const turn = turns.get(message) ?? 0;
   turns.set(message, turn + 1);
   const replies = REPLIES[message] ?? [{ areas: [] }];
-  return { reply: schema.parse({ reasoning: 'Scripted.', title: 'Scripted', ...replies[Math.min(turn, replies.length - 1)] }), usage: SPENT };
+  const parsed = schema.safeParse({ reasoning: 'Scripted.', title: 'Scripted', ...replies[Math.min(turn, replies.length - 1)] });
+  return parsed.success ? { reply: parsed.data, usage: SPENT } : { unfit: parsed.error.message, usage: SPENT };
 };
 
 let failures = 0;
@@ -327,6 +329,11 @@ try {
   check('a model that cannot be reached leaves the screen as it was, and the line says so', ids() === beforeWeather && said().includes('could not be reached'), said());
   check('and its run is recorded as failed, with no call answered', runs[1]?.agentId === 'mira.compose' && runs[1]?.outcome === 'failed' && runs[1]?.steps === 0, JSON.stringify(runs[1]));
   unreachable = false;
+
+  runs.length = 0;
+  await ask('Say it at length');
+  check('a reply that does not fit the reply’s schema is refused: the screen stays, and the line says it did not fit', ids() === beforeWeather && said().includes('did not fit'), said());
+  check('and its run is recorded as failed, with the call that answered', runs[1]?.outcome === 'failed' && runs[1]?.steps === 1, JSON.stringify(runs[1]));
 
   session.dispatch('dock', { type: 'ui:click', ref: 'forward' });
   check('forward from the first screen is the answer after it, as it was', await until(() => current().position === 2 && current().question === 'Guten Tag is german' && fields('e')[0]?.value === 'Guten Tag'), `position ${String(current().position)}, ${areas()}`);

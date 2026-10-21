@@ -43,6 +43,7 @@ export const greetingsPerLanguage: SeedEntry = {
     aggregate: { value: { count: '*' } },
     groupBy: ['greetings.language'],
     sort: [{ field: 'greetings.language', dir: 'asc' }],
+    limit: 100,
   },
 };
 
@@ -51,7 +52,7 @@ export const greetingLanguages: SeedEntry = {
   refresh: 'reactive',
   intent: 'The languages there are greetings in',
   shape: [{ language: '' }],
-  dsl: { from: ['greetings'], fields: ['greetings.language'], distinct: true, sort: [{ field: 'greetings.language', dir: 'asc' }] },
+  dsl: { from: ['greetings'], fields: ['greetings.language'], distinct: true, sort: [{ field: 'greetings.language', dir: 'asc' }], limit: 100 },
 };
 
 export const greetingAdd: SeedMutation = {
