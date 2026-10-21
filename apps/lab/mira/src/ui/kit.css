@@ -162,7 +162,11 @@ html, body, #root { margin: 0; min-height: 100%; }
 .k-menu > .k-text + .k-button, .k-menu > .k-muted { margin-bottom: 4px; }
 .k-menu > .k-muted { padding-bottom: 10px; border-bottom: 1px solid var(--k-line); }
 
-.k-area-changed > .k-card { box-shadow: 0 0 0 2px var(--k-accent); }
+.k-area-changed .k-card { box-shadow: 0 0 0 2px var(--k-accent); }
+
+/* nova's DOM adapter wraps a canvas and an action in elements of its own; React does not. They take no room, so the
+   dock sticks and the areas lay out the same under either kit. */
+[data-canvas], [data-component='ActionSlot'] { display: contents; }
 
 .k-grid {
   flex: 1;
