@@ -7,7 +7,7 @@ export const textLayout: LayoutNode = {
     { component: 'Text', children: '{{$.text}}' },
     {
       component: 'Row',
-      children: [{ for: '$.examples', as: 'example', do: { component: 'Button', ref: 'example', props: { label: '$example', tone: 'quiet', value: '$example' } } }],
+      children: [{ for: '$.examples', as: 'example', do: { component: 'Button', ref: 'example', props: { label: '$example', tone: 'suggestion', value: '$example' } } }],
     },
   ],
 };

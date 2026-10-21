@@ -3,8 +3,15 @@ import { z } from 'zod';
 import { useNovaDispatch } from '@niscorp/nova/adapters/react';
 import type { NovaComponent } from '@niscorp/nova/adapters/react';
 
-const parsed = <T,>(schema: z.ZodType<T>, props: unknown, fallback: T): T => {
-  const result = schema.safeParse(props);
+// A value a component does not take falls back to its default on its own; the others still hold.
+const parsed = <S extends z.ZodRawShape>(schema: z.ZodObject<S>, props: Record<string, unknown>, fallback: z.output<z.ZodObject<S>>): z.output<z.ZodObject<S>> => {
+  const taken = Object.fromEntries(
+    Object.entries(props).filter(([key, value]) => {
+      const field = schema.shape[key];
+      return field !== undefined && z.safeParse(field, value).success;
+    }),
+  );
+  const result = schema.safeParse({ ...fallback, ...taken });
   return result.success ? result.data : fallback;
 };
 
@@ -31,7 +38,10 @@ Text.meta = { description: 'A paragraph.', propsSchema: TextProps };
 
 const ButtonProps = z.object({
   label: z.string().optional().describe('What the button says; falls back to its children.'),
-  tone: z.enum(['primary', 'quiet', 'pill', 'chip', 'icon']).optional().describe('primary | quiet: the one chosen, or a thing to ask | pill: one of a set to choose from | chip: names what is shown, and opens to more | icon: a single sign'),
+  tone: z
+    .enum(['primary', 'suggestion', 'choice', 'chosen', 'summary', 'step'])
+    .optional()
+    .describe('primary: what the action does | suggestion: a thing to ask | choice: one of a set to choose from | chosen: the one of the set that is chosen | summary: names what is shown, and opens to more | step: back or forward'),
   value: z.unknown().optional().describe('Sent with the click as its payload.'),
 });
 export const Button: NovaComponent = ({ children, novaRef, novaModel: _model, ...props }) => {

@@ -46,17 +46,17 @@ html, body, #root { margin: 0; min-height: 100%; }
   cursor: pointer;
 }
 .k-button:active { transform: translateY(1px); }
-.k-button.k-quiet, .k-button.k-pill, .k-button.k-chip, .k-button.k-icon {
+.k-button.k-suggestion, .k-button.k-choice, .k-button.k-chosen, .k-button.k-summary, .k-button.k-step {
   padding: 5px 12px;
   border-radius: 999px;
   font-weight: 500;
   white-space: nowrap;
   flex-shrink: 0;
 }
-.k-button.k-quiet { background: var(--k-accent-soft); color: var(--k-accent); }
-.k-button.k-pill, .k-button.k-chip, .k-button.k-icon { background: var(--k-surface); color: var(--k-ink); border: 1px solid var(--k-line); }
-.k-button.k-chip { flex-shrink: 1; min-width: 0; max-width: 42vw; overflow: hidden; text-overflow: ellipsis; }
-.k-button.k-icon { padding: 5px 10px; }
+.k-button.k-suggestion, .k-button.k-chosen { background: var(--k-accent-soft); color: var(--k-accent); }
+.k-button.k-choice, .k-button.k-summary, .k-button.k-step { background: var(--k-surface); color: var(--k-ink); border: 1px solid var(--k-line); }
+.k-button.k-summary { flex-shrink: 1; min-width: 0; max-width: 42vw; overflow: hidden; text-overflow: ellipsis; }
+.k-button.k-step { padding: 5px 10px; }
 
 /* An app a model leads: the answer, and the dock under it. The answer scrolls; the dock stays at the bottom, in
    reading order down to the hands: the screens and the answer shown, then the line to ask in. */
@@ -178,6 +178,6 @@ html, body, #root { margin: 0; min-height: 100%; }
   .k-dock { padding-left: 16px; padding-right: 16px; }
   .k-dock > .k-row { flex-wrap: wrap; gap: 8px; }
   .k-dock > .k-row > .k-row { width: 100%; }
-  .k-button.k-chip { flex: 1; max-width: none; }
+  .k-button.k-summary { flex: 1; max-width: none; }
   .k-menu { right: 16px; }
 }
