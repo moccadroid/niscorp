@@ -324,17 +324,23 @@ try {
   await ask('bon jour is french');
   check('with the greetings open, "bon jour is french" fills in the form where it stands, and nothing else moves', ids() === greetingsIds && fields('b')[0]?.value === 'bon jour' && fields('b')[1]?.value === 'French', `${ids()} vs ${greetingsIds} — ${JSON.stringify(fields('b'))}`);
   const tableThere = on('a').id;
+  const formThere = on('b').id;
   session.dispatch('b', { type: 'ui:click', ref: 'save' });
-  check('saved, the form goes, and what was beside it stays where it is, reading the new row', await until(() => areas() === 'rows.table' && on('a').id === tableThere && rows('a', 'rows').length === 6), `${areas()}, ${rows('a', 'rows').length} rows`);
+  check(
+    'saved, a form filled in where it stood is empty again, in its place, and what is beside it reads the new row',
+    await until(() => areas() === 'rows.table rows.form' && on('a').id === tableThere && on('b').id === formThere && fields('b')[0]?.value === '' && rows('a', 'rows').length === 6),
+    `${areas()}, ${JSON.stringify(fields('b'))}, ${rows('a', 'rows').length} rows`,
+  );
 
   await ask('Add a greeting that says Hej');
   const withForm = total();
   session.dispatch('a', { type: 'ui:click', ref: 'save' });
   check(
-    'an answer left with nothing once its form is saved leaves the stack, and the first screen is gone back to',
-    await until(() => areas() === OVERVIEW && current().screen === SCREENS[0]?.id && current().position === 1 && total() === withForm - 1),
-    `${areas()}, ${String(current().position)} of ${total()}`,
+    'saved, a form an answer opened shows what it was opened with again, and the answer stays where it is in the stack',
+    await until(() => areas() === 'rows.form' && on('a').data['saved'] === true && fields('a')[0]?.value === 'Hej' && total() === withForm),
+    `${areas()}, ${JSON.stringify(fields('a'))}, ${String(current().position)} of ${total()}`,
   );
+  await openMenu(SCREENS[0]?.id ?? '');
   check('the first screen counts both: 7', await until(() => value('b') === 7), JSON.stringify(on('b').data));
 
   const languages = SCREENS.find((screen) => screen.id === 'languages');

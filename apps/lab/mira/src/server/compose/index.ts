@@ -33,7 +33,6 @@ export type Models = { jev?: Jev; chat?: Chat; missing: readonly string[] };
 
 const AskSchema = z.looseObject({ text: z.string() });
 const OpenSchema = z.looseObject({ opening: z.string() });
-const SavedSchema = z.looseObject({ saved: z.string() });
 const GoSchema = z.looseObject({ going: z.coerce.number() });
 
 const reasonOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));
@@ -160,18 +159,6 @@ export const composer =
       return screen === undefined ? history.current() : showScreen(screen);
     };
 
-    // A form an answer opened has done its work once saved, and goes; the rest stays where it is. On a screen it stays,
-    // emptied, for the next one. An answer left with nothing leaves the stack, and the first screen is gone back to.
-    const saved = async (data: unknown): Promise<ShownPlan> => {
-      const fingerprint = SavedSchema.parse(data).saved;
-      const now = history.current();
-      if (now.screen !== undefined) return now;
-      const kept = Object.fromEntries(Object.entries(canvasesOfPlan(now)).filter(([, canvas]) => canvas.input['write'] !== fingerprint));
-      if (Object.keys(kept).length > 0) return show(history.replace(history.showing(), planOf(now.question, kept, { arrangements: ARRANGEMENTS, arrangement: arrangementOfPlan(now), label: now.label })));
-      history.drop(history.showing());
-      return home === undefined ? history.current() : showScreen(home);
-    };
-
     return [
       { id: 'ask', description: 'Answers a message with a screen. Send { text }; answers the plan shown: { question, response, label, canvases, position, total, stack }.', execute: ask },
       { id: 'screens.open', description: 'Shows one of the screens in the dock: its canvases together. Send { opening: <screen id> }; answers its plan.', execute: open },
@@ -179,6 +166,5 @@ export const composer =
       { id: 'answers.forward', description: 'Shows the answer after the one shown, and answers its plan.', execute: async () => show(history.forward()) },
       { id: 'answers.go', description: 'Shows one answer from the stack. Send { going: <its position> }; answers its plan.', execute: async (data) => show(history.go(GoSchema.parse(data).going)) },
       { id: 'answers.current', description: 'Answers the plan shown, or, while an answer streams, the answer so far.', execute: async () => soFar ?? history.current() },
-      { id: 'answers.saved', description: 'Takes a form that was saved off the answer shown. Send { saved: <the write it saved through> }; answers the plan.', execute: saved },
     ];
   };
