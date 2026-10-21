@@ -2,17 +2,16 @@ import type { ActionDefinition, Step } from '@niscorp/nova';
 import { SCREENS } from '../../screens';
 import { AREAS } from '../../shell/areas';
 
-// Every answer arrives as the message `answer`, from the server: each area then holds exactly what it lists for that
-// area, and nothing where it lists nothing.
-const place: Step[] = AREAS.map((area) => ({ reconcile: { canvas: area, to: `$.current.canvases.${area}`, action: 'action', input: 'input', own: 'canvas' as const } }));
+// Every call answers the plan shown into `current`: each area then holds exactly what it lists for that area, and
+// nothing where it lists nothing.
+const shown: Step[] = [{ set: 'listing', value: false }, ...AREAS.map((area) => ({ reconcile: { canvas: area, to: `$.current.canvases.${area}`, action: 'action', input: 'input', own: 'canvas' as const } }))];
 
-// The answer does not come back here: the server sends it as the message `answer`.
 const ask: Step[] = [
   { set: 'asking', value: true },
   { set: 'error', value: '' },
   {
     call: 'ask',
-    onSuccess: [{ set: 'asking', value: false }, { set: 'text', value: '' }],
+    onSuccess: [{ set: 'asking', value: false }, { set: 'text', value: '' }, ...shown],
     onError: [{ set: 'asking', value: false }, { set: 'error', value: '{{@error.message}}' }],
   },
 ];
@@ -92,17 +91,23 @@ export const dockAction: ActionDefinition = {
       },
     ],
   },
-  endpoints: { ask: { fn: 'ask' }, open: { fn: 'screens.open' }, back: { fn: 'answers.back' }, forward: { fn: 'answers.forward' }, go: { fn: 'answers.go' }, saved: { fn: 'answers.saved' } },
+  endpoints: {
+    ask: { fn: 'ask', target: 'current' },
+    open: { fn: 'screens.open', target: 'current' },
+    back: { fn: 'answers.back', target: 'current' },
+    forward: { fn: 'answers.forward', target: 'current' },
+    go: { fn: 'answers.go', target: 'current' },
+    saved: { fn: 'answers.saved', target: 'current' },
+  },
   triggers: [
-    { message: 'answer', do: [{ set: 'listing', value: false }, { set: 'current', value: '@event.payload' }, ...place] },
-    { message: 'saved', do: [{ set: 'saved', value: '@event.payload' }, { call: 'saved' }] },
+    { message: 'saved', do: [{ set: 'saved', value: '@event.payload' }, { call: 'saved', onSuccess: shown }] },
     { message: 'ask', do: [{ set: 'text', value: '@event.payload' }, ...ask] },
     { event: 'ui:key', key: 'Enter', ref: 'text', do: ask },
     { event: 'ui:click', ref: 'send', do: ask },
-    { event: 'ui:click', ref: 'screen', do: [{ set: 'opening', value: '@event.payload' }, { call: 'open' }] },
-    { event: 'ui:click', ref: 'back', do: [{ call: 'back' }] },
-    { event: 'ui:click', ref: 'forward', do: [{ call: 'forward' }] },
+    { event: 'ui:click', ref: 'screen', do: [{ set: 'opening', value: '@event.payload' }, { call: 'open', onSuccess: shown }] },
+    { event: 'ui:click', ref: 'back', do: [{ call: 'back', onSuccess: shown }] },
+    { event: 'ui:click', ref: 'forward', do: [{ call: 'forward', onSuccess: shown }] },
     { event: 'ui:click', ref: 'stack', do: [{ toggle: 'listing' }] },
-    { event: 'ui:click', ref: 'entry', do: [{ set: 'going', value: '@event.payload' }, { call: 'go' }] },
+    { event: 'ui:click', ref: 'entry', do: [{ set: 'going', value: '@event.payload' }, { call: 'go', onSuccess: shown }] },
   ],
 };

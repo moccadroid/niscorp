@@ -33,14 +33,12 @@ const AskSchema = z.looseObject({ text: z.string() });
 const OpenSchema = z.looseObject({ opening: z.string() });
 const SavedSchema = z.looseObject({ saved: z.string() });
 const GoSchema = z.looseObject({ going: z.coerce.number() });
-const WriteSchema = z.looseObject({ write: z.string(), fields: z.array(z.looseObject({ key: z.string(), value: z.unknown() })) });
 
 const reasonOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));
 
 export const composer =
   (models: Models) =>
   (session: FunctionSession): FunctionDefinition[] => {
-    const writes = new Set(CATALOG.writes.map((write) => write.fingerprint));
     const system = systemPrompt(CATALOG, SCREENS, ARRANGEMENTS);
     let asked = 0;
 
@@ -55,7 +53,6 @@ export const composer =
     // draft needs a signed-in person. When the app has sign-in, this moves to `session.draft`, where moss checks it.
     const show = (plan: ShownPlan, changed: readonly AreaId[] = []): ShownPlan => {
       unverifiedShell(session).setLayout('answers', changed.length > 0 ? markChanged(plan.layout, changed) : plan.layout);
-      session.shell.publish('answer', plan);
       return plan;
     };
 
@@ -135,25 +132,12 @@ export const composer =
       return home === undefined ? history.current() : showScreen(home);
     };
 
-    const write = async (data: unknown): Promise<{ saved: true }> => {
-      const { write: fingerprint, fields } = WriteSchema.parse(data);
-      if (!writes.has(fingerprint)) throw new Error(`This app ships no write ${fingerprint}.`);
-      const response = await session.wire('/api/vex', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ fingerprint, context: Object.fromEntries(fields.map((field) => [field.key, typeof field.value === 'string' ? field.value.trim() : field.value])) }),
-      });
-      if (!response.ok) throw new Error(`${fingerprint}: ${await response.text()}`);
-      return { saved: true };
-    };
-
     return [
-      { id: 'ask', description: 'Answers a message with a screen, sent to the dock as the message `answer`. Send { text }; answers the plan: { question, position, total, canvases }.', execute: ask },
+      { id: 'ask', description: 'Answers a message with a screen. Send { text }; answers the plan shown: { question, reasoning, label, canvases, position, total, stack }.', execute: ask },
       { id: 'screens.open', description: 'Shows one of the screens in the dock: its canvases together. Send { opening: <screen id> }; answers its plan.', execute: open },
       { id: 'answers.back', description: 'Shows the answer before the one shown, and answers its plan.', execute: async () => show(history.back()) },
       { id: 'answers.forward', description: 'Shows the answer after the one shown, and answers its plan.', execute: async () => show(history.forward()) },
       { id: 'answers.go', description: 'Shows one answer from the stack. Send { going: <its position> }; answers its plan.', execute: async (data) => show(history.go(GoSchema.parse(data).going)) },
       { id: 'answers.saved', description: 'Takes a form that was saved off the answer shown. Send { saved: <the write it saved through> }; answers the plan.', execute: saved },
-      { id: 'answers.write', description: 'Saves what a form holds through one of the writes the app ships. Send { write, fields: [{ key, value }] }.', execute: write },
     ];
   };

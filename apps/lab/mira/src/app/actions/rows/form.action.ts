@@ -1,5 +1,6 @@
 import type { ActionDefinition } from '@niscorp/nova';
 import { z } from 'zod';
+import { saveRequest } from './form.prism';
 
 // The model may fill it in; only the person saves it. Saved, it says so on the message `saved`, and the server takes
 // it off an answer that opened it.
@@ -38,7 +39,7 @@ export const formAction: ActionDefinition = {
       { if: '$.error', then: { component: 'Text', props: { tone: 'error' }, children: '{{$.error}}' } },
     ],
   },
-  endpoints: { save: { fn: 'answers.write' } },
+  endpoints: { save: { url: '/api/vex', method: 'POST', request: saveRequest } },
   triggers: [
     {
       event: 'ui:click',
