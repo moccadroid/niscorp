@@ -1,4 +1,5 @@
 import type { Screen } from '../../app/screens';
+import type { Usage } from '../runs';
 import type { Catalog } from './catalog';
 import type { OpenCanvas } from './screen';
 
@@ -7,7 +8,7 @@ export type Question = { type: 'noul'; instructions: string };
 // A yes is a probability of 0.5 or more.
 export type Picked = { yes: boolean; probability?: number };
 
-export type Decide = (state: Record<string, unknown>, questions: Record<string, Question>) => Promise<Record<string, Picked>>;
+export type Decide = (state: Record<string, unknown>, questions: Record<string, Question>) => Promise<{ picked: Record<string, Picked>; usage: Usage }>;
 
 export type Picks = {
   actions: { id: string; probability: number }[];
@@ -19,7 +20,7 @@ export type Picks = {
 const probabilityOf = (picked: Picked | undefined): number => picked?.probability ?? (picked?.yes === true ? 1 : 0);
 
 // The state carries what each candidate is, in words; each question names its candidate by key.
-export const pick = async (message: string, open: readonly OpenCanvas[], catalog: Catalog, screens: readonly Screen[], decide: Decide): Promise<Picks> => {
+export const pick = async (message: string, open: readonly OpenCanvas[], catalog: Catalog, screens: readonly Screen[], decide: Decide): Promise<{ picks: Picks; usage: Usage }> => {
   const state = {
     message,
     open_screen: Object.fromEntries(open.map((canvas) => [canvas.area, canvas.intent])),
@@ -42,11 +43,12 @@ export const pick = async (message: string, open: readonly OpenCanvas[], catalog
     questions[`screen${at}`] = { type: 'noul', instructions: `Does the message ask to see screens["${screen.id}"] as it is?` };
   });
 
-  const picked = await decide(state, questions);
-  return {
+  const { picked, usage } = await decide(state, questions);
+  const picks: Picks = {
     actions: catalog.actions.map((action, at) => ({ id: action.id, probability: probabilityOf(picked[`action${at}`]) })),
     reads: catalog.reads.map((read, at) => ({ fingerprint: read.fingerprint, probability: probabilityOf(picked[`read${at}`]) })),
     writes: catalog.writes.map((write, at) => ({ fingerprint: write.fingerprint, probability: probabilityOf(picked[`write${at}`]) })),
     screens: screens.map((screen, at) => ({ id: screen.id, probability: probabilityOf(picked[`screen${at}`]) })),
   };
+  return { picks, usage };
 };

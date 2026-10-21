@@ -7,6 +7,8 @@ import { SCREENS } from '../../app/screens';
 import type { Screen } from '../../app/screens';
 import { AREAS } from '../../app/shell/areas';
 import type { AreaId } from '../../app/shell/areas';
+import { recordModelRun } from '../runs';
+import type { Usage } from '../runs';
 import { composeAnswer } from './answer';
 import type { Compose } from './answer';
 import { CATALOG } from './catalog';
@@ -14,7 +16,7 @@ import type { Catalog } from './catalog';
 import { createHistory } from './history';
 import { markChanged } from './layout';
 import { pick } from './pick';
-import type { Decide, Picks } from './pick';
+import type { Decide } from './pick';
 import { arrangementOfPlan, canvasesInAreas, canvasesOfPlan, changedAreas, planOf, wordsCanvas } from './plan';
 import type { AreaCanvases, Plan, ShownPlan } from './plan';
 import { messagePrompt, systemPrompt } from './prompt';
@@ -26,15 +28,16 @@ export type { ShownPlan } from './plan';
 
 export type Embed = (texts: string[]) => Promise<number[][]>;
 
-export type Models = { decide?: Decide; compose?: Compose; embed?: Embed; missing: readonly string[] };
+// Who runs a model is said in every run it is recorded in.
+export type Model<F> = { provider: string; model: string; call: F };
+
+export type Models = { decide?: Model<Decide>; compose?: Model<Compose>; embed?: Embed; missing: readonly string[] };
 
 const AskSchema = z.looseObject({ text: z.string() });
 const OpenSchema = z.looseObject({ opening: z.string() });
 const SavedSchema = z.looseObject({ saved: z.string() });
 const GoSchema = z.looseObject({ going: z.coerce.number() });
 const WriteSchema = z.looseObject({ write: z.string(), fields: z.array(z.looseObject({ key: z.string(), value: z.unknown() })) });
-
-const ms = (from: number, to: number): string => `${Math.round(to - from)} ms`;
 
 const reasonOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));
 
@@ -44,6 +47,9 @@ export const composer =
     const writes = new Set(catalog.writes.map((write) => write.fingerprint));
     const system = systemPrompt(catalog, screens, arrangements);
     let asked = 0;
+
+    const record = (agentId: string, model: Model<unknown>, label: string, usage: readonly Usage[], since: number, ok: boolean): void =>
+      recordModelRun(session, { agentId, label, provider: model.provider, model: model.model, usage, elapsedMs: performance.now() - since, outcome: ok ? 'ok' : 'failed' });
 
     const home = screens[0];
     const screenPlan = (screen: Screen): Plan => planOf('', canvasesInAreas(screen.canvases), { arrangements, screen, arrangement: screen.arrangement });
@@ -70,24 +76,28 @@ export const composer =
       const message = AskSchema.parse(data).text.trim();
       if (message === '') return history.current();
       const before = history.current();
-      if (models.compose === undefined) throw new Error(`Set ${models.missing.join(' and ')} in .env, and start the app again.`);
+      const chat = models.compose;
+      if (chat === undefined) throw new Error(`Set ${models.missing.join(' and ')} in .env, and start the app again.`);
       const turn = (asked += 1);
-      const started = performance.now();
       const open = readOpenScreen(session.shell, before);
-      const decide = models.decide;
-      const picks: Picks | undefined = decide === undefined ? undefined : await pick(message, open, catalog, screens, decide).catch((error: unknown) => {
-        console.error(`[ask] Jev could not answer "${message}": ${reasonOf(error)}`);
-        return undefined;
-      });
-      const picked = performance.now();
+      const jev = models.decide;
+      const picking = performance.now();
+      const picked =
+        jev === undefined
+          ? undefined
+          : await pick(message, open, catalog, screens, jev.call).catch((error: unknown) => {
+              console.error(`[ask] Jev could not answer "${message}": ${reasonOf(error)}`);
+              return undefined;
+            });
+      if (jev !== undefined) record('mira.jev', jev, message, picked === undefined ? [] : [picked.usage], picking, picked !== undefined);
+      const composing = performance.now();
       const current = arrangementOfPlan(before);
-      const user = messagePrompt(message, open, { id: before.arrangement, layout: before.layout }, picks);
-      const composed = await composeAnswer({ system, user }, { open: canvasesOfPlan(before), current, catalog, screens, arrangements }, models.compose).catch((error: unknown) => {
+      const user = messagePrompt(message, open, { id: before.arrangement, layout: before.layout }, picked?.picks);
+      const composed = await composeAnswer({ system, user }, { open: canvasesOfPlan(before), current, catalog, screens, arrangements }, chat.call).catch((error: unknown) => {
         console.error(`[ask] the model could not answer "${message}": ${reasonOf(error)}`);
         return undefined;
       });
-      const done = performance.now();
-      console.log(`[ask] "${message}" — Jev ${ms(started, picked)} · model ${ms(picked, done)}${composed !== undefined && composed.calls > 1 ? ` (${composed.calls} calls)` : ''} · ${ms(started, done)}`);
+      record('mira.compose', chat, message, composed?.usage ?? [], composing, composed !== undefined && 'answer' in composed);
       // A later message is being answered: this one's answer would only flash past.
       if (turn !== asked) return history.current();
 

@@ -1,4 +1,5 @@
 import { renderDocument } from '@niscorp/moss';
+import type { RunRecord } from '@niscorp/moss';
 import { z } from 'zod';
 import { SCREENS } from '../app/screens';
 import { AREAS } from '../app/shell/areas';
@@ -6,6 +7,7 @@ import { greetingAdd, greetingsCount, greetingsInLanguage, greetingsList, greeti
 import { boot } from '../server/boot';
 import type { Compose, Decide, Models } from '../server/compose';
 import { recordOf } from '../server/compose/record';
+import type { Usage } from '../server/runs';
 import { drawing } from '../server/document';
 
 // Offline, and the same every run: a decision model that finds nothing likely, and a chat model that answers each
@@ -58,23 +60,25 @@ const REPLIES: Record<string, Record<string, unknown>[]> = {
   'What is the weather in Vienna?': [{ reasoning: 'Nothing in this app shows the weather.', areas: [] }],
 };
 
+const SPENT: Usage = { inputTokens: 100, outputTokens: 10, totalTokens: 110, reported: true };
+
 let asked: { state: Record<string, unknown>; questions: Record<string, unknown> }[] = [];
 const decide: Decide = async (state, questions) => {
   asked.push({ state, questions });
-  return Object.fromEntries(Object.keys(questions).map((name) => [name, { yes: false, probability: 0.1 }]));
+  return { picked: Object.fromEntries(Object.keys(questions).map((name) => [name, { yes: false, probability: 0.1 }])), usage: SPENT };
 };
 
 let prompts: string[] = [];
 const turns = new Map<string, number>();
 let unreachable = false;
-const compose: Compose = async <T>(_system: string, user: string, schema: z.ZodType<T>): Promise<T> => {
+const compose: Compose = async <T>(_system: string, user: string, schema: z.ZodType<T>): Promise<{ reply: T; usage: Usage }> => {
   prompts.push(user);
   if (unreachable) throw new Error('the provider did not answer');
   const message = /^MESSAGE: (.*)$/m.exec(user)?.[1] ?? '';
   const turn = turns.get(message) ?? 0;
   turns.set(message, turn + 1);
   const replies = REPLIES[message] ?? [{ areas: [] }];
-  return schema.parse({ reasoning: 'Scripted.', title: 'Scripted', ...replies[Math.min(turn, replies.length - 1)] });
+  return { reply: schema.parse({ reasoning: 'Scripted.', title: 'Scripted', ...replies[Math.min(turn, replies.length - 1)] }), usage: SPENT };
 };
 
 let failures = 0;
@@ -97,8 +101,9 @@ const actionsOf = (canvases: readonly { action: string }[]): string => canvases.
 const OVERVIEW = actionsOf(SCREENS[0]?.canvases ?? []);
 const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 
-const models: Models = { decide, compose, missing: [] };
-const { server } = await boot(models);
+const runs: RunRecord[] = [];
+const models: Models = { decide: { provider: 'scripted', model: 'jev', call: decide }, compose: { provider: 'scripted', model: 'chat', call: compose }, missing: [] };
+const { server } = await boot(models, (run) => runs.push(run));
 try {
   const shells = server.shells;
   if (shells === undefined) throw new Error('the manifest has no shell');
@@ -179,8 +184,14 @@ try {
   check('the first screen loads what it shows', await until(() => value('b') === 5), JSON.stringify(on('b').data));
 
   const overviewIds = ids();
+  runs.length = 0;
   await ask('Guten Tag is german');
   const jev = asked[asked.length - 1];
+  check(
+    'each message is recorded as two runs: Jev\'s pass and the model\'s, each with its model, what it spent and how it ended',
+    runs.map((run) => `${run.agentId} ${run.model} ${run.outcome} ${run.steps} ${run.totalTokens} ${run.label}`).join(' | ') === 'mira.jev jev ok 1 110 Guten Tag is german | mira.compose chat ok 1 110 Guten Tag is german',
+    JSON.stringify(runs),
+  );
   check('Jev is asked about the message with the open screen: an intent for each canvas, the words too', jev?.state['message'] === 'Guten Tag is german' && Object.keys(recordOf(jev?.state['open_screen'])).join(',') === 'a,b,c,d,e', JSON.stringify(jev?.state['open_screen']));
   check(
     'the model is given the open screen by area — where each area is, what each holds, the words too — and what Jev thinks',
@@ -246,12 +257,14 @@ try {
   const beforePie = ids();
   const stackBeforePie = total();
   prompts = [];
+  runs.length = 0;
   await ask('Show me a pie chart');
   check(
     'an answer refused twice leaves the screen as it was, and the line says so',
     prompts.length === 2 && ids() === beforePie && total() === stackBeforePie && said().includes('did not fit'),
     `${ids()} — ${said()}`,
   );
+  check('a model run refused twice is recorded as failed, with both calls', runs[1]?.outcome === 'failed' && runs[1]?.steps === 2 && runs[1]?.totalTokens === 220, JSON.stringify(runs[1]));
 
   await ask('The count and the languages, with the table wide beneath');
   check('a layout the model wrote is the one the answer is laid out in', current().arrangement === 'written' && grid() === '2: a b c×2' && areas() === 'rows.stat rows.bars rows.table', `${String(current().arrangement)} — ${grid()} — ${areas()}`);
@@ -301,8 +314,10 @@ try {
   check('and the bar says what was asked, and why nothing changed', current().question === 'What is the weather in Vienna?' && current().reasoning === 'Nothing in this app shows the weather.', JSON.stringify(current()).slice(0, 200));
 
   unreachable = true;
+  runs.length = 0;
   await ask('Show me every greeting');
   check('a model that cannot be reached leaves the screen as it was, and the line says so', ids() === beforeWeather && said().includes('could not be reached'), said());
+  check('and its run is recorded as failed, with no call answered', runs[1]?.agentId === 'mira.compose' && runs[1]?.outcome === 'failed' && runs[1]?.steps === 0, JSON.stringify(runs[1]));
   unreachable = false;
 
   session.dispatch('dock', { type: 'ui:click', ref: 'forward' });
@@ -324,13 +339,20 @@ try {
 }
 
 asked = [];
-const { server: jevless } = await boot({
-  decide: async () => {
-    throw new Error('Jev did not answer');
+const { server: jevless } = await boot(
+  {
+    decide: {
+      provider: 'scripted',
+      model: 'jev',
+      call: async () => {
+        throw new Error('Jev did not answer');
+      },
+    },
+    compose: { provider: 'scripted', model: 'chat', call: compose },
+    missing: [],
   },
-  compose,
-  missing: [],
-});
+  () => {},
+);
 try {
   const shells = jevless.shells;
   if (shells === undefined) throw new Error('the manifest has no shell');
@@ -344,7 +366,7 @@ try {
   jevless.close();
 }
 
-const { server: keyless } = await boot({ missing: ['GROQ_API_KEY'] });
+const { server: keyless } = await boot({ missing: ['GROQ_API_KEY'] }, () => {});
 try {
   const shells = keyless.shells;
   if (shells === undefined) throw new Error('the manifest has no shell');

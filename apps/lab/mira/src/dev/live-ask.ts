@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs';
 import { z } from 'zod';
 import { AREAS } from '../app/shell/areas';
 import { boot } from '../server/boot';
-import type { Compose, Decide } from '../server/compose';
+import type { Compose, Decide, Model } from '../server/compose';
 import { recordOf } from '../server/compose/record';
 import { modelsFromEnv } from '../server/models';
 
@@ -92,10 +92,11 @@ const models = modelsFromEnv(process.env);
 const said: string[] = [];
 const decideWith = noJev ? undefined : models.decide;
 const composeWith = models.compose;
-const decide: Decide | undefined =
-  decideWith &&
-  (async (state, questions) => {
-    const picked = await decideWith(state, questions);
+const decide: Model<Decide> | undefined = decideWith && {
+  ...decideWith,
+  call: async (state, questions) => {
+    const answered = await decideWith.call(state, questions);
+    const picked = answered.picked;
     if (prompts) said.push(`──── JEV STATE
 ${JSON.stringify(state, null, 2)}
 ──── JEV QUESTIONS
@@ -104,12 +105,14 @@ ${JSON.stringify(questions, null, 2)}
 ${JSON.stringify(picked, null, 2)}`);
     const yes = Object.entries(picked).flatMap(([name, one]) => (one.yes ? [name] : []));
     said.push(`  Jev: ${yes.join(' ')}`);
-    return picked;
-  });
-const compose: Compose | undefined =
-  composeWith &&
-  (async (system, user, schema) => {
-    const reply = await composeWith(system, user, schema);
+    return answered;
+  },
+};
+const compose: Model<Compose> | undefined = composeWith && {
+  ...composeWith,
+  call: async (system, user, schema) => {
+    const answered = await composeWith.call(system, user, schema);
+    const reply = answered.reply;
     if (prompts) said.push(`──── MODEL SYSTEM
 ${system}
 ──── MODEL USER
@@ -119,8 +122,9 @@ ${JSON.stringify(z.toJSONSchema(schema))}
 ──── MODEL ANSWERED
 ${JSON.stringify(reply, null, 2)}`);
     said.push(`  model: ${JSON.stringify(reply)}`);
-    return reply;
-  });
+    return answered;
+  },
+};
 
 const until = async (condition: () => boolean, ms = 60_000): Promise<boolean> => {
   const deadline = Date.now() + ms;
@@ -136,7 +140,7 @@ const scores: number[] = [];
 const misses = new Map<string, number>();
 for (let run = 1; run <= runs; run += 1) {
   const { decide: _jev, ...withoutJev } = models;
-  const { server } = await boot({ ...withoutJev, ...(decide !== undefined ? { decide } : {}), ...(compose !== undefined ? { compose } : {}) });
+  const { server } = await boot({ ...withoutJev, ...(decide !== undefined ? { decide } : {}), ...(compose !== undefined ? { compose } : {}) }, () => {});
   const shells = server.shells;
   if (shells === undefined) throw new Error('the manifest has no shell');
   const session = await shells.session(null, null);

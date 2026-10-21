@@ -22,6 +22,7 @@ src/server/compose/ the message loop: the open screen read, Jev's pass, gpt-oss-
                     plan.ts, history.ts  the answer as a plan, and the stack of them
                     index.ts         the functions the dock calls
 src/server/models/  the models, from .env
+src/server/runs/    each model's part in a message recorded as a run, and the line the server logs for it
 src/db/         the tables, and the hello-world rows
 src/app/        ARTIFACTS ONLY — the manifest (app.ts), the charter, the actions, the shell
 src/server/     the environment (runtime.ts), the boot, how a screen is drawn (document.ts)
@@ -46,6 +47,7 @@ There is no chat history: the screen open when a message arrives is the conversa
   5. **The plan is placed by the dock,** with nova's `reconcile`: each area holds exactly what the plan lists for it. A canvas that stays keeps its instance — a form the model fills in is filled where it stands. An answer that changes nothing adds nothing to the stack; the chip still names what was asked and opens to the model's reasoning.
 - **A message that gets no screen leaves the screen as it is,** and the line says why: the model refused twice, could not be reached, or there is no key.
 - **Jev may take 2 s and the model 8 s.** A Jev pass given up leaves the model to answer alone.
+- **Every message is recorded as two runs,** through moss (`session.recordRun`): `mira.jev` and `mira.compose`, each with its provider and model, the tokens it spent (`reported: false` where signal estimated them), how many calls answered, how long it took, and whether it ended in an answer. The server logs a line for each (`src/server/runs/`).
 - **A form an answer opened goes once it is saved** (`answers.saved`); on a screen it stays, emptied.
 - **The actions are small, with one purpose each:** a table, a number, bars, a form. Each says what it shows (`description`) and declares its input as a JSON Schema written with zod, every field described; the model's answers are checked against that same schema (`z.fromJSONSchema`). A new kind of view is a new action, not a bigger one; the ones the model may place are listed in `catalog.ts`.
 - **The model never presses anything.** It can open a form filled in; only the person saves it, through a write the app ships (`answers.write`).

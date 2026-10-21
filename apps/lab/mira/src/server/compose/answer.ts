@@ -3,6 +3,7 @@ import type { Arrangement } from '../../app/arrangements';
 import type { Screen } from '../../app/screens';
 import { AREAS } from '../../app/shell/areas';
 import type { AreaId } from '../../app/shell/areas';
+import type { Usage } from '../runs';
 import type { Catalog } from './catalog';
 import { areasOfArrangement, gridLayout } from './layout';
 import type { WrittenLayout } from './layout';
@@ -11,7 +12,7 @@ import { isRecord } from './record';
 import { entriesOf, ReplySchema } from './reply.schema';
 import type { Entry, Reply } from './reply.schema';
 
-export type Compose = <T>(system: string, user: string, schema: z.ZodType<T>) => Promise<T>;
+export type Compose = <T>(system: string, user: string, schema: z.ZodType<T>) => Promise<{ reply: T; usage: Usage }>;
 
 // No arrangement keeps the one on screen.
 export type Answer = { reasoning: string; title: string; screen?: string; canvases: AreaCanvases; said: Partial<Record<AreaId, Said>>; arrangement?: string | WrittenLayout };
@@ -119,11 +120,12 @@ const answerOf = (reply: Reply, context: AnswerContext): Answer => {
   return { reasoning, title, canvases, said, ...(arrangement !== undefined ? { arrangement } : {}) };
 };
 
-export const composeAnswer = async (prompts: { system: string; user: string }, context: AnswerContext, compose: Compose): Promise<{ answer: Answer; calls: number } | { refused: string[]; calls: number }> => {
+export const composeAnswer = async (prompts: { system: string; user: string }, context: AnswerContext, compose: Compose): Promise<({ answer: Answer } | { refused: string[] }) & { usage: Usage[] }> => {
   const first = await compose(prompts.system, prompts.user, ReplySchema);
-  const refused = refusalsOf(first, context);
-  if (refused.length === 0) return { answer: answerOf(first, context), calls: 1 };
+  const refused = refusalsOf(first.reply, context);
+  if (refused.length === 0) return { answer: answerOf(first.reply, context), usage: [first.usage] };
   const again = await compose(prompts.system, `${prompts.user}\n\nYOUR LAST ANSWER WAS REFUSED:\n${refused.map((reason) => `- ${reason}`).join('\n')}\nAnswer again.`, ReplySchema);
-  const still = refusalsOf(again, context);
-  return still.length === 0 ? { answer: answerOf(again, context), calls: 2 } : { refused: still, calls: 2 };
+  const still = refusalsOf(again.reply, context);
+  const usage = [first.usage, again.usage];
+  return still.length === 0 ? { answer: answerOf(again.reply, context), usage } : { refused: still, usage };
 };

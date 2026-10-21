@@ -1,8 +1,11 @@
 import { z } from 'zod';
 import { createSignal } from '@niscorp/signal';
-import type { Compose, Decide, Embed, Models } from '../compose';
+import type { Compose, Decide, Embed, Model, Models } from '../compose';
 
 type Env = Readonly<Record<string, string | undefined>>;
+
+const JEV = { provider: 'typesafe', model: 'jev-latest' };
+const CHAT = { provider: 'groq', model: 'openai/gpt-oss-120b' };
 
 // Jev answers in about 200 ms and the chat model in about one second, its slowest measured near 4 s. A Jev pass given up
 // is answered by the chat model alone; a chat call given up is a line saying the model could not be reached.
@@ -24,18 +27,27 @@ const EMBEDDERS: Record<string, { provider: 'openai' | 'openrouter'; key: string
 // budget allows.
 export const modelsFromEnv = (env: Env): Models & { summary: string } => {
   const has = (name: string): boolean => (env[name] ?? '').trim() !== '';
-  const chat = has('GROQ_API_KEY') ? createSignal('groq').model('openai/gpt-oss-120b') : undefined;
-  const jev = has('TYPESAFE_API_KEY') ? createSignal('typesafe') : undefined;
+  const chat = has('GROQ_API_KEY') ? createSignal('groq').model(CHAT.model) : undefined;
+  const jev = has('TYPESAFE_API_KEY') ? createSignal('typesafe').model(JEV.model) : undefined;
   const embedder = EMBEDDERS[env['EMBEDDINGS'] ?? ''];
   const embeds = embedder !== undefined && has(embedder.key) ? createSignal(embedder.provider).model(embedder.model) : undefined;
 
-  const decide: Decide | undefined =
-    jev &&
-    (async (state, questions) => {
+  const decide: Model<Decide> | undefined = jev && {
+    ...JEV,
+    call: async (state, questions) => {
       const result = await jev.decide({ state, questions, options: { signal: AbortSignal.timeout(JEV_MS) } });
-      return Object.fromEntries(Object.entries(DecisionsSchema.parse(result.decisions)).map(([name, decision]) => [name, { yes: decision.answer, ...(decision.noul !== undefined ? { probability: decision.noul } : {}) }]));
-    });
-  const compose: Compose | undefined = chat && (async (system, user, schema) => (await within(CHAT_MS, chat.systemPrompt(system).schema(schema).options({ reasoningEffort: 'low' }).complete(user))).response);
+      const picked = Object.fromEntries(Object.entries(DecisionsSchema.parse(result.decisions)).map(([name, decision]) => [name, { yes: decision.answer, ...(decision.noul !== undefined ? { probability: decision.noul } : {}) }]));
+      return { picked, usage: result.meta.usage };
+    },
+  };
+  // complete() adds the usage the provider reported to what it estimated, and does not say which.
+  const compose: Model<Compose> | undefined = chat && {
+    ...CHAT,
+    call: async (system, user, schema) => {
+      const result = await within(CHAT_MS, chat.systemPrompt(system).schema(schema).options({ reasoningEffort: 'low' }).complete(user));
+      return { reply: result.response, usage: { ...result.meta.usage, reported: false } };
+    },
+  };
   const embed: Embed | undefined = embeds && ((texts) => embeds.embed(texts));
 
   const summary = [

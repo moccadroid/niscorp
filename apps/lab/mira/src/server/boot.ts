@@ -1,11 +1,12 @@
 import { existsSync } from 'node:fs';
 import { createServer } from '@niscorp/moss';
-import type { MossServer } from '@niscorp/moss';
+import type { MossServer, RunSink } from '@niscorp/moss';
 import { buildApp } from '../app/app';
 import { APP_SEQUENCE } from '../db/schema';
 import { composer } from './compose';
 import type { Models } from './compose';
 import { modelsFromEnv } from './models';
+import { logRun } from './runs';
 import { runtime } from './runtime';
 
 const fromEnvFile = (): Models => {
@@ -16,7 +17,7 @@ const fromEnvFile = (): Models => {
   return models;
 };
 
-// The checks hand in models of their own; the app reads its keys from .env.
-export const boot = async (models: Models = fromEnvFile()): Promise<{ server: MossServer }> => ({
-  server: await createServer(buildApp(composer(models)), { ...(await runtime()), tables: [APP_SEQUENCE] }),
+// The checks hand in models and a run sink of their own; the app reads its keys from .env and logs each run.
+export const boot = async (models: Models = fromEnvFile(), runs: RunSink = logRun): Promise<{ server: MossServer }> => ({
+  server: await createServer(buildApp(composer(models), runs), { ...(await runtime()), tables: [APP_SEQUENCE] }),
 });
