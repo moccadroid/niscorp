@@ -1,11 +1,11 @@
 import { ActionDefinitionSchema, LayoutNodeSchema } from '@niscorp/nova';
 import type { LayoutNode } from '@niscorp/nova';
 import { actions } from '../app/action-catalog';
-import { ANSWERS } from '../app/answers';
 import { ARRANGEMENTS } from '../app/arrangements';
 import { assignments } from '../app/charter/assignments';
 import { charter } from '../app/charter/charter';
 import { SCREENS } from '../app/screens';
+import { CATALOG } from '../server/compose/catalog';
 import { AREAS } from '../app/shell/areas';
 import { shell } from '../app/shell/shell';
 import { buildRegistry } from '../ui/registry';
@@ -46,7 +46,6 @@ const componentsIn = (node: unknown): string[] => {
 };
 
 pure('the action catalog', actions);
-pure('the prepared answers', ANSWERS);
 pure('the charter', charter);
 pure('the assignments', assignments);
 pure('the shell', shell);
@@ -71,20 +70,6 @@ for (const [name, layout] of layouts) {
   check(`${name} names only components the kit has`, missing.length === 0, missing.join(', '));
 }
 
-const ids = new Set<string>();
-for (const answer of ANSWERS) {
-  check(`prepared answer "${answer.id}" is the only one with its id`, !ids.has(answer.id));
-  ids.add(answer.id);
-  const action = actions[answer.action];
-  check(`prepared answer "${answer.id}" opens an action the app has`, action !== undefined, answer.action);
-  const takes = propertiesOf(action?.input);
-  const extra = Object.keys(answer.input).filter((key) => !takes.includes(key));
-  check(`prepared answer "${answer.id}" gives only inputs ${answer.action} takes`, extra.length === 0, extra.join(', '));
-  const paths = [...Object.keys(answer.choose ?? {}), ...Object.keys(answer.set ?? {})];
-  const lost = paths.filter((path) => path.split('.').reduce<unknown>((at, key) => (isRecord(at) || Array.isArray(at) ? (at as Record<string, unknown>)[key] : undefined), answer.input) === undefined);
-  check(`prepared answer "${answer.id}" chooses and sets only inputs it has`, lost.length === 0, lost.join(', '));
-}
-
 pure('the arrangements', ARRANGEMENTS);
 const canvasesIn = (node: unknown): string[] => {
   if (Array.isArray(node)) return node.flatMap(canvasesIn);
@@ -103,12 +88,19 @@ check('the frame has the region an arrangement is swapped into, and the first on
 pure('the screens', SCREENS);
 check('there is a first screen to open on', SCREENS.length > 0);
 for (const screen of SCREENS) {
-  const missing = screen.answers.filter((id) => !ANSWERS.some((answer) => answer.id === id));
-  check(`screen "${screen.id}" shows only prepared answers there are`, missing.length === 0, missing.join(', '));
-  const choosing = screen.answers.filter((id) => ANSWERS.find((answer) => answer.id === id)?.choose !== undefined);
-  check(`screen "${screen.id}" shows only answers that need nothing picked`, choosing.length === 0, choosing.join(', '));
+  for (const [at, canvas] of screen.canvases.entries()) {
+    const action = actions[canvas.action];
+    const named = `screen "${screen.id}" canvas ${at + 1}`;
+    check(`${named} opens an action the app has`, action !== undefined, canvas.action);
+    const extra = Object.keys(canvas.input).filter((key) => !propertiesOf(action?.input).includes(key));
+    check(`${named} gives only inputs ${canvas.action} takes`, extra.length === 0, extra.join(', '));
+    const placeable = CATALOG.actions.find((candidate) => candidate.id === canvas.action);
+    const parsed = placeable?.input.safeParse(canvas.input);
+    check(`${named} is opened with an input its action’s schema takes`, parsed === undefined || parsed.success, parsed?.error?.message ?? '');
+    check(`${named} says why it is there`, canvas.intent.trim() !== '');
+  }
   const arrangement = ARRANGEMENTS.find((candidate) => candidate.id === screen.arrangement);
-  check(`screen "${screen.id}" is laid out in an arrangement there is, with room for its answers`, arrangement !== undefined && arrangement.slots >= screen.answers.length, `${screen.arrangement}: ${screen.answers.length} answers`);
+  check(`screen "${screen.id}" is laid out in an arrangement there is, with room for its canvases`, arrangement !== undefined && arrangement.slots >= screen.canvases.length, `${screen.arrangement}: ${screen.canvases.length} canvases`);
 }
 
 console.log(failures === 0 ? '[pass] artifacts: all checks passed' : `[fail] artifacts: ${failures} check(s) failed`);

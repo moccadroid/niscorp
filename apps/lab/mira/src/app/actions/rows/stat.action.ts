@@ -2,12 +2,14 @@ import type { ActionDefinition } from '@niscorp/nova';
 import { z } from 'zod';
 import { readEndpoint, readInput } from './read';
 
+export const statInput = z.object({ ...readInput, label: z.string().describe('What the number counts.') });
+
 export const statAction: ActionDefinition = {
   id: 'rows.stat',
   title: 'Number',
   description: 'One number a read answers, as { value }, and what it counts.',
   data: { title: '', read: '', params: {}, label: '', result: { value: null }, error: null },
-  input: z.toJSONSchema(z.object({ ...readInput, label: z.string().describe('What the number counts.') })),
+  input: z.toJSONSchema(statInput),
   layout: {
     component: 'Card',
     props: { title: '{{$.title}}' },

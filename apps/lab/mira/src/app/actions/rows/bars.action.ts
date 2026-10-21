@@ -2,12 +2,14 @@ import type { ActionDefinition } from '@niscorp/nova';
 import { z } from 'zod';
 import { readEndpoint, readInput } from './read';
 
+export const barsInput = z.object(readInput);
+
 export const barsAction: ActionDefinition = {
   id: 'rows.bars',
   title: 'Bars',
   description: 'Values side by side as bars: a read that answers rows of { label, value }.',
   data: { title: '', read: '', params: {}, items: [], error: null },
-  input: z.toJSONSchema(z.object(readInput)),
+  input: z.toJSONSchema(barsInput),
   layout: {
     component: 'Card',
     props: { title: '{{$.title}}' },

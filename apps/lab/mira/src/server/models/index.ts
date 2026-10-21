@@ -3,24 +3,34 @@ import type { Decide, Embed, Fill, Models, Picked } from '../compose';
 
 type Env = Readonly<Record<string, string | undefined>>;
 
+// How long a call may take before it is given up: Jev answers in about 300 ms and the chat model in about one second,
+// its slowest measured near 3.5 s. A Jev pass given up is answered by the chat model alone; a chat call given up is a
+// line saying the model could not be reached.
+const JEV_MS = 2_000;
+const CHAT_MS = 8_000;
+
+// signal's complete() takes no abort, so the chat call is raced against the clock: its request runs on, unwaited for.
+const within = <T>(ms: number, work: Promise<T>): Promise<T> =>
+  Promise.race([work, new Promise<never>((_, reject) => setTimeout(() => reject(new Error(`no answer in ${ms} ms`)), ms).unref())]);
+
 const EMBEDDERS: Record<string, { provider: 'openai' | 'openrouter'; key: string; model: string; named: string }> = {
   openai: { provider: 'openai', key: 'OPENAI_API_KEY', model: 'text-embedding-3-small', named: 'OpenAI text-embedding-3-small' },
   openrouter: { provider: 'openrouter', key: 'OPENROUTER_API_KEY', model: 'qwen/qwen3-embedding-8b', named: 'OpenRouter qwen3-embedding-8b' },
 };
 
-// The models the keys in .env allow, and a line saying what they are. Without a TypeSafe key the chat model makes the
-// decisions too: the same questions, answered one to two orders of magnitude slower and with no probabilities.
+// The models the keys in .env allow, and a line saying what they are. Without a TypeSafe key there is no Jev pass: the
+// chat model could answer its questions too, but far slower than its budget allows.
 export const modelsFromEnv = (env: Env): Models & { said: string } => {
   const has = (name: string): boolean => (env[name] ?? '').trim() !== '';
   const chat = has('GROQ_API_KEY') ? createSignal('groq').model('openai/gpt-oss-120b') : undefined;
-  const jev = has('TYPESAFE_API_KEY') ? createSignal('typesafe') : chat;
+  const jev = has('TYPESAFE_API_KEY') ? createSignal('typesafe') : undefined;
   const embedder = EMBEDDERS[env['EMBEDDINGS'] ?? ''];
   const embeds = embedder !== undefined && has(embedder.key) ? createSignal(embedder.provider).model(embedder.model) : undefined;
 
   const decide: Decide | undefined =
     jev &&
     (async (state, questions) => {
-      const result = await jev.decide({ state, questions });
+      const result = await jev.decide({ state, questions, options: { signal: AbortSignal.timeout(JEV_MS) } });
       return Object.fromEntries(
         Object.entries(result.decisions as Record<string, Record<string, unknown>>).map(([name, decision]): [string, Picked] => [
           name,
@@ -32,13 +42,13 @@ export const modelsFromEnv = (env: Env): Models & { said: string } => {
         ]),
       );
     });
-  const fill: Fill | undefined = chat && (async (system, user, schema) => (await chat.systemPrompt(system).schema(schema).options({ reasoningEffort: 'low' }).complete(user)).response);
+  const fill: Fill | undefined = chat && (async (system, user, schema) => (await within(CHAT_MS, chat.systemPrompt(system).schema(schema).options({ reasoningEffort: 'low' }).complete(user))).response);
   const embed: Embed | undefined = embeds && ((texts) => embeds.embed(texts));
 
   const missing = has('GROQ_API_KEY') ? [] : ['GROQ_API_KEY'];
   const said = [
-    has('TYPESAFE_API_KEY') ? 'Jev picks' : chat !== undefined ? 'gpt-oss-120b picks (no TYPESAFE_API_KEY: slower)' : 'nothing picks',
-    chat !== undefined ? 'gpt-oss-120b fills in' : 'nothing fills in (no GROQ_API_KEY)',
+    jev !== undefined ? 'Jev picks' : 'no Jev pass (no TYPESAFE_API_KEY)',
+    chat !== undefined ? 'gpt-oss-120b composes' : 'nothing composes (no GROQ_API_KEY)',
     embeds !== undefined && embedder !== undefined ? `embeddings: ${embedder.named}` : 'no embeddings',
   ].join(' · ');
   return { ...(decide !== undefined ? { decide } : {}), ...(fill !== undefined ? { fill } : {}), ...(embed !== undefined ? { embed } : {}), missing, said };

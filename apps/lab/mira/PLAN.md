@@ -11,15 +11,17 @@ Made 2026-10-20 by `npm create nisc`, on nisc 0.8.1. This is the record AGENTS.m
 | D3 Reads | answered | **Vex entries.** An answer's action reads one by its fingerprint (`/api/vex`), under the person's policy, and again whenever what it read changes (`refresh: 'reactive'`). |
 | D4 Writes | answered | **Vex mutation entries**, sent from a form an answer opened (`answers.write`) — by the person, never by the model. |
 | D5 Routing | derived · **partly open** | The first screen is drawn on the server and adopted by the terminal — it costs nothing while nobody can sign in. Open: once sign-in exists, the browser keeps the session in a cookie no script can read, and the page is drawn for whoever it says (AGENTS.md rule 12) — a page drawn for somebody is theirs alone (`private, no-store`). Open: which paths are **pages** rather than the app, and whether the app's shell state syncs to the address bar. |
-| D6 Who answers a message | answered | Jev picks the prepared answers that fit (`TYPESAFE_API_KEY`); gpt-oss-120b on Groq fills them in (`GROQ_API_KEY`). Without Jev the chat model picks too, slower and with no probabilities. |
-| D7 What a screen is made of | answered · **open: the answers** | Prepared answers (`src/app/answers.ts`) placed on six areas, and screens of them (`src/app/screens.ts`) in the bar’s menu. Which answers and screens there are follows the data. |
+| D6 Who answers a message | answered | Jev reads the message and the open screen (`TYPESAFE_API_KEY`), then gpt-oss-120b on Groq composes the screen (`GROQ_API_KEY`), with what Jev picked as a hint. Without a TypeSafe key there is no Jev pass. Jev may take 2 s and the model 8 s; past that, the model answers alone, or a line says it could not be reached. |
+| D7 What a screen is made of | answered | Canvases: an action from the catalog (`src/server/compose/catalog.ts`: the actions the model may place, the reads they show, the writes a form saves through), opened with an input its schema takes, and why it is there. Up to six, on the areas `a`–`f`; the screens in the bar’s menu are canvases too (`src/app/screens.ts`). |
 | D8 History | derived · **open** | The answers one shell was given, kept while it lives; a reload starts again. Open: whether a person's answers outlive the shell, and memory beyond that. |
-| D9 Embeddings | answered · **open: memory** | `EMBEDDINGS` in `.env`; they narrow the prepared answers to the 255 nearest a message when there are more. |
+| D9 Embeddings | answered · **open: memory** | `EMBEDDINGS` in `.env`, for memory. Nothing uses them yet. |
 | D10 Layout swaps | derived · **open: sign-in** | An answer’s arrangement is swapped into the frame’s `answers` region through moss’s unverified shell (`@niscorp/moss/unverified`, in `src/server/compose/index.ts`), because moss lets a session change a layout only through a draft, and a draft needs a signed-in person. **When the app has sign-in, the swap moves to `session.draft`, where moss checks it.** |
+| D11 What keeps a canvas in place | **open** | Now: the placement code keeps what is on screen in its order, and the model's order only for what is new. Measured against the model keeping the order itself (told to, unless the message asks to move things): 68/78 right against 78/78 (`src/dev/live-ask.ts --runs=6`). |
+| D12 Jev's "still wanted?" | **open** | Jev answers, for each canvas on screen, whether it is still wanted, and the model is told. On ten follow-ups it was right 8 of 14 times; the 78/78 above is without it. |
 
 ## Answered when it was made
 
-- **Who leads:** a model. A message is answered with a screen: Jev picks the prepared answers that fit (`src/app/answers.ts`), gpt-oss-120b fills in what the message says, and the plan is placed on the six areas. The keys are in `.env`.
+- **Who leads:** a model. A message is answered with a screen: Jev reads the message and the open screen, gpt-oss-120b composes the screen from the app's actions, and the bar places it on the six areas. The keys are in `.env`.
 - **What draws the screen:** React. The kit in `src/ui/` is where the look lives; a layout names components, never styles.
 
 ## The dial-in — open
@@ -35,9 +37,9 @@ Made 2026-10-20 by `npm create nisc`, on nisc 0.8.1. This is the record AGENTS.m
 ## Order of work
 
 1. **The interview** — every open item above, answered or delegated by name. ← here
-2. **Scaffold** — done: the frame, the message loop, seven actions, five prepared answers and three screens over hello-world rows, and their checks.
+2. **Scaffold** — done: the frame, the message loop, seven actions, three screens over hello-world rows, and their checks.
 3. **Data** — per D2/D3: your tables in `src/db/schema.ts`, your reads and writes in `src/app/vex/`; the greetings go.
-4. **Prepared answers and screens** — one answer for each thing a person will want to see: an action, its input, and what it shows, in words a model can match a message to; and the screens that put them together, the first the one the app opens on.
-5. **Actions** — your own, small: one purpose each, a description that says what it shows, an `input` for what an answer fills in.
+4. **Screens** — the ones a person will want in the menu, each its canvases; the first the one the app opens on.
+5. **Actions** — your own, small: one purpose each, a description that says what it shows, an `input` schema for what the model fills in; the ones the model may place go in the catalog.
 6. **Writes** — per D4; a form an answer opens, filled in by the model, saved by the person.
-7. **Checks** — every prepared answer has a message in `src/dev/compose-check.ts` that must reach it.
+7. **Checks** — `src/dev/compose-check.ts` runs the loop offline; `src/dev/live-ask.ts` asks the real models a run of messages and counts the right screens.

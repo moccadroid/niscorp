@@ -1,21 +1,19 @@
 import type { ShellManifest } from '@niscorp/moss';
-import { ANSWERS } from '../answers';
 import { ARRANGEMENTS } from '../arrangements';
 import { SCREENS } from '../screens';
 import { AREAS } from './areas';
 import { frameLayout } from './frame.layout';
 
-// The app opens on the first screen: its prepared answers, an area each, in its arrangement.
+// The app opens on the first screen: its canvases, an area each, in its arrangement.
 const first = SCREENS[0];
-const opening = (first?.answers ?? []).flatMap((id) => ANSWERS.filter((answer) => answer.id === id));
 const arranged = ARRANGEMENTS.find((arrangement) => arrangement.id === first?.arrangement) ?? ARRANGEMENTS[0];
 
 export const shell: ShellManifest = {
   canvases: [
     { id: 'bar', initial: 'answer.bar' },
     ...AREAS.map((area, at) => {
-      const answer = opening[at];
-      return answer === undefined ? { id: area } : { id: area, initial: { action: answer.action, input: answer.input } };
+      const canvas = first?.canvases[at];
+      return canvas === undefined ? { id: area } : { id: area, initial: { action: canvas.action, input: canvas.input } };
     }),
     { id: 'line', initial: 'ask.line' },
   ],

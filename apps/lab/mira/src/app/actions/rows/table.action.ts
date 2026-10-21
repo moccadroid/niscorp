@@ -2,17 +2,17 @@ import type { ActionDefinition } from '@niscorp/nova';
 import { z } from 'zod';
 import { readEndpoint, readInput } from './read';
 
+export const tableInput = z.object({
+  ...readInput,
+  columns: z.array(z.object({ key: z.string(), label: z.string() })).describe('The columns, in order: a row field and its heading.'),
+});
+
 export const tableAction: ActionDefinition = {
   id: 'rows.table',
   title: 'Table',
   description: 'The rows a read answers, as a table with the columns it is given.',
   data: { title: '', read: '', params: {}, columns: [], rows: [], error: null },
-  input: z.toJSONSchema(
-    z.object({
-      ...readInput,
-      columns: z.array(z.object({ key: z.string(), label: z.string() })).describe('The columns, in order: a row field and its heading.'),
-    }),
-  ),
+  input: z.toJSONSchema(tableInput),
   layout: {
     component: 'Card',
     props: { title: '{{$.title}}' },

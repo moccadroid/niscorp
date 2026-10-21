@@ -1,9 +1,8 @@
-import type { PreparedAnswer } from '../../app/answers';
 import type { Arrangement } from '../../app/arrangements';
 import type { Screen } from '../../app/screens';
-import { AREAS } from '../../app/shell/areas';
-import type { Options } from './options';
-import type { Chosen } from './plan';
+import type { AreaId } from '../../app/shell/areas';
+import type { Catalog } from './catalog';
+import type { OpenCanvas } from './screen';
 
 export type Question = { type: 'noul'; instructions: string } | { type: 'choice'; instructions: string; criteria: Record<string, string> };
 
@@ -13,68 +12,58 @@ export type Picked = { yes?: boolean; choice?: string; p?: number };
 
 export type Decide = (state: Record<string, unknown>, questions: Record<string, Question>) => Promise<Record<string, Picked>>;
 
-const NONE = 'none';
+// What Jev made of a message: each action, read, write and screen with how likely it belongs in the answer, whether
+// each canvas on screen is still wanted, and the arrangement.
+export type Picks = {
+  actions: { id: string; p: number }[];
+  reads: { fingerprint: string; p: number }[];
+  writes: { fingerprint: string; p: number }[];
+  screens: { id: string; p: number }[];
+  keep: { area: AreaId; p: number }[];
+  arrangement?: string;
+};
 
-// What a screen shows, in words: what each of its answers shows.
-export const screenShows = (screen: Screen, answers: readonly PreparedAnswer[]): string =>
-  screen.answers.flatMap((id) => answers.find((answer) => answer.id === id)?.shows ?? []).join('; ');
+const probability = (picked: Picked | undefined): number => picked?.p ?? (picked?.yes === true ? 1 : 0);
 
-// One pass of the decision model over the message alone: for each prepared answer, whether it answers the message,
-// and for each input it chooses from rows, which value; for each screen, whether it does; and which arrangement the
-// answer suits. An answer is shown when it is a yes and every value it chooses was picked, and a screen that is a yes
-// shows its answers; the yeses are ordered by how sure the model was, a screen's answers in the screen's order.
-export const pick = async (
-  message: string,
-  answers: readonly PreparedAnswer[],
-  screens: readonly Screen[],
-  arrangements: readonly Arrangement[],
-  options: Options,
-  decide: Decide,
-): Promise<{ chosen: Chosen[]; arrangement?: string }> => {
+// One pass over the message and the open screen. The state carries what each candidate is, in words; each question
+// names its candidate by key.
+export const pick = async (message: string, open: readonly OpenCanvas[], catalog: Catalog, screens: readonly Screen[], arrangements: readonly Arrangement[], decide: Decide): Promise<Picks> => {
+  const state = {
+    message,
+    open_screen: Object.fromEntries(open.map((canvas) => [canvas.area, canvas.intent])),
+    actions: Object.fromEntries(catalog.actions.map((action) => [action.id, action.description])),
+    reads: Object.fromEntries(catalog.reads.map((read) => [read.fingerprint, read.intent])),
+    writes: Object.fromEntries(catalog.writes.map((write) => [write.fingerprint, write.intent])),
+    screens: Object.fromEntries(screens.map((screen) => [screen.id, `${screen.label}: ${screen.canvases.map((canvas) => canvas.intent).join('; ')}`])),
+  };
   const questions: Record<string, Question> = {};
+  catalog.actions.forEach((action, at) => {
+    questions[`action${at}`] = { type: 'noul', instructions: `Does the answer to the message need actions["${action.id}"]?` };
+  });
+  catalog.reads.forEach((read, at) => {
+    questions[`read${at}`] = { type: 'noul', instructions: `Does the message ask for what reads["${read.fingerprint}"] answers?` };
+  });
+  catalog.writes.forEach((write, at) => {
+    questions[`write${at}`] = { type: 'noul', instructions: `Does the message ask to do what writes["${write.fingerprint}"] does?` };
+  });
+  screens.forEach((screen, at) => {
+    questions[`screen${at}`] = { type: 'noul', instructions: `Does the message ask to see screens["${screen.id}"] as it is?` };
+  });
+  for (const canvas of open) {
+    questions[`keep_${canvas.area}`] = { type: 'noul', instructions: `Is open_screen["${canvas.area}"] still wanted on screen after the message?` };
+  }
   if (arrangements.length > 0) {
     questions['arrangement'] = { type: 'choice', instructions: 'How should the answer to the message be laid out?', criteria: Object.fromEntries(arrangements.map((arrangement) => [arrangement.id, arrangement.suits])) };
   }
-  answers.forEach((answer, at) => {
-    questions[`show${at}`] = { type: 'noul', instructions: `Would ${answer.shows} answer the person's message?` };
-    [...(options.get(answer) ?? new Map<string, string[]>())].forEach(([path, values], index) => {
-      const question = answer.choose?.[path]?.question ?? path;
-      questions[`choose${at}_${index}`] = { type: 'choice', instructions: question, criteria: { [NONE]: 'None of these', ...Object.fromEntries(values.map((value, v) => [`v${v}`, value])) } };
-    });
-  });
-  screens.forEach((screen, at) => {
-    questions[`screen${at}`] = { type: 'noul', instructions: `Would the screen "${screen.label}" — ${screenShows(screen, answers)} — answer the person's message?` };
-  });
-  const picked = await decide({ message }, questions);
 
-  const shown: { chosen: Chosen; p: number }[] = [];
-  answers.forEach((answer, at) => {
-    const yes = picked[`show${at}`];
-    if (yes?.yes !== true) return;
-    const values: Record<string, unknown> = {};
-    const paths = [...(options.get(answer) ?? new Map<string, string[]>())];
-    const complete = paths.every(([path, choices], index) => {
-      const choice = picked[`choose${at}_${index}`]?.choice ?? NONE;
-      const value = choice.startsWith('v') ? choices[Number(choice.slice(1))] : undefined;
-      if (value !== undefined) values[path] = value;
-      return value !== undefined;
-    });
-    if (complete) shown.push({ chosen: { answer, values }, p: yes.p ?? 0.5 });
-  });
-  screens.forEach((screen, at) => {
-    const yes = picked[`screen${at}`];
-    if (yes?.yes !== true) return;
-    for (const id of screen.answers) {
-      const answer = answers.find((candidate) => candidate.id === id && candidate.choose === undefined);
-      if (answer !== undefined && !shown.some(({ chosen }) => chosen.answer.id === id)) shown.push({ chosen: { answer, values: {} }, p: yes.p ?? 0.5 });
-    }
-  });
+  const picked = await decide(state, questions);
   const arrangement = picked['arrangement']?.choice;
   return {
-    chosen: shown
-      .sort((one, other) => other.p - one.p)
-      .slice(0, AREAS.length)
-      .map(({ chosen }) => chosen),
+    actions: catalog.actions.map((action, at) => ({ id: action.id, p: probability(picked[`action${at}`]) })),
+    reads: catalog.reads.map((read, at) => ({ fingerprint: read.fingerprint, p: probability(picked[`read${at}`]) })),
+    writes: catalog.writes.map((write, at) => ({ fingerprint: write.fingerprint, p: probability(picked[`write${at}`]) })),
+    screens: screens.map((screen, at) => ({ id: screen.id, p: probability(picked[`screen${at}`]) })),
+    keep: open.map((canvas) => ({ area: canvas.area, p: probability(picked[`keep_${canvas.area}`]) })),
     ...(arrangement !== undefined ? { arrangement } : {}),
   };
 };
