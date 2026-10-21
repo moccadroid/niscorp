@@ -4,7 +4,7 @@ import type { AreaId } from '../../app/shell/areas';
 import { AreaIdSchema } from './layout';
 import type { Said } from './plan';
 
-export const GridSchema = z
+const GridSchema = z
   .object({
     columns: z.number().int().min(1).max(3).describe('How many columns the areas are laid out in.'),
     areas: z
@@ -46,10 +46,10 @@ export const EntrySchema = z
 export const ReplySchema = z
   .object({
     title: z.string().max(40).describe('What the answer is, in at most four words ("German greetings", "A joke"), never the message repeated. It names the answer among the others.'),
-    screen: z.string().nullish().describe('The id of one of the SCREENS, only when the message asks for that screen as it is; then no areas.'),
+    areas: z.array(EntrySchema).max(AREAS.length).nullish().describe('An entry for each area that changes. An area left out stays as it is, unless the arrangement has no such area.'),
     arrangement: z.string().nullish().describe('The id of one of the ARRANGEMENTS, only when the answer needs other room than the one on screen; every area used must be in it.'),
     grid: GridSchema.nullish(),
-    areas: z.array(EntrySchema).max(AREAS.length).nullish().describe('An entry for each area that changes. An area left out stays as it is, unless the arrangement has no such area.'),
+    screen: z.string().nullish().describe('The id of one of the SCREENS, only when the message asks for that screen as it is; then no areas.'),
   })
   .strict();
 

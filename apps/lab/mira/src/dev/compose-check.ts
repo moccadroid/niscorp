@@ -271,9 +271,9 @@ try {
   check('a read asked with a value reads only what the value names', await until(() => on('a').action === 'rows.table' && rows('a', 'rows').length === 1), JSON.stringify(on('a').data['params']));
   const germanTable = on('a').id;
   await ask('and the count beside it');
-  check('the answer streams in: an area is placed while the rest of the reply is still being written', streamed > 0, String(streamed));
   check('a canvas kept stays the same canvas, in its area; what is new goes where the model puts it', on('a').id === germanTable && areas() === 'rows.table rows.stat' && grid() === '2: a b', `${areas()} — ${grid()}`);
   await ask('the count first');
+  check('the answer streams in: an area is placed while the rest of the reply is still being written', streamed > 0, String(streamed));
   check('a canvas the model keeps from another area moves there', areas() === 'rows.stat rows.table', areas());
 
   prompts = [];

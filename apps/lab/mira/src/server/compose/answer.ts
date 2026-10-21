@@ -7,7 +7,7 @@ import { areasOfArrangement, gridLayout } from './layout';
 import type { WrittenLayout } from './layout';
 import type { AreaCanvases, Said } from './plan';
 import { isRecord, recordOf } from './record';
-import { entriesOf, EntrySchema, entryOf, GridSchema } from './reply.schema';
+import { entriesOf, EntrySchema, entryOf } from './reply.schema';
 import type { Entry, Reply } from './reply.schema';
 
 // No arrangement keeps the one on screen.
@@ -121,27 +121,26 @@ export const answerOf = (reply: Reply, context: AnswerContext): Answer => {
   return { title, canvases, said, ...(arrangement !== undefined ? { arrangement } : {}) };
 };
 
-// While the reply streams, solid writes it left to right: once an entry is followed by another, it is finished, and it
-// is placed if its own checks pass. The room is final by then, for it comes before the areas. Whether the whole reply
-// holds is the run's to say when it ends.
+// While the reply streams, solid writes it left to right: an entry is finished once the next one has begun, or once the
+// reply has gone past the areas to its room (solid holds every key from the start; a key the model has reached has a
+// value, null included). A finished entry is placed in the room on screen if its own checks pass;
+// another room, or a screen, comes with the whole reply, which is the run's to check when it ends.
 export const answerSoFar = (output: unknown, context: AnswerContext): Answer | undefined => {
   const data = recordOf(recordOf(output)['data']);
   const written = data['areas'];
   if (!Array.isArray(written) || typeof data['screen'] === 'string') return undefined;
-  const grid = GridSchema.safeParse(data['grid']);
-  const asked = grid.success ? gridLayout(grid.data) : context.arrangements.find((arrangement) => arrangement.id === data['arrangement'])?.id;
-  const arrangement = asked ?? context.current;
-  const room = areasOfArrangement(arrangement, context.arrangements);
+  const pastTheAreas = ['arrangement', 'grid', 'screen'].some((key) => data[key] !== undefined);
+  const room = areasOfArrangement(context.current, context.arrangements);
   const seen = new Set<AreaId>();
-  const entries = written.slice(0, -1).flatMap((raw: unknown) => {
+  const entries = (pastTheAreas ? written : written.slice(0, -1)).flatMap((raw: unknown) => {
     const parsed = EntrySchema.safeParse(raw);
     if (!parsed.success) return [];
     const entry = entryOf(parsed.data);
-    if (seen.has(entry.area) || entryRefusals(entry, '', room, nameOf(arrangement), context.open, context.catalog).length > 0) return [];
+    if (seen.has(entry.area) || entryRefusals(entry, '', room, nameOf(context.current), context.open, context.catalog).length > 0) return [];
     seen.add(entry.area);
     return [entry];
   });
   const { canvases, said } = applyEntries(entries, context.open, room, context.catalog);
   const title = typeof data['title'] === 'string' ? data['title'].trim() : '';
-  return { title, canvases, said, ...(asked !== undefined ? { arrangement: asked } : {}) };
+  return { title, canvases, said };
 };
