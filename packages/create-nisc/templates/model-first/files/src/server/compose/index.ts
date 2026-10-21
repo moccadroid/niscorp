@@ -1,192 +1,170 @@
 import { z } from 'zod';
+import type { CortexEvent, SignalClient, Usage } from '@niscorp/cortex';
 import type { FunctionDefinition, FunctionSession } from '@niscorp/moss';
 import { unverifiedShell } from '@niscorp/moss/unverified';
-import type { FetchFn } from '@niscorp/nova';
-import { ANSWERS } from '../../app/answers';
-import type { PreparedAnswer } from '../../app/answers';
 import { ARRANGEMENTS } from '../../app/arrangements';
-import type { Arrangement } from '../../app/arrangements';
 import { SCREENS } from '../../app/screens';
 import type { Screen } from '../../app/screens';
-import { fill } from './fill';
-import type { Fill } from './fill';
+import type { AreaId } from '../../app/shell/areas';
+import { recordModelRun } from '../runs';
+import { answerOf, answerSoFar, refusalsOf } from './answer';
+import type { AnswerContext } from './answer';
+import { CATALOG, opened } from './catalog';
+import type { Catalog } from './catalog';
+import { composerAgent } from './composer.agent';
 import { createHistory } from './history';
-import { optionsOf } from './options';
-import type { Options, Rows } from './options';
+import { messageInput } from './knowledge';
+import { markChanged } from './layout';
 import { pick } from './pick';
 import type { Decide } from './pick';
-import { placedOf, planOf, samePlan, textOf } from './plan';
-import type { Chosen, Placed, Plan, Said } from './plan';
+import { arrangementOfPlan, canvasesInAreas, canvasesOfPlan, changedAreas, planOf } from './plan';
+import type { Plan, ShownPlan } from './plan';
+import { canvasesStanding, readOpenScreen } from './screen';
+import type { OpenCanvas } from './screen';
 
-export type { Decide, Picked, Question } from './pick';
-export type { Fill } from './fill';
-export type { Plan } from './plan';
+export type { Decide } from './pick';
 
-export type Embed = (texts: string[]) => Promise<number[][]>;
+export type Jev = { provider: string; model: string; decide: Decide };
+export type Chat = { provider: string; model: string; llm: SignalClient; timeoutMs: number };
 
-// What answers a message. `decide` picks prepared answers, in about 300 ms on a decision model; `fill` refines that
-// with the chat model, and the refined plan replaces the first when it lands. Neither: nothing can answer.
-export type Models = { decide?: Decide; fill?: Fill; embed?: Embed; missing: readonly string[] };
-
-// A decision model is asked about at most 255 options at once: past that, the answers nearest the message go.
-const MOST = 255;
-
-const cosine = (one: readonly number[], other: readonly number[]): number => {
-  let dot = 0;
-  let a = 0;
-  let b = 0;
-  one.forEach((value, at) => {
-    const theirs = other[at] ?? 0;
-    dot += value * theirs;
-    a += value * value;
-    b += theirs * theirs;
-  });
-  return a === 0 || b === 0 ? 0 : dot / Math.sqrt(a * b);
-};
-
-const narrowed = async (message: string, answers: readonly PreparedAnswer[], embed: Embed | undefined): Promise<readonly PreparedAnswer[]> => {
-  if (answers.length <= MOST) return answers;
-  if (embed === undefined) return answers.slice(0, MOST);
-  const [asked, ...shows] = await embed([message, ...answers.map((answer) => answer.shows)]);
-  return answers
-    .map((answer, at) => ({ answer, near: cosine(asked ?? [], shows[at] ?? []) }))
-    .sort((one, other) => other.near - one.near)
-    .slice(0, MOST)
-    .map(({ answer }) => answer);
-};
-
-const vexRows =
-  (wire: FetchFn): Rows =>
-  async (fingerprint, context = {}) => {
-    const response = await wire('/api/vex', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ fingerprint, context }) });
-    if (!response.ok) throw new Error(`${fingerprint}: ${await response.text()}`);
-    return response.json();
-  };
-
-const failed =
-  (message: string) =>
-  (error: unknown): undefined => {
-    console.error(`[compose] the model could not answer "${message}":`, error instanceof Error ? error.message : error);
-    return undefined;
-  };
+export type Models = { jev?: Jev; chat?: Chat; missing: readonly string[] };
 
 const AskSchema = z.looseObject({ text: z.string() });
 const OpenSchema = z.looseObject({ opening: z.string() });
-const SavedSchema = z.looseObject({ saved: z.string() });
 const GoSchema = z.looseObject({ going: z.coerce.number() });
-const WriteSchema = z.looseObject({ write: z.string(), fields: z.array(z.looseObject({ key: z.string(), value: z.unknown() })) });
+
+const reasonOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));
+
+const NO_USAGE: Usage = { inputTokens: 0, outputTokens: 0, totalTokens: 0, reported: false };
+
+const screenOf = (plan: Plan): string => JSON.stringify([plan.canvases, plan.layout, plan.label]);
 
 export const composer =
-  (models: Models, answers: readonly PreparedAnswer[] = ANSWERS, screens: readonly Screen[] = SCREENS, arrangements: readonly Arrangement[] = ARRANGEMENTS) =>
-  (session: FunctionSession): FunctionDefinition[] => {
-    const rows = vexRows(session.wire);
-    const examples = answers.map((answer) => answer.example);
-    const writes = new Set(answers.flatMap((answer) => (typeof answer.input['write'] === 'string' ? [answer.input['write']] : [])));
-    let asked = 0;
+  (models: Models): ((session: FunctionSession) => FunctionDefinition[]) =>
+  (session) => {
+    const held = new Set(session.actions);
+    const catalog: Catalog = { ...CATALOG, actions: CATALOG.actions.filter((action) => held.has(action.id)) };
+    const deps = { catalog, screens: SCREENS, arrangements: ARRANGEMENTS };
+    // What the person did last: an answer for anything earlier is no longer shown.
+    let turn = 0;
 
-    const entriesOf = (screen: Screen): Placed[] =>
-      screen.answers.flatMap((id) => {
-        const answer = answers.find((candidate) => candidate.id === id);
-        return answer === undefined ? [] : [placedOf({ answer, values: {} })];
-      });
-    const home = screens[0];
-    const homeEntries = home === undefined ? [] : entriesOf(home);
-    // The stack starts at the first screen, as the shell opened it.
-    const history = createHistory(home === undefined ? undefined : planOf('', homeEntries, {}, { screen: home, arrangement: home.arrangement }));
-    // One text a screen: words the model wrote take the place of any a prepared answer would show.
-    const entriesFrom = (chosen: readonly Chosen[], said: Said | undefined): Placed[] =>
-      said === undefined ? chosen.map(placedOf) : [textOf(said, examples), ...chosen.filter((one) => one.answer.action !== 'answer.text').map(placedOf)];
-    // The first screen, with what is said in the place of its own words: when there is nothing else to show.
-    const withHome = (said: Said): Placed[] => [textOf(said, examples), ...homeEntries.filter((entry) => entry.action !== 'answer.text')];
+    const screenPlan = (screen: Screen): Plan => planOf('', canvasesInAreas(screen.canvases.map((canvas) => opened(canvas, catalog))), { arrangements: ARRANGEMENTS, screen, arrangement: screen.arrangement });
+    const history = createHistory(screenPlan(SCREENS[0]));
 
-    // Each plan swaps its layout into the frame's `answers` region, then reaches the screen as the message `answer`,
-    // which the bar places: one sender, so the picker's plan and the model's that follows it arrive in the order they
-    // were made.
     // The swap goes around moss (`unverifiedShell`): moss lets a session change a layout only through a draft, and a
     // draft needs a signed-in person. When the app has sign-in, this moves to `session.draft`, where moss checks it.
-    const show = (plan: Plan): Plan => {
-      unverifiedShell(session).setLayout('answers', plan.layout);
-      session.shell.publish('answer', plan);
+    const show = (plan: ShownPlan, changed: readonly AreaId[] = []): ShownPlan => {
+      unverifiedShell(session).setLayout('answers', changed.length > 0 ? markChanged(plan.layout, changed) : plan.layout);
       return plan;
     };
 
-    // The chat model's plan replaces the picker's in the history, and on screen only while it is still the one shown.
-    // It is placed against the picker's, so what both show stays where it is; laid out as the model said, else as the
-    // picker did.
-    const refine = async (turn: number, first: Plan, message: string, offered: readonly PreparedAnswer[], options: Options, quick: readonly Chosen[], screen: readonly string[], fillWith: Fill): Promise<void> => {
-      const better = await fill(message, offered, screens, arrangements, options, quick, screen, fillWith);
-      const entries = better === undefined ? [] : entriesFrom(better.chosen, better.said);
-      if (entries.length === 0) return;
-      const plan = planOf(message, entries, first.canvases, { arrangement: better?.arrangement ?? first.arrangement });
-      if (samePlan(plan, first)) return;
-      const index = first.position - 1;
-      const now = history.replace(index, plan);
-      if (turn === asked && history.showing() === index) show(now);
+    // The answer being written, while it streams: the dock re-reads it whenever the message `answer-moved` says it moved.
+    let soFar: ShownPlan | undefined;
+    const moveTo = (plan: ShownPlan | undefined, changed: readonly AreaId[] = []): void => {
+      soFar = plan;
+      show(plan ?? history.current(), changed);
+      session.shell.publish('answer-moved');
     };
 
-    const ask = async (data: unknown): Promise<Plan> => {
+    // Before anything else is shown, the screen as the person left it is kept with the answer it is on — unless an answer
+    // is streaming in over it.
+    const standing = (): OpenCanvas[] => {
+      const open = readOpenScreen(session.shell, history.current());
+      if (soFar === undefined) history.keep(canvasesStanding(open));
+      return open;
+    };
+
+    const leave = (to: () => ShownPlan): ShownPlan => {
+      standing();
+      turn += 1;
+      soFar = undefined;
+      return show(to());
+    };
+
+    // A screen already in the stack is gone back to, not stacked again. What the model said when it answered with the
+    // screen is shown with it, and not kept.
+    const showScreen = (screen: Screen, response?: string): ShownPlan => {
+      const there = history.indexOf((plan) => plan.screen === screen.id);
+      const plan = there >= 0 ? history.go(there + 1) : history.add(screenPlan(screen));
+      return response === undefined ? plan : { ...plan, response };
+    };
+
+    const ask = async (data: unknown): Promise<ShownPlan> => {
       const message = AskSchema.parse(data).text.trim();
       if (message === '') return history.current();
+      const chat = models.chat;
+      if (chat === undefined) throw new Error(`Set ${models.missing.join(' and ')} in .env, and start the app again.`);
+      const open = standing();
+      const asked = (turn += 1);
       const before = history.current();
-      if (models.decide === undefined) {
-        return show(history.add(planOf(message, withHome({ title: 'Nothing to answer with', text: `Set ${models.missing.join(' and ')} in .env, and start the app again.` }), before.canvases)));
+      const jev = models.jev;
+      const picking = performance.now();
+      const picked =
+        jev === undefined
+          ? undefined
+          : await pick(message, open, catalog, SCREENS, jev.decide).catch((error: unknown) => {
+              console.error(`[ask] Jev could not answer "${message}": ${reasonOf(error)}`);
+              return undefined;
+            });
+      if (jev !== undefined) {
+        const usage = picked?.usage ?? NO_USAGE;
+        recordModelRun(session, { agentId: 'nisc-template-app.jev', label: message, provider: jev.provider, model: jev.model, usage, steps: picked === undefined ? 0 : 1, elapsedMs: performance.now() - picking, outcome: picked === undefined ? 'failed' : 'ok' });
       }
-      const turn = (asked += 1);
-      const offered = await narrowed(message, answers, models.embed);
-      const options = await optionsOf(offered, rows);
-      const picked = await pick(message, offered, screens, arrangements, options, models.decide);
-      const quick = picked.chosen;
-      // A picker sure of nothing is no answer yet: the chat model is asked before anything is shown, and the first
-      // screen comes back, with a line saying so, only when it finds nothing either.
-      if (quick.length === 0) {
-        const better = models.fill === undefined ? undefined : await fill(message, offered, screens, arrangements, options, quick, before.answers, models.fill).catch(failed(message));
-        const entries = better === undefined ? [] : entriesFrom(better.chosen, better.said);
-        if (entries.length > 0) return show(history.add(planOf(message, entries, before.canvases, { arrangement: better?.arrangement ?? picked.arrangement })));
-        return show(history.add(planOf(message, withHome({ title: 'Nothing here answers that yet', text: 'These are things this app can show.' }), before.canvases, { arrangement: home?.arrangement })));
+
+      const current = arrangementOfPlan(before);
+      const context: AnswerContext = { ...deps, open: canvasesOfPlan(before), current };
+      const agent = composerAgent((envelope) => {
+        const refused = refusalsOf(envelope.data, context);
+        return refused.length === 0 ? { ok: true } : { retry: refused.map((reason) => `- ${reason}`).join('\n') };
+      });
+      const input = messageInput(message, open, { id: before.arrangement, layout: before.layout }, picked?.picks);
+      // A correction starts the answer again from the screen the message was asked on.
+      const streamed = (event: CortexEvent): void => {
+        if (asked !== turn) return;
+        if (event.type === 'retry' && soFar !== undefined) moveTo(undefined);
+        if (event.type !== 'output-partial') return;
+        const answer = answerSoFar(event.output, context);
+        if (answer === undefined) return;
+        const plan = history.next(planOf(message, answer.canvases, { arrangements: ARRANGEMENTS, arrangement: answer.arrangement ?? current, label: answer.title }));
+        if (screenOf(plan) === screenOf(soFar ?? before)) return;
+        moveTo(plan, changedAreas(plan, before));
+      };
+      const result = await agent.run(input, { llm: chat.llm, deps, signal: AbortSignal.timeout(chat.timeoutMs), onEvent: streamed }).result;
+      const { usage, steps, elapsedMs } = result.meta;
+      recordModelRun(session, { agentId: agent.agentId, label: message, provider: chat.provider, model: chat.model, usage, steps, elapsedMs, outcome: result.ok ? 'ok' : 'failed' });
+      if (asked !== turn) return history.current();
+      const placed = soFar !== undefined;
+      soFar = undefined;
+
+      if (!result.ok) {
+        const { code, stop, message: reason } = result.error;
+        console.error(`[ask] "${message}" got no screen: ${code}${stop === undefined ? '' : ` (${stop})`}: ${reason}`);
+        if (placed) moveTo(undefined);
+        throw new Error(code === 'aborted' || code === 'model_call_failed' ? 'The model could not be reached. Ask again in a moment.' : 'That answer did not fit this app’s actions. Ask again, or put it differently.');
       }
-      const first = show(history.add(planOf(message, quick.map(placedOf), before.canvases, { arrangement: picked.arrangement })));
-      if (models.fill !== undefined) void refine(turn, first, message, offered, options, quick, before.answers, models.fill).catch(failed(message));
-      return first;
+      const answer = answerOf(result.output.data, context);
+      const response = result.output.response?.trim() ?? '';
+      const screen = answer.screen === undefined ? undefined : SCREENS.find((candidate) => candidate.id === answer.screen);
+      if (screen !== undefined) return show(showScreen(screen, response));
+      if (Object.keys(answer.canvases).length === 0) throw new Error('Nothing here answers that yet.');
+      const plan = { ...planOf(message, answer.canvases, { arrangements: ARRANGEMENTS, arrangement: answer.arrangement ?? current, label: answer.title }), response };
+      // An answer that leaves the screen as it is adds nothing to the stack; the dock still names what was asked, and why
+      // nothing changed.
+      if (screenOf({ ...plan, label: before.label }) === screenOf(before)) return show({ ...before, question: message, label: answer.title, response });
+      return show(history.add(plan), changedAreas(plan, before));
     };
 
-    // A screen already in the stack is gone back to, not stacked again; one that is not is shown as it is written,
-    // not arranged around what was on screen before.
-    const open = async (data: unknown): Promise<Plan> => {
-      const screen = screens.find((candidate) => candidate.id === OpenSchema.parse(data).opening);
-      if (screen === undefined) return history.current();
-      const there = history.indexOf((plan) => plan.screen === screen.id);
-      return show(there >= 0 ? history.go(there + 1) : history.add(planOf('', entriesOf(screen), {}, { screen, arrangement: screen.arrangement })));
-    };
-
-    // A form an answer opened has done its work once saved, and goes; on a screen it stays, emptied, for the next one.
-    // An answer left with nothing leaves the stack, and the first screen is gone back to.
-    const saved = async (data: unknown): Promise<Plan> => {
-      const fingerprint = SavedSchema.parse(data).saved;
-      const now = history.current();
-      if (now.screen !== undefined) return now;
-      const kept = Object.values(now.canvases)
-        .flatMap((entries) => entries ?? [])
-        .filter((entry) => entry.input['write'] !== fingerprint);
-      if (kept.length > 0) return show(history.replace(history.showing(), planOf(now.question, kept, now.canvases, { arrangement: now.arrangement })));
-      history.drop(history.showing());
-      const there = history.indexOf((plan) => plan.screen === home?.id);
-      return show(there >= 0 ? history.go(there + 1) : history.add(planOf('', homeEntries, {}, { ...(home !== undefined ? { screen: home } : {}), arrangement: home?.arrangement })));
-    };
-
-    const write = async (data: unknown): Promise<{ saved: true }> => {
-      const { write: fingerprint, fields } = WriteSchema.parse(data);
-      if (!writes.has(fingerprint)) throw new Error(`No prepared answer writes through ${fingerprint}.`);
-      await rows(fingerprint, Object.fromEntries(fields.map((field) => [field.key, typeof field.value === 'string' ? field.value.trim() : field.value])));
-      return { saved: true };
+    const open = async (data: unknown): Promise<ShownPlan> => {
+      const screen = SCREENS.find((candidate) => candidate.id === OpenSchema.parse(data).opening);
+      return screen === undefined ? history.current() : leave(() => showScreen(screen));
     };
 
     return [
-      { id: 'ask', description: 'Answers a message with a screen, sent to the bar as the message `answer`. Send { text }; answers the plan: { question, position, total, answers, canvases }.', execute: ask },
-      { id: 'screens.open', description: 'Shows a screen from the menu: its prepared answers together. Send { opening: <screen id> }; answers its plan.', execute: open },
-      { id: 'answers.back', description: 'Shows the answer before the one shown, and answers its plan.', execute: async () => show(history.back()) },
-      { id: 'answers.forward', description: 'Shows the answer after the one shown, and answers its plan.', execute: async () => show(history.forward()) },
-      { id: 'answers.go', description: 'Shows one answer from the stack. Send { going: <its position> }; answers its plan.', execute: async (data) => show(history.go(GoSchema.parse(data).going)) },
-      { id: 'answers.saved', description: 'Takes a form that was saved off the answer shown. Send { saved: <the write it saved through> }; answers the plan.', execute: saved },
-      { id: 'answers.write', description: 'Saves what a form holds through the write its prepared answer names. Send { write, fields: [{ key, value }] }.', execute: write },
+      { id: 'ask', description: 'Answers a message with a screen. Send { text }; answers the plan shown: { question, response, label, canvases, position, total, stack }.', execute: ask },
+      { id: 'screens.open', description: 'Shows one of the screens in the dock: its canvases together. Send { opening: <screen id> }; answers its plan.', execute: open },
+      { id: 'answers.back', description: 'Shows the answer before the one shown, and answers its plan.', execute: async () => leave(history.back) },
+      { id: 'answers.forward', description: 'Shows the answer after the one shown, and answers its plan.', execute: async () => leave(history.forward) },
+      { id: 'answers.go', description: 'Shows one answer from the stack. Send { going: <its position> }; answers its plan.', execute: async (data) => leave(() => history.go(GoSchema.parse(data).going)) },
+      { id: 'answers.current', description: 'Answers the plan shown, or, while an answer streams, the answer so far.', execute: async () => soFar ?? history.current() },
     ];
   };

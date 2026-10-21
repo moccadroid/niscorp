@@ -1,10 +1,17 @@
-import { useState, type ChangeEvent, type CSSProperties, type KeyboardEvent } from 'react';
+import { useState, type ChangeEvent, type KeyboardEvent } from 'react';
 import { z } from 'zod';
 import { useNovaDispatch } from '@niscorp/nova/adapters/react';
 import type { NovaComponent } from '@niscorp/nova/adapters/react';
 
-const parsed = <T,>(schema: z.ZodType<T>, props: unknown, fallback: T): T => {
-  const result = schema.safeParse(props);
+// A value a component does not take falls back to its default on its own; the others still hold.
+const parsed = <S extends z.ZodRawShape>(schema: z.ZodObject<S>, props: Record<string, unknown>, fallback: z.output<z.ZodObject<S>>): z.output<z.ZodObject<S>> => {
+  const taken = Object.fromEntries(
+    Object.entries(props).filter(([key, value]) => {
+      const field = schema.shape[key];
+      return field !== undefined && z.safeParse(field, value).success;
+    }),
+  );
+  const result = schema.safeParse({ ...fallback, ...taken });
   return result.success ? result.data : fallback;
 };
 
@@ -22,7 +29,12 @@ const HeadingProps = z.object({}).describe('The page’s title.');
 export const Heading: NovaComponent = ({ children }) => <h1 className="k-heading">{children}</h1>;
 Heading.meta = { description: 'The page’s title.', propsSchema: HeadingProps };
 
-const TextProps = z.object({ tone: z.enum(['default', 'muted', 'strong', 'error']).optional().describe('default | muted | strong | error') });
+const TextProps = z.object({
+  tone: z
+    .enum(['default', 'lead', 'muted', 'strong', 'display', 'right', 'wrong', 'error'])
+    .optional()
+    .describe('default | lead: the sentence a card opens with | muted | strong | display: one big figure | right: a right answer, said | wrong: a wrong answer, said | error'),
+});
 export const Text: NovaComponent = ({ children, novaRef: _ref, novaModel: _model, ...props }) => {
   const { tone } = parsed(TextProps, props, {});
   return <p className={tone === undefined || tone === 'default' ? 'k-text' : `k-text k-${tone}`}>{children}</p>;
@@ -31,7 +43,12 @@ Text.meta = { description: 'A paragraph.', propsSchema: TextProps };
 
 const ButtonProps = z.object({
   label: z.string().optional().describe('What the button says; falls back to its children.'),
-  tone: z.enum(['primary', 'quiet']).optional().describe('primary | quiet'),
+  tone: z
+    .enum(['primary', 'suggestion', 'link', 'choice', 'chosen', 'right', 'wrong', 'summary', 'step'])
+    .optional()
+    .describe(
+      'primary: what the action does | suggestion: a thing to ask | link: opens another screen | choice: one of a set to choose from | chosen: the one of the set that is chosen | right: the right one of a set, once picked | wrong: a wrong one, picked | summary: names what is shown, and opens to more | step: back, forward, or start over',
+    ),
   value: z.unknown().optional().describe('Sent with the click as its payload.'),
 });
 export const Button: NovaComponent = ({ children, novaRef, novaModel: _model, ...props }) => {
@@ -40,8 +57,7 @@ export const Button: NovaComponent = ({ children, novaRef, novaModel: _model, ..
   return (
     <button
       type="button"
-      className={tone === 'quiet' ? 'k-button k-quiet' : 'k-button'}
-      data-ref={novaRef}
+      className={tone === undefined || tone === 'primary' ? 'k-button' : `k-button k-${tone}`}
       onClick={() => dispatch({ type: 'ui:click', ...(novaRef !== undefined ? { ref: novaRef } : {}), ...(value !== undefined ? { payload: value } : {}) })}
     >
       {label ?? children}
@@ -50,45 +66,52 @@ export const Button: NovaComponent = ({ children, novaRef, novaModel: _model, ..
 };
 Button.meta = { description: 'A button; dispatches ui:click with its ref, and its value as the payload.', propsSchema: ButtonProps };
 
-const FrameProps = z.object({}).describe('The whole app: a bar, the answer, the line to ask in.');
+const FrameProps = z.object({}).describe('The whole app: the answer, and the dock under it.');
 export const Frame: NovaComponent = ({ children }) => <div className="k-frame">{children}</div>;
 Frame.meta = { description: 'The whole app, top to bottom.', propsSchema: FrameProps };
 
-const BarProps = z.object({}).describe('The strip across the top.');
-export const Bar: NovaComponent = ({ children }) => <header className="k-bar">{children}</header>;
-Bar.meta = { description: 'The strip across the top.', propsSchema: BarProps };
+const DockProps = z.object({}).describe('What stays at the bottom while the answer scrolls above it.');
+export const Dock: NovaComponent = ({ children }) => <footer className="k-dock">{children}</footer>;
+Dock.meta = { description: 'What stays at the bottom while the answer scrolls above it.', propsSchema: DockProps };
 
-const MenuProps = z.object({}).describe('A list that opens under the bar: one choice a line.');
+const MenuProps = z.object({}).describe('A list that opens above the dock: one choice a line.');
 export const Menu: NovaComponent = ({ children }) => <nav className="k-menu">{children}</nav>;
-Menu.meta = { description: 'A list that opens under the bar.', propsSchema: MenuProps };
+Menu.meta = { description: 'A list that opens above the dock.', propsSchema: MenuProps };
 
-const AnswersProps = z.object({ columns: z.number().int().min(1).max(3).optional().describe('How many columns its areas are laid out in: 1 to 3.') });
-export const Answers: NovaComponent = ({ children, novaRef: _ref, novaModel: _model, ...props }) => {
-  const { columns } = parsed(AnswersProps, props, {});
+const GridProps = z.object({ columns: z.number().int().min(1).max(3).optional().describe('How many columns its areas are laid out in: 1 to 3.') });
+export const Grid: NovaComponent = ({ children, novaRef: _ref, novaModel: _model, ...props }) => {
+  const { columns } = parsed(GridProps, props, {});
   return (
-    <main className="k-answers" style={{ '--k-columns': columns ?? 2 } as CSSProperties}>
+    <main className={`k-grid k-columns-${columns ?? 2}`}>
       {children}
     </main>
   );
 };
-Answers.meta = { description: 'The grid an answer is drawn in.', propsSchema: AnswersProps };
+Grid.meta = { description: 'Areas in columns, row by row.', propsSchema: GridProps };
 
-const AreaProps = z.object({ name: z.string().describe('Which canvas it holds.'), span: z.number().int().min(1).max(3).optional().describe('How many columns it takes.') });
+const AreaProps = z.object({
+  name: z.string().describe('Which canvas it holds.'),
+  span: z.number().int().min(1).max(3).optional().describe('How many columns it takes.'),
+  changed: z.boolean().optional().describe('Whether the last answer changed what it holds.'),
+});
 export const Area: NovaComponent = ({ children, novaRef: _ref, novaModel: _model, ...props }) => {
-  const { name, span } = parsed(AreaProps, props, { name: '' });
+  const { span, changed } = parsed(AreaProps, props, { name: '' });
   return (
-    <section className={`k-area k-area-${name}`} style={{ '--k-span': span ?? 1 } as CSSProperties}>
+    <section className={`k-area k-span-${span ?? 1}${changed === true ? ' k-area-changed' : ''}`}>
       {children}
     </section>
   );
 };
 Area.meta = { description: 'One area of an answer.', propsSchema: AreaProps };
 
-const CardProps = z.object({ title: z.string().optional().describe('What the card shows, in a few words.') });
+const CardProps = z.object({
+  title: z.string().optional().describe('What the card shows, in a few words.'),
+  tone: z.enum(['default', 'hero']).optional().describe('default | hero: the card a screen opens with'),
+});
 export const Card: NovaComponent = ({ children, novaRef: _ref, novaModel: _model, ...props }) => {
-  const { title } = parsed(CardProps, props, {});
+  const { title, tone } = parsed(CardProps, props, {});
   return (
-    <article className="k-card">
+    <article className={tone === 'hero' ? 'k-card k-hero' : 'k-card'}>
       {title !== undefined && title !== '' ? <h2 className="k-card-title">{title}</h2> : null}
       {children}
     </article>
@@ -96,68 +119,68 @@ export const Card: NovaComponent = ({ children, novaRef: _ref, novaModel: _model
 };
 Card.meta = { description: 'One part of an answer, with its title.', propsSchema: CardProps };
 
-const TableProps = z.object({
-  columns: z.array(z.object({ key: z.string(), label: z.string() })).describe('The columns, in order: the row field and its heading.'),
-  rows: z.array(z.record(z.string(), z.unknown())).describe('The rows.'),
-});
-export const Table: NovaComponent = ({ novaRef: _ref, novaModel: _model, ...props }) => {
-  const { columns, rows } = parsed(TableProps, props, { columns: [], rows: [] });
+const CodeProps = z.object({ text: z.string().describe('The code, as it is to be read.') });
+export const Code: NovaComponent = ({ novaRef: _ref, novaModel: _model, ...props }) => {
+  const { text } = parsed(CodeProps, props, { text: '' });
   return (
-    <div className="k-table-wrap">
-      <table className="k-table">
-        <thead>
-          <tr>
-            {columns.map((column) => (
-              <th key={column.key}>{column.label}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row, at) => (
-            <tr key={at}>
-              {columns.map((column) => (
-                <td key={column.key}>{cell(row[column.key])}</td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <pre className="k-code">
+      <code>{text}</code>
+    </pre>
   );
 };
-Table.meta = { description: 'Rows as a table.', propsSchema: TableProps };
+Code.meta = { description: 'A block of code, kept as written.', propsSchema: CodeProps };
 
-const StatProps = z.object({ value: z.unknown().describe('The number.'), label: z.string().optional().describe('What it counts.') });
-export const Stat: NovaComponent = ({ novaRef: _ref, novaModel: _model, ...props }) => {
-  const { value, label } = parsed(StatProps, props, { value: '' });
+const PointsProps = z.object({ items: z.array(z.object({ title: z.string(), text: z.string() })).describe('Each point: a few words, and a sentence.') });
+export const Points: NovaComponent = ({ novaRef: _ref, novaModel: _model, ...props }) => {
+  const { items } = parsed(PointsProps, props, { items: [] });
   return (
-    <div className="k-stat">
-      <strong className="k-stat-value">{cell(value)}</strong>
-      {label !== undefined ? <span className="k-stat-label">{label}</span> : null}
-    </div>
-  );
-};
-Stat.meta = { description: 'One number, and what it counts.', propsSchema: StatProps };
-
-const BarsProps = z.object({ items: z.array(z.object({ label: z.unknown(), value: z.number() })).describe('One bar per item, as long as its value.') });
-export const Bars: NovaComponent = ({ novaRef: _ref, novaModel: _model, ...props }) => {
-  const { items } = parsed(BarsProps, props, { items: [] });
-  const most = Math.max(1, ...items.map((item) => item.value));
-  return (
-    <ul className="k-bars">
-      {items.map((item, at) => (
-        <li key={at} className="k-bars-item">
-          <span className="k-bars-label">{cell(item.label)}</span>
-          <span className="k-bars-track">
-            <span className="k-bars-fill" style={{ width: `${(item.value / most) * 100}%` }} />
-          </span>
-          <span className="k-bars-value">{item.value}</span>
-        </li>
+    <dl className="k-points">
+      {items.map((item) => (
+        <div key={item.title} className="k-point">
+          <dt>{item.title}</dt>
+          <dd>{item.text}</dd>
+        </div>
       ))}
-    </ul>
+    </dl>
   );
 };
-Bars.meta = { description: 'Values side by side as bars.', propsSchema: BarsProps };
+Points.meta = { description: 'A few points, each a few words and a sentence.', propsSchema: PointsProps };
+
+const StepsProps = z.object({ items: z.array(z.string()).describe('The steps, in order.') });
+export const Steps: NovaComponent = ({ novaRef: _ref, novaModel: _model, ...props }) => {
+  const { items } = parsed(StepsProps, props, { items: [] });
+  return (
+    <ol className="k-steps">
+      {items.map((item) => (
+        <li key={item}>{item}</li>
+      ))}
+    </ol>
+  );
+};
+Steps.meta = { description: 'Steps in order, numbered.', propsSchema: StepsProps };
+
+const CheckProps = z.object({
+  label: z.string().describe('What is ticked off.'),
+  checked: z.boolean().optional().describe('Whether it is ticked.'),
+  value: z.unknown().optional().describe('Sent with the click as its payload.'),
+});
+export const Check: NovaComponent = ({ novaRef, novaModel: _model, ...props }) => {
+  const dispatch = useNovaDispatch();
+  const { label, checked, value } = parsed(CheckProps, props, { label: '' });
+  return (
+    <button
+      type="button"
+      role="checkbox"
+      aria-checked={checked === true}
+      className={checked === true ? 'k-check k-checked' : 'k-check'}
+      onClick={() => dispatch({ type: 'ui:click', ...(novaRef !== undefined ? { ref: novaRef } : {}), ...(value !== undefined ? { payload: value } : {}) })}
+    >
+      <span className="k-box" aria-hidden="true" />
+      <span className="k-check-label">{label}</span>
+    </button>
+  );
+};
+Check.meta = { description: 'A line to tick off; dispatches ui:click with its ref, and its value as the payload.', propsSchema: CheckProps };
 
 const InputProps = z.object({
   placeholder: z.string().optional(),
@@ -193,18 +216,6 @@ export const Input: NovaComponent = ({ novaRef, novaModel, ...props }) => {
 };
 Input.meta = { description: 'A line of text, bound to data with the node’s `model`; Enter is a ui:key.', propsSchema: InputProps };
 
-const PromptProps = z.object({}).describe('The line to ask in, across the bottom.');
-export const Prompt: NovaComponent = ({ children }) => <footer className="k-prompt">{children}</footer>;
+const PromptProps = z.object({}).describe('The line to ask in, and the button that sends it.');
+export const Prompt: NovaComponent = ({ children }) => <div className="k-prompt">{children}</div>;
 Prompt.meta = { description: 'The line to ask in.', propsSchema: PromptProps };
-
-const FieldProps = z.object({ label: z.string().describe('What the field is for.') });
-export const Field: NovaComponent = ({ children, novaRef: _ref, novaModel: _model, ...props }) => {
-  const { label } = parsed(FieldProps, props, { label: '' });
-  return (
-    <label className="k-field">
-      <span className="k-field-label">{label}</span>
-      {children}
-    </label>
-  );
-};
-Field.meta = { description: 'A labelled field of a form.', propsSchema: FieldProps };

@@ -1,12 +1,10 @@
 import type { ActionDefinition } from '@niscorp/nova';
 import { textAction } from './actions/answer/text.action';
-import { barAction } from './actions/ask/bar.action';
-import { lineAction } from './actions/ask/line.action';
-import { barsAction } from './actions/rows/bars.action';
-import { formAction } from './actions/rows/form.action';
-import { statAction } from './actions/rows/stat.action';
-import { tableAction } from './actions/rows/table.action';
+import { dockAction } from './actions/ask/dock.action';
+import { GUIDE } from './actions/guide/guide.actions';
 
-export const actions: Record<string, ActionDefinition> = Object.fromEntries(
-  [lineAction, barAction, textAction, tableAction, statAction, barsAction, formAction].map((action) => [action.id, action]),
-);
+// What the model may put on a screen, each opened with an input its schema takes. Its words are `answer.text`, placed
+// by saying them; the dock is never placed.
+export const placeable: readonly ActionDefinition[] = GUIDE;
+
+export const actions: Record<string, ActionDefinition> = Object.fromEntries([dockAction, textAction, ...placeable].map((action) => [action.id, action]));

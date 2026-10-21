@@ -57,18 +57,21 @@ describe('generate — every app the questions can make', () => {
   });
 
   it('a model-first app has its keys in .env, the names in .env.example, and its own sections in AGENTS.md and PLAN.md', () => {
-    const { dir } = make(completed(catalog, { kind: 'model-first' }), 'model-keys', { env: { GROQ_API_KEY: 'gsk-test', EMBEDDINGS: 'openrouter', OPENROUTER_API_KEY: 'or-test' } });
+    const { dir } = make(completed(catalog, { kind: 'model-first' }), 'model-keys', { env: { GROQ_API_KEY: 'gsk-test', TYPESAFE_API_KEY: 'ts-test' } });
     expect(read(dir, '.env')).toContain('GROQ_API_KEY=gsk-test\n');
-    expect(read(dir, '.env')).toContain('EMBEDDINGS=openrouter\n');
-    expect(read(dir, '.env')).toContain('OPENROUTER_API_KEY=or-test\n');
-    expect(read(dir, '.env')).not.toContain('OPENAI_API_KEY');
+    expect(read(dir, '.env')).toContain('TYPESAFE_API_KEY=ts-test\n');
     expect(read(dir, '.env.example')).toContain('GROQ_API_KEY=\n');
     expect(read(dir, '.env.example')).not.toContain('gsk-test');
     expect(read(dir, 'AGENTS.md')).toContain('## How the model leads');
+    expect(read(dir, 'AGENTS.md')).toContain('## How to proceed from here');
+    expect(read(dir, 'AGENTS.md')).toContain('`model-keys.jev` and `model-keys.compose`');
     expect(read(dir, 'PLAN.md')).toContain('| D6 Who answers a message | answered |');
-    expect(read(dir, 'PLAN.md')).toContain('| D3 Reads | answered | **Vex entries.**');
+    expect(read(dir, 'PLAN.md')).toContain('| D3 Reads | answered | **Vex entries**');
     expect(read(dir, 'src/db/schema.ts')).toContain("id: 'model-keys.app'");
-    expect(JSON.parse(read(dir, 'package.json')).dependencies['@niscorp/signal']).toBe('^0.4.9');
+    expect(read(dir, 'src/server/compose/composer.agent.ts')).toContain("id: 'model-keys.compose'");
+    const dependencies = JSON.parse(read(dir, 'package.json')).dependencies;
+    expect(dependencies['@niscorp/signal']).toBe('^0.4.9');
+    expect(dependencies['@niscorp/cortex']).toBe('^0.4.10');
   });
 
   it.each(apps.map((picks) => [Object.values(picks).join('-'), picks] as const))('%s: named, pinned, documented, and nothing of the repository left in it', (label, picks) => {

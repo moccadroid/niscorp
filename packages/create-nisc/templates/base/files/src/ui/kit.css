@@ -1,6 +1,3 @@
-/* The look — the only place it lives. A different look is a different
-   stylesheet over the same layouts. */
-
 :root {
   --k-bg: #f6f4ef;
   --k-surface: #ffffff;
@@ -11,6 +8,10 @@
   --k-accent-ink: #ffffff;
   --k-accent-soft: #e8edfd;
   --k-error: #b42318;
+  --k-right: #17804b;
+  --k-right-soft: #e2f4ea;
+  --k-wrong: #b42318;
+  --k-wrong-soft: #fdeceb;
   --k-radius: 10px;
   font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
   color: var(--k-ink);
@@ -33,6 +34,40 @@ html, body, #root { margin: 0; min-height: 100%; }
 .k-text { margin: 0; line-height: 1.55; }
 .k-muted { color: var(--k-muted); }
 .k-strong { font-weight: 650; }
+.k-lead { font-size: 17px; line-height: 1.5; }
+.k-display { font-size: 64px; font-weight: 700; line-height: 1; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.k-text.k-right { color: var(--k-right); }
+.k-text.k-wrong { color: var(--k-wrong); }
+
+.k-code {
+  margin: 0;
+  padding: 14px 16px;
+  overflow-x: auto;
+  border-radius: var(--k-radius);
+  background: #1d1f27;
+  color: #e6e8f0;
+  font: 13px/1.55 ui-monospace, 'SF Mono', Consolas, monospace;
+}
+
+.k-points { margin: 0; display: grid; gap: 12px; }
+.k-point { display: grid; grid-template-columns: 170px 1fr; gap: 12px; padding-top: 12px; border-top: 1px solid var(--k-line); }
+.k-point dt { font-weight: 650; }
+.k-point dd { margin: 0; color: var(--k-muted); line-height: 1.5; }
+
+.k-steps { margin: 0; padding: 0; list-style: none; counter-reset: step; display: grid; gap: 10px; }
+.k-steps li { counter-increment: step; display: grid; grid-template-columns: 28px 1fr; gap: 10px; align-items: start; line-height: 1.5; }
+.k-steps li::before {
+  content: counter(step);
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  font-weight: 650;
+  background: var(--k-accent-soft);
+  color: var(--k-accent);
+}
 .k-error { color: var(--k-error); }
 
 .k-button {
@@ -46,35 +81,67 @@ html, body, #root { margin: 0; min-height: 100%; }
   cursor: pointer;
 }
 .k-button:active { transform: translateY(1px); }
-.k-button.k-quiet {
-  padding: 6px 12px;
+.k-button.k-suggestion, .k-button.k-choice, .k-button.k-chosen, .k-button.k-summary, .k-button.k-step {
+  padding: 5px 12px;
+  border-radius: 999px;
   font-weight: 500;
-  background: var(--k-accent-soft);
-  color: var(--k-accent);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
+.k-button.k-suggestion, .k-button.k-chosen { background: var(--k-accent-soft); color: var(--k-accent); }
+.k-button.k-choice, .k-button.k-summary, .k-button.k-step { background: var(--k-surface); color: var(--k-ink); border: 1px solid var(--k-line); }
+.k-button.k-summary { flex-shrink: 1; min-width: 0; max-width: 42vw; overflow: hidden; text-overflow: ellipsis; }
+.k-button.k-step { padding: 5px 10px; }
+.k-button.k-link { padding: 0; background: none; color: var(--k-accent); font-weight: 600; }
+.k-button.k-link:hover { text-decoration: underline; }
 
-/* An app a model leads: a bar, the answer, the line to ask in. */
+/* A set to pick one from, one under the other in its card. */
+.k-card > .k-button { padding: 10px 14px; border-radius: var(--k-radius); text-align: left; font-weight: 500; white-space: normal; }
+.k-card > .k-button.k-choice { background: var(--k-surface); color: var(--k-ink); border: 1px solid var(--k-line); }
+.k-card > .k-button.k-choice:hover { border-color: var(--k-accent); }
+.k-button.k-right { background: var(--k-right-soft); color: var(--k-right); border: 1px solid var(--k-right); }
+.k-button.k-wrong { background: var(--k-wrong-soft); color: var(--k-wrong); border: 1px solid var(--k-wrong); }
+
+.k-check {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 2px;
+  border: 0;
+  border-top: 1px solid var(--k-line);
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.k-card > .k-check + .k-check { margin-top: -12px; }
+.k-box { width: 18px; height: 18px; flex-shrink: 0; box-sizing: border-box; display: grid; place-items: center; border: 1.5px solid var(--k-muted); border-radius: 5px; }
+.k-checked .k-box { background: var(--k-accent); border-color: var(--k-accent); }
+.k-checked .k-box::after { content: '✓'; color: var(--k-accent-ink); font-size: 12px; font-weight: 700; }
+.k-checked .k-check-label { color: var(--k-muted); text-decoration: line-through; }
 
 .k-frame { min-height: 100vh; display: flex; flex-direction: column; }
 
-.k-bar {
+.k-dock {
   position: sticky;
-  top: 0;
+  bottom: 0;
   z-index: 1;
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px 16px;
-  padding: 12px 24px;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 24px;
   background: var(--k-bg);
-  border-bottom: 1px solid var(--k-line);
+  border-top: 1px solid var(--k-line);
 }
-.k-bar .k-row { gap: 8px; }
+.k-dock > .k-row { justify-content: space-between; flex-wrap: nowrap; gap: 12px; }
+.k-dock > .k-row > .k-row { flex-wrap: nowrap; gap: 6px; min-width: 0; }
+.k-dock > .k-row > .k-row:first-child { overflow-x: auto; scrollbar-width: none; }
 
 .k-menu {
   position: absolute;
-  top: calc(100% + 4px);
+  bottom: calc(100% + 6px);
   right: 24px;
   z-index: 2;
   width: min(380px, calc(100vw - 32px));
@@ -90,11 +157,18 @@ html, body, #root { margin: 0; min-height: 100%; }
   border-radius: calc(var(--k-radius) + 4px);
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.1);
 }
-.k-menu .k-button { text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.k-menu .k-button { text-align: left; overflow: hidden; text-overflow: ellipsis; border-radius: var(--k-radius); }
+.k-menu > .k-text { padding: 0 10px; }
+.k-menu > .k-text + .k-button, .k-menu > .k-muted { margin-bottom: 4px; }
+.k-menu > .k-muted { padding-bottom: 10px; border-bottom: 1px solid var(--k-line); }
 
-/* An answer's grid: its columns and each area's span are the arrangement's,
-   set as --k-columns and --k-span. An area with nothing in it takes no room. */
-.k-answers {
+.k-area-changed .k-card { box-shadow: 0 0 0 2px var(--k-accent); }
+
+/* nova's DOM adapter wraps a canvas and an action in elements of its own; React does not. They take no room, so the
+   dock sticks and the areas lay out the same under either kit. */
+[data-canvas], [data-component='ActionSlot'] { display: contents; }
+
+.k-grid {
   flex: 1;
   width: 100%;
   max-width: 1080px;
@@ -102,11 +176,16 @@ html, body, #root { margin: 0; min-height: 100%; }
   box-sizing: border-box;
   padding: 24px;
   display: grid;
-  grid-template-columns: repeat(var(--k-columns, 2), minmax(0, 1fr));
   align-content: start;
   gap: 16px;
 }
-.k-area { min-width: 0; grid-column: span var(--k-span, 1); }
+.k-columns-1 { grid-template-columns: minmax(0, 1fr); }
+.k-columns-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.k-columns-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.k-area { min-width: 0; }
+.k-span-2 { grid-column: span 2; }
+.k-span-3 { grid-column: span 3; }
+/* An area with nothing in it takes no room. */
 .k-area:not(:has(.k-card)) { display: none; }
 
 .k-card {
@@ -119,25 +198,9 @@ html, body, #root { margin: 0; min-height: 100%; }
   border-radius: calc(var(--k-radius) + 4px);
 }
 .k-card-title { margin: 0; font-size: 15px; font-weight: 650; letter-spacing: 0.01em; }
-
-.k-table-wrap { overflow-x: auto; }
-.k-table { width: 100%; border-collapse: collapse; font-size: 14px; }
-.k-table th { text-align: left; font-weight: 600; color: var(--k-muted); padding: 6px 8px; border-bottom: 1px solid var(--k-line); }
-.k-table td { padding: 8px; border-bottom: 1px solid var(--k-line); }
-.k-table tr:last-child td { border-bottom: 0; }
-
-.k-stat { display: flex; align-items: baseline; gap: 10px; }
-.k-stat-value { font-size: 44px; font-weight: 700; letter-spacing: -0.02em; line-height: 1; }
-.k-stat-label { color: var(--k-muted); }
-
-.k-bars { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-.k-bars-item { display: grid; grid-template-columns: minmax(80px, 30%) 1fr auto; align-items: center; gap: 10px; font-size: 14px; }
-.k-bars-track { height: 10px; border-radius: 5px; background: var(--k-accent-soft); overflow: hidden; }
-.k-bars-fill { display: block; height: 100%; border-radius: 5px; background: var(--k-accent); }
-.k-bars-value { font-variant-numeric: tabular-nums; color: var(--k-muted); }
-
-.k-field { display: flex; flex-direction: column; gap: 6px; }
-.k-field-label { font-size: 13px; font-weight: 600; color: var(--k-muted); }
+.k-hero { padding: 32px; gap: 16px; border-color: transparent; background: linear-gradient(135deg, var(--k-accent-soft), var(--k-surface) 75%); }
+.k-hero > .k-card-title { font-size: 30px; letter-spacing: -0.015em; }
+.k-hero > .k-lead { font-size: 18px; max-width: 62ch; }
 
 .k-input {
   flex: 1;
@@ -153,22 +216,17 @@ html, body, #root { margin: 0; min-height: 100%; }
 }
 .k-input:focus { border-color: var(--k-accent); box-shadow: 0 0 0 3px var(--k-accent-soft); }
 
-.k-prompt {
-  position: sticky;
-  bottom: 0;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-  padding: 16px 24px;
-  background: var(--k-bg);
-  border-top: 1px solid var(--k-line);
-}
+.k-prompt { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .k-prompt > .k-input { flex: 1 1 240px; }
 .k-prompt > .k-text { flex-basis: 100%; }
 
 @media (max-width: 720px) {
-  .k-answers { grid-template-columns: 1fr; padding: 16px; }
+  .k-point { grid-template-columns: 1fr; gap: 4px; }
+  .k-grid { grid-template-columns: 1fr; padding: 16px; }
   .k-area { grid-column: auto; }
-  .k-bar, .k-prompt { padding-left: 16px; padding-right: 16px; }
+  .k-dock { padding-left: 16px; padding-right: 16px; }
+  .k-dock > .k-row { flex-wrap: wrap; gap: 8px; }
+  .k-dock > .k-row > .k-row { width: 100%; }
+  .k-button.k-summary { flex: 1; max-width: none; }
+  .k-menu { right: 16px; }
 }

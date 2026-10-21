@@ -20,7 +20,7 @@ Four questions, because they are what shape the files:
 4. **What draws the screen?** React, or plain DOM (no framework in the page).
 
 A model-first app then asks for its keys, masked (see "Keys" below): Groq for
-gpt-oss-120b, TypeSafe for Jev, and the embeddings — OpenAI, OpenRouter or none.
+gpt-oss-120b, and TypeSafe for Jev.
 
 ```bash
 npm create nisc my-app -- --page --dom     # flags answer the questions
@@ -46,9 +46,9 @@ not quietly make a different app.
 
 The structure the rulebook describes, and a first screen that works:
 
-- one action on a canvas, a kit of five primitives with its stylesheet, and an
-  entry — the first screen **arrives as markup** (drawn by the server, or
-  written at build) and is picked up by the page;
+- one action on a canvas, a kit with its stylesheet, and an entry — the first
+  screen **arrives as markup** (drawn by the server, or written at build) and
+  is picked up by the page;
 - `npm run dev`, `build`, `check` and `start` — and, with the shell in the
   page, `export` — all the `nisc` command; `nisc dev` runs a moss app's server inside vite, so its
   `vite.config.ts` holds nothing but the framework's plugin;
@@ -62,27 +62,24 @@ The structure the rulebook describes, and a first screen that works:
 
 A model-first app has, instead of the welcome screen:
 
-- a frame of three parts — the bar (the screens, what was asked, and the stack
-  of answers: back, forward, or any of them from the list behind its counter),
-  six areas an answer is placed on, and the line to ask in;
-- **screens** (`src/app/screens.ts`): prepared answers shown together, opened
-  from the bar's menu without asking; the first is the dashboard the app opens
-  on, and falls back on when nothing answers;
-- **the message loop** (`src/server/compose/`): Jev picks the prepared answers
-  that fit a message in about 300 ms, and the screen shows them at once;
-  gpt-oss-120b then fills in what the message says (a form's fields, the value
-  to filter by) and its plan replaces the first, placed so that nothing already
-  on screen moves. It may also say a few words — a title and two short
-  sentences — where no prepared answer shows what was asked. The model opens a
-  form filled in; only the person saves it, and a saved form goes;
-- **prepared answers** (`src/app/answers.ts`): an action, the input it opens
-  with, and what it shows in words — what a message is matched to;
-- seven small actions — the line and the bar, and a table, a number, bars, a
-  form and a few words for the areas — over a table of five hello-worlds, so
-  the first question has a real answer;
-- a check that runs the loop offline with a scripted decision model and chat
-  model: typed, picked, filled in, placed without moving, read, written and
-  gone, a screen opened, a few words, back and forward.
+- a frame: the answer, six areas laid out in an arrangement, and one dock at
+  the bottom — the screens, a chip naming the answer shown with back, forward
+  and every answer to go back to, and the line to ask in;
+- **the message loop** (`src/server/compose/`): Jev reads the message and the
+  open screen and says which actions likely belong; gpt-oss-120b composes the
+  screen as a cortex agent, naming only the areas that change, checked against
+  the app's actions and their input schemas and corrected inside the run when
+  it does not hold. The answer streams in. What a person pressed, ticked or
+  picked stays, the model sees it, and an answer gone back to shows it as it
+  was left;
+- **a tour of nisc** to start from: five screens of cards to read, and a
+  counter, a checklist and a quick check to use, which the model can fill in
+  too. A card's link opens a screen at once; only what is typed, or a thing to
+  ask pressed, goes to the model. Its `AGENTS.md` says how to remove the tour —
+  a folder, a check, and edits in five files — and what to build next;
+- checks that run the loop offline with a scripted decision model and chat
+  model, one for the loop and one for the tour, and `src/dev/live-ask.ts`,
+  which asks the real models a run of cases.
 
 And two documents:
 
