@@ -44,7 +44,7 @@ export const composer =
     let asked = 0;
 
     const home = screens[0];
-    const homePlan = (): Unnumbered => planOf('', home?.canvases ?? [], {}, { ...(home !== undefined ? { screen: home } : {}), arrangement: home?.arrangement });
+    const homePlan = (): Unnumbered => planOf('', home?.canvases ?? [], { ...(home !== undefined ? { screen: home } : {}), arrangement: home?.arrangement });
     // The stack starts at the first screen, as the shell opened it.
     const history = createHistory(home === undefined ? undefined : homePlan());
 
@@ -61,13 +61,13 @@ export const composer =
     // A screen already in the stack is gone back to, not stacked again; one that is not is shown as it is written.
     const openScreenOf = (screen: Screen): Plan => {
       const there = history.indexOf((plan) => plan.screen === screen.id);
-      return show(there >= 0 ? history.go(there + 1) : history.add(planOf('', screen.canvases, {}, { screen, arrangement: screen.arrangement })));
+      return show(there >= 0 ? history.go(there + 1) : history.add(planOf('', screen.canvases, { screen, arrangement: screen.arrangement })));
     };
 
     // Words above what is on screen, which stays as it is: when nothing else answers.
     const saidOver = (message: string, said: Said, before: Plan): Plan => {
       const kept = Object.values(before.canvases).flatMap((canvases): Canvas[] => (canvases ?? []).filter((canvas) => canvas.action !== 'answer.text'));
-      return show(history.add(planOf(message, [textOf(said, EXAMPLES), ...kept], before.canvases, { arrangement: before.arrangement })));
+      return show(history.add(planOf(message, [textOf(said, EXAMPLES), ...kept], { arrangement: before.arrangement })));
     };
 
     const ask = async (data: unknown): Promise<Plan> => {
@@ -105,7 +105,7 @@ export const composer =
       if (screen !== undefined) return openScreenOf(screen);
       const canvases = answer.said === undefined ? answer.canvases : [textOf(answer.said, EXAMPLES), ...answer.canvases];
       if (canvases.length === 0) return saidOver(message, { title: 'Nothing here answers that yet', text: 'Ask for something this app shows, or try one of these.' }, before);
-      return show(history.add(planOf(message, canvases, before.canvases, { ...(answer.arrangement !== undefined ? { arrangement: answer.arrangement } : {}) })));
+      return show(history.add(planOf(message, canvases, { ...(answer.arrangement !== undefined ? { arrangement: answer.arrangement } : {}) })));
     };
 
     const open = async (data: unknown): Promise<Plan> => {
@@ -122,7 +122,7 @@ export const composer =
       const kept = Object.values(now.canvases)
         .flatMap((canvases) => canvases ?? [])
         .filter((canvas) => canvas.input['write'] !== fingerprint);
-      if (kept.length > 0) return show(history.replace(history.showing(), planOf(now.question, kept, now.canvases, { arrangement: now.arrangement })));
+      if (kept.length > 0) return show(history.replace(history.showing(), planOf(now.question, kept, { arrangement: now.arrangement })));
       history.drop(history.showing());
       return home === undefined ? history.current() : openScreenOf(home);
     };

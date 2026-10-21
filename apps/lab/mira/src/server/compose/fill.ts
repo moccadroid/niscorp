@@ -89,7 +89,7 @@ ARRANGEMENTS (id — what it suits; how many canvases it holds):
 ${arrangements.map((arrangement) => `- ${arrangement.id} — ${arrangement.suits}; ${arrangement.slots}`).join('\n')}
 
 Reply with { "canvases": [{ "action": "…", "input": { … }, "intent": "…" }], "arrangement": "…" }, adding "say" or "screen" only as below.
-- canvases: the most important first. An input follows its action's schema; a read's params carry every value it is asked with. intent: why the canvas is there, in a few words.
+- canvases: the most important first. Canvases that stay keep the order they have on screen, unless the message asks to move them. An input follows its action's schema; a read's params carry every value it is asked with. intent: why the canvas is there, in a few words.
 - A form is filled in from the message, where the message says what goes in a field; the person saves it, never you. When a form on screen is what the message is about, answer with that form, its fields filled in, and keep the rest of the screen.
 - arrangement: one that holds every canvas, words counting as one. Only when none suits, write "layout" instead: { "component": "Answers", "props": { "columns": 1 to 3 }, "children": [{ "component": "Area", "props": { "name": "a", "span": 1 }, "children": [{ "component": "CanvasSlot", "props": { "canvasId": "a" } }] }, …] } — one Area for each canvas, named ${AREAS.join(', ')} in order, its span the columns it takes.
 - say: { "title": "a few words", "text": "at most two short sentences" } — only when the message asks about this app itself, or asks for something no action shows. Never what the screen already shows.
@@ -106,7 +106,6 @@ const pickedOf = (picks: Picks): string => {
     `reads: ${yes(picks.reads, (item) => item.fingerprint)}`,
     `writes: ${yes(picks.writes, (item) => item.fingerprint)}`,
     `screens: ${yes(picks.screens, (item) => item.id)}`,
-    `still wanted: ${picks.keep.map((item) => `${item.area} ${item.p >= 0.5 ? 'yes' : 'no'} (${item.p.toFixed(2)})`).join(', ') || 'nothing is open'}`,
     `arrangement: ${picks.arrangement ?? 'none'}`,
   ].join('\n');
 };

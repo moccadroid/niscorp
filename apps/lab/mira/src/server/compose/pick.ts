@@ -1,6 +1,5 @@
 import type { Arrangement } from '../../app/arrangements';
 import type { Screen } from '../../app/screens';
-import type { AreaId } from '../../app/shell/areas';
 import type { Catalog } from './catalog';
 import type { OpenCanvas } from './screen';
 
@@ -12,14 +11,13 @@ export type Picked = { yes?: boolean; choice?: string; p?: number };
 
 export type Decide = (state: Record<string, unknown>, questions: Record<string, Question>) => Promise<Record<string, Picked>>;
 
-// What Jev made of a message: each action, read, write and screen with how likely it belongs in the answer, whether
-// each canvas on screen is still wanted, and the arrangement.
+// What Jev made of a message: each action, read, write and screen with how likely it belongs in the answer, and the
+// arrangement.
 export type Picks = {
   actions: { id: string; p: number }[];
   reads: { fingerprint: string; p: number }[];
   writes: { fingerprint: string; p: number }[];
   screens: { id: string; p: number }[];
-  keep: { area: AreaId; p: number }[];
   arrangement?: string;
 };
 
@@ -49,9 +47,6 @@ export const pick = async (message: string, open: readonly OpenCanvas[], catalog
   screens.forEach((screen, at) => {
     questions[`screen${at}`] = { type: 'noul', instructions: `Does the message ask to see screens["${screen.id}"] as it is?` };
   });
-  for (const canvas of open) {
-    questions[`keep_${canvas.area}`] = { type: 'noul', instructions: `Is open_screen["${canvas.area}"] still wanted on screen after the message?` };
-  }
   if (arrangements.length > 0) {
     questions['arrangement'] = { type: 'choice', instructions: 'How should the answer to the message be laid out?', criteria: Object.fromEntries(arrangements.map((arrangement) => [arrangement.id, arrangement.suits])) };
   }
@@ -63,7 +58,6 @@ export const pick = async (message: string, open: readonly OpenCanvas[], catalog
     reads: catalog.reads.map((read, at) => ({ fingerprint: read.fingerprint, p: probability(picked[`read${at}`]) })),
     writes: catalog.writes.map((write, at) => ({ fingerprint: write.fingerprint, p: probability(picked[`write${at}`]) })),
     screens: screens.map((screen, at) => ({ id: screen.id, p: probability(picked[`screen${at}`]) })),
-    keep: open.map((canvas) => ({ area: canvas.area, p: probability(picked[`keep_${canvas.area}`]) })),
     ...(arrangement !== undefined ? { arrangement } : {}),
   };
 };

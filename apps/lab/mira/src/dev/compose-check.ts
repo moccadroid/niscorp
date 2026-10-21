@@ -7,8 +7,8 @@ import { boot } from '../server/boot';
 import type { Decide, Fill, Models } from '../server/compose';
 import { drawing } from '../server/document';
 
-// Offline, and the same every run: a decision model that answers every canvas on screen still wanted and nothing else
-// likely, and a chat model that answers each message with the replies scripted for it, one per call.
+// Offline, and the same every run: a decision model that finds nothing likely, and a chat model that answers each
+// message with the replies scripted for it, one per call.
 const COLUMNS = [
   { key: 'text', label: 'Greeting' },
   { key: 'language', label: 'Language' },
@@ -40,7 +40,8 @@ const REPLIES: Record<string, unknown[]> = {
   'How many greetings are there?': [{ canvases: [count], arrangement: 'single' }],
   'Which greetings are in German?': [{ canvases: [german], arrangement: 'single' }],
   'and the count beside it': [{ canvases: [german, count], arrangement: 'pair' }],
-  'bon jour is french': [{ canvases: [form('bon jour', 'French'), table], arrangement: 'pair' }],
+  'bon jour is french': [{ canvases: [table, form('bon jour', 'French')], arrangement: 'pair' }],
+  'the count first': [{ canvases: [count, german], arrangement: 'pair' }],
   'Everything about the greetings': [{ canvases: [count, bars, table], arrangement: 'single' }],
   'The count and the languages, with the table wide beneath': [{ canvases: [count, bars, table], layout: written([['a', 1], ['b', 1], ['c', 2]], 2) }],
   'The count and the table, laid out by hand': [{ canvases: [count, table], layout: { component: 'Answers', props: { columns: 2 }, children: [{ component: 'Script', props: { src: 'x' } }] } }],
@@ -59,7 +60,7 @@ const decide: Decide = async (state, questions) => {
   return Object.fromEntries(
     Object.entries(questions).map(([name, question]) => {
       if (question.type === 'choice') return [name, { choice: Object.keys(question.criteria)[0] ?? '', p: 0.9 }];
-      return [name, { yes: name.startsWith('keep_'), p: name.startsWith('keep_') ? 0.8 : 0.1 }];
+      return [name, { yes: false, p: 0.1 }];
     }),
   );
 };
@@ -161,8 +162,8 @@ try {
 
   await ask('Show me every greeting');
   const jev = asked[asked.length - 1];
-  check('Jev is asked about the message with the open screen: an intent for each canvas, and whether each is still wanted', jev?.state['message'] === 'Show me every greeting' && Object.keys((jev?.state['open_screen'] ?? {}) as object).join(',') === 'a,b,c,d,e' && Object.keys(jev?.questions ?? {}).includes('keep_e'), JSON.stringify(jev?.state['open_screen']));
-  check('the model is given the open screen — each canvas’s action, intent, input and what it holds — and what Jev thinks', /- b: rows\.stat — how many greetings there are/.test(lastPrompt()) && lastPrompt().includes('"count":5') && lastPrompt().includes('still wanted: a yes (0.80)'), lastPrompt().slice(0, 600));
+  check('Jev is asked about the message with the open screen: an intent for each canvas', jev?.state['message'] === 'Show me every greeting' && Object.keys((jev?.state['open_screen'] ?? {}) as object).join(',') === 'a,b,c,d,e', JSON.stringify(jev?.state['open_screen']));
+  check('the model is given the open screen — each canvas’s action, intent, input and what it holds — and what Jev thinks', /- b: rows\.stat — how many greetings there are/.test(lastPrompt()) && lastPrompt().includes('"count":5') && lastPrompt().includes('A FAST PICKER THINKS'), lastPrompt().slice(0, 600));
   check('"Show me every greeting" is the table alone, laid out as one thing', areas() === 'rows.table' && grid() === '1: a', `${areas()} — ${grid()}`);
   check('the table reads the five hello-worlds', await until(() => rows('a', 'rows').length === 5), JSON.stringify(on('a').data['rows']));
 
@@ -174,6 +175,8 @@ try {
   const germanTable = on('a').id;
   await ask('and the count beside it');
   check('what stays on screen stays the same canvas, in its place, and what is new follows it', on('a').id === germanTable && areas() === 'rows.table rows.stat' && grid() === '2: a b', `${areas()} — ${grid()}`);
+  await ask('the count first');
+  check('an order the model gives stands: what was on screen moves when the message asks', areas() === 'rows.stat rows.table', areas());
 
   session.dispatch('bar', { type: 'ui:click', ref: 'screen', payload: 'greetings' });
   await until(() => current().screen === 'greetings');

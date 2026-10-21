@@ -16,8 +16,8 @@ Made 2026-10-20 by `npm create nisc`, on nisc 0.8.1. This is the record AGENTS.m
 | D8 History | derived · **open** | The answers one shell was given, kept while it lives; a reload starts again. Open: whether a person's answers outlive the shell, and memory beyond that. |
 | D9 Embeddings | answered · **open: memory** | `EMBEDDINGS` in `.env`, for memory. Nothing uses them yet. |
 | D10 Layout swaps | derived · **open: sign-in** | An answer’s arrangement is swapped into the frame’s `answers` region through moss’s unverified shell (`@niscorp/moss/unverified`, in `src/server/compose/index.ts`), because moss lets a session change a layout only through a draft, and a draft needs a signed-in person. **When the app has sign-in, the swap moves to `session.draft`, where moss checks it.** |
-| D11 What keeps a canvas in place | **open** | Now: the placement code keeps what is on screen in its order, and the model's order only for what is new. Measured against the model keeping the order itself (told to, unless the message asks to move things): 68/78 right against 78/78 (`src/dev/live-ask.ts --runs=6`). |
-| D12 Jev's "still wanted?" | **open** | Jev answers, for each canvas on screen, whether it is still wanted, and the model is told. On ten follow-ups it was right 8 of 14 times; the 78/78 above is without it. |
+| D11 What keeps a canvas in place | answered (2026-10-21) | **The model.** It is told to keep what stays in the order it has on screen, unless the message asks to move things, and the canvases are placed in the order it gives. Placement code that kept what was on screen in its order scored 68/78 against 78/78 (`src/dev/live-ask.ts --runs=6`): it could not move anything a message asked to move. |
+| D12 Jev's "still wanted?" | answered (2026-10-21) | **Not asked.** On ten follow-ups Jev was right 8 of 14 times, and with its answer the model dropped what was open. |
 
 ## Answered when it was made
 
