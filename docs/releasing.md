@@ -123,10 +123,13 @@ and `@niscorp/nisc` moves whenever any member does.
 
 Two things follow:
 
-- **A template change needs a changeset naming `create-nisc`.** The templates
-  are private workspace packages of their own (so CI can build and check them),
-  which means Changesets does not notice a change to one as a change to
-  `create-nisc`. Without the changeset, the fix is merged and never shipped.
+- **A template change is a change to `create-nisc`.** Its items
+  (`packages/create-nisc/templates/<item>/`) are files of the package, not
+  packages of their own, so a change to one asks for a changeset naming
+  `create-nisc` like any other change does. CI checks them through the apps
+  made from them (`pnpm check:create`): every kind of app, installed from the
+  packed packages, typechecked, checked, built, served — and `nisc dev` run
+  against the classic one.
 - **It was first published by hand** (`pnpm release:first`), as every new
   package is, at the version of the `@niscorp/nisc` it carried — 0.2.0, on
   2026-10-03.

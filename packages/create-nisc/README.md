@@ -6,25 +6,36 @@ A new [nisc](https://github.com/moccadroid/niscorp) application.
 npm create nisc
 ```
 
-Three questions, because they are what shape the files:
+Four questions, because they are what shape the files:
 
 1. **Where should it go?** The folder's name becomes the app's name.
-2. **Where does the shell run?** On a server — moss: one shell per person on
+2. **Who leads?** You — classic: you build the screens, and a first one that
+   works is there. Or a model — model-first: there is no navigation; a person
+   types a message, and the answer is a screen composed from the app's actions
+   (below).
+3. **Where does the shell run?** On a server — moss: one shell per person on
    the server, the charter enforced there. Or in the page — no server: offline,
-   static hosting, and the charter is not a security boundary.
-3. **What draws the screen?** React, or plain DOM (no framework in the page).
+   static hosting, and the charter is not a security boundary. A model-first
+   app is behind moss, and is not asked.
+4. **What draws the screen?** React, or plain DOM (no framework in the page).
+
+A model-first app then asks for its keys, masked (see "Keys" below): Groq for
+gpt-oss-120b, and TypeSafe for Jev.
 
 ```bash
 npm create nisc my-app -- --page --dom     # flags answer the questions
-npm create nisc my-app -- --yes            # the defaults: moss, React
+npm create nisc my-app -- --model-first    # a model leads; the keys are asked
+npm create nisc my-app -- --yes            # the defaults: classic, moss, React
 ```
 
 | | |
 |---|---|
 | `dir` | where the app goes (default `my-nisc-app`) |
+| `--classic` / `--model-first` | you build the screens (the default), or a model composes one for every message |
 | `--moss` / `--page` | the shell on a server (the default), or in the page |
 | `--react` / `--dom` | React draws the screen (the default), or plain DOM |
 | `--yes` | take the defaults for anything not given, and ask nothing |
+| `--workspace` | depend on the nisc packages of the workspace it is made in (`workspace:^`) — for an app inside the nisc repository |
 | `--help`, `-h` | this list |
 
 With no terminal to ask in, the flags are all there is and the rest takes the
@@ -35,9 +46,9 @@ not quietly make a different app.
 
 The structure the rulebook describes, and a first screen that works:
 
-- one action on a canvas, a kit of five primitives with its stylesheet, and an
-  entry — the first screen **arrives as markup** (drawn by the server, or
-  written at build) and is picked up by the page;
+- one action on a canvas, a kit with its stylesheet, and an entry — the first
+  screen **arrives as markup** (drawn by the server, or written at build) and
+  is picked up by the page;
 - `npm run dev`, `build`, `check` and `start` — and, with the shell in the
   page, `export` — all the `nisc` command; `nisc dev` runs a moss app's server inside vite, so its
   `vite.config.ts` holds nothing but the framework's plugin;
@@ -48,6 +59,27 @@ The structure the rulebook describes, and a first screen that works:
   checked against** — a caret range from each one's version (such as `^0.2.0`), not
   whatever is newest — and `@niscorp/nisc` itself, which pins that set
   exactly and carries the rulebook.
+
+A model-first app has, instead of the welcome screen:
+
+- a frame: the answer, six areas laid out in an arrangement, and one dock at
+  the bottom — the screens, a chip naming the answer shown with back, forward
+  and every answer to go back to, and the line to ask in;
+- **the message loop** (`src/server/compose/`): Jev reads the message and the
+  open screen and says which actions likely belong; gpt-oss-120b composes the
+  screen as a cortex agent, naming only the areas that change, checked against
+  the app's actions and their input schemas and corrected inside the run when
+  it does not hold. The answer streams in. What a person pressed, ticked or
+  picked stays, the model sees it, and an answer gone back to shows it as it
+  was left;
+- **a tour of nisc** to start from: five screens of cards to read, and a
+  counter, a checklist and a quick check to use, which the model can fill in
+  too. A card's link opens a screen at once; only what is typed, or a thing to
+  ask pressed, goes to the model. Its `AGENTS.md` says how to remove the tour —
+  a folder, a check, and edits in five files — and what to build next;
+- checks that run the loop offline with a scripted decision model and chat
+  model, one for the loop and one for the tour, and `src/dev/live-ask.ts`,
+  which asks the real models a run of cases.
 
 And two documents:
 
@@ -69,13 +101,57 @@ the files; make the app in a subfolder instead:
 npm create nisc site -- --page --dom
 ```
 
+## How an app is put together
+
+An app is made of **items**, one for each answer, plus the ones every app has.
+Each is a folder under `templates/`, and the questions are
+`templates/questions.json`: the command's code names no item, so a new kit, a
+new shell or a new kind of app is a new folder, and its flag and its place in
+the questions follow from it.
+
+```
+templates/
+  questions.json          [{ id, message }], in the order they are asked
+  <item>/
+    item.json             what it answers, and what it adds
+    files/                written into every app made with it
+    with/<other item>/    written only when that other item is chosen too
+    agents-section.md     a section added to the app's AGENTS.md
+```
+
+`item.json`:
+
+| field | |
+|---|---|
+| `id` | the folder's name, and its flag: `--<id>` |
+| `answers` | the question it answers; absent, every app has it |
+| `label`, `hint`, `usage`, `summary` | what the question offers, the flag's line in `--help`, and its words in the line said once it is made |
+| `default` | the answer taken when nobody gives one: exactly one per question |
+| `requires` | `{ question: item }` — what another question must be answered with; that question is then not asked |
+| `package` | a `package.json` fragment: fields, `scripts`, `dependencies`, `devDependencies` (`workspace:^` for a nisc package) |
+| `env` | the keys it asks for: `{ name, message, required? }`, or `{ choose, message, options: [{ value, label, keys? }] }` |
+| `docs` | its lines in AGENTS.md and PLAN.md: `is`, `where`, `runs`, `decisions`, `answered`, `open`, `order` |
+| `with` | `{ <other item>: { package, env, docs } }` — added only when that other item is chosen too |
+
+Two items that write the same file, or disagree about a field, a script or a
+dependency, is a mistake in the templates: it is refused before anything is
+written. In every file, `nisc-template-app` becomes the app's name.
+
+## Keys
+
+An item that needs keys asks for them after the questions, masked, and they go
+into `.env`; `.env.example` gets the names alone. A key left empty is filled in
+`.env` later. Keys are never flags — a flag stays in the shell's history — so
+with no terminal to ask in, they are read from the environment. A `.env` that
+is already there keeps what it holds and gains only the lines it lacks.
+
 ## Why it can be trusted to work
 
-The four templates are real apps in the nisc repository: typechecked, built and
-checked by its CI on every change. And CI makes each kind of app with the built
-`create-nisc`, outside the repository, installs it from the packed packages
-under pnpm's strict resolution, and typechecks, checks and builds it
-(`pnpm check:create`). A new app starts from something that works today.
+CI makes every kind of app with the built `create-nisc`, outside the
+repository, installs it from the packed packages under pnpm's strict
+resolution, and typechecks, checks, builds and serves it (`pnpm check:create`);
+its tests make every combination the questions allow and refuse any two items
+that collide. A new app starts from something that works today.
 
 ## License
 

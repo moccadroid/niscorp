@@ -1,0 +1,31 @@
+{
+  "id": "base",
+  "package": {
+    "private": true,
+    "version": "0.0.0",
+    "type": "module",
+    "engines": { "node": ">=22.12" },
+    "dependencies": {
+      "@niscorp/nova": "workspace:^",
+      "@niscorp/prism": "workspace:^",
+      "@niscorp/strata": "workspace:^",
+      "zod": "^4.6.5"
+    },
+    "devDependencies": {
+      "@niscorp/cli": "workspace:^",
+      "@niscorp/nisc": "workspace:^",
+      "@types/node": "^26.6.4",
+      "tsx": "^4.23.1",
+      "typescript": "^6.0.2",
+      "vite": "^7.1.12"
+    }
+  },
+  "docs": {
+    "where": [
+      "src/dev/        the checks (`npm run check`) — a new feature adds its own",
+      "nisc.config.ts  how the app boots and how its screens are drawn, for the `nisc` command",
+      "strata.lock.json  the grammar versions the source is written at (rule 20) — moved only",
+      "                by `npm run strata verify`, never by hand"
+    ]
+  }
+}

@@ -57,10 +57,12 @@ const freePort = (): Promise<number> =>
     });
   });
 
-const whileServed = async (dir: string, ask: (base: string) => Promise<void>): Promise<void> => {
+// `nisc start` or `nisc dev` in the made app, for as long as `ask` runs; `log` is what it has said so far.
+const whileRunning = async (dir: string, command: 'start' | 'dev', ask: (base: string, log: () => string) => Promise<void>): Promise<void> => {
   const port = await freePort();
-  const base = `http://127.0.0.1:${port}`;
-  const child = spawn(process.execPath, [join(dir, 'node_modules', '@niscorp', 'cli', 'bin', 'nisc.js'), 'start', '--port', String(port)], { cwd: dir, stdio: ['ignore', 'pipe', 'pipe'] });
+  // vite listens on localhost, which may be ::1 rather than 127.0.0.1
+  const base = command === 'dev' ? `http://localhost:${port}` : `http://127.0.0.1:${port}`;
+  const child = spawn(process.execPath, [join(dir, 'node_modules', '@niscorp', 'cli', 'bin', 'nisc.js'), command, '--port', String(port)], { cwd: dir, stdio: ['ignore', 'pipe', 'pipe'] });
   let log = '';
   child.stdout.on('data', (chunk: Buffer) => (log += chunk.toString()));
   child.stderr.on('data', (chunk: Buffer) => (log += chunk.toString()));
@@ -70,20 +72,22 @@ const whileServed = async (dir: string, ask: (base: string) => Promise<void>): P
       try {
         if ((await fetch(`${base}/`)).ok) break;
       } catch {}
-      if (Date.now() > deadline) throw new Error(`nisc start did not come up:\n${log}`);
+      if (Date.now() > deadline) throw new Error(`nisc ${command} did not come up:\n${log}`);
       await pause(200);
     }
-    await ask(base);
+    await ask(base, () => log);
   } finally {
     child.kill('SIGTERM');
   }
 };
 
 const KINDS = [
-  { name: 'made-moss-react', flags: ['--moss', '--react'], ownShell: false },
-  { name: 'made-moss-dom', flags: ['--moss', '--dom'], ownShell: false },
-  { name: 'made-page-react', flags: ['--page', '--react'], ownShell: true },
-  { name: 'made-page-dom', flags: ['--page', '--dom'], ownShell: true },
+  { name: 'made-moss-react', flags: ['--moss', '--react'], ownShell: false, dev: true },
+  { name: 'made-moss-dom', flags: ['--moss', '--dom'], ownShell: false, dev: false },
+  { name: 'made-page-react', flags: ['--page', '--react'], ownShell: true, dev: false },
+  { name: 'made-page-dom', flags: ['--page', '--dom'], ownShell: true, dev: false },
+  { name: 'made-model-react', flags: ['--model-first', '--react'], ownShell: false, dev: false },
+  { name: 'made-model-dom', flags: ['--model-first', '--dom'], ownShell: false, dev: false },
 ] as const;
 
 const scratch = mkdtempSync(join(tmpdir(), 'nisc-create-'));
@@ -105,10 +109,12 @@ try {
     // By name, from its own folder: GNU tar (Git Bash) reads `C:\…` as a remote
     // host. And Windows' tar ends its lines CRLF.
     const entries = execFileSync('tar', ['-tzf', basename(tarball)], { cwd: dirname(tarball), encoding: 'utf8' }).trim().split(/\r?\n/);
-    const stray = entries.filter((entry) => /^package\/templates\/[^/]+\/(node_modules|dist|out|\.turbo)\//.test(entry));
+    const stray = entries.filter((entry) => /^package\/templates\/.*\/(node_modules|dist|out|\.turbo)\//.test(entry));
     if (stray.length > 0) throw new Error(`in the tarball, and should not be:\n${stray.slice(0, 12).join('\n')}`);
-    for (const template of ['moss-react', 'moss-dom', 'shell-react', 'shell-dom']) {
-      if (!entries.includes(`package/templates/${template}/package.json`)) throw new Error(`the ${template} template is not in the tarball`);
+    const templates = join(packagesDir, 'create-nisc', 'templates');
+    const items = readdirSync(templates, { withFileTypes: true }).filter((entry) => entry.isDirectory()).map((entry) => entry.name);
+    for (const file of ['package/templates/questions.json', ...items.map((item) => `package/templates/${item}/item.json`)]) {
+      if (!entries.includes(file)) throw new Error(`${file} is not in the tarball`);
     }
   });
 
@@ -140,6 +146,25 @@ try {
     });
     step(`${kind.name}: typechecks`, () => void pnpm(['run', 'typecheck'], dir));
     step(`${kind.name}: its checks pass`, () => void pnpm(['run', 'check'], dir));
+    if (kind.dev) {
+      await stepAsync(`${kind.name}: \`nisc dev\` draws the first screen in a vite page, hands moss's paths to the app server and the rest to vite, and re-boots the server when the source changes`, () =>
+        whileRunning(dir, 'dev', async (base, log) => {
+          const html = await (await fetch(`${base}/`)).text();
+          for (const part of ['class="k-heading"', 'id="nisc-snapshot"', '/@vite/client']) if (!html.includes(part)) throw new Error(`the page has no ${part}`);
+          if (!JSON.stringify(await (await fetch(`${base}/catalog`)).json()).includes('welcome')) throw new Error('/catalog is not the app server’s, or has no welcome');
+          const entry = await fetch(`${base}/src/main.tsx`);
+          if (!entry.ok || !(await entry.text()).includes('createTerminal')) throw new Error('vite does not serve src/main.tsx');
+          const file = join(dir, 'src', 'app', 'charter', 'assignments.ts');
+          writeFileSync(file, `${readFileSync(file, 'utf8')}\n`);
+          const deadline = Date.now() + 30_000;
+          while (!log().includes('app server re-booted')) {
+            if (Date.now() > deadline) throw new Error(`the app server did not re-boot:\n${log()}`);
+            await pause(150);
+          }
+          if (!(await fetch(`${base}/catalog`)).ok) throw new Error('the re-booted app server does not answer');
+        }),
+      );
+    }
     const built = step(`${kind.name}: builds`, () => void pnpm(['run', 'build'], dir));
     if (!built) continue;
     step(`${kind.name}: the page it built holds its stylesheet`, () => {
@@ -148,7 +173,7 @@ try {
       if (/<link[^>]*rel="stylesheet"/.test(html)) throw new Error('dist/index.html still links a stylesheet as a file');
     });
     await stepAsync(`${kind.name}: \`nisc start\` serves what it built — compressed, the script kept, a missing file a 404`, () =>
-      whileServed(dir, async (base) => {
+      whileRunning(dir, 'start', async (base) => {
         const browser = { 'accept-encoding': 'br' };
         const page = await fetch(`${base}/`, { headers: browser });
         const html = await page.text();

@@ -437,7 +437,7 @@ Say this out loud in the interview, because it is the part a user cannot infer: 
 ## Order of work
 
 1. **The interview** (see "Before any code") — every decision answered or delegated by name, recorded in `PLAN.md` with scope, data model, and roles.
-2. **Scaffold** — manifest + runtime + terminal (moss), or boot + shell factory (degrade); canvases + empty registry; one placeholder action renders. `npm create nisc` makes exactly this — from templates that are themselves checked apps — and writes `PLAN.md` with D1 and the renderer answered and the rest open; the interview (step 1) is then about what it left open.
+2. **Scaffold** — manifest + runtime + terminal (moss), or boot + shell factory (degrade); canvases + empty registry; one placeholder action renders. `npm create nisc` makes exactly this — every app it can make is made, installed and checked by CI — and writes `PLAN.md` with D1 and the renderer answered and the rest open; the interview (step 1) is then about what it left open.
 3. **Kit** — primitives against a kitchen-sink action; lock the look before any real feature.
 4. **Data layer** — per D2/D3: schema, seed, entries, behaviors; prove one read end-to-end.
 5. **Actions** — domain by domain: list → detail → form; chrome and routes as they're needed; new action ids granted in the charter as they're minted.
