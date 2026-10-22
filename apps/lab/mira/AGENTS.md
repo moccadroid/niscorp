@@ -9,9 +9,8 @@ What is particular to this app:
 - **Where things go:**
 
 ```
-src/app/actions/guide/  the tour of nisc the app starts with: cards to read, and a counter, a checklist and a quick check to use — it goes first (below, "How to proceed from here")
 src/app/action-catalog.ts  every action, and `placeable`: the ones the model may put on a screen
-src/app/screens.ts  the screens in the dock — the tour's lessons: canvases shown together; the first is the one the app opens on
+src/app/screens.ts  the screens in the dock: canvases shown together; the first is the one the app opens on
 src/app/arrangements.ts  how an answer is laid out: layouts for the frame’s `answers` region, and what each is for
 src/server/compose/ the message loop: the open screen read, Jev's pass, gpt-oss-120b composes, the plan is placed
                     catalog.ts       what the model is given to place: the `placeable` actions, the reads, the writes
@@ -52,7 +51,6 @@ There is no chat history: the screen open when a message arrives is the conversa
 - **A message that gets no screen leaves the screen as it is,** and the line says why: the model's reply did not fit, it could not be reached, or there is no key.
 - **Jev may take 2 s and the model 8 s.** A Jev pass given up leaves the model to answer alone.
 - **Every message is recorded as a run for each model it went to,** through moss (`session.recordRun`): `mira.jev` and `mira.compose`, each with its provider and model, the tokens it spent (`reported: false` where signal estimated them), its steps and how long it took — for the composer, cortex's run meta — and whether it ended in an answer. The server logs a line for each (`src/server/runs/`).
-- **The app starts as a tour of nisc** (`src/app/actions/guide/`): five screens in the dock — a start, three lessons, and how to make it yours. Cards to read — points, an example in code, or steps, the text in the action's own data, no input — and cards to use: a counter, a checklist and a quick check, each with an input the model can fill. A card's link opens another screen at once, as the dock's buttons do; only what is typed, or a thing to ask pressed, goes to the model. What a person presses, ticks and picks stays on the screen; the model sees it, and can change it: "tick off the first step", "a counter that starts at 100", "quiz me on the charter". Its check is `src/dev/guide-check.ts`.
 - **An action you add is small, with one purpose:** it says what it shows (`description`), and declares what the model may open it with as a JSON Schema written with zod, every field described; the model's answers are checked against that same schema (`z.fromJSONSchema`). A read or a write it names must be one the app ships, asked with the values it takes. The ones the model may place are `placeable`, in `src/app/action-catalog.ts`.
 - **The model never presses anything.** It opens cards with an input — a checklist with a step ticked, a form filled in — and only the person saves.
 - **The keys are in `.env`:** `GROQ_API_KEY` (gpt-oss-120b; without it, a message is answered with a notice saying so), and `TYPESAFE_API_KEY` (Jev; without it there is no Jev pass).
@@ -60,23 +58,6 @@ There is no chat history: the screen open when a message arrives is the conversa
 
 ## How to proceed from here
 
-The tour is a starting point, there to be deleted. First the interview: PLAN.md's open items, each answered or delegated by name (the rulebook's "Before any code").
-
-**Remove the tour.** It lives in two places and is named in five:
-
-1. Delete `src/app/actions/guide/` and `src/dev/guide-check.ts`.
-2. `src/app/action-catalog.ts`: drop the `GUIDE` import; `placeable` is `[]` until your own actions are in it.
-3. `src/app/charter/charter.ts`: drop `'guide.*'`.
-4. `src/dev/all-checks.ts`: drop the `guide-check` line.
-5. `src/app/screens.ts`: everything below its two types — your screens instead of the tour's. Until there are actions, one screen of words will do:
-   ```ts
-   export const SCREENS: readonly [Screen, ...Screen[]] = [
-     { id: 'start', label: 'Start', description: 'What this app is.', arrangement: 'single', canvases: [{ action: 'answer.text', input: { title: 'The app', text: 'What it is, in a sentence.' }, intent: 'what this app is' }] },
-   ];
-   ```
-6. `src/dev/live-ask.ts`: your cases in `RUN` instead of the tour's, and its `tour` helper.
-7. This file: the tour's rows under "Where things go", its paragraph above, and this list; PLAN.md: the tour in D3 and in the order of work. `npm run check` passes again.
-
-What stays is the app: the message loop, the dock, the arrangements, the kit, and `compose-check`, which needs nothing of the tour.
+First the interview: PLAN.md's open items, each answered or delegated by name (the rulebook's "Before any code").
 
 **Then build in PLAN.md's order of work,** each step checked before the next: your tables, reads and writes; your actions, each placeable one in `placeable` and every one granted in the charter's `actions`; your screens; a check for each feature in `src/dev/`; and `live-ask` cases for what people will ask.

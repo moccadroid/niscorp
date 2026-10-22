@@ -8,7 +8,7 @@ Made 2026-10-20 by `npm create nisc`, on nisc 0.8.1. This is the record AGENTS.m
 |---|---|---|
 | D1 Posture | answered | **A moss server app.** The shell runs on the server, one per person; the browser is a canvas terminal over a socket. The charter is enforced there: a principal reaches only the actions and the data it is granted. |
 | D2 Environment | derived · **open for deployment** | Development and the checks run on PGlite, an in-memory Postgres that starts empty every boot (`src/server/runtime.ts`). Open: the Postgres a deployment hands it, and where it runs. |
-| D3 Reads | answered | **Vex entries**, read by an action by its fingerprint (`/api/vex`), under the person's policy. None yet: the tour the app starts with is text in its actions. |
+| D3 Reads | answered | **Vex entries**, read by an action by its fingerprint (`/api/vex`), under the person's policy. None yet. |
 | D4 Writes | answered | **Vex mutation entries**, posted to `/api/vex` by a form the person saves, never by the model. None yet. |
 | D5 Routing | derived · **partly open** | The first screen is drawn on the server and adopted by the terminal — it costs nothing while nobody can sign in. Open: once sign-in exists, the browser keeps the session in a cookie no script can read, and the page is drawn for whoever it says (AGENTS.md rule 12) — a page drawn for somebody is theirs alone (`private, no-store`). Open: which paths are **pages** rather than the app, and whether the app's shell state syncs to the address bar. |
 | D6 Who answers a message | answered | Jev reads the message and the open screen (`TYPESAFE_API_KEY`), then gpt-oss-120b on Groq composes the screen as a cortex agent (`GROQ_API_KEY`), with what Jev picked as a hint. Without a TypeSafe key there is no Jev pass. Jev may take 2 s and the model 8 s; past that, the model answers alone, or the line says it could not be reached and the screen stays as it is. Measured on the tour's cases (`src/dev/live-ask.ts --runs=2`): 30/32 right with Jev, 31/32 without, and about 200 ms slower with it. |
@@ -37,8 +37,8 @@ Made 2026-10-20 by `npm create nisc`, on nisc 0.8.1. This is the record AGENTS.m
 ## Order of work
 
 1. **The interview** — every open item above, answered or delegated by name. ← here
-2. **Scaffold** — done: the frame, the message loop, the dock, a tour of nisc in five screens — cards to read, and a counter, a checklist and a quick check to use, which the model can fill in too — and their checks.
-3. **Data** — the tour goes first (AGENTS.md, "How to proceed from here"); then, per D2/D3, your tables in `src/db/schema.ts`, your reads in `src/app/vex/`.
+2. **Scaffold** — done: the frame, the message loop, the dock, and their checks.
+3. **Data** — per D2/D3, your tables in `src/db/schema.ts`, your reads in `src/app/vex/`.
 4. **Actions** — your own, small: one purpose each, a description that says what it shows, an `input` schema for what the model fills in; the ones the model may place in `placeable`, each granted in the charter.
 5. **Screens** — the ones a person will want in the dock, each its canvases; the first the one the app opens on.
 6. **Writes** — per D4; a form an answer opens, filled in by the model, saved by the person.
