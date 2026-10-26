@@ -1,8 +1,10 @@
 import { z } from 'zod';
+import type { FunctionSession } from '@niscorp/moss';
 import type { ActionDefinition } from '@niscorp/nova';
 import type { SeedEntry, SeedMutation } from '@niscorp/vex';
 import { placeable } from '../../app/action-catalog';
-import type { Canvas } from '../../app/screens';
+import { SCREENS } from '../../app/screens';
+import type { Canvas, Screen } from '../../app/screens';
 import { ENTRIES } from '../../app/vex';
 import { isRecord, recordOf } from './record';
 
@@ -44,3 +46,14 @@ const catalogOf = (actions: readonly ActionDefinition[], entries: readonly (Seed
 });
 
 export const CATALOG: Catalog = catalogOf(placeable, ENTRIES);
+
+const DiscoverySchema = z.looseObject({ fingerprints: z.array(z.looseObject({ fingerprint: z.string() })) });
+
+// The reads and writes vex lists for a person when they ask it: the ones their roles may use.
+export const withUsable = async (catalog: Catalog, wire: FunctionSession['wire']): Promise<Catalog> => {
+  const response = await wire('/api/vex');
+  const listed = new Set(response.ok ? DiscoverySchema.parse(await response.json()).fingerprints.map(({ fingerprint }) => fingerprint) : []);
+  return { ...catalog, reads: CATALOG.reads.filter((read) => listed.has(read.fingerprint)), writes: CATALOG.writes.filter((write) => listed.has(write.fingerprint)) };
+};
+
+export const screensHeld = (actions: readonly string[]): Screen[] => SCREENS.filter((screen) => screen.canvases.every((canvas) => actions.includes(canvas.action)));

@@ -1,0 +1,25 @@
+# Mira's own Postgres, for `npm run dev` and `npm start` on this machine.
+#
+#   docker compose up -d     stand it up; DATABASE_URL in .env points at it
+#   docker compose down      stop (the volume stays)
+#   docker compose down -v   stop and forget everything in it
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: mira
+      POSTGRES_PASSWORD: mira
+      POSTGRES_DB: mira
+    ports:
+      - '127.0.0.1:5434:5432'
+    volumes:
+      - mira-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U mira -d mira']
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+volumes:
+  mira-data:

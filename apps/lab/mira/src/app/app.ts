@@ -1,11 +1,26 @@
 import { defineApp } from '@niscorp/moss';
-import type { NiscApp, RunSink } from '@niscorp/moss';
+import type { NiscApp, RunSink, ShellManifest } from '@niscorp/moss';
 import { actions } from './action-catalog';
-import { assignments } from './charter/assignments';
-import { charter } from './charter/charter';
+import { charter, WEARABLE } from './charter/charter';
 import { shell } from './shell/shell';
-import { ENTRIES } from './vex';
+import { BEHAVIORS, ENTRIES } from './vex';
 
-export type AppSeams = { functions: NonNullable<NiscApp['functions']>; runs: RunSink };
+export type AppSeams = {
+  functions: NonNullable<NiscApp['functions']>;
+  identity: NonNullable<NiscApp['identity']>;
+  inputs: NonNullable<ShellManifest['inputs']>;
+  runs: RunSink;
+};
 
-export const buildApp = (seams: AppSeams): NiscApp => defineApp({ charter, assignments, actions, entries: ENTRIES, shell, functions: seams.functions, runs: seams.runs });
+export const buildApp = (seams: AppSeams): NiscApp =>
+  defineApp({
+    charter,
+    wearable: WEARABLE,
+    actions,
+    entries: ENTRIES,
+    behaviors: BEHAVIORS,
+    shell: { ...shell, inputs: seams.inputs },
+    identity: seams.identity,
+    functions: seams.functions,
+    runs: seams.runs,
+  });

@@ -1,7 +1,7 @@
 # Mira Assistant: your own Dots, built the nisc way
 
-**Status: Proposed (2026-10-22), its three decisions answered (2026-10-26). Nothing built.** Branch
-`worktree-mira`. Mira is a bare model-led app (the tour came out in `7890b0c2`): every typed message is
+**Status: Proposed (2026-10-22), its three decisions answered (2026-10-26). Step 1 built (2026-10-26),
+steps 2–6 not started.** Branch `worktree-mira`. Mira is a bare model-led app (the tour came out in `7890b0c2`): every typed message is
 answered with a screen, composed by a cortex agent from the app's actions. Part 5 has what was decided.
 
 ## 0. For whoever builds this
@@ -169,6 +169,15 @@ Each step ends with `npm run check` passing and a check of its own in `src/dev/`
 
 1. **A person, on Postgres** (2.1). Done: two people sign in by link on Postgres, each sees only their
    own screens; the checks still run on PGlite; strangers get no link.
+   **Built 2026-10-26.** `src/dev/signin-check.ts` holds it on PGlite; on the Docker Postgres it was run
+   by hand through `nisc start` (the owner and an invited member each signed in by their own link, a
+   link used twice was refused). Three things the text above did not say, and how they were done: the
+   owner's row is written at boot by `gatekeeper` (`people/owner`), so that role also holds
+   `people.write.insert`; a person the owner invites is stamped `member` by the owner's row rule, so no
+   write of the owner's makes another owner; the model is offered only the reads and writes vex lists
+   for the person. `TIDE_SEQUENCE` joins `runtime.tables` with step 5, where tide is first used.
+   **Open:** `nisc dev` does not register the config's `routes`, so `/login` works under `nisc start`
+   and not in dev, where `/dev/as/<address>` signs in instead (a fix in `@niscorp/cli`).
 2. **The stack lasts** (2.3). Done: a reload brings back the person's answers, back and forward through
    them.
 3. **Memory** (2.2). Done: offline, a scripted model's `remember` and `recall` reach the rows and come

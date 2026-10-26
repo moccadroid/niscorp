@@ -45,8 +45,8 @@ const app = await startApp(scripted.models);
 const { on, current, total, grid, areas, ids, without, said, drawn, marked, runs, ask, session } = app;
 try {
   const template = '<!doctype html><html><head></head><body><div id="root"></div></body></html>';
-  const page = await renderDocument({ ...drawing, server: app.server, template, request: { path: '/', cookie: null } });
-  check('the page arrives drawn: the first screen, and the dock with the screens and the line to ask in', page.drawn && ['k-frame', 'k-dock', 'k-prompt'].every((part) => page.html.includes(part)), page.html.slice(0, 300));
+  const page = await renderDocument({ ...drawing, server: app.server, template, request: { path: '/', cookie: `nisc.token=${app.token}` } });
+  check('the page arrives drawn for the person signed in: the first screen, and the dock with the screens and the line to ask in', page.drawn && ['k-frame', 'k-dock', 'k-prompt'].every((part) => page.html.includes(part)), page.html.slice(0, 300));
 
   check('the app opens on the first screen, every one of its canvases an area of its own, and the stack starts there', areas() === START && on('dock').action === 'ask.dock' && current().position === 1 && total() === 1, areas());
   const room = ARRANGEMENTS.find((arrangement) => arrangement.id === FIRST.arrangement)?.areaCount;

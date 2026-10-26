@@ -9,6 +9,8 @@ A [nisc](https://github.com/moccadroid/niscorp) application behind moss — the 
 | `npm start` | serve the built app, each first screen drawn |
 | `npm run check` | the checks in `src/dev/` |
 | `npm run strata status` | which grammar versions the source is written at |
+| `docker compose up -d` | the app's own Postgres, at the `DATABASE_URL` in `.env.example` |
+| `npx nisc migrate` | apply the tables as a deploy step (`--check` tries it and rolls it back) |
 
 **Before building anything:** [PLAN.md](PLAN.md) — what was decided when this app
 was made and what is still open — and [AGENTS.md](AGENTS.md), which says where

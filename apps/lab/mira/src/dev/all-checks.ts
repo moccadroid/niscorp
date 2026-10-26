@@ -3,7 +3,9 @@ import { spawnSync } from 'node:child_process';
 const CHECKS: readonly (readonly [name: string, what: string, args?: readonly string[]])[] = [
   ['artifacts-check', 'src/app is data: pure JSON, every artifact parses its schema, every screen canvas opens an action with an input it takes'],
   ['strata', 'the source is written at the installed grammars (strata.lock.json)', ['status', '--check']],
-  ['compose-check', 'a message is answered with a screen: the open screen read, picked, composed, checked, placed, written, and back again'],];
+  ['compose-check', 'a message is answered with a screen: the open screen read, picked, composed, checked, placed, written, and back again'],
+  ['signin-check', 'invite only: a link mailed to an invited address signs them in once; strangers get nothing; the owner invites, a member cannot'],
+];
 
 let failed = 0;
 for (const [name, what, args = []] of CHECKS) {

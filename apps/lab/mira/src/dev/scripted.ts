@@ -1,12 +1,14 @@
 import type { SignalClient, Usage } from '@niscorp/cortex';
-import type { MossServer, RunRecord } from '@niscorp/moss';
+import type { MossServer, RunRecord, RunSink } from '@niscorp/moss';
 import { routeResponse } from '@niscorp/signal';
 import type { StepRequest, StepResult } from '@niscorp/signal';
 import { z } from 'zod';
 import { AREAS } from '../app/shell/areas';
 import { boot } from '../server/boot';
+import type { BootConfig } from '../server/boot';
 import type { Decide, Models } from '../server/compose';
 import { recordOf } from '../server/compose/record';
+import type { SendMail } from '../server/identity';
 
 // Each message, and the replies the chat model gives it, one a call: the last one again and again.
 export type Script = Record<string, Record<string, unknown>[]>;
@@ -98,6 +100,7 @@ type Canvas = { action: string; id: string; data: Record<string, unknown> };
 
 export type App = {
   server: MossServer;
+  token: string;
   session: Session;
   runs: RunRecord[];
   on: (canvas: string) => Canvas;
@@ -118,13 +121,21 @@ export type App = {
   openScreen: (id: string) => Promise<void>;
 };
 
-// The app booted with the models given, driven as a terminal drives it: what the dock is typed, pressed and sent.
+export const OWNER = 'owner@mira.test';
+
+// On PGlite, its owner let in; every mail goes to `mail`.
+export const offline = (models: Models, runs: RunSink, mail: SendMail = async () => undefined): BootConfig => ({ models, runs, mail, owner: OWNER, publicUrl: 'http://mira.test', databaseUrl: '' });
+
+// The app booted with the models given, driven as a terminal drives it, signed in as its owner: what the dock is typed,
+// pressed and sent.
 export const startApp = async (models: Models): Promise<App> => {
   const runs: RunRecord[] = [];
-  const { server } = await boot({ models, runs: (run) => runs.push(run) });
+  const { server, door } = await boot(offline(models, (run) => runs.push(run)));
   const shells = server.shells;
   if (shells === undefined) throw new Error('the manifest has no shell');
-  const session = await shells.session(null, null);
+  const token = await door.signIn(OWNER);
+  if (token === null) throw new Error('the owner was not let in');
+  const session = await shells.session(token, await server.principalOf(token));
   const shell = session.shell;
 
   let answered = 0;
@@ -152,6 +163,7 @@ export const startApp = async (models: Models): Promise<App> => {
 
   return {
     server,
+    token,
     session,
     runs,
     on,

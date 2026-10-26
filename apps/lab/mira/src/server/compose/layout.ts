@@ -68,3 +68,14 @@ export const markChanged = (layout: LayoutNode, changed: readonly AreaId[]): Lay
   };
   return LayoutNodeSchema.parse(mark(layout));
 };
+
+// The shell's frame with an answer's layout in its region: the frame a person's draft holds while they look at it.
+export const framed = (frame: LayoutNode, region: string, layout: LayoutNode): LayoutNode => {
+  const put = (node: unknown): unknown => {
+    if (Array.isArray(node)) return node.map(put);
+    if (!isRecord(node)) return node;
+    if (node['ref'] === region && Object.keys(node).length === 1) return layout;
+    return 'children' in node ? { ...node, children: put(node['children']) } : node;
+  };
+  return LayoutNodeSchema.parse(put(frame));
+};

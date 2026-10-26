@@ -4,11 +4,11 @@ import type { LayoutNode } from '@niscorp/nova';
 import { componentsOf, walkNodes } from '@niscorp/nova/reflect';
 import { actions } from '../app/action-catalog';
 import { ARRANGEMENTS } from '../app/arrangements';
-import { assignments } from '../app/charter/assignments';
-import { charter } from '../app/charter/charter';
+import { charter, WEARABLE } from '../app/charter/charter';
 import { SCREENS } from '../app/screens';
 import { AREAS } from '../app/shell/areas';
 import { shell } from '../app/shell/shell';
+import { BEHAVIORS, ENTRIES } from '../app/vex';
 import { inputKeysOf } from '../server/compose/catalog';
 import { isRecord } from '../server/compose/record';
 import { buildRegistry } from '../ui/registry';
@@ -37,7 +37,9 @@ const parses = (name: string, parse: () => unknown): void => {
 };
 pure('the action catalog', actions);
 pure('the charter', charter);
-pure('the assignments', assignments);
+pure('the role combinations people wear', WEARABLE);
+pure('the reads and writes', ENTRIES);
+pure('the row rules', BEHAVIORS);
 pure('the shell', shell);
 if (shell.layout !== undefined) parses('the shell’s frame', () => LayoutNodeSchema.parse(shell.layout));
 

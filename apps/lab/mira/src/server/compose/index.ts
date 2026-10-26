@@ -1,20 +1,21 @@
 import { z } from 'zod';
 import type { CortexEvent, SignalClient, Usage } from '@niscorp/cortex';
 import type { FunctionDefinition, FunctionSession } from '@niscorp/moss';
-import { unverifiedShell } from '@niscorp/moss/unverified';
+import type { LayoutNode } from '@niscorp/nova';
 import { ARRANGEMENTS } from '../../app/arrangements';
 import { SCREENS } from '../../app/screens';
 import type { Screen } from '../../app/screens';
 import type { AreaId } from '../../app/shell/areas';
+import { frameLayout } from '../../app/shell/frame.layout';
 import { recordModelRun } from '../runs';
 import { answerOf, answerSoFar, refusalsOf } from './answer';
 import type { AnswerContext } from './answer';
-import { CATALOG, opened } from './catalog';
+import { CATALOG, opened, screensHeld, withUsable } from './catalog';
 import type { Catalog } from './catalog';
 import { composerAgent } from './composer.agent';
 import { createHistory } from './history';
 import { messageInput } from './knowledge';
-import { markChanged } from './layout';
+import { framed, markChanged } from './layout';
 import { pick } from './pick';
 import type { Decide } from './pick';
 import { arrangementOfPlan, canvasesInAreas, canvasesOfPlan, changedAreas, planOf } from './plan';
@@ -39,22 +40,37 @@ const NO_USAGE: Usage = { inputTokens: 0, outputTokens: 0, totalTokens: 0, repor
 
 const screenOf = (plan: Plan): string => JSON.stringify([plan.canvases, plan.layout, plan.label]);
 
+export const dockInputs = ({ actions }: { actions: readonly string[] }): Record<string, Record<string, unknown>> => ({
+  dock: { screens: screensHeld(actions).map(({ id, label }) => ({ id, label })) },
+});
+
 export const composer =
   (models: Models): ((session: FunctionSession) => FunctionDefinition[]) =>
   (session) => {
     const held = new Set(session.actions);
-    const catalog: Catalog = { ...CATALOG, actions: CATALOG.actions.filter((action) => held.has(action.id)) };
-    const deps = { catalog, screens: SCREENS, arrangements: ARRANGEMENTS };
+    const catalog: Catalog = { actions: CATALOG.actions.filter((action) => held.has(action.id)), reads: [], writes: [] };
+    let usable: Promise<Catalog> | undefined;
+    const screens = screensHeld(session.actions);
     // What the person did last: an answer for anything earlier is no longer shown.
     let turn = 0;
 
     const screenPlan = (screen: Screen): Plan => planOf('', canvasesInAreas(screen.canvases.map((canvas) => opened(canvas, catalog))), { arrangements: ARRANGEMENTS, screen, arrangement: screen.arrangement });
     const history = createHistory(screenPlan(SCREENS[0]));
 
-    // The swap goes around moss (`unverifiedShell`): moss lets a session change a layout only through a draft, and a
-    // draft needs a signed-in person. When the app has sign-in, this moves to `session.draft`, where moss checks it.
-    const show = (plan: ShownPlan, changed: readonly AreaId[] = []): ShownPlan => {
-      unverifiedShell(session).setLayout('answers', changed.length > 0 ? markChanged(plan.layout, changed) : plan.layout);
+    // An answer's layout goes into the frame's region through this shell's draft, where moss checks it; it is kept
+    // nowhere. The draft holds one frame, taken again for each answer.
+    let frameId: string | undefined;
+    let drawn = '';
+    const draw = async (layout: LayoutNode): Promise<void> => {
+      const frame = framed(frameLayout, 'answers', layout);
+      const written = JSON.stringify(frame);
+      if (written === drawn) return;
+      const added = await session.draft.add([{ kind: 'layout', ...(frameId === undefined ? {} : { id: frameId }), body: { ref: 'frame', layout: frame, use: true } }]);
+      frameId = added.artifacts[0]?.id;
+      drawn = written;
+    };
+    const show = async (plan: ShownPlan, changed: readonly AreaId[] = []): Promise<ShownPlan> => {
+      await draw(changed.length > 0 ? markChanged(plan.layout, changed) : plan.layout);
       return plan;
     };
 
@@ -62,8 +78,9 @@ export const composer =
     let soFar: ShownPlan | undefined;
     const moveTo = (plan: ShownPlan | undefined, changed: readonly AreaId[] = []): void => {
       soFar = plan;
-      show(plan ?? history.current(), changed);
-      session.shell.publish('answer-moved');
+      show(plan ?? history.current(), changed)
+        .then(() => session.shell.publish('answer-moved'))
+        .catch((error: unknown) => console.error(`[ask] the answer so far could not be drawn: ${reasonOf(error)}`));
     };
 
     // Before anything else is shown, the screen as the person left it is kept with the answer it is on — unless an answer
@@ -74,7 +91,7 @@ export const composer =
       return open;
     };
 
-    const leave = (to: () => ShownPlan): ShownPlan => {
+    const leave = (to: () => ShownPlan): Promise<ShownPlan> => {
       standing();
       turn += 1;
       soFar = undefined;
@@ -96,13 +113,15 @@ export const composer =
       if (chat === undefined) throw new Error(`Set ${models.missing.join(' and ')} in .env, and start the app again.`);
       const open = standing();
       const asked = (turn += 1);
+      const offered = await (usable ??= withUsable(catalog, session.wire));
+      const deps = { catalog: offered, screens, arrangements: ARRANGEMENTS };
       const before = history.current();
       const jev = models.jev;
       const picking = performance.now();
       const picked =
         jev === undefined
           ? undefined
-          : await pick(message, open, catalog, SCREENS, jev.decide).catch((error: unknown) => {
+          : await pick(message, open, offered, screens, jev.decide).catch((error: unknown) => {
               console.error(`[ask] Jev could not answer "${message}": ${reasonOf(error)}`);
               return undefined;
             });
@@ -144,7 +163,7 @@ export const composer =
       }
       const answer = answerOf(result.output.data, context);
       const response = result.output.response?.trim() ?? '';
-      const screen = answer.screen === undefined ? undefined : SCREENS.find((candidate) => candidate.id === answer.screen);
+      const screen = answer.screen === undefined ? undefined : screens.find((candidate) => candidate.id === answer.screen);
       if (screen !== undefined) return show(showScreen(screen, response));
       if (Object.keys(answer.canvases).length === 0) throw new Error('Nothing here answers that yet.');
       const plan = { ...planOf(message, answer.canvases, { arrangements: ARRANGEMENTS, arrangement: answer.arrangement ?? current, label: answer.title }), response };
@@ -155,7 +174,7 @@ export const composer =
     };
 
     const open = async (data: unknown): Promise<ShownPlan> => {
-      const screen = SCREENS.find((candidate) => candidate.id === OpenSchema.parse(data).opening);
+      const screen = screens.find((candidate) => candidate.id === OpenSchema.parse(data).opening);
       return screen === undefined ? history.current() : leave(() => showScreen(screen));
     };
 
