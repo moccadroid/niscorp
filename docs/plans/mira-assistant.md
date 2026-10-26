@@ -1,9 +1,8 @@
 # Mira Assistant: your own Dots, built the nisc way
 
-**Status: Proposed (2026-10-22), two of three decisions answered (2026-10-26). Nothing built.** Branch
+**Status: Proposed (2026-10-22), its three decisions answered (2026-10-26). Nothing built.** Branch
 `worktree-mira`. Mira is a bare model-led app (the tour came out in `7890b0c2`): every typed message is
-answered with a screen, composed by a cortex agent from the app's actions. Part 5 has what is decided
-and the one question left.
+answered with a screen, composed by a cortex agent from the app's actions. Part 5 has what was decided.
 
 ## 0. For whoever builds this
 
@@ -173,8 +172,8 @@ Each step ends with `npm run check` passing and a check of its own in `src/dev/`
 2. **The stack lasts** (2.3). Done: a reload brings back the person's answers, back and forward through
    them.
 3. **Memory** (2.2). Done: offline, a scripted model's `remember` and `recall` reach the rows and come
-   back in the next message's prompt; live, "I'm vegetarian" is kept and "dinner ideas?" answers with it.
-   `live-ask` gets these cases.
+   back in the next message's prompt; in the running app, "I'm vegetarian" is kept and "dinner ideas?"
+   answers with it.
 4. **The inbox** (2.4). Done: a row written for a person shows in their dock at once if they are
    connected, and when they come back if not.
 5. **Standing jobs** (2.5). Done: a reminder and a weekly job written from a message, previewed, armed,
@@ -185,19 +184,17 @@ Each step ends with `npm run check` passing and a check of its own in `src/dev/`
 
 - **Answered (2026-10-26): mail.** Resend; the owner adds the key.
 - **Answered (2026-10-26): who gets in.** Invite only.
-- **Open: where the Postgres wrapper lives.** vex runs on Postgres as it is: it compiles to Postgres
-  SQL, and a node-postgres pool answers its queries unchanged. What a node-postgres pool lacks is a
-  `transaction` that checks one client out of the pool (strata's migrations need it) and dates as the raw
-  strings Prism reads. vex ships that wrapper for PGlite (`createPglitePool`), not for node-postgres;
-  lyceum wrote its own (`apps/lab/lyceum/src/server/pg.ts`, 44 lines). Recommendation: put it in vex
-  beside the PGlite one, so mira, lyceum and the model-first template share it. Cost: a vex change with
-  its changeset; the alternative is a second copy in mira.
+- **Decided (2026-10-26): the Postgres wrapper goes into vex.** vex runs on Postgres as it is: it
+  compiles to Postgres SQL, and a node-postgres pool answers its queries unchanged. What a node-postgres
+  pool lacks is a `transaction` that checks one client out of the pool (strata's migrations need it) and
+  dates as the raw strings Prism reads. vex ships that wrapper for PGlite (`createPglitePool`), not for
+  node-postgres; lyceum wrote its own (`apps/lab/lyceum/src/server/pg.ts`, 44 lines). It is being added
+  to vex in its own worktree from main; step 1 uses it once it is on main.
 
 ## 6. Still open
 
-- **Jev** (PLAN.md D6). `src/dev/live-ask.ts` asks the real models a list of test messages, each with
+- **Jev** (PLAN.md D6). A script sent the real models a list of test messages, each with
   the screen it should get. While the app was a tour of nisc, those were 16 messages about the tour's
   cards ("What is an action?", "tick off the first step of my tour"); run twice with Jev and twice
   without, they came out 30/32 right with Jev and 31/32 without, and about 200 ms slower with it. The
-  tour and its messages are gone. Jev stays until Mira has its own actions and its own test messages to
-  measure it on again.
+  tour, its messages and the script are gone. Jev stays until it can be measured on Mira's own actions.

@@ -54,10 +54,10 @@ There is no chat history: the screen open when a message arrives is the conversa
 - **An action you add is small, with one purpose:** it says what it shows (`description`), and declares what the model may open it with as a JSON Schema written with zod, every field described; the model's answers are checked against that same schema (`z.fromJSONSchema`). A read or a write it names must be one the app ships, asked with the values it takes. The ones the model may place are `placeable`, in `src/app/action-catalog.ts`.
 - **The model never presses anything.** It opens cards with an input — a form filled in — and only the person saves.
 - **The keys are in `.env`:** `GROQ_API_KEY` (gpt-oss-120b; without it, a message is answered with a notice saying so), and `TYPESAFE_API_KEY` (Jev; without it there is no Jev pass).
-- **`src/dev/compose-check.ts` runs the loop offline**, with a scripted Jev and a scripted model (`src/dev/scripted.ts`), on words, screens and actions the app does not have — so it holds whatever actions the app ships. **`src/dev/live-ask.ts` asks the real models** its cases (`RUN`), each from the screen it was asked on, and counts the screens that are what the case wants, with nothing shown twice (`--runs=<n>`, `--why`, `--prompts` for everything the models were sent, `--no-jev`, or messages of your own, each after `--screen=<id>` to ask it from that screen). It costs a Jev pass and a chat call a message, and is not part of `npm run check`.
+- **`src/dev/compose-check.ts` runs the loop offline**, with a scripted Jev and a scripted model (`src/dev/scripted.ts`), on words, screens and actions the app does not have — so it holds whatever actions the app ships.
 
 ## How to proceed from here
 
 First the interview: PLAN.md's open items, each answered or delegated by name (the rulebook's "Before any code").
 
-**Then build in PLAN.md's order of work,** each step checked before the next: your tables, reads and writes; your actions, each placeable one in `placeable` and every one granted in the charter's `actions`; your screens; a check for each feature in `src/dev/`; and `live-ask` cases for what people will ask.
+**Then build in PLAN.md's order of work,** each step checked before the next: your tables, reads and writes; your actions, each placeable one in `placeable` and every one granted in the charter's `actions`; your screens; and a check for each feature in `src/dev/`.

@@ -86,7 +86,6 @@ export const scriptedModels = (script: Script, options: { jevFails?: boolean; ke
 const ShownSchema = z.looseObject({
   question: z.string().optional(),
   response: z.string().optional(),
-  label: z.string().optional(),
   screen: z.string().optional(),
   arrangement: z.string().optional(),
   position: z.number().optional(),
@@ -115,12 +114,12 @@ export type App = {
   drawn: () => string;
   grid: () => string;
   marked: () => string;
-  ask: (text: string) => Promise<number | undefined>;
+  ask: (text: string) => Promise<void>;
   openScreen: (id: string) => Promise<void>;
 };
 
 // The app booted with the models given, driven as a terminal drives it: what the dock is typed, pressed and sent.
-export const startApp = async (models: Models, answerWithinMs = 5000): Promise<App> => {
+export const startApp = async (models: Models): Promise<App> => {
   const runs: RunRecord[] = [];
   const { server } = await boot({ models, runs: (run) => runs.push(run) });
   const shells = server.shells;
@@ -185,19 +184,16 @@ export const startApp = async (models: Models, answerWithinMs = 5000): Promise<A
         .filter((props) => props['changed'] === true)
         .map((props) => String(props['name']))
         .join(' '),
-    // A message is answered when the line's `ask` call ends, whatever it leaves on screen: how long that took, if it did.
+    // A message is answered when the line's `ask` call ends, whatever it leaves on screen.
     ask: async (text) => {
       draw();
       const seen = answered;
       const movesBefore = moves;
-      const started = performance.now();
       session.dispatch('dock', { type: 'ui:model', ref: 'text', payload: text });
       session.dispatch('dock', { type: 'ui:key', ref: 'text', key: 'Enter' });
-      const done = await until(() => answered > seen, answerWithinMs);
-      const took = performance.now() - started;
+      await until(() => answered > seen);
       streamed = movesWhenAnswered - movesBefore;
       await settle();
-      return done ? took : undefined;
     },
     openScreen: async (id) => {
       session.dispatch('dock', { type: 'ui:click', ref: 'screen', payload: id });
