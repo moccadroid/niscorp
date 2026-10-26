@@ -176,8 +176,8 @@ Each step ends with `npm run check` passing and a check of its own in `src/dev/`
    `people.write.insert`; a person the owner invites is stamped `member` by the owner's row rule, so no
    write of the owner's makes another owner; the model is offered only the reads and writes vex lists
    for the person. `TIDE_SEQUENCE` joins `runtime.tables` with step 5, where tide is first used.
-   **Open:** `nisc dev` does not register the config's `routes`, so `/login` works under `nisc start`
-   and not in dev, where `/dev/as/<address>` signs in instead (a fix in `@niscorp/cli`).
+   `/login` works under `nisc dev` too since `@niscorp/cli` registers the config's `routes` there
+   (`6ce35e17`); in dev, `/dev/as/<address>` also signs in on this machine.
 2. **The stack lasts** (2.3). Done: a reload brings back the person's answers, back and forward through
    them.
 3. **Memory** (2.2). Done: offline, a scripted model's `remember` and `recall` reach the rows and come
