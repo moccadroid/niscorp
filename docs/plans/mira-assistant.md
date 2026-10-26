@@ -1,8 +1,9 @@
 # Mira Assistant: your own Dots, built the nisc way
 
-**Status: Proposed (2026-10-22). Nothing built.** Branch `worktree-mira`. Mira is a bare model-led app
-(the tour came out in `7890b0c2`): every typed message is answered with a screen, composed by a cortex
-agent from the app's actions. Three decisions in part 5 are the owner's; the build waits for them.
+**Status: Proposed (2026-10-22), two of three decisions answered (2026-10-26). Nothing built.** Branch
+`worktree-mira`. Mira is a bare model-led app (the tour came out in `7890b0c2`): every typed message is
+answered with a screen, composed by a cortex agent from the app's actions. Part 5 has what is decided
+and the one question left.
 
 ## 0. For whoever builds this
 
@@ -36,9 +37,11 @@ the conversation), an open tier for strangers.
     `created_at timestamptz not null default now()`.
   - Entries `links/issue` and `links/redeem` (redeeming deletes the row), run with `server.executeAs` as
     the machine role `gatekeeper`, which is granted only `links.insert` and `links.delete`.
-  - Function `signin.request({ email })` → mails the link (decision 2). Route `/login?token=` in
+  - Function `signin.request({ email })` → mails the link through Resend (`RESEND_API_KEY` in `.env`;
+    without it the link is written to the server's log). Route `/login?token=` in
     `nisc.config.ts` → redeem → `mintSession(pool, personId, 30 days)` → `sessionCookies` → 302 to `/`.
-- **Who gets in** (decision 3). Table `people`: `id uuid pk default gen_random_uuid()`,
+- **Who gets in: invite only.** The owner's email comes from `.env` (`MIRA_OWNER`); the owner adds
+  people from a People screen (`people.invite({ email, name })`). Table `people`: `id uuid pk default gen_random_uuid()`,
   `email text unique not null`, `name text`, `role text not null check (role in ('owner','member'))`,
   `invited_by uuid`, `created_at timestamptz not null default now()`. A link is only mailed to an email
   in `people`. `identity.resolve(principal)` reads the role, as the machine role `identity`.
@@ -48,8 +51,8 @@ the conversation), an open tier for strangers.
   replaces `unverifiedShell`.
 - **Postgres.** `DATABASE_URL` set → Postgres; unset → PGlite for development and the checks. The tables
   are `runtime.tables: [APP_SEQUENCE, TIDE_SEQUENCE]` and `nisc migrate` applies them: the runtime
-  migrates nothing (rule 17). Mira is the first app on that path. vex has no adapter from a `pg` pool
-  (decision 1).
+  migrates nothing (rule 17). Mira is the first app on that path. vex runs on Postgres as it is; a
+  node-postgres pool needs only a small wrapper for migrations and dates (decision 1).
 
 ### 2.2 Memory (`src/server/memory/`)
 
@@ -90,9 +93,12 @@ export const memoryFor = (session: FunctionSession, embedder?: Embedder): Memory
 - **What the person sees:** "Remembered: …  · undo" under an answer that kept something, and a
   `memory.list` action — every memory with where it came from and a forget button — which the model
   can open ("what do you remember about me?").
-- **Cost.** Each `recall` or `remember` call is one more model step (about a second on 120b). The
-  composer's steps are capped at three tool calls. With tools, words the model writes beside a call
-  reach the stream, so mira's stream handler resets on each new step, not only on a correction.
+- **When the model calls them.** `remember` when the person asks it to remember something, or when a
+  message plainly states something lasting ("I'm vegetarian"); `recall` when what was injected is not
+  enough. Most messages call neither. A message that does call one takes one more model step (about a
+  second on 120b); the composer's steps are capped at three tool calls. With tools, words the model
+  writes beside a call reach the stream, so mira's stream handler resets on each new step, not only on a
+  correction.
 
 ### 2.3 The stack lasts (`src/server/compose/history.ts`)
 
@@ -175,22 +181,23 @@ Each step ends with `npm run check` passing and a check of its own in `src/dev/`
    fired by the driver at their time, and landing in the inbox; a job never touches another person's rows.
 6. **Connectors** (2.6), when the crawler is ready. **Screens it makes** (2.7) after that.
 
-## 5. What needs the owner's word
+## 5. Decisions
 
-1. **vex and Postgres.** vex can talk to PGlite but has no adapter for a real Postgres pool; lyceum wrote
-   its own (`apps/lab/lyceum/src/server/pg.ts`, 44 lines). Recommendation: add `createPgPool` to vex
-   (`@niscorp/vex/postgres`), so mira, lyceum and the model-first template share one. Cost: a vex change
-   with its changeset; the alternative is a second copy in mira.
-2. **Which mail service sends Mira's sign-in links**, and its key. lyceum and lyra use Resend; without a
-   key the link is written to the server's log, which is enough for development.
-3. **Who gets in.** Recommendation: invite only — the owner's email comes from `.env`, and the owner adds
-   people from a People screen. Cost: one screen and one function.
+- **Answered (2026-10-26): mail.** Resend; the owner adds the key.
+- **Answered (2026-10-26): who gets in.** Invite only.
+- **Open: where the Postgres wrapper lives.** vex runs on Postgres as it is: it compiles to Postgres
+  SQL, and a node-postgres pool answers its queries unchanged. What a node-postgres pool lacks is a
+  `transaction` that checks one client out of the pool (strata's migrations need it) and dates as the raw
+  strings Prism reads. vex ships that wrapper for PGlite (`createPglitePool`), not for node-postgres;
+  lyceum wrote its own (`apps/lab/lyceum/src/server/pg.ts`, 44 lines). Recommendation: put it in vex
+  beside the PGlite one, so mira, lyceum and the model-first template share it. Cost: a vex change with
+  its changeset; the alternative is a second copy in mira.
 
-## 6. Raised before, still open
+## 6. Still open
 
-- **Jev** (PLAN.md D6): on the tour's cases it added about 200 ms and no accuracy. With memory, inbox
-  and jobs the app has more to choose from, which is where it helped before. Kept until measured on
-  Mira's own cases.
-- **`remember` as a function**, as agreed, costs a model step each time it is used. Putting `remember`
-  in the answer the model already writes would cost nothing extra; it is not what was agreed, so it is
-  only noted here.
+- **Jev** (PLAN.md D6). `src/dev/live-ask.ts` asks the real models a list of test messages, each with
+  the screen it should get. While the app was a tour of nisc, those were 16 messages about the tour's
+  cards ("What is an action?", "tick off the first step of my tour"); run twice with Jev and twice
+  without, they came out 30/32 right with Jev and 31/32 without, and about 200 ms slower with it. The
+  tour and its messages are gone. Jev stays until Mira has its own actions and its own test messages to
+  measure it on again.
