@@ -1,9 +1,12 @@
 import type { PgPool } from '../postgres/introspect.js';
+import type { TypeParsers } from '../postgres/date-parsers.js';
+
+export { RAW_DATE_PARSERS } from '../postgres/date-parsers.js';
 
 type PgliteQuery = (
   text: string,
   values?: unknown[],
-  options?: { parsers?: Record<number, (value: string) => unknown> },
+  options?: { parsers?: TypeParsers },
 ) => Promise<{ rows: Record<string, unknown>[]; fields?: Array<{ name: string; dataTypeID: number }> }>;
 
 type PgliteLike = {
@@ -11,13 +14,7 @@ type PgliteLike = {
   transaction?: <T>(fn: (tx: { query: PgliteQuery }) => Promise<T>) => Promise<T>;
 };
 
-const RAW = (value: string): string => value;
-
-// OIDs: DATE is 1082, TIMESTAMPTZ is 1184. Not for a pool handed to the vex
-// cache, which reads its timestamp columns as Dates.
-export const RAW_DATE_PARSERS: Record<number, (value: string) => unknown> = { 1082: RAW, 1184: RAW };
-
-export const createPglitePool = (db: PgliteLike, parsers?: Record<number, (value: string) => unknown>): PgPool => {
+export const createPglitePool = (db: PgliteLike, parsers?: TypeParsers): PgPool => {
   const options = parsers !== undefined ? { parsers } : undefined;
   // PGlite runs Postgres on one thread, where `statement_timeout`'s timer
   // never fires.

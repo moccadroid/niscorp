@@ -87,14 +87,14 @@ engine.cache;                     // CacheBackend — the live cache
 
 | Area | Provided |
 |------|----------|
-| Database adapters | PostgreSQL (`createPostgresAdapter`) — pluggable `DatabaseAdapter` interface for others. `createPglitePool` (`@niscorp/vex/pglite`) shapes a PGlite database as the pool it takes |
+| Database adapters | PostgreSQL (`createPostgresAdapter`) — pluggable `DatabaseAdapter` interface for others. `createPglitePool` (`@niscorp/vex/pglite`) shapes a PGlite database as the pool it takes, `createPgPool` (`@niscorp/vex/pg`) a node-postgres `pg.Pool` |
 | Cache backends | In-memory, Postgres (durable), tiered L1/L2 with warm-up |
 | Framework adapters | Hono (`@niscorp/vex/hono`), Express (`@niscorp/vex/express`) — discovery + query endpoints |
 | LLM integration | `generateDsl` / `mapToShape` hooks; reference agents built on `@niscorp/cortex` (`@niscorp/vex/agent`: `createQueryDsl`, `createShapeMapper`) |
 | Writes | Mutation entries in the same cache — a closed grammar, replay-only by fingerprint, never generated; `lintMutation` checks a statement at seed |
 | Seeding and freshness | `seedCache` turns authored `SeedEntry` / `SeedMutation` rows into protected cache entries; an entry's `refresh` is `'snapshot'` or `'reactive'` |
 | Safety | Server-side scope policies, query analyzer (cartesian/nesting/index checks), parameterized SQL only |
-| Its own table | The Postgres cache's table is a [strata](../strata/README.md) sequence (`cache.sequence`, `nisc.vex.cache`): `cache.init()` applies it through the ledger once, instead of `IF NOT EXISTS` on every boot. Requires a pool with `transaction` (the PGlite pool has one). |
+| Its own table | The Postgres cache's table is a [strata](../strata/README.md) sequence (`cache.sequence`, `nisc.vex.cache`): `cache.init()` applies it through the ledger once, instead of `IF NOT EXISTS` on every boot. Requires a pool with `transaction` (the PGlite pool and `createPgPool`'s have one; a bare `pg.Pool` does not). |
 
 ## License
 

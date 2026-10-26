@@ -71,6 +71,16 @@
         "default": "./dist/adapters/pglite/index.cjs"
       }
     },
+    "./pg": {
+      "import": {
+        "types": "./dist/adapters/pg/index.d.ts",
+        "default": "./dist/adapters/pg/index.js"
+      },
+      "require": {
+        "types": "./dist/adapters/pg/index.d.cts",
+        "default": "./dist/adapters/pg/index.cjs"
+      }
+    },
     "./package.json": "./package.json"
   },
   "files": [
@@ -102,6 +112,7 @@
     "@niscorp/prism": "workspace:^",
     "@niscorp/strata": "workspace:^",
     "hono": "^4",
+    "pg": "^8",
     "zod": "^4.2.0"
   },
   "devDependencies": {
