@@ -691,7 +691,9 @@ src/
       compile.ts                 ResolvedQuery → parameterized SQL
       operators.ts               per-operator SQL generation
       statement-timeout.ts       how a read's time limit is enforced
+      date-parsers.ts            RAW_DATE_PARSERS, shared by the two pool shims
     pglite/index.ts              createPglitePool (@niscorp/vex/pglite)
+    pg/index.ts                  createPgPool (@niscorp/vex/pg)
     hono/index.ts                vex() Hono app (@niscorp/vex/hono)
     express/index.ts             vex() Express handler (@niscorp/vex/express)
     index.ts                     adapter barrel
@@ -733,7 +735,7 @@ scripts/                         Dev-only: docker, seed, dev server, fixtures
 | Package | Relationship | Purpose |
 |---------|--------------|---------|
 | `zod` | peer (required) | Schema validation + JSON Schema generation |
-| `pg` | peer (optional) | Postgres adapter and Postgres cache backend |
+| `pg` | peer (optional) | A Postgres pool for the adapter and the cache; `@niscorp/vex/pg` imports it |
 | `hono` | peer (optional) | Hono framework adapter |
 | `express` | peer (optional) | Express framework adapter |
 | `@niscorp/cortex` | peer (optional) | Reference query agent (`defineAgent`/`defineTool`, standalone runtime) |

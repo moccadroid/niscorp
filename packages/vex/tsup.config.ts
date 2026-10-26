@@ -7,6 +7,7 @@ export default defineConfig({
     'migrations/index': 'src/migrations/index.ts',
     'adapters/hono/index': 'src/adapters/hono/index.ts',
     'adapters/pglite/index': 'src/adapters/pglite/index.ts',
+    'adapters/pg/index': 'src/adapters/pg/index.ts',
     'adapters/express/index': 'src/adapters/express/index.ts',
   },
   format: ['esm', 'cjs'],

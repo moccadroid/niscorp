@@ -185,7 +185,10 @@ type QueryEngineConfig = {
   set up at `introspect()`. A database that cannot enforce it (PGlite) runs
   reads unbounded and the engine warns each time `introspect()` runs. A `PgPool`
   declares such a database with `statementTimeouts: false`, as the pool from
-  `createPglitePool` does.
+  `createPglitePool` does. When the server's own `statement_timeout` is not
+  already within the limit, a pool with `transaction` (`createPgPool`'s) runs
+  each read in a transaction that sets it first; a bare `pg.Pool` runs it
+  unbounded.
 - `config.maxPresenceVariants` is not a limit on what runs: past it, a response
   carries a warning that the entry has compiled that many distinct
   optional-key combinations.
@@ -1219,10 +1222,21 @@ const l2 = createPostgresCache({
 await l2.init();           // applies l2.sequence through strata's ledger — once, recorded
 ```
 
-`init()` runs a strata migration, so the pool must expose `transaction` — the
-PGlite pool has one; a bare `pg.Pool` needs a wrapper that checks a client out
-per transaction (see `PgPool`). A host that migrates several owners in one run
-collects `l2.sequence` (`nisc.vex.cache`) instead of calling `init()`.
+`init()` runs a strata migration, so the pool must expose `transaction`. A bare
+`pg.Pool` does not; `createPgPool` from `@niscorp/vex/pg` gives it one that
+checks one client out per transaction (the PGlite pool has one too):
+
+```typescript
+import pg from 'pg';
+import { createPgPool } from '@niscorp/vex/pg';
+
+const pool = createPgPool(new pg.Pool({ connectionString: process.env.DATABASE_URL }));
+const l2 = createPostgresCache({ pool });
+await l2.init();
+```
+
+A host that migrates several owners in one run collects `l2.sequence`
+(`nisc.vex.cache`) instead of calling `init()`.
 
 **Tiered** — L1 (memory) + L2 (durable), read-through/write-through. Reads hit
 L1; on an L1 miss it promotes a validated L2 entry into L1. Writes go to L1
@@ -1315,10 +1329,22 @@ await seedCache(engine.cache, [ordersRecent, taskSetDone]);
 
 `@niscorp/vex/pglite` exports `createPglitePool(db, parsers?)`, which shapes a
 PGlite database as the `PgPool` the Postgres adapter and cache take (with
-`transaction`), and `RAW_DATE_PARSERS`, which returns `DATE`/`TIMESTAMPTZ`
-columns as raw strings. Pass the parsers to the adapter's pool; give the
-Postgres cache a pool without them — it reads its own timestamp columns as
-`Date`s.
+`transaction`). `@niscorp/vex/pg` exports `createPgPool(pool, parsers?)`, the
+same for a node-postgres `pg.Pool`: its `transaction` checks one client out of
+the pool, runs `BEGIN`, the callback and `COMMIT` on it (`ROLLBACK` and rethrow
+when the callback throws), and releases it. Both export `RAW_DATE_PARSERS`,
+which returns `DATE`/`TIMESTAMPTZ` columns as raw strings. Pass the parsers to
+the adapter's pool; give the Postgres cache a pool without them — it reads its
+own timestamp columns as `Date`s:
+
+```typescript
+import pg from 'pg';
+import { createPgPool, RAW_DATE_PARSERS } from '@niscorp/vex/pg';
+
+const db = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+const adapter = createPostgresAdapter({ pool: createPgPool(db, RAW_DATE_PARSERS) });
+const cache = createPostgresCache({ pool: createPgPool(db) });
+```
 
 `@niscorp/vex` and `@niscorp/vex/pglite` import no Node built-in, so a bundler
 builds them for a page with no alias and no polyfill. Vex's hashes are the same
