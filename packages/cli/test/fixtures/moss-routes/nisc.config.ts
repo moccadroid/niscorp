@@ -1,5 +1,6 @@
 import { PGlite } from '@electric-sql/pglite';
 import { createServer, defineApp } from '@niscorp/moss';
+import { MOSS_PATHS } from '@niscorp/moss/node';
 import { createPglitePool } from '@niscorp/vex/pglite';
 import type { NiscMossProject } from '../../../src';
 
@@ -35,4 +36,5 @@ export const project: NiscMossProject = {
   },
   draw: () => '<p>drawn</p>',
   dist: 'built',
+  dev: { owned: new RegExp(`${MOSS_PATHS.source}|^/hello$`) },
 };
