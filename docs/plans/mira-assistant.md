@@ -87,22 +87,18 @@ export const memoryFor = (session: FunctionSession, embedder?: Embedder): Memory
 - **How the composer gets it:**
   - `atStart` → a context producer, "WHAT YOU KNOW ABOUT THIS PERSON".
   - `forMessage` → the run's input, after the open screen: the five most relevant, not already above.
-  - `recall` → a cortex tool, built per run around `memoryFor(session)` (`defineTool`; cortex hands a
-    tool no session, so it is a closure), because what it finds has to be there before the answer is
-    written. On Groq the composer already runs on `emit`, the one path that combines tools with an answer.
-  - `remember` → returned in the answer the model already writes: a `remember` field of the reply (a
-    list of short texts, described on the schema), which the composer hands to `memory.remember` once the
-    run ends. It costs no extra step. It comes last in the reply, after the areas and the room, so the
-    screen still streams in first.
+  - `recall` and `remember` → two cortex tools, built per run around `memoryFor(session)`
+    (`defineTool`; cortex hands a tool no session, so it is a closure). On Groq the composer already runs
+    on `emit`, the one path that combines tools with an answer.
 - **What the person sees:** "Remembered: …  · undo" under an answer that kept something, and a
   `memory.list` action — every memory with where it came from and a forget button — which the model
   can open ("what do you remember about me?").
-- **When the model uses them.** `remember` only when the person asks it to remember something, or when
-  a message plainly states something lasting ("I'm vegetarian"); otherwise the field is left out.
-  `recall` only when what was injected is not enough; a message that calls it takes one more model step
-  (about a second on 120b), and the composer's steps are capped at three tool calls. With a tool, words
-  the model writes beside the call reach the stream, so mira's stream handler resets on each new step,
-  not only on a correction.
+- **When the model calls them.** `remember` when the person asks it to remember something, or when a
+  message plainly states something lasting ("I'm vegetarian"); `recall` when what was injected is not
+  enough. Most messages call neither. A message that does call one takes one more model step (about a
+  second on 120b); the composer's steps are capped at three tool calls. With tools, words the model
+  writes beside a call reach the stream, so mira's stream handler resets on each new step, not only on a
+  correction.
 
 ### 2.3 The stack lasts (`src/server/compose/history.ts`)
 
@@ -159,7 +155,7 @@ person's alone and replays only what they may.
 
 | when | what happens | rows |
 |---|---|---|
-| Mon 19:02 | "I'm vegetarian, by the way." The model's answer carries `remember: ["is vegetarian"]`. | `memories`: `{person: p1, text: "is vegetarian", message: "I'm vegetarian, by the way."}` |
+| Mon 19:02 | "I'm vegetarian, by the way." The model answers and calls `remember(["is vegetarian"])`. | `memories`: `{person: p1, text: "is vegetarian", message: "I'm vegetarian, by the way."}` |
 | Mon 19:03 | "Every Monday at eight, give me three dinner ideas from new recipes." A `job.draft` card: "Mondays 08:00 — three dinner ideas, vegetarian" and its preview. The person presses Arm. | `jobs`: `{person: p1, intent: "three dinner ideas every Monday at 08:00", armed: true, reflex: {on: {clock: {every: "week", on: "mon", at: "08:00"}}, effect: {name: "inbox.add", …}}}` |
 | next Mon 08:00 | tide fires the job as p1, with no model; the effect writes the inbox and nudges p1. | `inbox`: `{person: p1, title: "Dinner ideas", text: "…", job: <the job>}` |
 | Mon 08:15 | The dock shows "1 new". "What's new?" opens `inbox.list`. | `inbox.seen_at` set |
@@ -176,7 +172,7 @@ Each step ends with `npm run check` passing and a check of its own in `src/dev/`
    own screens; the checks still run on PGlite; strangers get no link.
 2. **The stack lasts** (2.3). Done: a reload brings back the person's answers, back and forward through
    them.
-3. **Memory** (2.2). Done: offline, a scripted model's `remember` field and `recall` call reach the rows and come
+3. **Memory** (2.2). Done: offline, a scripted model's `remember` and `recall` reach the rows and come
    back in the next message's prompt; live, "I'm vegetarian" is kept and "dinner ideas?" answers with it.
    `live-ask` gets these cases.
 4. **The inbox** (2.4). Done: a row written for a person shows in their dock at once if they are
