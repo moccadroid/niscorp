@@ -22,7 +22,7 @@ export type NiscMossProject = Common & {
   tokenKey?: string;
   // Default: `/`, and every page whose path has no parameter.
   paths?: (server: MossServer) => readonly string[] | Promise<readonly string[]>;
-  // `nisc start` registers these before the site's catch-all.
+  // `nisc start` registers these before the site's catch-all; `nisc dev` registers them too, and sends them the paths `dev.owned` names.
   routes?: (server: MossServer) => void | Promise<void>;
   // For `nisc migrate`. `runtime` opens the environment and nothing else:
   // tables it migrated itself are changed before the step can check them.

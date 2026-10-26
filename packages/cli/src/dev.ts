@@ -47,7 +47,9 @@ const mossPlugin = async (configFile: string, dev: NiscMossProject['dev']): Prom
       const project: unknown = Reflect.get(loaded, 'project');
       if (!isProject(project) || isShellProject(project)) throw new Error(`nisc: ${configFile} no longer describes an app behind moss.`);
       const booted = await project.boot();
+      // Routes first: the check answers requests in-process, and Hono takes no route once it has answered one.
       try {
+        await project.routes?.(booted.server);
         await booted.server.checkFunctions();
       } catch (error) {
         await booted.close?.();

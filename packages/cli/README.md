@@ -55,12 +55,12 @@ page in the manifest), and what each one needs once it has been drawn.
 
 | Field | |
 |---|---|
-| `boot` | stand the app up: `{ server, close? }`; `nisc` then calls `server.checkFunctions()` (`nisc start` once `routes` and the site are mounted), which refuses an action calling a function the app does not have before anything is drawn or served |
+| `boot` | stand the app up: `{ server, close? }`; `nisc` then calls `server.checkFunctions()` (`nisc dev` once `routes` are registered, `nisc start` once `routes` and the site are mounted), which refuses an action calling a function the app does not have before anything is drawn or served |
 | `draw` | a terminal that draws a screen to a string (moss's `terminal/react/server`, `/vue/server`, `/dom/server`) |
 | `htmlAttributes?` | what the kit would put on `<html>` from an effect (a palette, a scheme) |
 | `site?` | the address the site is served at (`"https://example.com"`). With it, every path's document says its own canonical address — see "The head of each page" |
 | `paths?` | the paths to build. Default: `/` and every page whose path has no parameter. A page like `/docs/:slug` has as many paths as there are rows — list them here (`server.executeAs` runs a seeded read as a charter role) |
-| `routes?` | routes of the app's own that `nisc start` registers before the site (a sign-in handoff, a webhook) |
+| `routes?` | routes of the app's own (a sign-in handoff, a webhook): `nisc start` registers them before the site, and `nisc dev` registers them too, for the paths `dev.owned` sends to the app server |
 | `dist?` | where the bundler writes the terminal (default `dist`) |
 | `stylesheet?` | where the built page's stylesheet goes: `'page'` (the default — written into `index.html`, see `nisc build`) or `'file'` (left as the bundler linked it) |
 | `checks?` | the check suite `nisc check` runs (default `src/dev/all-checks.ts`) |
@@ -324,6 +324,8 @@ and `start` do:
   still a vite page (its client, the framework's refresh preamble);
 - moss's own paths (`/api`, `/catalog`, the socket, …) go to the app server,
   everything else to vite;
+- the config's `routes` are registered on the app server, as `nisc start`
+  registers them — a path reaches them once `dev.owned` sends it there;
 - an edit under `src/app`, `src/server`, `src/db`, `src/ui` or to the config
   re-boots the app (a fresh database, fresh shells) and reloads the page — the
   old server answers until the new one is up;
