@@ -10,6 +10,7 @@ import type { ShellHost, ShellSession } from '../src/shells';
 import { sealSession } from '../src/identity';
 import type { NiscApp } from '../src/manifest';
 import { hostConfig, standHost } from './shell-host-double';
+import { turn } from './turn';
 
 class FakeConnection implements Connection {
   sent: ServerMessage[] = [];
@@ -1315,5 +1316,43 @@ describe('socket — shells for nobody alive at once', () => {
     const arriving = Array.from({ length: DEFAULT_ANONYMOUS_SHELL_MAX + 5 }, () => new FakeConnection());
     for (const conn of arriving) await accept(SOCKET, conn);
     expect(arriving.every((conn) => conn.closed === undefined)).toBe(true);
+  });
+});
+
+describe('socket — a burst of resets', () => {
+  const counter = { id: 'counter', data: { n: 0 } };
+  const app = { charter: { public: ['counter'] }, assignments: {}, actions: { counter }, shell: { canvases: [{ id: 'main', initial: 'counter' }] } } as unknown as NiscApp;
+
+  it.each([
+    ['nobody signed in', undefined],
+    ['somebody signed in', 'good'],
+  ])('%s: 200 reset messages build the shell twice more, the build under way and one that answers all the rest', async (_who, token) => {
+    const builds = { count: 0, release: (): void => {} };
+    const released = new Promise<void>((release) => void (builds.release = release));
+    const host = standHost(
+      hostConfig({
+        app,
+        resolve: async () => {
+          builds.count += 1;
+          if (builds.count === 2) await released;
+          return { roles: ['public'], scope: {}, catalog: { ids: ['counter'], hash: 'h' }, variants: new Map() };
+        },
+        wire: () => async () => ({ ok: true, status: 200, json: async () => ({}), text: async () => '{}' }),
+        idleMs: 0,
+      }),
+    );
+    const accept = createSocket(ctxWith({ shells: host, revalidateMs: 0 }));
+    const conn = new FakeConnection();
+    await accept(SOCKET, token === undefined ? conn : conn.offering(token));
+
+    conn.emit({ type: 'reset' });
+    await vi.waitFor(() => expect(builds.count).toBe(2));
+    for (let i = 0; i < 199; i += 1) conn.emit({ type: 'reset' });
+    builds.release();
+    for (let i = 0; i < 5; i += 1) await turn();
+
+    expect(builds.count).toBe(3);
+    expect(conn.first('error')).toBeUndefined();
+    host.stop();
   });
 });

@@ -243,10 +243,16 @@ const replaceShell = async (host: HostState, cell: Cell): Promise<void> => {
   for (const { connection, wants } of carried) attach(built.live, connection, host.delta && wants);
 };
 
-// Resets of a cell run in turn and are never merged: a later one may be for a
-// change the build of the earlier one had already read past.
+// Resets of a cell run in turn. One that arrives while another waits for its
+// turn is answered by that one, whose build has read nothing yet. It is never
+// answered by the build under way: that may have read past the change it is for.
 const resetCell = (host: HostState, cell: Cell): void => {
-  const turn = (cell.resetting ?? Promise.resolve()).then(() => replaceShell(host, cell));
+  if (cell.hasWaitingReset === true) return;
+  cell.hasWaitingReset = true;
+  const turn = (cell.resetting ?? Promise.resolve()).then(() => {
+    cell.hasWaitingReset = false;
+    return replaceShell(host, cell);
+  });
   cell.resetting = turn.catch((error: unknown) => console.error('[moss/shells] a reset failed to rebuild', error));
 };
 

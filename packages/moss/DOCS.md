@@ -2023,9 +2023,13 @@ for (const error of report.errors) console.error(`${error.check}: ${error.detail
     `false` = they hold no shell, which is an answer, not an error. The
     replacement is built from what the shell was opened with (for a page's,
     the inputs of its path and its id seed), and a shell's resets run one
-    after another. A reset whose build throws, or has not landed within
-    `runtime.endpointTimeoutMs`, is logged and leaves the shell that stood;
-    the reset after it goes ahead.
+    after another. A reset that arrives while another waits for its turn is
+    answered by that one, whose build has read nothing yet; it is never
+    answered by the build under way, which may have read what it builds from
+    before the change the later reset is for. So a burst of resets costs two
+    builds at most: the one under way and one more. A reset whose build
+    throws, or has not landed within `runtime.endpointTimeoutMs`, is logged
+    and leaves the shell that stood; the reset after it goes ahead.
 - What `ShellHost.session(token, principal)` returns (a type that is not
   exported by name: `Awaited<ReturnType<ShellHost['session']>>`):
   `{ shell, attach, detach, resync, dispatch, publish, back, popTo, reset }`. The living nova `Shell`,
@@ -2144,7 +2148,12 @@ server.nudge('usr_ada', 'notes-changed');
   canvases are the broken thing, so it must not travel through one. It is
   protocol-level, not app-level — no action declares it and no charter grants
   it — and it is answered by the frames it produces, not by an envelope of its
-  own.
+  own. Any terminal may send it, signed in or not, and each one that is acted
+  on is a whole build: who somebody is, what they hold, and the app's
+  `inputs`, `phrases`, `functions` and `seeds`. Resets that arrive while one
+  waits for its turn are answered by it (`reset(principal)`, under `shells`),
+  so a burst costs two builds at most. Nothing limits how often: a terminal
+  that sends one each time a build lands keeps one build of its shell running.
 - `back` names no canvas either, and for a related reason: back is one gesture
   over the whole shell, and the terminal that sends it has no idea which canvas
   moved last — it is served trees, not stacks. The shell decides what back
