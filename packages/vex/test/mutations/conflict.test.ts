@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest';
+import { PGlite } from '@electric-sql/pglite';
+import { createPglitePool } from '../../src/adapters/pglite/index.js';
 import { executeMutation } from '../../src/mutations/engine.js';
 import type { MutationClient } from '../../src/mutations/engine.js';
 import { MutationDefinitionSchema } from '../../src/mutations/schema.js';
@@ -243,20 +245,31 @@ describe('onConflict scope', () => {
     expect(calls[0]!.sql).toMatch(/DO UPDATE SET .*WHERE memberships\.studio_id = \$\d+/);
   });
 
-  it('a match rule already IN the target adds no WHERE — the pinned insert value arbitrates', async () => {
-    const { client, calls } = fakeClient();
-    await executeMutation(
-      client,
-      {
-        op: 'insert',
-        table: 'memberships',
-        values: { id: { $context: 'id' }, person_id: { $context: 'personId' } },
-        onConflict: { target: ['studio_id', 'person_id'], set: { notes: { $context: 'notes' } } },
-      },
-      { context: { id: 'm1', personId: 'p1', notes: 'hi' }, scope, policy, schema },
-    );
-    expect(calls[0]!.sql).toContain('DO UPDATE SET');
-    expect(calls[0]!.sql).not.toContain('DO UPDATE SET notes = $4 WHERE');
+  it('a match on a conflict-target column bounds the DO UPDATE when the insert does not pin that column', async () => {
+    const db = new PGlite();
+    await db.exec(`
+      CREATE TABLE memberships (id text PRIMARY KEY, studio_id text NOT NULL, person_id text NOT NULL, notes text, UNIQUE (studio_id, person_id));
+      INSERT INTO memberships VALUES ('m_1', 'studio_1', 'p1', 'ours'), ('m_2', 'studio_2', 'p1', 'theirs');
+    `);
+    const insertAnywhere: ScopePolicy = {
+      default: 'deny',
+      entities: { memberships: { insert: [], update: [{ match: 'studio_id', to: 'studioId' }] } },
+    };
+    const enroll: MutationDefinition = {
+      op: 'insert',
+      table: 'memberships',
+      values: { id: { $context: 'id' }, studio_id: { $context: 'studio' }, person_id: 'p1', notes: { $context: 'notes' } },
+      onConflict: { target: ['studio_id', 'person_id'], set: { notes: { $context: 'notes' } } },
+    };
+    const run = (studio: string) =>
+      executeMutation(createPglitePool(db), enroll, { context: { id: 'm_new', studio, notes: 'changed' }, scope, policy: insertAnywhere, schema });
+
+    expect(await run('studio_2')).toEqual([]);
+    expect(await run('studio_1')).toEqual([{ id: 'm_1', studio_id: 'studio_1', person_id: 'p1', notes: 'changed' }]);
+    expect((await db.query('SELECT id, notes FROM memberships ORDER BY id')).rows).toEqual([
+      { id: 'm_1', notes: 'changed' },
+      { id: 'm_2', notes: 'theirs' },
+    ]);
   });
 });
 
