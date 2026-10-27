@@ -1,232 +1,456 @@
 :root {
-  --k-bg: #f6f4ef;
-  --k-surface: #ffffff;
-  --k-ink: #1d1d1f;
-  --k-muted: #6b6a66;
-  --k-line: #e4e1d9;
-  --k-accent: #2f5bea;
-  --k-accent-ink: #ffffff;
-  --k-accent-soft: #e8edfd;
-  --k-error: #b42318;
-  --k-right: #17804b;
-  --k-right-soft: #e2f4ea;
-  --k-wrong: #b42318;
-  --k-wrong-soft: #fdeceb;
-  --k-radius: 10px;
-  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
-  color: var(--k-ink);
-  background: var(--k-bg);
+  --full: oklab(87.86% -0.0037 0.1642);
+  --tint: oklab(93.4% -0.0152 0.1179);
+  --hink: oklab(29.31% 0.0059 0.0598);
+  --error: oklab(68.68% 0.1756 0.1015);
+  --error-ink: oklab(20.81% 0.0644 0.0418);
+  --page: var(--full);
+  --page-ink: var(--hink);
+  --fold: 30px;
+  --ease: cubic-bezier(0.25, 1, 0.5, 1);
+  --move: 640ms;
+  --mini-s: 0.56;
+  color-scheme: light;
+  font-family: 'Archivo Variable', 'Archivo', system-ui, sans-serif;
+  font-size: 17px;
+  -webkit-font-smoothing: antialiased;
+  background: var(--page);
+  transition: background-color 0.5s;
 }
+
+/* Provenance: each answer's turn is a colour, and so is each screen. */
+[data-ink='screen-1'] { --full: oklab(87.86% -0.0037 0.1642); --tint: oklab(93.4% -0.0152 0.1179); --hink: oklab(29.31% 0.0059 0.0598); }
+[data-ink='screen-2'] { --full: oklab(79.01% -0.1431 0.0365); --tint: oklab(90.76% -0.0772 0.0144); --hink: oklab(30.31% -0.059 0.0102); }
+[data-ink='turn-1'] { --full: oklab(75.29% 0.1022 0.1317); --tint: oklab(86.37% 0.043 0.0841); --hink: oklab(27.17% 0.0545 0.0549); }
+[data-ink='turn-2'] { --full: oklab(73.43% 0.1884 -0.0242); --tint: oklab(85.87% 0.0912 -0.0203); --hink: oklab(27.61% 0.1126 -0.0066); }
+[data-ink='turn-3'] { --full: oklab(74.2% -0.0638 -0.1292); --tint: oklab(88.17% -0.0387 -0.0558); --hink: oklab(27.52% -0.0256 -0.0778); }
+[data-ink='turn-4'] { --full: oklab(84.07% -0.1251 0.1633); --tint: oklab(92.87% -0.0714 0.1134); --hink: oklab(27.73% -0.0487 0.0572); }
+[data-ink='turn-5'] { --full: oklab(71.08% 0.0631 -0.1532); --tint: oklab(86.61% 0.0314 -0.0666); --hink: oklab(25.47% 0.034 -0.124); }
+
+/* The page behind everything is the colour of the line: what shows past the last layer is the next card. */
+:root:has(.k-dock[data-ink='screen-1']) { --page: oklab(87.86% -0.0037 0.1642); --page-ink: oklab(29.31% 0.0059 0.0598); }
+:root:has(.k-dock[data-ink='screen-2']) { --page: oklab(79.01% -0.1431 0.0365); --page-ink: oklab(30.31% -0.059 0.0102); }
+:root:has(.k-dock[data-ink='turn-1']) { --page: oklab(75.29% 0.1022 0.1317); --page-ink: oklab(27.17% 0.0545 0.0549); }
+:root:has(.k-dock[data-ink='turn-2']) { --page: oklab(73.43% 0.1884 -0.0242); --page-ink: oklab(27.61% 0.1126 -0.0066); }
+:root:has(.k-dock[data-ink='turn-3']) { --page: oklab(74.2% -0.0638 -0.1292); --page-ink: oklab(27.52% -0.0256 -0.0778); }
+:root:has(.k-dock[data-ink='turn-4']) { --page: oklab(84.07% -0.1251 0.1633); --page-ink: oklab(27.73% -0.0487 0.0572); }
+:root:has(.k-dock[data-ink='turn-5']) { --page: oklab(71.08% 0.0631 -0.1532); --page-ink: oklab(25.47% 0.034 -0.124); }
+:root:has(.k-dock[data-error]) { --page: var(--error); --page-ink: var(--error-ink); }
+
+.k-area, .k-dock, .k-chip { --c: var(--full); --ink: var(--hink); }
 
 html, body, #root { margin: 0; min-height: 100%; }
+body { background: var(--page); overflow-x: clip; }
+button { -webkit-tap-highlight-color: transparent; }
+:focus-visible { outline: 3px solid currentColor; outline-offset: 3px; }
 
-.k-page {
-  max-width: 640px;
-  margin: 0 auto;
-  padding: 64px 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.k-row { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; }
-.k-heading { margin: 0; font-size: 32px; letter-spacing: -0.01em; }
-.k-text { margin: 0; line-height: 1.55; }
-.k-muted { color: var(--k-muted); }
-.k-strong { font-weight: 650; }
-.k-lead { font-size: 17px; line-height: 1.5; }
-.k-display { font-size: 64px; font-weight: 700; line-height: 1; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
-.k-text.k-right { color: var(--k-right); }
-.k-text.k-wrong { color: var(--k-wrong); }
-
-.k-code {
-  margin: 0;
-  padding: 14px 16px;
-  overflow-x: auto;
-  border-radius: var(--k-radius);
-  background: #1d1f27;
-  color: #e6e8f0;
-  font: 13px/1.55 ui-monospace, 'SF Mono', Consolas, monospace;
-}
-
-.k-points { margin: 0; display: grid; gap: 12px; }
-.k-point { display: grid; grid-template-columns: 170px 1fr; gap: 12px; padding-top: 12px; border-top: 1px solid var(--k-line); }
-.k-point dt { font-weight: 650; }
-.k-point dd { margin: 0; color: var(--k-muted); line-height: 1.5; }
-
-.k-steps { margin: 0; padding: 0; list-style: none; counter-reset: step; display: grid; gap: 10px; }
-.k-steps li { counter-increment: step; display: grid; grid-template-columns: 28px 1fr; gap: 10px; align-items: start; line-height: 1.5; }
-.k-steps li::before {
-  content: counter(step);
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  font-size: 13px;
-  font-weight: 650;
-  background: var(--k-accent-soft);
-  color: var(--k-accent);
-}
-.k-error { color: var(--k-error); }
-
-.k-button {
-  border: 0;
-  border-radius: var(--k-radius);
-  padding: 10px 18px;
-  font: inherit;
-  font-weight: 600;
-  background: var(--k-accent);
-  color: var(--k-accent-ink);
-  cursor: pointer;
-}
-.k-button:active { transform: translateY(1px); }
-.k-button.k-suggestion, .k-button.k-choice, .k-button.k-chosen, .k-button.k-summary, .k-button.k-step {
-  padding: 5px 12px;
-  border-radius: 999px;
-  font-weight: 500;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-.k-button.k-suggestion, .k-button.k-chosen { background: var(--k-accent-soft); color: var(--k-accent); }
-.k-button.k-choice, .k-button.k-summary, .k-button.k-step { background: var(--k-surface); color: var(--k-ink); border: 1px solid var(--k-line); }
-.k-button.k-summary { flex-shrink: 1; min-width: 0; max-width: 42vw; overflow: hidden; text-overflow: ellipsis; }
-.k-button.k-step { padding: 5px 10px; }
-.k-button.k-link { padding: 0; background: none; color: var(--k-accent); font-weight: 600; }
-.k-button.k-link:hover { text-decoration: underline; }
-
-/* A set to pick one from, one under the other in its card. */
-.k-card > .k-button { padding: 10px 14px; border-radius: var(--k-radius); text-align: left; font-weight: 500; white-space: normal; }
-.k-card > .k-button.k-choice { background: var(--k-surface); color: var(--k-ink); border: 1px solid var(--k-line); }
-.k-card > .k-button.k-choice:hover { border-color: var(--k-accent); }
-.k-button.k-right { background: var(--k-right-soft); color: var(--k-right); border: 1px solid var(--k-right); }
-.k-button.k-wrong { background: var(--k-wrong-soft); color: var(--k-wrong); border: 1px solid var(--k-wrong); }
-
-.k-check {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  padding: 10px 2px;
-  border: 0;
-  border-top: 1px solid var(--k-line);
-  background: none;
-  font: inherit;
-  color: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-.k-card > .k-check + .k-check { margin-top: -12px; }
-.k-box { width: 18px; height: 18px; flex-shrink: 0; box-sizing: border-box; display: grid; place-items: center; border: 1.5px solid var(--k-muted); border-radius: 5px; }
-.k-checked .k-box { background: var(--k-accent); border-color: var(--k-accent); }
-.k-checked .k-box::after { content: '✓'; color: var(--k-accent-ink); font-size: 12px; font-weight: 700; }
-.k-checked .k-check-label { color: var(--k-muted); text-decoration: line-through; }
-
-.k-frame { min-height: 100vh; display: flex; flex-direction: column; }
-
-.k-dock {
-  position: sticky;
-  bottom: 0;
-  z-index: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 10px 24px;
-  background: var(--k-bg);
-  border-top: 1px solid var(--k-line);
-}
-.k-dock > .k-row { justify-content: space-between; flex-wrap: nowrap; gap: 12px; }
-.k-dock > .k-row > .k-row { flex-wrap: nowrap; gap: 6px; min-width: 0; }
-.k-dock > .k-row > .k-row:first-child { overflow-x: auto; scrollbar-width: none; }
-
-.k-menu {
-  position: absolute;
-  bottom: calc(100% + 6px);
-  right: 24px;
-  z-index: 2;
-  width: min(380px, calc(100vw - 32px));
-  max-height: 60vh;
-  overflow-y: auto;
-  box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 8px;
-  background: var(--k-surface);
-  border: 1px solid var(--k-line);
-  border-radius: calc(var(--k-radius) + 4px);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.1);
-}
-.k-menu .k-button { text-align: left; overflow: hidden; text-overflow: ellipsis; border-radius: var(--k-radius); }
-.k-menu > .k-text { padding: 0 10px; }
-.k-menu > .k-text + .k-button, .k-menu > .k-muted { margin-bottom: 4px; }
-.k-menu > .k-muted { padding-bottom: 10px; border-bottom: 1px solid var(--k-line); }
-
-.k-area-changed .k-card { box-shadow: 0 0 0 2px var(--k-accent); }
-
-/* nova's DOM adapter wraps a canvas and an action in elements of its own; React does not. They take no room, so the
-   dock sticks and the areas lay out the same under either kit. */
+/* nova's DOM adapter wraps a canvas and an action in elements of its own; React does not. They take no room. */
 [data-canvas], [data-component='ActionSlot'] { display: contents; }
 
-.k-grid {
-  flex: 1;
-  width: 100%;
-  max-width: 1080px;
-  margin: 0 auto;
+.k-frame { min-height: 100dvh; display: flex; flex-direction: column; touch-action: pan-y; }
+
+/* The layers: edge to edge, each one's rounded foot laid over the next, sharing the screen between them. Every layer
+   reaches up under the one before it; the first reaches into the room left for it above. */
+.k-grid,
+.k-miniature-sheet {
   box-sizing: border-box;
-  padding: 24px;
   display: grid;
-  align-content: start;
-  gap: 16px;
+  grid-template-columns: minmax(0, 1fr);
+  grid-auto-rows: auto;
+  align-content: stretch;
+  padding-top: var(--fold);
 }
-.k-columns-1 { grid-template-columns: minmax(0, 1fr); }
-.k-columns-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.k-columns-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.k-area { min-width: 0; }
-.k-span-2 { grid-column: span 2; }
-.k-span-3 { grid-column: span 3; }
+.k-grid { flex: 1; }
+
+.k-area {
+  position: relative;
+  box-sizing: border-box;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  margin-top: calc(-1 * var(--fold));
+  padding: calc(var(--fold) + 20px) 22px 26px;
+  border-radius: 0 0 var(--fold) var(--fold);
+  background: var(--c);
+  color: var(--ink);
+}
+:is(.k-grid, .k-miniature-sheet) > .k-area:nth-child(even) { --c: var(--tint); }
+:is(.k-grid, .k-miniature-sheet) > .k-area:first-child { padding-top: calc(28px + env(safe-area-inset-top, 0px)); }
+.k-grid > .k-area:nth-child(1) { z-index: 9; }
+.k-grid > .k-area:nth-child(2) { z-index: 8; }
+.k-grid > .k-area:nth-child(3) { z-index: 7; }
+.k-grid > .k-area:nth-child(4) { z-index: 6; }
+.k-grid > .k-area:nth-child(5) { z-index: 5; }
+.k-grid > .k-area:nth-child(6) { z-index: 4; }
 /* An area with nothing in it takes no room. */
 .k-area:not(:has(.k-card)) { display: none; }
 
-.k-card {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 20px;
-  background: var(--k-surface);
-  border: 1px solid var(--k-line);
-  border-radius: calc(var(--k-radius) + 4px);
+/* The ink says what the last answer changed first; the word says it for everyone. */
+.k-area > .k-text.k-mark {
+  position: absolute;
+  left: 22px;
+  top: calc(var(--fold) + 4px);
+  font-size: 11px;
+  line-height: 1;
+  font-weight: 820;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
 }
-.k-card-title { margin: 0; font-size: 15px; font-weight: 650; letter-spacing: 0.01em; }
-.k-hero { padding: 32px; gap: 16px; border-color: transparent; background: linear-gradient(135deg, var(--k-accent-soft), var(--k-surface) 75%); }
-.k-hero > .k-card-title { font-size: 30px; letter-spacing: -0.015em; }
-.k-hero > .k-lead { font-size: 18px; max-width: 62ch; }
+:is(.k-grid, .k-miniature-sheet) > .k-area:first-child > .k-mark { top: calc(9px + env(safe-area-inset-top, 0px)); }
+
+.k-card { flex: 1; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.k-card-title { margin: 0; font-size: 36px; line-height: 0.94; font-weight: 860; font-stretch: 114%; letter-spacing: -0.025em; text-wrap: balance; overflow-wrap: anywhere; }
+.k-hero > .k-card-title { font-size: 46px; }
+.k-text { margin: 0; line-height: 1.38; max-width: 36em; overflow-wrap: anywhere; }
+.k-lead { font-size: 19px; line-height: 1.3; font-weight: 560; }
+.k-strong { font-weight: 760; }
+.k-display { font-size: 64px; font-weight: 860; font-stretch: 112%; line-height: 1; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.k-text.k-right, .k-text.k-wrong, .k-text.k-error { font-weight: 740; }
+.k-text.k-tag { font-size: 12.5px; font-weight: 820; letter-spacing: 0.09em; text-transform: uppercase; }
+.k-heading { margin: 0; font-size: 46px; line-height: 0.94; font-weight: 860; font-stretch: 114%; letter-spacing: -0.025em; }
+.k-page { max-width: 640px; margin: 0 auto; padding: 64px 22px; display: flex; flex-direction: column; gap: 16px; }
+
+.k-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.k-card .k-row { gap: 10px 12px; }
+.k-row.k-entry { align-items: baseline; gap: 2px 12px; padding-top: 9px; }
+.k-entry > .k-strong { font-size: 19px; font-stretch: 106%; }
+.k-entry > .k-text:not(.k-strong, .k-tag) { font-size: 15px; }
+.k-entry > .k-tag { margin-left: auto; }
+
+.k-button {
+  border: 0;
+  border-radius: 999px;
+  padding: 12px 22px;
+  font: inherit;
+  font-weight: 760;
+  background: var(--ink);
+  color: var(--c);
+  cursor: pointer;
+}
+.k-button:disabled { cursor: default; }
+.k-button.k-suggestion, .k-button.k-choice, .k-button.k-chosen {
+  padding: 10px 16px;
+  font-size: 16px;
+  font-weight: 640;
+  text-align: left;
+  background: color-mix(in oklab, var(--c), #fff 34%);
+  color: var(--ink);
+}
+.k-button.k-chosen, .k-button.k-right { background: var(--ink); color: var(--c); }
+.k-button.k-wrong { background: transparent; color: var(--ink); box-shadow: inset 0 0 0 3px currentColor; }
+.k-button.k-link {
+  padding: 6px 0;
+  border-radius: 0;
+  background: none;
+  color: inherit;
+  font-size: 15px;
+  font-weight: 720;
+  text-decoration: underline 3px transparent;
+  text-underline-offset: 6px;
+}
+.k-button.k-link[aria-current='page'] { text-decoration-color: currentColor; }
 
 .k-input {
-  flex: 1;
+  flex: 1 1 200px;
   min-width: 0;
   box-sizing: border-box;
-  padding: 10px 14px;
+  padding: 8px 0 6px;
   font: inherit;
+  font-size: 19px;
   color: inherit;
-  background: var(--k-surface);
-  border: 1px solid var(--k-line);
-  border-radius: var(--k-radius);
+  caret-color: currentColor;
+  background: transparent;
+  border: 0;
+  border-bottom: 3px solid currentColor;
+  border-radius: 0;
   outline: none;
 }
-.k-input:focus { border-color: var(--k-accent); box-shadow: 0 0 0 3px var(--k-accent-soft); }
+.k-input::placeholder { color: color-mix(in oklab, var(--c), var(--ink) 90%); opacity: 1; }
+.k-input:focus { border-bottom-width: 5px; padding-bottom: 4px; }
 
-.k-prompt { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.k-prompt > .k-input { flex: 1 1 240px; }
-.k-prompt > .k-text { flex-basis: 100%; }
+.k-code { margin: 0; padding: 14px 16px; overflow-x: auto; border-radius: 16px; background: var(--ink); color: var(--c); font: 13px/1.55 ui-monospace, 'SF Mono', Consolas, monospace; }
+.k-points { margin: 0; display: grid; gap: 12px; }
+.k-point { display: grid; grid-template-columns: 170px 1fr; gap: 12px; padding-top: 12px; border-top: 3px solid currentColor; }
+.k-point dt { font-weight: 760; }
+.k-point dd { margin: 0; line-height: 1.38; }
+.k-steps { margin: 0; padding: 0; list-style: none; counter-reset: step; display: grid; gap: 10px; }
+.k-steps li { counter-increment: step; display: grid; grid-template-columns: 28px 1fr; gap: 10px; align-items: start; line-height: 1.38; }
+.k-steps li::before { content: counter(step); width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-size: 13px; font-weight: 820; background: var(--ink); color: var(--c); }
+.k-check { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 2px; border: 0; border-top: 3px solid currentColor; background: none; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+.k-box { width: 18px; height: 18px; flex-shrink: 0; box-sizing: border-box; display: grid; place-items: center; border: 3px solid currentColor; border-radius: 5px; }
+.k-checked .k-box { background: var(--ink); }
+.k-checked .k-box::after { content: '✓'; color: var(--c); font-size: 12px; font-weight: 820; }
+.k-checked .k-check-label { text-decoration: line-through; }
+
+/* The dock: the last layer, the colour of what comes next. It lies under the last card's foot, and is lifted over the
+   answer, its own top rounded, while the answer runs on under it. */
+.k-dock {
+  --well: color-mix(in oklab, var(--c), #fff 34%);
+  --soft: color-mix(in oklab, var(--c), var(--ink) 90%);
+  position: sticky;
+  bottom: 0;
+  z-index: 3;
+  margin-top: calc(-1 * var(--fold));
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: 'error error' 'controls controls' 'line line' 'links send';
+  gap: 8px 12px;
+  padding: calc(var(--fold) + 12px) max(18px, env(safe-area-inset-right, 0px)) calc(12px + env(safe-area-inset-bottom, 0px)) max(18px, env(safe-area-inset-left, 0px));
+  background: var(--c);
+  color: var(--ink);
+  transition: background-color 0.45s, color 0.45s, border-radius 0.3s var(--ease);
+}
+.k-dock[data-lifted], .k-frame:has(.k-deck) .k-dock { z-index: 20; border-radius: var(--fold) var(--fold) 0 0; }
+.k-dock[data-error] { --c: var(--error); --ink: var(--error-ink); }
+.k-dock > .k-error { grid-area: error; font-size: 18px; line-height: 1.28; }
+.k-dock > .k-controls { grid-area: controls; flex-wrap: nowrap; }
+.k-dock[data-error] > .k-controls { display: none; }
+.k-dock > .k-prompt { grid-area: line; display: flex; }
+.k-dock > .k-links { grid-area: links; align-self: center; gap: 20px; }
+.k-dock > .k-button { grid-area: send; align-self: center; height: 48px; min-width: 92px; padding: 0 22px; font-size: 17px; font-weight: 780; font-stretch: 106%; transition: background-color 0.45s, color 0.45s; }
+
+.k-button.k-step {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  background: var(--well);
+  color: var(--ink);
+  transition: opacity 0.2s, scale 0.2s var(--ease), background-color 0.2s, color 0.2s;
+}
+.k-step svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2.8; stroke-linecap: round; stroke-linejoin: round; }
+.k-step:disabled { opacity: 0.28; }
+/* A finger swiping the answer says where it is going on the button it would press. */
+:root[data-swiping='back'] .k-controls > .k-step:first-child:not(:disabled),
+:root[data-swiping='forward'] .k-controls > .k-step:last-child:not(:disabled) {
+  background: var(--ink);
+  color: var(--c);
+  scale: calc(1 + var(--swipe, 0) * 0.3);
+}
+
+.k-chip {
+  flex: 1;
+  min-width: 0;
+  height: 44px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 22px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--c);
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+}
+.k-chip-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; font-size: 16px; font-weight: 760; font-stretch: 106%; }
+.k-chip-count { flex: none; font-size: 14px; font-weight: 740; font-variant-numeric: tabular-nums; }
+
+.k-input.k-line { flex: 1; font-size: 23px; font-weight: 640; font-stretch: 104%; padding: 8px 0 7px; }
+.k-input.k-line::placeholder { color: var(--soft); }
+.k-input.k-line:focus { padding-bottom: 5px; }
+
+/* Every answer side by side, oldest at the left: the one in the middle is the one picked. It covers the answer, down to
+   the dock. */
+.k-deck {
+  position: fixed;
+  inset: 0 0 calc(var(--dock-h, 220px) - var(--fold)) 0;
+  z-index: 15;
+  overflow: clip;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  background: var(--page);
+  color: var(--page-ink);
+  --mini-w: calc(100vw * var(--mini-s));
+  --mini-h: calc((100dvh - var(--dock-h, 220px) + var(--fold)) * var(--mini-s));
+}
+.k-deck-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  touch-action: pan-x;
+  padding: 10px calc(50% - var(--mini-w) / 2) 24px;
+}
+.k-deck-row::-webkit-scrollbar { display: none; }
+.k-deck-row[data-dragging] { cursor: grabbing; scroll-snap-type: none; }
+.k-mini { flex: none; width: var(--mini-w); margin: 0; scroll-snap-align: center; scale: 0.9; transform-origin: 50% 0; transition: scale 0.35s var(--ease); cursor: pointer; }
+.k-mini[data-selected] { scale: 1; }
+.k-miniature { position: relative; width: var(--mini-w); height: var(--mini-h); border-radius: 16px; overflow: hidden; background: var(--page); }
+.k-miniature-sheet { position: absolute; top: 0; left: 0; width: 100vw; height: calc(100dvh - var(--dock-h, 220px) + var(--fold)); scale: var(--mini-s); transform-origin: 0 0; pointer-events: none; }
+.k-mini > .k-text { color: var(--page-ink); }
+.k-mini > .k-title { padding-top: 14px; font-size: 25px; line-height: 0.96; font-weight: 860; font-stretch: 112%; letter-spacing: -0.02em; }
+.k-mini > .k-meta { margin-top: 8px; font-size: 12.5px; font-weight: 820; letter-spacing: 0.09em; text-transform: uppercase; }
+.k-mini > .k-quote { margin-top: 6px; font-size: 16px; line-height: 1.3; font-weight: 680; }
+.k-mini > .k-muted { margin-top: 4px; font-size: 15px; line-height: 1.35; }
+.k-mini > :is(.k-quote, .k-muted) { transition: opacity 0.3s; }
+.k-mini:not([data-selected]) > :is(.k-quote, .k-muted) { opacity: 0; }
+
+@media (min-width: 721px) {
+  :root { --fold: 48px; --mini-s: 0.34; font-size: 19px; }
+  .k-grid[data-columns='2'], .k-miniature-sheet[data-columns='2'] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .k-grid[data-columns='3'], .k-miniature-sheet[data-columns='3'] { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .k-area[data-span='2'] { grid-column: span 2; }
+  .k-area[data-span='3'] { grid-column: span 3; }
+  .k-area { padding: calc(var(--fold) + 32px) 48px 50px; }
+  .k-card { gap: 14px; }
+  :is(.k-grid, .k-miniature-sheet) > .k-area:first-child, .k-area[data-row='1'] { padding-top: 46px; }
+  /* Side by side, neighbours take turns: one in full ink, the next in its tint. */
+  :is(.k-grid, .k-miniature-sheet) > .k-area:nth-child(even) { --c: var(--full); }
+  .k-area:is([data-row='1'], [data-row='3'], [data-row='5'])[data-column='2'],
+  .k-area:is([data-row='2'], [data-row='4'], [data-row='6']):is([data-column='1'], [data-column='3']) { --c: var(--tint); }
+  .k-grid[data-columns='1'] > .k-area:nth-child(even), .k-miniature-sheet[data-columns='1'] > .k-area:nth-child(even) { --c: var(--tint); }
+  .k-area > .k-text.k-mark { left: 48px; top: calc(var(--fold) + 10px); font-size: 12px; }
+  .k-area:is(:first-child, [data-row='1']) > .k-mark { top: 16px; }
+  .k-card-title { font-size: 60px; }
+  .k-hero > .k-card-title { font-size: 80px; }
+  .k-lead { font-size: 24px; }
+  .k-dock {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas: 'error error error' 'links controls controls' 'line line send';
+    gap: 12px 28px;
+    padding: calc(var(--fold) + 16px) 48px 28px;
+  }
+  .k-dock > .k-error { font-size: 21px; }
+  .k-dock > .k-controls { justify-self: end; width: min(100%, 540px); }
+  .k-dock[data-error] > .k-controls { display: flex; }
+  .k-input.k-line { font-size: 30px; }
+  .k-deck-row { gap: 28px; }
+  .k-mini > .k-title { font-size: 30px; }
+}
 
 @media (max-width: 720px) {
   .k-point { grid-template-columns: 1fr; gap: 4px; }
-  .k-grid { grid-template-columns: 1fr; padding: 16px; }
-  .k-area { grid-column: auto; }
-  .k-dock { padding-left: 16px; padding-right: 16px; }
-  .k-dock > .k-row { flex-wrap: wrap; gap: 8px; }
-  .k-dock > .k-row > .k-row { width: 100%; }
-  .k-button.k-summary { flex: 1; max-width: none; }
-  .k-menu { right: 16px; }
+}
+
+/* How each part travels, as a view transition. Nothing travels sideways: a layer's new skin wipes down over the old, a
+   new layer grows down from under the one above it and an old one folds up under it, while the layers below move to
+   make room; going back, the newer skin lifts off upward. A layer that comes or goes with nothing staying under it is
+   swept: the layer above it grows over it or shrinks off it (src/ui/target.ts marks which). What has no name is not part
+   of a move, and stays live under it. */
+:root { view-transition-name: none; }
+::view-transition { pointer-events: none; }
+:root:active-view-transition-type(quick) { --move: 380ms; }
+::view-transition-group(*) { animation-duration: var(--move); animation-timing-function: var(--ease); }
+
+.k-grid > .k-area[data-name='a'] { view-transition-name: area-a; view-transition-class: area a; }
+.k-grid > .k-area[data-name='b'] { view-transition-name: area-b; view-transition-class: area b; }
+.k-grid > .k-area[data-name='c'] { view-transition-name: area-c; view-transition-class: area c; }
+.k-grid > .k-area[data-name='d'] { view-transition-name: area-d; view-transition-class: area d; }
+.k-grid > .k-area[data-name='e'] { view-transition-name: area-e; view-transition-class: area e; }
+.k-grid > .k-area[data-name='f'] { view-transition-name: area-f; view-transition-class: area f; }
+/* On a wide screen a card that changes column folds where it was and grows where it goes, rather than crossing over. */
+@media (min-width: 721px) {
+  .k-grid > .k-area[data-name='a'][data-column='2'] { view-transition-name: area-a-2; }
+  .k-grid > .k-area[data-name='b'][data-column='2'] { view-transition-name: area-b-2; }
+  .k-grid > .k-area[data-name='c'][data-column='2'] { view-transition-name: area-c-2; }
+  .k-grid > .k-area[data-name='d'][data-column='2'] { view-transition-name: area-d-2; }
+  .k-grid > .k-area[data-name='e'][data-column='2'] { view-transition-name: area-e-2; }
+  .k-grid > .k-area[data-name='f'][data-column='2'] { view-transition-name: area-f-2; }
+  .k-grid > .k-area[data-name='a'][data-column='3'] { view-transition-name: area-a-3; }
+  .k-grid > .k-area[data-name='b'][data-column='3'] { view-transition-name: area-b-3; }
+  .k-grid > .k-area[data-name='c'][data-column='3'] { view-transition-name: area-c-3; }
+  .k-grid > .k-area[data-name='d'][data-column='3'] { view-transition-name: area-d-3; }
+  .k-grid > .k-area[data-name='e'][data-column='3'] { view-transition-name: area-e-3; }
+  .k-grid > .k-area[data-name='f'][data-column='3'] { view-transition-name: area-f-3; }
+}
+
+/* While a move is drawn, each layer runs on below its foot in its own colour, so a box that grows past the skin it had
+   is that colour all the way down. Its group clips it at the foot. When the whole answer moves as one picture, the
+   layers keep their own feet. */
+:root:active-view-transition:not(:active-view-transition-type(deck-open, deck-close)) .k-grid > .k-area::after {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  left: 0;
+  right: 0;
+  top: calc(100% - var(--fold));
+  height: 70vh;
+  background: var(--c);
+}
+
+::view-transition-group(*.area) { overflow: clip; border-radius: 0 0 var(--fold) var(--fold); }
+::view-transition-group(*.a) { z-index: 9; }
+::view-transition-group(*.b) { z-index: 8; }
+::view-transition-group(*.c) { z-index: 7; }
+::view-transition-group(*.d) { z-index: 6; }
+::view-transition-group(*.e) { z-index: 5; }
+::view-transition-group(*.f) { z-index: 4; }
+::view-transition-image-pair(*.area) { isolation: auto; }
+::view-transition-old(*.area),
+::view-transition-new(*.area) { animation: none; mix-blend-mode: normal; }
+/* Down the page, each layer starts a beat after the one above it. */
+::view-transition-new(*.b) { --lead: 45ms; }
+::view-transition-new(*.c) { --lead: 90ms; }
+::view-transition-new(*.d) { --lead: 135ms; }
+::view-transition-new(*.e) { --lead: 180ms; }
+::view-transition-new(*.f) { --lead: 225ms; }
+::view-transition-new(*.area) { animation: wipe-in calc(var(--move) - var(--lead, 0ms)) var(--ease) var(--lead, 0ms) both; }
+::view-transition-old(*.area):only-child { animation: fold-up var(--move) var(--ease) both; }
+::view-transition-new(*.swept):only-child { animation: fade-in calc(var(--move) / 4) linear both; }
+::view-transition-old(*.swept):only-child { animation: fade-out calc(var(--move) / 4) linear calc(var(--move) * 3 / 4) both; }
+:root:active-view-transition-type(back)::view-transition-new(*.area) { animation: none; }
+:root:active-view-transition-type(back)::view-transition-new(*.area):only-child { animation: wipe-in var(--move) var(--ease) both; }
+:root:active-view-transition-type(back)::view-transition-old(*.area) { z-index: 1; animation: fold-up var(--move) var(--ease) both; }
+:root:active-view-transition-type(back)::view-transition-new(*.swept):only-child { animation: fade-in calc(var(--move) / 4) linear both; }
+:root:active-view-transition-type(back)::view-transition-old(*.swept):only-child { animation: fade-out calc(var(--move) / 4) linear calc(var(--move) * 3 / 4) both; }
+
+@keyframes wipe-in {
+  from { clip-path: inset(0 0 100% 0 round 0 0 var(--fold) var(--fold)); }
+  to { clip-path: inset(0 0 0 0 round 0 0 var(--fold) var(--fold)); }
+}
+@keyframes fold-up {
+  from { clip-path: inset(0 0 0 0 round 0 0 var(--fold) var(--fold)); }
+  to { clip-path: inset(0 0 100% 0 round 0 0 var(--fold) var(--fold)); }
+}
+
+/* The dock moves with the answer: under the last foot, or over everything while it is lifted. */
+.k-dock { view-transition-name: dock; view-transition-class: dock; }
+.k-dock[data-lifted], .k-frame:has(.k-deck) .k-dock { view-transition-class: dock lifted; }
+::view-transition-group(*.dock) { z-index: 3; }
+::view-transition-group(*.lifted) { z-index: 20; }
+::view-transition-old(dock), ::view-transition-new(dock) { animation-duration: 240ms; }
+
+/* The chip's words re-ink as a card does. */
+.k-chip-title { view-transition-name: chip-title; view-transition-class: words; }
+::view-transition-group(*.words) { z-index: 21; }
+::view-transition-new(*.words) { animation: words-in calc(var(--move) * 0.8) var(--ease) calc(var(--move) * 0.2) both; }
+::view-transition-old(*.words) { animation: fade-out calc(var(--move) * 0.3) linear both; }
+:root:active-view-transition-type(back)::view-transition-old(*.words) { z-index: 1; animation: words-out var(--move) var(--ease) both; }
+:root:active-view-transition-type(back)::view-transition-new(*.words) { animation: fade-in calc(var(--move) / 2) linear both; }
+@keyframes words-in { from { clip-path: inset(0 0 100% 0); } to { clip-path: inset(0); } }
+@keyframes words-out { from { clip-path: inset(0); } to { clip-path: inset(0 0 100% 0); } }
+@keyframes fade-in { from { opacity: 0; } }
+@keyframes fade-out { to { opacity: 0; } }
+
+/* The words leave the line upward, into the chip; a question that gets no screen brings them back down. An answer that
+   comes re-inks the chip instead. */
+:root:active-view-transition-type(ask, error) .k-dock:not([data-asking]) > .k-prompt { view-transition-name: question; }
+:root:active-view-transition-type(ask, error) .k-dock[data-asking] .k-chip-title { view-transition-name: question; view-transition-class: none; }
+::view-transition-group(question) { z-index: 22; animation-duration: 480ms; }
+
+/* The deck: the answer shrinks into its picture among the rest, and grows back out of the one picked. */
+.k-deck-row { view-transition-name: deck; }
+.k-mini[data-selected] > .k-miniature { view-transition-name: sheet; }
+:root:active-view-transition-type(deck-open, deck-close) .k-grid { view-transition-name: sheet; }
+:root:active-view-transition-type(deck-open, deck-close) .k-grid > .k-area { view-transition-name: none; }
+.k-frame:has(.k-deck) .k-grid, .k-frame:has(.k-deck) .k-grid > .k-area { view-transition-name: none; }
+::view-transition-group(sheet) { z-index: 10; overflow: clip; border-radius: 16px; animation-duration: 560ms; }
+::view-transition-group(deck) { z-index: 9; }
+::view-transition-new(deck):only-child { animation: deck-in 560ms var(--ease) 80ms both; }
+::view-transition-old(deck):only-child { animation: fade-out 280ms linear both; }
+@keyframes deck-in { from { opacity: 0; scale: 0.96; } }
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --move: 200ms; }
+  ::view-transition-group(*) { animation: none !important; }
+  ::view-transition-new(*) { animation: fade-in 200ms linear both !important; }
+  ::view-transition-old(*) { animation: fade-out 200ms linear both !important; }
+  .k-mini, .k-dock, .k-chip { transition: none; }
 }

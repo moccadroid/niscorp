@@ -14,12 +14,13 @@ import type { AnswerContext } from './answer';
 import { CATALOG, opened, screensHeld, withUsable } from './catalog';
 import type { Catalog } from './catalog';
 import { composerAgent } from './composer.agent';
+import { deckOf } from './deck';
 import { createHistory, keptAs } from './history';
 import { messageInput } from './knowledge';
-import { framed, markChanged } from './layout';
+import { drawnRegion, framed } from './layout';
 import { pick } from './pick';
 import type { Decide } from './pick';
-import { arrangementOfPlan, canvasesInAreas, canvasesOfPlan, changedAreas, planOf } from './plan';
+import { arrangementOfPlan, canvasesInAreas, canvasesOfPlan, inked, planOf } from './plan';
 import type { Plan, ShownPlan } from './plan';
 import { canvasesStanding, readOpenScreen } from './screen';
 import type { OpenCanvas } from './screen';
@@ -31,7 +32,7 @@ export type Chat = { provider: string; model: string; llm: SignalClient; timeout
 
 export type Models = { jev?: Jev; chat?: Chat; missing: readonly string[] };
 
-const AskSchema = z.looseObject({ text: z.string() });
+const AskSchema = z.looseObject({ asked: z.string() });
 const OpenSchema = z.looseObject({ opening: z.string() });
 const GoSchema = z.looseObject({ going: z.coerce.number() });
 
@@ -55,7 +56,7 @@ export const composer =
     // What the person did last: an answer for anything earlier is no longer shown.
     let turn = 0;
 
-    const screenPlan = (screen: Screen): Plan => planOf('', canvasesInAreas(screen.canvases.map((canvas) => opened(canvas, catalog))), { arrangements: ARRANGEMENTS, screen, arrangement: screen.arrangement });
+    const screenPlan = (screen: Screen): Plan => planOf('', canvasesInAreas(screen.canvases.map((canvas) => opened(canvas, catalog))), { arrangements: ARRANGEMENTS, screen, arrangement: screen.arrangement, ink: screen.ink });
     const history = createHistory(screenPlan(SCREENS[0]));
     const kept = keptAs(session.wire, grammar);
 
@@ -71,16 +72,16 @@ export const composer =
       frameId = added.artifacts[0]?.id;
       drawn = written;
     };
-    const show = async (plan: ShownPlan, changed: readonly AreaId[] = []): Promise<ShownPlan> => {
-      await draw(changed.length > 0 ? markChanged(plan.layout, changed) : plan.layout);
+    const show = async (plan: ShownPlan): Promise<ShownPlan> => {
+      await draw(drawnRegion(plan));
       return plan;
     };
 
     // The answer being written, while it streams: the dock re-reads it whenever the message `answer-moved` says it moved.
     let soFar: ShownPlan | undefined;
-    const moveTo = (plan: ShownPlan | undefined, changed: readonly AreaId[] = []): void => {
+    const moveTo = (plan: ShownPlan | undefined): void => {
       soFar = plan;
-      show(plan ?? history.current(), changed)
+      show(plan ?? history.current())
         .then(() => session.shell.publish('answer-moved'))
         .catch((error: unknown) => console.error(`[ask] the answer so far could not be drawn: ${reasonOf(error)}`));
     };
@@ -109,7 +110,7 @@ export const composer =
     };
 
     const ask = async (data: unknown): Promise<ShownPlan> => {
-      const message = AskSchema.parse(data).text.trim();
+      const message = AskSchema.parse(data).asked.trim();
       if (message === '') return history.current();
       const chat = models.chat;
       if (chat === undefined) throw new Error(`Set ${models.missing.join(' and ')} in .env, and start the app again.`);
@@ -146,9 +147,9 @@ export const composer =
         if (event.type !== 'output-partial') return;
         const answer = answerSoFar(event.output, context);
         if (answer === undefined) return;
-        const plan = history.next(planOf(message, answer.canvases, { arrangements: ARRANGEMENTS, arrangement: answer.arrangement ?? current, label: answer.title }));
+        const plan = history.next(inked(planOf(message, answer.canvases, { arrangements: ARRANGEMENTS, arrangement: answer.arrangement ?? current, label: answer.title, ink: history.nextInk() }), before));
         if (screenOf(plan) === screenOf(soFar ?? before)) return;
-        moveTo(plan, changedAreas(plan, before));
+        moveTo(plan);
       };
       const result = await agent.run(input, { llm: chat.llm, deps, signal: AbortSignal.timeout(chat.timeoutMs), onEvent: streamed }).result;
       const { usage, steps, elapsedMs } = result.meta;
@@ -168,12 +169,12 @@ export const composer =
       const screen = answer.screen === undefined ? undefined : screens.find((candidate) => candidate.id === answer.screen);
       if (screen !== undefined) return show(showScreen(screen, response));
       if (Object.keys(answer.canvases).length === 0) throw new Error('Nothing here answers that yet.');
-      const plan = { ...planOf(message, answer.canvases, { arrangements: ARRANGEMENTS, arrangement: answer.arrangement ?? current, label: answer.title }), response };
+      const plan = { ...inked(planOf(message, answer.canvases, { arrangements: ARRANGEMENTS, arrangement: answer.arrangement ?? current, label: answer.title, ink: history.nextInk() }), before), response };
       // An answer that leaves the screen as it is adds nothing to the stack; the dock still names what was asked, and why
       // nothing changed.
       if (screenOf({ ...plan, label: before.label }) === screenOf(before)) return show({ ...before, question: message, label: answer.title, response });
       kept.keep(plan).catch((error: unknown) => console.error(`[ask] "${message}" was shown and not kept: ${reasonOf(error)}`));
-      return show(history.add(plan), changedAreas(plan, before));
+      return show(history.add(plan));
     };
 
     const open = async (data: unknown): Promise<ShownPlan> => {
@@ -185,18 +186,23 @@ export const composer =
     // current one as it mounts, which is the last of them.
     let restored: Promise<void> | undefined;
     const restoredFirst =
-      (run: (data: unknown) => Promise<ShownPlan>) =>
-      async (data: unknown): Promise<ShownPlan> => {
+      <T>(run: (data: unknown) => Promise<T>) =>
+      async (data: unknown): Promise<T> => {
         await (restored ??= kept.past().then(history.restore, (error: unknown) => console.error(`[answers] the person's answers could not be read: ${reasonOf(error)}`)));
         return run(data);
       };
 
     return [
-      { id: 'ask', description: 'Answers a message with a screen. Send { text }; answers the plan shown: { question, response, label, canvases, position, total, stack }.', execute: restoredFirst(ask) },
+      { id: 'ask', description: 'Answers a message with a screen. Send { asked }; answers the plan shown: { question, response, label, canvases, position, total, stack, ink, next }.', execute: restoredFirst(ask) },
       { id: 'screens.open', description: 'Shows one of the screens in the dock: its canvases together. Send { opening: <screen id> }; answers its plan.', execute: restoredFirst(open) },
       { id: 'answers.back', description: 'Shows the answer before the one shown, and answers its plan.', execute: restoredFirst(async () => leave(history.back)) },
       { id: 'answers.forward', description: 'Shows the answer after the one shown, and answers its plan.', execute: restoredFirst(async () => leave(history.forward)) },
       { id: 'answers.go', description: 'Shows one answer from the stack. Send { going: <its position> }; answers its plan.', execute: restoredFirst(async (data) => leave(() => history.go(GoSchema.parse(data).going))) },
       { id: 'answers.current', description: 'Answers the plan shown, or, while an answer streams, the answer so far.', execute: restoredFirst(async () => soFar ?? show(history.current())) },
+      {
+        id: 'answers.deck',
+        description: 'Every answer in the stack, as the overview draws it: its position and title, what was asked, what the model said it did, and its cards with their titles and words. Send nothing.',
+        execute: restoredFirst(async () => deckOf(history.all(), history.current().position)),
+      },
     ];
   };

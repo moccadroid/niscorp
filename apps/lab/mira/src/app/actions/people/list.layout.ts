@@ -10,10 +10,11 @@ export const listLayout: LayoutNode = {
       key: 'id',
       do: {
         component: 'Row',
+        props: { tone: 'entry' },
         children: [
           { component: 'Text', props: { tone: 'strong' }, children: '{{$person.email}}' },
           { if: '$person.name', then: { component: 'Text', children: '{{$person.name}}' } },
-          { component: 'Text', props: { tone: 'muted' }, children: '{{$person.role}}' },
+          { component: 'Text', props: { tone: 'tag' }, children: '{{$person.role}}' },
         ],
       },
     },

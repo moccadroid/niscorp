@@ -1,59 +1,55 @@
 import type { LayoutNode } from '@niscorp/nova';
 
+const browsed = (field: string): unknown => ({ $at: ['$.current.stack', { $prism: { $sub: [{ $ref: '$.browse' }, 1] } }, field] });
+
+const chip: LayoutNode = {
+  if: '$.asking',
+  then: { component: 'Chip', props: { label: '$.asked', count: '…', ink: '$.current.next' } },
+  else: {
+    if: '$.browsing',
+    then: { component: 'Chip', ref: 'chip-open', props: { label: browsed('label'), count: '{{$.browse}}/{{$.current.total}}', ink: browsed('ink') } },
+    else: { component: 'Chip', ref: 'chip', props: { label: '$.current.label', count: '{{$.current.position}}/{{$.current.total}}', ink: '$.current.ink' } },
+  },
+};
+
+const steps: LayoutNode = {
+  component: 'Row',
+  props: { tone: 'controls' },
+  children: {
+    if: '$.browsing',
+    then: [
+      { component: 'Button', ref: 'deck-back', props: { label: 'Back', icon: 'back', disabled: { $eq: ['$.browse', 1] } } },
+      chip,
+      { component: 'Button', ref: 'deck-forward', props: { label: 'Forward', icon: 'forward', disabled: { $eq: ['$.browse', '$.current.total'] } } },
+    ],
+    else: [
+      { component: 'Button', ref: 'back', props: { label: 'Back', icon: 'back', disabled: { $eq: ['$.current.position', 1] } } },
+      chip,
+      { component: 'Button', ref: 'forward', props: { label: 'Forward', icon: 'forward', disabled: { $eq: ['$.current.position', '$.current.total'] } } },
+    ],
+  },
+};
+
 export const dockLayout: LayoutNode = {
   component: 'Dock',
+  props: { ink: { $if: '$.asking', $then: '$.current.later', $else: '$.current.next' }, asking: '$.asking', error: { $if: '$.error', $then: true, $else: false } },
   children: [
+    { if: '$.error', then: { component: 'Text', props: { tone: 'error' }, children: '{{$.error}}' } },
+    steps,
+    { component: 'Prompt', children: [{ component: 'Input', ref: 'text', model: '$.text', props: { placeholder: 'What would you like to see?', clearOnEnter: true, tone: 'line' } }] },
     {
       component: 'Row',
+      props: { tone: 'links' },
       children: [
         {
-          component: 'Row',
-          children: [
-            {
-              for: '$.screens',
-              as: 'screen',
-              key: 'id',
-              do: { component: 'Button', ref: 'screen', props: { label: '$screen.label', value: '$screen.id', tone: { $if: { $eq: ['$screen.id', '$.current.screen'] }, $then: 'chosen', $else: 'choice' } } },
-            },
-          ],
-        },
-        {
-          component: 'Row',
-          children: [
-            { component: 'Button', ref: 'back', props: { label: '←', tone: 'step' } },
-            { component: 'Button', ref: 'stack', props: { label: '{{$.current.label}} · {{$.current.position}}/{{$.current.total}}', tone: 'summary' } },
-            { component: 'Button', ref: 'forward', props: { label: '→', tone: 'step' } },
-          ],
+          for: '$.screens',
+          as: 'screen',
+          key: 'id',
+          do: { component: 'Button', ref: 'screen', props: { label: '$screen.label', value: '$screen.id', tone: 'link', current: { $eq: ['$screen.id', '$.current.screen'] } } },
         },
       ],
     },
-    {
-      if: '$.listing',
-      then: {
-        component: 'Menu',
-        children: [
-          { if: '$.current.question', then: { component: 'Text', props: { tone: 'strong' }, children: '{{$.current.question}}' } },
-          { if: '$.current.response', then: { component: 'Text', props: { tone: 'muted' }, children: '{{$.current.response}}' } },
-          {
-            for: '$.current.stack',
-            as: 'entry',
-            key: 'position',
-            do: {
-              component: 'Button',
-              ref: 'entry',
-              props: { label: '{{$entry.position}}. {{$entry.label}}', value: '$entry.position', tone: { $if: { $eq: ['$entry.position', '$.current.position'] }, $then: 'chosen', $else: 'choice' } },
-            },
-          },
-        ],
-      },
-    },
-    {
-      component: 'Prompt',
-      children: [
-        { component: 'Input', ref: 'text', model: '$.text', props: { placeholder: 'What would you like to see?', clearOnEnter: true } },
-        { component: 'Button', ref: 'send', props: { label: { $if: '$.asking', $then: 'Asking…', $else: 'Send' } } },
-        { if: '$.error', then: { component: 'Text', props: { tone: 'error' }, children: '{{$.error}}' } },
-      ],
-    },
+    { component: 'Button', ref: 'send', props: { label: { $if: '$.asking', $then: 'Asking…', $else: 'Send' }, disabled: { $if: '$.text', $then: false, $else: true } } },
+    { if: '$.browsing', then: { component: 'Keys', ref: 'deck-keys', props: { capture: true } }, else: { component: 'Keys', ref: 'keys' } },
   ],
 };

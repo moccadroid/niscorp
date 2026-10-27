@@ -16,6 +16,7 @@ export const shell: ShellManifest = {
       const candidates = at === 0 ? [...opens, 'signin.door'] : opens;
       return candidates.length === 0 ? { id: area } : { id: area, initial: candidates };
     }),
+    { id: 'overview' },
     { id: 'dock', initial: 'ask.dock' },
   ],
   layout: frameLayout,

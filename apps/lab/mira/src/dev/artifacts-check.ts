@@ -11,6 +11,8 @@ import { shell } from '../app/shell/shell';
 import { BEHAVIORS, ENTRIES } from '../app/vex';
 import { inputKeysOf } from '../server/compose/catalog';
 import { isRecord } from '../server/compose/record';
+import { ANSWER_INKS } from '../server/compose/plan';
+import { INKS } from '../ui/kit';
 import { buildRegistry } from '../ui/registry';
 import { checks } from './checks';
 
@@ -79,6 +81,7 @@ for (const arrangement of ARRANGEMENTS) {
 check('the frame has the region an arrangement is swapped into, and the first one in it', JSON.stringify(shell.layout).includes('"ref":"answers"') && shell.layoutStore?.['answers'] !== undefined);
 
 pure('the screens', SCREENS);
+check('every answer’s ink is one the kit has', ANSWER_INKS.every((ink) => INKS.some((known) => known === ink)), ANSWER_INKS.join(', '));
 for (const screen of SCREENS) {
   for (const [at, canvas] of screen.canvases.entries()) {
     const action = actions[canvas.action];
@@ -90,6 +93,7 @@ for (const screen of SCREENS) {
     check(`${named} is opened with an input its action’s schema takes`, parsed === undefined || parsed.success, parsed?.error?.message ?? '');
     check(`${named} says why it is there`, canvas.intent.trim() !== '');
   }
+  check(`screen "${screen.id}" is in an ink the kit has`, INKS.some((ink) => ink === screen.ink), screen.ink);
   const arrangement = ARRANGEMENTS.find((candidate) => candidate.id === screen.arrangement);
   check(`screen "${screen.id}" is laid out in an arrangement there is, with room for its canvases`, arrangement !== undefined && arrangement.areaCount >= screen.canvases.length, `${screen.arrangement}: ${screen.canvases.length} canvases`);
 }

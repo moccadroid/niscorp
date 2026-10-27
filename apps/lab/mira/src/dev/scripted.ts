@@ -93,6 +93,8 @@ const ShownSchema = z.looseObject({
   position: z.number().optional(),
   total: z.number().optional(),
   stack: z.array(z.looseObject({ position: z.number(), label: z.string() })).optional(),
+  ink: z.string().optional(),
+  next: z.string().optional(),
 });
 
 type Session = Awaited<ReturnType<NonNullable<MossServer['shells']>['session']>>;
@@ -117,6 +119,7 @@ export type App = {
   drawn: () => string;
   grid: () => string;
   marked: () => string;
+  inks: () => string;
   ask: (text: string) => Promise<void>;
   openScreen: (id: string) => Promise<void>;
 };
@@ -193,8 +196,13 @@ export const startApp = async (models: Models): Promise<App> => {
     marked: () =>
       named('Area', shell.getShellRenderTree())
         .map((area) => recordOf(area['props']))
-        .filter((props) => props['changed'] === true)
-        .map((props) => String(props['name']))
+        .filter((props) => props['fresh'] !== undefined)
+        .map((props) => `${String(props['name'])}:${String(props['fresh'])}`)
+        .join(' '),
+    inks: () =>
+      named('Area', shell.getShellRenderTree())
+        .map((area) => recordOf(area['props']))
+        .map((props) => `${String(props['name'])}:${String(props['ink'])}`)
         .join(' '),
     // A message is answered when the line's `ask` call ends, whatever it leaves on screen.
     ask: async (text) => {

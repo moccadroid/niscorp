@@ -69,10 +69,11 @@ try {
   check('an answer that no longer reads, or that newer code wrote, is left out, and the rest stay', !JSON.stringify(shown(again)['stack']).includes('Broken') && !JSON.stringify(shown(again)['stack']).includes('From later'), JSON.stringify(shown(again)['stack']));
   check('a new shell opens on the answer they were last given, with its canvases', shown(again)['label'] === 'The second' && said(again, 'a') === 'One' && said(again, 'b') === 'Two', `${String(shown(again)['label'])}: ${said(again, 'a')} / ${said(again, 'b')}`);
   check('…laid out as it was', drawn(again).includes('"name":"b"'));
+  check('…its cards in the inks they were in, and marked as they were', shown(again)['ink'] === 'turn-2' && drawn(again).includes('"ink":"turn-2","fresh":"changed"') && drawn(again).includes('"ink":"turn-2","fresh":"new"'), String(shown(again)['ink']));
   check('…and the stack behind it: the first screen, then their answers in order', shown(again)['total'] === 3 && shown(again)['position'] === 3, JSON.stringify(shown(again)['stack']));
   press(again, 'back');
   await until(() => shown(again)['label'] === 'The first');
-  check('back goes through them', said(again, 'a') === 'One' && shown(again)['position'] === 2);
+  check('back goes through them', said(again, 'a') === 'One' && shown(again)['position'] === 2 && shown(again)['ink'] === 'turn-1');
   press(again, 'back');
   await until(() => shown(again)['label'] === 'Start');
   check('…to the first screen', shown(again)['position'] === 1);

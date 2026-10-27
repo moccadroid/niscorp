@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.1",
+    "@fontsource-variable/archivo": "^5.3.0",
     "@niscorp/charter": "workspace:^",
     "@niscorp/cortex": "workspace:^",
     "@niscorp/moss": "workspace:^",

@@ -42,7 +42,8 @@ const scripted = scriptedModels(SCRIPT);
 const { prompts } = scripted;
 const lastPrompt = (): string => prompts[prompts.length - 1] ?? '';
 const app = await startApp(scripted.models);
-const { on, current, total, grid, areas, ids, without, said, drawn, marked, runs, ask, session } = app;
+const { on, current, total, grid, areas, ids, without, said, drawn, marked, inks, rows, runs, ask, session } = app;
+const browsing = (): boolean => on('dock').data['browsing'] === true;
 try {
   const template = '<!doctype html><html><head></head><body><div id="root"></div></body></html>';
   const page = await renderDocument({ ...drawing, server: app.server, template, request: { path: '/', cookie: `nisc.token=${app.token}` } });
@@ -69,25 +70,34 @@ try {
     prompts[0]?.slice(0, 600) ?? '',
   );
   check('words the model says are placed where it says, in the room it gives', areas() === 'answer.text answer.text' && on('a').data['title'] === 'One' && on('b').data['title'] === 'Two' && grid() === '2: a b', `${areas()} — ${grid()}`);
-  check('the areas the answer changed are outlined', marked() === 'a b', marked());
-  check('the chip in the dock names the answer shown by its title, and where it stands among the answers', drawn().includes('"Two things · 2/2"'), drawn().match(/"label":"[^"]*· \d+\/\d+"/)?.[0] ?? '');
-  session.dispatch('dock', { type: 'ui:click', ref: 'stack' });
-  await settle();
+  check('the areas the answer changed are marked so, in a word on the screen', marked() === 'a:changed b:changed' && (drawn().match(/"tone":"mark"\},"children":\[\{"type":"text","value":"Changed"/g) ?? []).length === 2, marked());
+  check('a card the answer wrote is in the answer’s own ink, the first of the turn', inks() === 'a:turn-1 b:turn-1' && current().ink === 'turn-1', inks());
+  check('the line is in the ink of the answer that comes next', current().next === 'turn-2' && /"name":"Dock","props":\{"ink":"turn-2"/.test(drawn()), drawn().match(/"name":"Dock","props":\{[^}]*\}/)?.[0] ?? '');
+  check('the chip in the dock names the answer shown by its title, and where it stands among the answers', drawn().includes('"label":"Two things"') && drawn().includes('"count":"2/2"'), drawn().match(/"label":"Two things"[^}]*/)?.[0] ?? '');
+  session.dispatch('dock', { type: 'ui:click', ref: 'chip' });
   check(
-    'opening the chip shows what was asked, what the model said it did, and the answers to go back to',
-    current().response === 'Put the two side by side.' && drawn().includes('side by side.') && drawn().includes(`1. ${FIRST.label}`) && drawn().includes('2. Two things') && drawn().includes('Two things side by side'),
-    String(current().response),
+    'the chip opens every answer side by side, over the answer: what was asked, what the model said it did, each card by its title',
+    (await until(() => on('overview').action === 'ask.deck' && rows('overview', 'answers').length === 2)) && browsing() && drawn().includes('Put the two side by side.') && drawn().includes('“Two things side by side”'),
+    JSON.stringify(rows('overview', 'answers')).slice(0, 300),
   );
-  session.dispatch('dock', { type: 'ui:click', ref: 'stack' });
+  check('…the answer shown picked', on('overview').data['selected'] === 2 && on('dock').data['browse'] === 2, String(on('overview').data['selected']));
+  session.dispatch('dock', { type: 'ui:click', ref: 'deck-back' });
+  check('…back moves the pick, not the answer shown', (await until(() => on('overview').data['selected'] === 1 && on('dock').data['browse'] === 1)) && current().position === 2, `${String(on('overview').data['selected'])} ${String(current().position)}`);
+  session.dispatch('dock', { type: 'ui:click', ref: 'deck-back' });
+  await settle();
+  check('…and stops at the first', on('overview').data['selected'] === 1, String(on('overview').data['selected']));
+  session.dispatch('dock', { type: 'ui:key', ref: 'deck-keys', key: 'Escape' });
+  check('Escape closes it on the answer that was shown', (await until(() => on('overview').action === '' && !browsing())) && current().position === 2, `${on('overview').action} ${String(current().position)}`);
 
   const pairIds = ids();
   await ask('drop the second');
   check('when Jev finds nothing likely, the model is given no hint', !lastPrompt().includes('FAST PICKER'), lastPrompt().slice(-300));
-  check('an answer that only empties an area outlines nothing', marked() === '', marked());
+  check('an answer that only empties an area marks nothing, and what stays keeps its ink', marked() === '' && inks() === 'a:turn-1', `${marked()} — ${inks()}`);
   check('an area the model drops is emptied, and every other stays as it was', on('b').id === '' && without('b', ids()) === without('b', pairIds), `${ids()} vs ${pairIds}`);
   const first = on('a').id;
   await ask('the second again, beside it');
   check('a canvas kept stays the same canvas, in its area; what is new goes where the model puts it', on('a').id === first && on('b').data['title'] === 'Two', `${ids()}`);
+  check('a card put where nothing was is marked new, in the ink of its turn', marked() === 'b:new' && inks() === 'a:turn-1 b:turn-3' && /"tone":"mark"\},"children":\[\{"type":"text","value":"New"/.test(drawn()), `${marked()} — ${inks()}`);
   await ask('swap them');
   check('the answer streams in: an area is placed while the rest of the reply is still being written', app.streamed() > 0, String(app.streamed()));
   check('a canvas the model keeps from another area moves there', on('a').data['title'] === 'Two' && on('b').data['title'] === 'One', `${String(on('a').data['title'])} ${String(on('b').data['title'])}`);
@@ -132,8 +142,8 @@ try {
   await settle();
 
   const answeredBefore = app.answered();
-  session.shell.publish('ask', 'What can you do?');
-  check('a message sent on `ask` — a card’s thing to ask — is asked as if typed', (await until(() => app.answered() > answeredBefore)) && lastPrompt().includes('MESSAGE: What can you do?'), lastPrompt().slice(-200));
+  session.dispatch('b', { type: 'ui:click', ref: 'suggestion', payload: 'What can you do?' });
+  check('a thing to ask, pressed on the first screen, is asked as if typed', (await until(() => app.answered() > answeredBefore)) && lastPrompt().includes('MESSAGE: What can you do?'), lastPrompt().slice(-200));
   await settle();
   check('words the model says are shown as words', areas() === 'answer.text' && on('a').data['title'] === 'What this app does', areas());
 
@@ -162,12 +172,35 @@ try {
   check('forward from the first screen is the answer after it, as it was', await until(() => current().position === 2 && current().question === 'Two things side by side' && on('a').data['title'] === 'One'), `position ${String(current().position)}, ${areas()}`);
   session.dispatch('dock', { type: 'ui:click', ref: 'back' });
   check('back is the first screen again', await until(() => current().position === 1 && current().screen === FIRST.id), `position ${String(current().position)}`);
+  session.dispatch('dock', { type: 'ui:key', ref: 'keys', key: 'ArrowRight' });
+  check('the right arrow is forward too', await until(() => current().position === 2), `position ${String(current().position)}`);
+  session.dispatch('dock', { type: 'ui:key', ref: 'keys', key: 'ArrowLeft' });
+  check('…and the left arrow back', await until(() => current().position === 1), `position ${String(current().position)}`);
 
-  session.dispatch('dock', { type: 'ui:click', ref: 'stack' });
-  const stack = current().stack ?? [];
-  check('the chip opens the stack: every answer, by its title or the screen it is', on('dock').data['listing'] === true && stack.length === total() && stack[0]?.label === FIRST.label && stack[1]?.label === 'Two things', JSON.stringify(stack.slice(0, 3)));
-  session.dispatch('dock', { type: 'ui:click', ref: 'entry', payload: 4 });
-  check('an answer picked from the stack is shown as it was, and the list closes', await until(() => current().position === 4 && on('b').data['title'] === 'Two' && on('dock').data['listing'] === false), `${String(current().position)}, ${areas()}`);
+  session.dispatch('dock', { type: 'ui:click', ref: 'chip' });
+  await until(() => on('overview').action === 'ask.deck' && rows('overview', 'answers').length === total());
+  const deck = rows('overview', 'answers').map(recordOf);
+  check(
+    'the overview holds every answer, by its title or the screen it is',
+    deck.length === total() && deck[0]?.['label'] === FIRST.label && deck[0]['screen'] === true && deck[1]?.['label'] === 'Two things',
+    JSON.stringify(deck.map((entry) => entry['label'])),
+  );
+  check(
+    '…each with its cards: their titles, where its answer put them, and the inks they were in',
+    JSON.stringify(deck[1]?.['layers']) === JSON.stringify([
+      { name: 'a', span: 1, row: 1, column: 1, ink: 'turn-1', fresh: 'changed', mark: 'Changed', title: 'One', text: 'About One.' },
+      { name: 'b', span: 1, row: 1, column: 2, ink: 'turn-1', fresh: 'changed', mark: 'Changed', title: 'Two', text: 'About Two.' },
+    ]),
+    JSON.stringify(deck[1]?.['layers']),
+  );
+  session.dispatch('dock', { type: 'ui:click', ref: 'deck-forward' });
+  await until(() => on('overview').data['selected'] === 2);
+  session.dispatch('dock', { type: 'ui:key', ref: 'deck-keys', key: 'Enter' });
+  check('Enter opens the one picked, and the overview closes', await until(() => current().position === 2 && on('overview').action === '' && !browsing()), `${String(current().position)} ${on('overview').action}`);
+  session.dispatch('dock', { type: 'ui:click', ref: 'chip' });
+  await until(() => on('overview').action === 'ask.deck' && rows('overview', 'answers').length === total());
+  session.dispatch('overview', { type: 'ui:click', ref: 'mini', payload: 4 });
+  check('an answer pressed there is shown as it was, and the overview closes', await until(() => current().position === 4 && on('b').data['title'] === 'Two' && on('overview').action === '' && !browsing()), `${String(current().position)}, ${areas()}`);
 } finally {
   app.server.close();
 }
