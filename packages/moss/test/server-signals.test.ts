@@ -2,8 +2,9 @@ import { describe, it, expect } from 'vitest';
 import { scopeGrants } from '@niscorp/vex';
 import type { ActionDefinition } from '@niscorp/nova';
 import { createIdentityCache } from '../src/identity/cache';
+import { memoKey } from '../src/identity';
 import { createRunningManifest } from '../src/artifactory';
-import type { NiscApp } from '../src/manifest';
+import type { FunctionSession, NiscApp } from '../src/manifest';
 import type { Fabric } from '../src/runtime';
 import type { FabricMessage } from '../src/runtime/runtime';
 import { buildShellHosts } from '../src/server/hosts';
@@ -11,6 +12,7 @@ import type { Hosts } from '../src/server/hosts';
 import { buildSignals } from '../src/server/signals';
 import type { Signals } from '../src/server/signals';
 import { noRows } from './saved-double';
+import { turn } from './turn';
 
 const inbox: ActionDefinition = {
   id: 'inbox',
@@ -62,7 +64,14 @@ const processOn = (fabric: Fabric | undefined): Process => {
     wrapWire: (inner) => inner,
     revokeSessions: undefined,
   });
-  const signals = buildSignals({ fabric, identity: { invalidate: identity.invalidate, invalidateTag: identity.invalidateTag }, reset: hosts.reset, adopt: hosts.adoptFor, deliver: hosts.deliver });
+  const signals = buildSignals({
+    fabric,
+    identity: { invalidate: identity.invalidate, invalidateTag: identity.invalidateTag },
+    reset: hosts.reset,
+    adopt: hosts.adoptFor,
+    adoptAll: hosts.adopt,
+    deliver: hosts.deliver,
+  });
   return { hosts, signals, resolved, identityOf: identity.get };
 };
 
@@ -180,5 +189,73 @@ describe('the signals of a server — who somebody is changed', () => {
       expect(onB?.shell).toBe(before);
       expect(bus.carried).toEqual([{ kind: 'invalidate-tag', tag: 'acme', origin: expect.any(String) }]);
     });
+  });
+});
+
+describe('the signals of a server — what a tenant’s people may reach changed', () => {
+  const notes: ActionDefinition = { id: 'notes', data: {} };
+  const tenantApp: NiscApp = {
+    charter: { public: { actions: ['notes'], functions: [] }, member: { actions: ['notes'], functions: ['notes.*'] } },
+    actions: { notes },
+    shell: { canvases: [{ id: 'main', initial: 'notes' }] },
+  };
+
+  const tenantProcess = (fabric: Fabric, roles: ReadonlyMap<string, readonly string[]>) => {
+    const sessions = new Map<string | null, FunctionSession>();
+    const records = createIdentityCache({ resolve: async (principal) => ({ roles: roles.get(principal) ?? ['public'], scope: {}, tag: 'acme' }), idleMs: 0 });
+    const hosts = buildShellHosts({
+      app: { ...tenantApp, functions: (session) => (sessions.set(session.principal, session), [{ id: 'notes.add', description: 'Adds a note.', execute: async () => 'added' }]) },
+      runtime: {},
+      identity: {
+        resolve: async (principal) => {
+          const held = principal === null ? ['public'] : (await records.get(principal)).roles;
+          return { roles: held, scope: {}, installed: undefined, memoKey: memoKey(held, undefined) };
+        },
+        composeScope: () => ({}),
+      },
+      running: createRunningManifest({ shipped: tenantApp, grants: scopeGrants([]), shells: [] }),
+      savedAs: () => noRows,
+      data: { answerIntent: async () => Promise.reject(new Error('no intent is asked here')), fingerprintsFor: async () => [] },
+      wire: () => async () => ({ ok: true, status: 200, json: async () => ({}), text: async () => '{}' }),
+      wrapWire: (inner) => inner,
+      revokeSessions: undefined,
+    });
+    const signals = buildSignals({
+      fabric,
+      identity: { invalidate: records.invalidate, invalidateTag: records.invalidateTag },
+      reset: hosts.reset,
+      adopt: hosts.adoptFor,
+      adoptAll: hosts.adopt,
+      deliver: hosts.deliver,
+    });
+    const held = (principal: string): string[] => sessions.get(principal)?.functions().map((one) => one.id) ?? [];
+    return { hosts, signals, held, dropRecord: records.invalidate };
+  };
+
+  it('`invalidateTag` has every living shell adopt in every process: a function the new roles do not grant is no longer held, though the record had been dropped', async () => {
+    const bus = createBus();
+    const roles = new Map<string, readonly string[]>([
+      ['acme_ada', ['member']],
+      ['acme_ben', ['member']],
+    ]);
+    const [a, b] = [tenantProcess(bus.endpoint(), roles), tenantProcess(bus.endpoint(), roles)];
+    try {
+      const bens = await a.hosts.shells?.session('t', 'acme_ben');
+      const adas = await b.hosts.shells?.session('t', 'acme_ada');
+      const before = [bens?.shell, adas?.shell];
+      expect([a.held('acme_ben'), b.held('acme_ada')]).toEqual([['notes.add'], ['notes.add']]);
+
+      a.dropRecord('acme_ben');
+      roles.set('acme_ada', ['public']);
+      roles.set('acme_ben', ['public']);
+      a.signals.invalidateTag('acme');
+      for (let i = 0; i < 5; i += 1) await turn();
+
+      expect([a.held('acme_ben'), b.held('acme_ada')]).toEqual([[], []]);
+      expect([bens?.shell, adas?.shell]).toEqual(before);
+    } finally {
+      a.hosts.stop();
+      b.hosts.stop();
+    }
   });
 });

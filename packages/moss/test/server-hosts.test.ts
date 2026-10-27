@@ -318,7 +318,7 @@ describe('the shell hosts — a change reaches the living shells of every host',
   it('a principal’s reset reaches their shell in the app’s host and the ones a page built for them, and nobody else’s', async () => {
     const hosts = buildShellHosts(depsWith(shipped));
     try {
-      const signals = buildSignals({ fabric: undefined, identity: { invalidate: () => true, invalidateTag: () => [] }, reset: hosts.reset, adopt: hosts.adoptFor, deliver: hosts.deliver });
+      const signals = buildSignals({ fabric: undefined, identity: { invalidate: () => true, invalidateTag: () => [] }, reset: hosts.reset, adopt: hosts.adoptFor, adoptAll: hosts.adopt, deliver: hosts.deliver });
       const page = hosts.pageAt('/docs')?.host;
       const sessions = [await hosts.shells?.session('t', 'usr_1'), await page?.session('t', 'usr_1'), await page?.session('t', 'usr_2')];
       const before = sessions.map((session) => session?.shell);

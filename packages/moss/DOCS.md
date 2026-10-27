@@ -1354,8 +1354,16 @@ It's a Hono app — mount it, extend it, or hand it to a listener.
   app keeps for them, and the one a page built for each connection of theirs.
   `false` = no record was held.
 - `invalidateTag(tag): number` — forget every identity record wearing the
-  tag the app put on it (`IdentityRecord.tag`); answers how many. Forgets, does
-  not reset shells.
+  tag the app put on it (`IdentityRecord.tag`); answers how many. Then every
+  living shell adopts, as after `refresh` ("A change is the server's", under
+  `shells` below): it is brought level with what its principal holds now, in
+  place, so a function or an action their new roles do not grant is no longer
+  held. No shell is reset: what people were in the middle of stays. Every
+  living shell, not only those of the records forgotten: a record can be
+  dropped while its shell lives (past `runtime.identityMax`, or unread for
+  `runtime.identityIdleMs`), and no tag finds it then. So each call asks the app's
+  `identity` again for every signed-in person with a living shell whose
+  record is not held.
 - `identity(principal): Promise<IdentityRecord>` — who one principal is,
   resolved the way a request resolves it: `{ roles, scope, installed? }`,
   through the same cache the request path uses. `null` is nobody signed in.

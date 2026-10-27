@@ -79,7 +79,7 @@ const process = (rows: RowsDouble = rowsDouble()): Process => {
     wrapWire: (inner) => inner,
     revokeSessions: undefined,
   });
-  const signals = buildSignals({ fabric: undefined, identity: { invalidate: () => false, invalidateTag: () => [] }, reset: hosts.reset, deliver: hosts.deliver, adopt: hosts.adoptFor });
+  const signals = buildSignals({ fabric: undefined, identity: { invalidate: () => false, invalidateTag: () => [] }, reset: hosts.reset, deliver: hosts.deliver, adopt: hosts.adoptFor, adoptAll: hosts.adopt });
   running.onChange(hosts.adopt);
   running.onChangeFor(signals.adopt);
   return {
