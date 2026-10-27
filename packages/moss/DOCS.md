@@ -2620,9 +2620,14 @@ hash of one key (a unique index on `integrations.key_hash`).
 **What intake holds a bundle to**, before any of it is kept. It is upgraded by
 its grammar stamps and read by the bundle's schema. Each action is named
 `ext.<audience>.<integration>.<name>` under the integration's own id; each of
-its endpoints is a fingerprint the app serves or a URL under
+its endpoints is a fingerprint the app serves, called on one of the app's vex
+routes (`/api/vex`, `/api/<resource>/vex`), or a URL under
 `/integrations/<id>/` (and not under `hook/`, the door that asks for no
-session), and none is `fn:`; its layout composes what the app's kit has; and no
+session), and none is `fn:`. The path of that URL, up to its `?`, is written
+as it resolves, because the path a URL parser reads is the one that is
+routed: a `..`, `.`, `%2e` or `\` that would move it is refused, and so is a
+`{{…}}` template, which is filled in when the endpoint is called; one in the
+query is taken. Its layout composes what the app's kit has; and no
 chain of its steps, laid over the app's own actions, runs for ever. Then
 `extension` is read by the app's schema and held to the app's `check`. Every
 reason, moss's and the app's, is reported together, and any one refuses the
