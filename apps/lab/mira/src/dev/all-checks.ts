@@ -5,6 +5,7 @@ const CHECKS: readonly (readonly [name: string, what: string, args?: readonly st
   ['strata', 'the source is written at the installed grammars (strata.lock.json)', ['status', '--check']],
   ['compose-check', 'a message is answered with a screen: the open screen read, picked, composed, checked, placed, written, and back again'],
   ['signin-check', 'invite only: a link mailed to an invited address signs them in once; strangers get nothing; the owner invites, a member cannot'],
+  ['history-check', 'the stack lasts: a new shell opens on the last answer, with the ones before it behind; a screen opened is not kept; nobody else sees them'],
 ];
 
 let failed = 0;

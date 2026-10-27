@@ -20,7 +20,24 @@ CREATE TABLE links (
 );
 `;
 
+const ANSWERS = `
+CREATE TABLE answers (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  person text NOT NULL,
+  question text NOT NULL,
+  title text NOT NULL,
+  response text,
+  plan jsonb NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX answers_person_created ON answers (person, created_at DESC);
+`;
+
 export const APP_SEQUENCE: Sequence = {
   id: 'mira.app',
-  migrations: [{ description: 'People, and the one-time sign-in links mailed to them', steps: sqlSteps(PEOPLE) }],
+  migrations: [
+    { description: 'People, and the one-time sign-in links mailed to them', steps: sqlSteps(PEOPLE) },
+    { description: 'Every answer a person was given, so their stack outlasts the shell', steps: sqlSteps(ANSWERS) },
+  ],
 };

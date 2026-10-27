@@ -1,7 +1,7 @@
 # Mira Assistant: your own Dots, built the nisc way
 
-**Status: Proposed (2026-10-22), its three decisions answered (2026-10-26). Step 1 built (2026-10-26),
-steps 2–6 not started.** Branch `worktree-mira`. Mira is a bare model-led app (the tour came out in `7890b0c2`): every typed message is
+**Status: Proposed (2026-10-22), its three decisions answered (2026-10-26). Steps 1 and 2 built
+(2026-10-26, 2026-10-27), steps 3–6 not started.** Branch `worktree-mira`. Mira is a bare model-led app (the tour came out in `7890b0c2`): every typed message is
 answered with a screen, composed by a cortex agent from the app's actions. Part 5 has what was decided.
 
 ## 0. For whoever builds this
@@ -180,6 +180,11 @@ Each step ends with `npm run check` passing and a check of its own in `src/dev/`
    (`6ce35e17`); in dev, `/dev/as/<address>` also signs in on this machine.
 2. **The stack lasts** (2.3). Done: a reload brings back the person's answers, back and forward through
    them.
+   **Built 2026-10-27.** `src/dev/history-check.ts` holds it on PGlite; on the Docker Postgres a server
+   restart was followed by a reload that opened on the last answer, and back went through the one
+   before. Decided with the owner before building: a new shell opens on the last answer (the dock asks
+   for it as it mounts), and only answers to messages are kept, not screens opened. The write is
+   `answers/keep` from `history.ts`, as the person, with no wait on it.
 3. **Memory** (2.2). Done: offline, a scripted model's `remember` and `recall` reach the rows and come
    back in the next message's prompt; in the running app, "I'm vegetarian" is kept and "dinner ideas?"
    answers with it.

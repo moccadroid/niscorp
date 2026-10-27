@@ -13,7 +13,7 @@ import type { AnswerContext } from './answer';
 import { CATALOG, opened, screensHeld, withUsable } from './catalog';
 import type { Catalog } from './catalog';
 import { composerAgent } from './composer.agent';
-import { createHistory } from './history';
+import { createHistory, keptAs } from './history';
 import { messageInput } from './knowledge';
 import { framed, markChanged } from './layout';
 import { pick } from './pick';
@@ -56,11 +56,12 @@ export const composer =
 
     const screenPlan = (screen: Screen): Plan => planOf('', canvasesInAreas(screen.canvases.map((canvas) => opened(canvas, catalog))), { arrangements: ARRANGEMENTS, screen, arrangement: screen.arrangement });
     const history = createHistory(screenPlan(SCREENS[0]));
+    const kept = keptAs(session.wire);
 
     // An answer's layout goes into the frame's region through this shell's draft, where moss checks it; it is kept
     // nowhere. The draft holds one frame, taken again for each answer.
     let frameId: string | undefined;
-    let drawn = '';
+    let drawn = JSON.stringify(framed(frameLayout, 'answers', history.current().layout));
     const draw = async (layout: LayoutNode): Promise<void> => {
       const frame = framed(frameLayout, 'answers', layout);
       const written = JSON.stringify(frame);
@@ -170,6 +171,7 @@ export const composer =
       // An answer that leaves the screen as it is adds nothing to the stack; the dock still names what was asked, and why
       // nothing changed.
       if (screenOf({ ...plan, label: before.label }) === screenOf(before)) return show({ ...before, question: message, label: answer.title, response });
+      kept.keep(plan).catch((error: unknown) => console.error(`[ask] "${message}" was shown and not kept: ${reasonOf(error)}`));
       return show(history.add(plan), changedAreas(plan, before));
     };
 
@@ -178,12 +180,22 @@ export const composer =
       return screen === undefined ? history.current() : leave(() => showScreen(screen));
     };
 
+    // The person's answers from before this shell are read once, before anything is shown: the dock asks for the
+    // current one as it mounts, which is the last of them.
+    let restored: Promise<void> | undefined;
+    const restoredFirst =
+      (run: (data: unknown) => Promise<ShownPlan>) =>
+      async (data: unknown): Promise<ShownPlan> => {
+        await (restored ??= kept.past().then(history.restore, (error: unknown) => console.error(`[answers] the person's answers could not be read: ${reasonOf(error)}`)));
+        return run(data);
+      };
+
     return [
-      { id: 'ask', description: 'Answers a message with a screen. Send { text }; answers the plan shown: { question, response, label, canvases, position, total, stack }.', execute: ask },
-      { id: 'screens.open', description: 'Shows one of the screens in the dock: its canvases together. Send { opening: <screen id> }; answers its plan.', execute: open },
-      { id: 'answers.back', description: 'Shows the answer before the one shown, and answers its plan.', execute: async () => leave(history.back) },
-      { id: 'answers.forward', description: 'Shows the answer after the one shown, and answers its plan.', execute: async () => leave(history.forward) },
-      { id: 'answers.go', description: 'Shows one answer from the stack. Send { going: <its position> }; answers its plan.', execute: async (data) => leave(() => history.go(GoSchema.parse(data).going)) },
-      { id: 'answers.current', description: 'Answers the plan shown, or, while an answer streams, the answer so far.', execute: async () => soFar ?? history.current() },
+      { id: 'ask', description: 'Answers a message with a screen. Send { text }; answers the plan shown: { question, response, label, canvases, position, total, stack }.', execute: restoredFirst(ask) },
+      { id: 'screens.open', description: 'Shows one of the screens in the dock: its canvases together. Send { opening: <screen id> }; answers its plan.', execute: restoredFirst(open) },
+      { id: 'answers.back', description: 'Shows the answer before the one shown, and answers its plan.', execute: restoredFirst(async () => leave(history.back)) },
+      { id: 'answers.forward', description: 'Shows the answer after the one shown, and answers its plan.', execute: restoredFirst(async () => leave(history.forward)) },
+      { id: 'answers.go', description: 'Shows one answer from the stack. Send { going: <its position> }; answers its plan.', execute: restoredFirst(async (data) => leave(() => history.go(GoSchema.parse(data).going))) },
+      { id: 'answers.current', description: 'Answers the plan shown, or, while an answer streams, the answer so far.', execute: restoredFirst(async () => soFar ?? show(history.current())) },
     ];
   };

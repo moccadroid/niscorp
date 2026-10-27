@@ -43,6 +43,7 @@ export const dockAction: ActionDefinition = {
     go: { fn: 'answers.go', target: 'current' },
     current: { fn: 'answers.current', target: 'current' },
   },
+  lifecycle: { mount: [{ call: 'current', onSuccess: shown }] },
   triggers: [
     { message: 'answer-moved', do: [{ call: 'current', onSuccess: shown }] },
     { message: 'ask', do: [{ set: 'text', value: '@event.payload' }, ...ask] },
