@@ -31,8 +31,9 @@ src/db/         your tables, as a strata sequence: people, and the sign-in links
 src/app/        ARTIFACTS ONLY — the manifest (app.ts), the charter, the actions, the shell, the reads and writes (vex/)
 src/server/     the environment (runtime.ts: Postgres or PGlite), the boot, how a screen is drawn (document.ts)
 src/ui/         the kit — the only renderer code, with src/main.tsx, the terminal entry: kit.tsx the
-                components, kit.css the look and how each part moves, target.ts which updates are
-                moves, drawn as view transitions
+                components, kit.css the look, target.ts which updates are moves and how each is drawn:
+                motion/ the stage of card copies an answer moves on, the sideways slide back and
+                forward take, the dock's travelling words; the overview's zoom is a view transition
 src/dev/        the checks (`npm run check`) — a new feature adds its own
 nisc.config.ts  how the app boots and how its screens are drawn, for the `nisc` command
 strata.lock.json  the grammar versions the source is written at (rule 20) — moved only

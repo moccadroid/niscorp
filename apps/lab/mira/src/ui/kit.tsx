@@ -317,55 +317,71 @@ Prompt.meta = { description: 'The line to ask in.', propsSchema: PromptProps };
 const typedInto = (target: EventTarget | null): boolean => target instanceof Element && target.closest('input, textarea, select, [contenteditable="true"]') !== null;
 const emptyField = (target: EventTarget | null): boolean => (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) && target.value.trim() === '';
 
-// A swipe to the right is the left arrow.
-const KeysProps = z.object({ capture: z.boolean().optional().describe('Whether keys pressed while typing in a field count too; Enter only from a field with nothing in it.') });
+// A swipe to the right is the left arrow, pressed as soon as the finger is known to be going sideways, so the answer it
+// goes to can follow the finger in; let go short of a quarter of the way, slowly, and the other arrow takes it back. On
+// the page, `data-swiping` says which way a finger is carrying the answer and `--swipe-x` how far; `data-swiped` says
+// how it was let go: commit or cancel.
+const KeysProps = z.object({
+  capture: z.boolean().optional().describe('Whether keys pressed while typing in a field count too; Enter only from a field with nothing in it.'),
+  back: z.boolean().optional().describe('Whether there is anything to go back to; a swipe that way gives a little and springs back.'),
+  forward: z.boolean().optional().describe('Whether there is anything to go forward to.'),
+});
 export const Keys: NovaComponent = ({ novaRef, novaModel: _model, ...props }) => {
   const dispatch = useNovaDispatch();
-  const { capture } = parsed(KeysProps, props, {});
+  const { capture, back, forward } = parsed(KeysProps, props, {});
   const press = useRef<(key: string) => void>(() => undefined);
   press.current = (key) => {
     if (novaRef !== undefined) dispatch({ type: 'ui:key', ref: novaRef, key });
   };
+  const open = useRef({ back: back !== false, forward: forward !== false });
+  open.current = { back: back !== false, forward: forward !== false };
   useEffect(() => {
     const root = document.documentElement;
     const onKey = (event: globalThis.KeyboardEvent): void => {
       if (event.metaKey || event.ctrlKey || event.altKey || event.defaultPrevented) return;
       if (!['ArrowLeft', 'ArrowRight', 'Enter', 'Escape'].includes(event.key)) return;
-      if (capture !== true && typedInto(event.target)) return;
+      if (capture !== true && typedInto(event.target) && !(event.key.startsWith('Arrow') && emptyField(event.target))) return;
       if (event.key === 'Enter' && ((typedInto(event.target) && !emptyField(event.target)) || (event.target instanceof Element && event.target.closest('button, a') !== null))) return;
       if (event.key.startsWith('Arrow')) event.preventDefault();
       press.current(event.key);
     };
-    let swipe: { id: number; x: number; y: number; at: number; on: boolean } | undefined;
+    let swipe: { id: number; x: number; y: number; at: number; way?: 'back' | 'forward'; pressed: boolean } | undefined;
     const onDown = (event: PointerEvent): void => {
       if (event.pointerType === 'mouse' || !(event.target instanceof Element) || event.target.closest('button, a, input, textarea, .k-deck') !== null) return;
-      swipe = { id: event.pointerId, x: event.clientX, y: event.clientY, at: performance.now(), on: false };
+      swipe = { id: event.pointerId, x: event.clientX, y: event.clientY, at: performance.now(), pressed: false };
     };
     const onMove = (event: PointerEvent): void => {
       if (swipe === undefined || event.pointerId !== swipe.id) return;
       const dx = event.clientX - swipe.x;
       const dy = event.clientY - swipe.y;
-      if (!swipe.on) {
+      if (swipe.way === undefined) {
         if (Math.abs(dy) > 14 && Math.abs(dy) > Math.abs(dx)) {
           swipe = undefined;
           return;
         }
         if (Math.abs(dx) < 12) return;
-        swipe.on = true;
+        swipe.way = dx > 0 ? 'back' : 'forward';
+        swipe.pressed = open.current[swipe.way];
+        root.removeAttribute('data-swiped');
+        root.setAttribute('data-swiping', swipe.way);
+        if (swipe.pressed) press.current(swipe.way === 'back' ? 'ArrowLeft' : 'ArrowRight');
       }
-      root.setAttribute('data-swiping', dx > 0 ? 'back' : 'forward');
-      root.style.setProperty('--swipe', String(Math.min(1, Math.abs(dx) / (window.innerWidth * 0.6))));
+      const carried = swipe.way === 'back' ? Math.max(0, dx) : Math.min(0, dx);
+      root.style.setProperty('--swipe-x', String(swipe.pressed ? carried : carried * 0.25));
+      root.style.setProperty('--swipe', String(Math.min(1, Math.abs(carried) / (window.innerWidth * 0.6))));
     };
     const onUp = (event: PointerEvent): void => {
       if (swipe === undefined || event.pointerId !== swipe.id) return;
-      const { x, at, on } = swipe;
+      const { x, at, way, pressed } = swipe;
       swipe = undefined;
+      if (way === undefined) return;
+      const dx = (event.clientX - x) * (way === 'back' ? 1 : -1);
+      const speed = dx / Math.max(1, performance.now() - at);
+      const commit = pressed && event.type !== 'pointercancel' && (dx > window.innerWidth * 0.25 || speed > 0.5);
       root.removeAttribute('data-swiping');
       root.style.removeProperty('--swipe');
-      if (!on || event.type === 'pointercancel') return;
-      const dx = event.clientX - x;
-      const speed = Math.abs(dx) / Math.max(1, performance.now() - at);
-      if (Math.abs(dx) > window.innerWidth * 0.25 || speed > 0.5) press.current(dx > 0 ? 'ArrowLeft' : 'ArrowRight');
+      root.setAttribute('data-swiped', commit ? 'commit' : 'cancel');
+      if (pressed && !commit) press.current(way === 'back' ? 'ArrowRight' : 'ArrowLeft');
     };
     window.addEventListener('keydown', onKey);
     window.addEventListener('pointerdown', onDown, { passive: true });
@@ -416,11 +432,16 @@ export const Deck: NovaComponent = ({ children, novaModel, novaRef: _ref, ...pro
       { off: Infinity },
     ).element;
   };
+  // While it is turned to a picture by hand, the pictures it passes on the way are not picked.
+  const steering = useRef(false);
   const scrollTo = (value: number | undefined, smooth: boolean): void => {
     const scroller = row.current;
     const target = pictures().find((element) => valueOf(element) === value);
     if (scroller === null || !(target instanceof HTMLElement)) return;
-    scroller.scrollTo({ left: target.offsetLeft + target.offsetWidth / 2 - scroller.clientWidth / 2, behavior: smooth && !matchMedia('(prefers-reduced-motion: reduce)').matches ? 'smooth' : 'instant' });
+    const left = target.offsetLeft + target.offsetWidth / 2 - scroller.clientWidth / 2;
+    const glides = smooth && !matchMedia('(prefers-reduced-motion: reduce)').matches && Math.abs(scroller.scrollLeft - left) > 1;
+    steering.current = glides;
+    scroller.scrollTo({ left, behavior: glides ? 'smooth' : 'instant' });
   };
   // Placed at the picture picked as soon as there are pictures; after that, it scrolls only to a pick made elsewhere.
   const placed = useRef(false);
@@ -440,8 +461,22 @@ export const Deck: NovaComponent = ({ children, novaModel, novaRef: _ref, ...pro
     const scroller = row.current;
     if (scroller === null) return undefined;
     const settle = (): void => {
+      if (steering.current) {
+        steering.current = false;
+        scroller.removeAttribute('data-dragging');
+      }
       const value = valueOf(centred());
       if (value !== undefined) pick.current(value);
+    };
+    let looking = false;
+    const onScroll = (): void => {
+      if (looking || steering.current || drag !== undefined) return;
+      looking = true;
+      requestAnimationFrame(() => {
+        looking = false;
+        const value = valueOf(centred());
+        if (value !== undefined && !steering.current) pick.current(value);
+      });
     };
     let drag: { id: number; x: number; left: number; lastX: number; lastAt: number; speed: number; moved: boolean } | undefined;
     const onDown = (event: PointerEvent): void => {
@@ -468,7 +503,6 @@ export const Deck: NovaComponent = ({ children, novaModel, novaRef: _ref, ...pro
       const { moved, speed } = drag;
       drag = undefined;
       if (!moved) return;
-      scroller.removeAttribute('data-dragging');
       const swallow = (click: MouseEvent): void => click.stopPropagation();
       scroller.addEventListener('click', swallow, { capture: true, once: true });
       setTimeout(() => scroller.removeEventListener('click', swallow, { capture: true }), 0);
@@ -481,6 +515,7 @@ export const Deck: NovaComponent = ({ children, novaModel, novaRef: _ref, ...pro
         { off: Infinity },
       ).value;
       scrollTo(nearest, true);
+      if (!steering.current) scroller.removeAttribute('data-dragging');
       if (nearest !== undefined) pick.current(nearest);
     };
     let turning = false;
@@ -499,6 +534,7 @@ export const Deck: NovaComponent = ({ children, novaModel, novaRef: _ref, ...pro
       if (next !== undefined) pick.current(next);
     };
     scroller.addEventListener('scrollend', settle);
+    scroller.addEventListener('scroll', onScroll, { passive: true });
     scroller.addEventListener('pointerdown', onDown);
     scroller.addEventListener('pointermove', onMove);
     scroller.addEventListener('pointerup', onUp);
@@ -506,6 +542,7 @@ export const Deck: NovaComponent = ({ children, novaModel, novaRef: _ref, ...pro
     scroller.addEventListener('wheel', onWheel, { passive: false });
     return () => {
       scroller.removeEventListener('scrollend', settle);
+      scroller.removeEventListener('scroll', onScroll);
       scroller.removeEventListener('pointerdown', onDown);
       scroller.removeEventListener('pointermove', onMove);
       scroller.removeEventListener('pointerup', onUp);

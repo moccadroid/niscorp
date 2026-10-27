@@ -8,10 +8,13 @@ const shown: Step[] = AREAS.map((area) => ({ reconcile: { canvas: area, to: `$.c
 
 const closeDeck: Step = { emit: { channel: 'deck-close' } };
 
-// The words leave the line for the chip as the question is sent, and come back to the line if it gets no screen.
+// The words leave the line for the chip as the question is sent, and come back to the line if it gets no screen. The
+// inks the answer and the line will have are taken as it is sent: the stack counts the answer before it is finished.
 const ask: Step[] = [
   closeDeck,
   { set: 'asked', from: 'text' },
+  { set: 'answerInk', from: 'current.next' },
+  { set: 'lineInk', from: 'current.later' },
   { set: 'text', value: '' },
   { set: 'asking', value: true },
   { set: 'error', value: '' },
@@ -49,6 +52,8 @@ export const dockAction: ActionDefinition = {
     going: 0,
     text: '',
     asked: '',
+    answerInk: 'turn-1',
+    lineInk: 'turn-2',
     asking: false,
     error: '',
     browsing: false,

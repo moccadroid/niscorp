@@ -1,190 +1,273 @@
 import { flushSync } from 'react-dom';
-import type { ComponentRegistry, RenderNode } from '@niscorp/nova';
+import type { ComponentRegistry } from '@niscorp/nova';
 import type { NovaComponent } from '@niscorp/nova/adapters/react';
-import type { Target, TerminalApi } from '@niscorp/moss/terminal';
+import type { Target } from '@niscorp/moss/terminal';
 import { reactTarget } from '@niscorp/moss/terminal/react';
-
-// What a move is made of: the answer's areas, which instances are on the canvases, what the chip says, the dock's
-// state, and whether the deck is open. An update that changes none of it is drawn as it comes.
-type Scene = { key: string; at: number | undefined; areas: string[]; deck: boolean; asking: boolean; error: boolean };
-
-const sceneOf = (api: TerminalApi): Scene => {
-  const parts: unknown[] = [];
-  const chip: unknown[] = [];
-  const areas: string[] = [];
-  let at: number | undefined;
-  let deck = false;
-  let asking = false;
-  let error = false;
-  const walk = (nodes: readonly RenderNode[]): void => {
-    for (const node of nodes) {
-      if (node.type === 'component') {
-        const { name, props } = node;
-        if (name === 'Deck') {
-          deck = true;
-          continue;
-        }
-        if (name === 'Grid') at = typeof props['at'] === 'number' ? props['at'] : undefined;
-        if (name === 'Grid' || name === 'Area') parts.push([name, props]);
-        if (name === 'Area' && typeof props['name'] === 'string') areas.push(props['name']);
-        if (name === 'ActionSlot') parts.push(props['instanceId']);
-        if (name === 'Chip') chip.push(props['label'], props['ink']);
-        if (name === 'Dock') {
-          asking = props['asking'] === true;
-          error = props['error'] === true;
-        }
-        if (name === 'CanvasSlot' && typeof props['canvasId'] === 'string') walk(api.canvasTree(props['canvasId']));
-      }
-      if (node.type === 'component' || node.type === 'fragment') walk(node.children);
-    }
-  };
-  walk(api.frame());
-  return { key: JSON.stringify([parts, deck ? [] : chip, deck, asking, error]), at, areas, deck, asking, error };
-};
-
-type Placed = { element: HTMLElement; name: string; row: number; column: number; span: number };
-
-const placed = (): Placed[] =>
-  [...document.querySelectorAll<HTMLElement>('.k-grid > .k-area')].map((element, at) => ({
-    element,
-    name: element.dataset['name'] ?? '',
-    row: Number(element.dataset['row'] ?? at + 1),
-    column: Number(element.dataset['column'] ?? 1),
-    span: Number(element.dataset['span'] ?? 1),
-  }));
-
-// Under in its column: after it on a narrow screen, where every area is one column; on a wide one, in a later row over
-// the same columns.
-const under = (other: Placed, area: Placed, all: readonly Placed[]): boolean =>
-  matchMedia('(min-width: 721px)').matches ? other.row > area.row && other.column < area.column + area.span && area.column < other.column + other.span : all.indexOf(other) > all.indexOf(area);
-
-// A layer that comes or goes with nothing staying under it has nowhere to grow from or fold to: the layer above it grows
-// over it or shrinks off it, and it is swept.
-const sweep = (comes: (name: string) => boolean, stays: (name: string) => boolean): void => {
-  const all = placed();
-  for (const area of all) {
-    if (!comes(area.name) || all.some((other) => under(other, area, all) && stays(other.name))) continue;
-    area.element.style.setProperty('view-transition-class', `area ${area.name} swept`);
-  }
-};
-const unswept = (): void => {
-  for (const element of document.querySelectorAll<HTMLElement>('.k-area')) element.style.removeProperty('view-transition-class');
-};
-
-const typesOf = (from: Scene, to: Scene, quick: boolean): string[] => [
-  from.at !== undefined && to.at !== undefined && to.at < from.at ? 'back' : 'forward',
-  ...(to.deck && !from.deck ? ['deck-open'] : []),
-  ...(from.deck && !to.deck ? ['deck-close'] : []),
-  ...(to.asking && !from.asking ? ['ask'] : []),
-  ...(to.error && !from.error ? ['error'] : []),
-  ...(quick ? ['quick'] : []),
-];
+import { dropLayers, holdLayers, matches, moveLayers, settle, tidy } from './motion/layers';
+import type { Layers, Pace } from './motion/layers';
+import { instancesOf, sceneOf } from './motion/scene';
+import { dropSlide, follow, holdSlide, playSlide, showNext } from './motion/slide';
+import type { Slide } from './motion/slide';
+import { cardsOf, gridOf, hideGrid, restingHeight } from './motion/stage';
+import { fly, moveChip, saidNow, wayOf } from './motion/words';
 
 // Updates that land within this long of each other are one move: the frame, then the canvases it holds.
-const QUIET_MS = 70;
-const LONGEST_MS = 450;
-const STARTS_WITHIN_MS = 300;
+const QUIET_MS = 60;
+const LONGEST_MS = 350;
+const MOVE_MS = 640;
+const GIVE_UP_MS = 1500;
 
-const moves = (): boolean => typeof document !== 'undefined' && typeof document.startViewTransition === 'function' && typeof ViewTransition !== 'undefined' && 'types' in ViewTransition.prototype;
+type Motion =
+  | { kind: 'layers'; layers: Layers; turn: number; again: number }
+  | { kind: 'slide'; slide: Slide; from: number | undefined; to: number | undefined; swipe?: 'following' | 'commit' | 'cancel'; back?: boolean; turn: number };
 
-// Every move is drawn as a view transition, and the stylesheet says how each part travels. One moves at a time: a move
-// that arrives while another is under way waits for it, and then goes at a quicker pace.
+const reducedMotion = (): boolean => matchMedia('(prefers-reduced-motion: reduce)').matches;
+const paceOf = (): Pace => ({
+  duration: reducedMotion() ? 200 : MOVE_MS,
+  fold: Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--fold')) || 30,
+  reduced: reducedMotion(),
+});
+const views = (): boolean => typeof document !== 'undefined' && typeof document.startViewTransition === 'function' && typeof ViewTransition !== 'undefined' && 'types' in ViewTransition.prototype;
+
+// An answer's cards move on a stage of copies while the page's own are laid out unseen under it; back and forward slide
+// the answer sideways, a finger's swipe carrying it; the overview opens and closes as a view transition. The dock is
+// never part of a move: only its words travel.
 export const miraTarget = (config: { root: HTMLElement; registry: ComponentRegistry<NovaComponent> }): Target => {
   const inner = reactTarget(config);
   return (api) => {
     const mount = inner(api);
+    const root = document.documentElement;
     let shown = sceneOf(api);
-    // starting: the picture a move starts from is not taken yet, so nothing may be drawn.
-    let phase: 'still' | 'starting' | 'settling' | 'moving' = 'still';
-    let waiting = false;
+    let painted = instancesOf(api);
+    let motion: Motion | undefined;
+    let turn = 0;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let deadline: number | undefined;
+    const scrolled = new Map<number, number>();
+    let deck: 'starting' | 'settling' | 'moving' | undefined;
     let heard: (() => void) | undefined;
-    let retype: (() => void) | undefined;
-    const paint = (): boolean => {
-      const before = shown.key;
+
+    const kindOf = (): Motion['kind'] | undefined => motion?.kind;
+    const paint = (): void => {
       flushSync(() => mount.update());
       shown = sceneOf(api);
-      return shown.key !== before;
+      painted = instancesOf(api);
     };
-    const move = (quick: boolean): void => {
-      const from = shown;
-      const to = sceneOf(api);
-      phase = 'starting';
+    const soon = (run: () => void): void => {
+      const now = performance.now();
+      deadline ??= now + LONGEST_MS;
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        deadline = undefined;
+        run();
+      }, Math.max(0, Math.min(QUIET_MS, deadline - now)));
+    };
+    const end = (): void => {
+      clearTimeout(timer);
+      deadline = undefined;
+      if (motion?.kind === 'layers') dropLayers(motion.layers);
+      if (motion?.kind === 'slide') dropSlide(motion.slide);
+      motion = undefined;
+      turn++;
+      hideGrid(false);
+      root.removeAttribute('data-swiped');
+      root.style.removeProperty('--swipe-x');
+    };
+
+    const runLayers = (): void => {
+      if (motion?.kind !== 'layers') return;
+      const current = motion;
+      const grid = gridOf();
+      if (grid !== current.layers.grid || grid === null) return end();
+      const mine = ++turn;
+      current.turn = mine;
+      settle(current.layers);
+      void moveLayers(current.layers, cardsOf(grid, painted), restingHeight(grid), paceOf()).then(() => {
+        if (motion !== current || current.turn !== mine) return;
+        tidy(current.layers);
+        if (matches(current.layers, cardsOf(grid, painted)) || current.again >= 2) return end();
+        current.again++;
+        runLayers();
+      });
+    };
+    const startLayers = (): boolean => {
+      const grid = gridOf();
+      if (grid === null) return false;
+      motion = { kind: 'layers', layers: holdLayers(grid, cardsOf(grid, painted)), turn: ++turn, again: 0 };
+      hideGrid(true);
+      if (window.scrollY > 0) window.scrollTo({ top: 0, behavior: reducedMotion() ? 'instant' : 'smooth' });
+      return true;
+    };
+
+    const playTo = (to: 'end' | 'start'): void => {
+      if (motion?.kind !== 'slide') return;
+      const current = motion;
+      const mine = ++turn;
+      current.turn = mine;
+      void playSlide(current.slide, to, paceOf()).then(() => {
+        if (motion !== current || current.turn !== mine) return;
+        if (to === 'start') {
+          current.back = true;
+          if (shown.at === current.from) end();
+          return;
+        }
+        if (shown.at === current.to) return end();
+        onward(current);
+      });
+    };
+    // Pressed again before the first had landed: the answer it was going to is the one it leaves from.
+    const onward = (current: Extract<Motion, { kind: 'slide' }>): void => {
+      const { slide } = current;
+      const sheet = slide.next;
+      if (sheet === undefined) return end();
+      const box = sheet.getBoundingClientRect();
+      Object.assign(sheet.style, { position: 'fixed', top: `${box.top}px`, left: `${box.left}px`, translate: '' });
+      document.body.append(sheet);
+      slide.shown.remove();
+      slide.shown = sheet;
+      slide.next = undefined;
+      slide.offset = 0;
+      slide.direction = (shown.at ?? 0) < (current.to ?? 0) ? -1 : 1;
+      if (current.to !== undefined) scrolled.set(current.to, window.scrollY);
+      current.from = current.to;
+      runSlide();
+    };
+    const runSlide = (): void => {
+      if (motion?.kind !== 'slide') return;
+      const current = motion;
+      if (current.swipe === 'cancel') {
+        if (current.back === true && shown.at === current.from) end();
+        return;
+      }
+      const grid = gridOf();
+      if (grid === null || grid !== current.slide.grid) return end();
+      if (shown.at === current.from || (current.slide.next !== undefined && current.swipe !== 'following')) return;
+      showNext(current.slide, cardsOf(grid, painted), restingHeight(grid));
+      current.to = shown.at;
+      window.scrollTo({ top: scrolled.get(shown.at ?? 0) ?? 0, behavior: 'instant' });
+      if (current.swipe !== 'following') playTo('end');
+    };
+    const startSlide = (direction: 1 | -1, swipe: boolean): boolean => {
+      const grid = gridOf();
+      if (grid === null) return false;
+      if (shown.at !== undefined) scrolled.set(shown.at, window.scrollY);
+      motion = { kind: 'slide', slide: holdSlide(grid, cardsOf(grid, painted), direction), from: shown.at, to: undefined, ...(swipe ? { swipe: 'following' as const } : {}), turn: ++turn };
+      hideGrid(true);
+      if (!swipe) giveUp(motion);
+      return true;
+    };
+    // A move whose answer never comes, or never comes back, ends on the page as it is.
+    const giveUp = (current: Motion): void => {
+      setTimeout(() => {
+        if (motion === current && current.kind === 'slide' && (current.slide.next === undefined || current.swipe === 'cancel')) end();
+      }, GIVE_UP_MS);
+    };
+
+    // A finger on the answer: the answer shown follows it at once, and the one it goes to joins it when it is drawn.
+    const swipeX = (): number => Number.parseFloat(root.style.getPropertyValue('--swipe-x')) || 0;
+    const carry = (): void => {
+      if (motion?.kind !== 'slide' || motion.swipe !== 'following') return;
+      follow(motion.slide, swipeX());
+      requestAnimationFrame(carry);
+    };
+    const fingers = new MutationObserver(() => {
+      const swiping = root.dataset['swiping'];
+      const swiped = root.dataset['swiped'];
+      if (swiping !== undefined && motion === undefined && deck === undefined && !shown.deck && startSlide(swiping === 'back' ? -1 : 1, true)) carry();
+      if (swiped === undefined || motion?.kind !== 'slide' || motion.swipe !== 'following') return;
+      follow(motion.slide, swipeX());
+      root.removeAttribute('data-swiped');
+      root.style.removeProperty('--swipe-x');
+      giveUp(motion);
+      if (swiped === 'commit') {
+        motion.swipe = 'commit';
+        if (motion.slide.next !== undefined) playTo('end');
+      } else {
+        motion.swipe = 'cancel';
+        playTo('start');
+      }
+    });
+    fingers.observe(root, { attributes: true, attributeFilter: ['data-swiping', 'data-swiped'] });
+
+    // The overview: the answer shrinks into its picture among the rest, and grows back out of the one picked.
+    const openOrClose = (opening: boolean): void => {
+      deck = 'starting';
       let begun = false;
-      sweep(
-        (name) => !to.areas.includes(name),
-        (name) => to.areas.includes(name),
-      );
       const transition = document.startViewTransition({
-        types: typesOf(from, to, quick),
+        types: [opening ? 'deck-open' : 'deck-close'],
         update: () =>
           new Promise<void>((done) => {
             begun = true;
-            phase = 'settling';
-            const deadline = performance.now() + LONGEST_MS;
-            let timer: ReturnType<typeof setTimeout> | undefined;
+            deck = 'settling';
+            const until = performance.now() + 450;
+            let wait: ReturnType<typeof setTimeout> | undefined;
             const settled = (): void => {
-              clearTimeout(timer);
+              clearTimeout(wait);
               heard = undefined;
-              retype = undefined;
-              phase = 'moving';
-              sweep(
-                (name) => !from.areas.includes(name),
-                (name) => from.areas.includes(name),
-              );
+              deck = 'moving';
               done();
             };
             heard = () => {
-              const left = deadline - performance.now();
+              const left = until - performance.now();
               if (left <= 0) return settled();
-              clearTimeout(timer);
-              timer = setTimeout(settled, Math.min(QUIET_MS, left));
+              clearTimeout(wait);
+              wait = setTimeout(settled, Math.min(70, left));
             };
             paint();
             heard();
           }),
       });
-      // What lands while the move settles is part of it, and says what kind of move it is too: the overview closing can
-      // come a moment after the answer it opens.
-      retype = () => {
-        for (const type of typesOf(from, shown, quick)) transition.types.add(type);
-      };
-      // A page the browser is not drawing never takes the picture a move starts from: the move is skipped, and the
-      // update drawn as it comes.
+      // A page the browser is not drawing never takes the picture a move starts from: the update is drawn as it comes.
       setTimeout(() => {
         if (!begun) transition.skipTransition();
-      }, STARTS_WITHIN_MS);
-      transition.finished.finally(() => {
-        unswept();
-        phase = 'still';
-        if (!waiting) return;
-        waiting = false;
-        if (sceneOf(api).key === shown.key) paint();
-        else move(true);
+      }, 300);
+      void transition.finished.finally(() => {
+        deck = undefined;
+        paint();
       });
     };
+
+    const update = (): void => {
+      if (deck === 'starting') return;
+      const before = shown;
+      const next = sceneOf(api);
+      const said = saidNow();
+      const reduced = reducedMotion();
+      if (deck === 'settling') {
+        paint();
+        heard?.();
+      } else if (deck === 'moving') paint();
+      else if (next.deck !== before.deck && views()) {
+        end();
+        openOrClose(next.deck);
+        return;
+      } else if (next.region !== before.region) {
+        if (motion === undefined) {
+          if (before.asking || next.asking || next.at === before.at) startLayers();
+          else startSlide((next.at ?? 0) < (before.at ?? 0) ? -1 : 1, false);
+        }
+        paint();
+        const moving = kindOf();
+        if (moving === 'layers') soon(runLayers);
+        if (moving === 'slide') soon(runSlide);
+      } else paint();
+
+      if (!before.asking && shown.asking) {
+        if (!reduced) fly(said, true);
+        moveChip(said, 'landing', reduced);
+      } else if (before.asking && !shown.asking && shown.error) {
+        if (!reduced) fly(said, false);
+        moveChip(said, -1, reduced);
+      } else moveChip(said, wayOf(said), reduced);
+    };
+
     return {
-      update: () => {
-        if (phase === 'starting') return;
-        if (phase === 'settling') {
-          if (paint()) {
-            retype?.();
-            heard?.();
-          }
-          return;
-        }
-        const next = sceneOf(api);
-        if (next.key === shown.key) {
-          if (!waiting) paint();
-          return;
-        }
-        if (phase === 'moving') {
-          waiting = true;
-          return;
-        }
-        if (moves()) move(false);
-        else paint();
+      update,
+      destroy: () => {
+        fingers.disconnect();
+        end();
+        mount.destroy();
       },
-      destroy: mount.destroy,
     };
   };
 };

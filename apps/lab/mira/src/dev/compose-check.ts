@@ -95,7 +95,19 @@ try {
   check('an answer that only empties an area marks nothing, and what stays keeps its ink', marked() === '' && inks() === 'a:turn-1', `${marked()} — ${inks()}`);
   check('an area the model drops is emptied, and every other stays as it was', on('b').id === '' && without('b', ids()) === without('b', pairIds), `${ids()} vs ${pairIds}`);
   const first = on('a').id;
+  const inksWhileAsked = new Set<string>();
+  const sampling = setInterval(() => {
+    const tree = drawn();
+    const dock = /"name":"Dock","props":(\{[^}]*\})/.exec(tree)?.[1] ?? '';
+    if (dock.includes('"asking":true')) inksWhileAsked.add(`${/"ink":"([^"]+)"/.exec(dock)?.[1] ?? ''} ${/"label":"the second again, beside it","count":"…","ink":"([^"]+)"/.exec(tree)?.[1] ?? ''}`);
+  }, 1);
   await ask('the second again, beside it');
+  clearInterval(sampling);
+  check(
+    'while a question is answered, the line stays in the ink of the answer after it and the chip in the ink of the one asked for, though the stack counts it before it ends',
+    inksWhileAsked.size === 1 && inksWhileAsked.has('turn-4 turn-3'),
+    [...inksWhileAsked].join(' | '),
+  );
   check('a canvas kept stays the same canvas, in its area; what is new goes where the model puts it', on('a').id === first && on('b').data['title'] === 'Two', `${ids()}`);
   check('a card put where nothing was is marked new, in the ink of its turn', marked() === 'b:new' && inks() === 'a:turn-1 b:turn-3' && /"tone":"mark"\},"children":\[\{"type":"text","value":"New"/.test(drawn()), `${marked()} — ${inks()}`);
   await ask('swap them');

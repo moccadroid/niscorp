@@ -4,7 +4,7 @@ const browsed = (field: string): unknown => ({ $at: ['$.current.stack', { $prism
 
 const chip: LayoutNode = {
   if: '$.asking',
-  then: { component: 'Chip', props: { label: '$.asked', count: '…', ink: '$.current.next' } },
+  then: { component: 'Chip', props: { label: '$.asked', count: '…', ink: '$.answerInk' } },
   else: {
     if: '$.browsing',
     then: { component: 'Chip', ref: 'chip-open', props: { label: browsed('label'), count: '{{$.browse}}/{{$.current.total}}', ink: browsed('ink') } },
@@ -32,7 +32,7 @@ const steps: LayoutNode = {
 
 export const dockLayout: LayoutNode = {
   component: 'Dock',
-  props: { ink: { $if: '$.asking', $then: '$.current.later', $else: '$.current.next' }, asking: '$.asking', error: { $if: '$.error', $then: true, $else: false } },
+  props: { ink: { $if: '$.asking', $then: '$.lineInk', $else: '$.current.next' }, asking: '$.asking', error: { $if: '$.error', $then: true, $else: false } },
   children: [
     { if: '$.error', then: { component: 'Text', props: { tone: 'error' }, children: '{{$.error}}' } },
     steps,
@@ -50,6 +50,17 @@ export const dockLayout: LayoutNode = {
       ],
     },
     { component: 'Button', ref: 'send', props: { label: { $if: '$.asking', $then: 'Asking…', $else: 'Send' }, disabled: { $if: '$.text', $then: false, $else: true } } },
-    { if: '$.browsing', then: { component: 'Keys', ref: 'deck-keys', props: { capture: true } }, else: { component: 'Keys', ref: 'keys' } },
+    {
+      if: '$.browsing',
+      then: { component: 'Keys', ref: 'deck-keys', props: { capture: true } },
+      else: {
+        component: 'Keys',
+        ref: 'keys',
+        props: {
+          back: { $if: { $eq: ['$.current.position', 1] }, $then: false, $else: true },
+          forward: { $if: { $eq: ['$.current.position', '$.current.total'] }, $then: false, $else: true },
+        },
+      },
+    },
   ],
 };

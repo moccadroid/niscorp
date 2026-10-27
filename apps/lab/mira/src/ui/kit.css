@@ -47,7 +47,7 @@ button { -webkit-tap-highlight-color: transparent; }
 /* nova's DOM adapter wraps a canvas and an action in elements of its own; React does not. They take no room. */
 [data-canvas], [data-component='ActionSlot'] { display: contents; }
 
-.k-frame { min-height: 100dvh; display: flex; flex-direction: column; touch-action: pan-y; }
+.k-frame { position: relative; overflow: clip; min-height: 100dvh; display: flex; flex-direction: column; touch-action: pan-y; }
 
 /* The layers: edge to edge, each one's rounded foot laid over the next, sharing the screen between them. Every layer
    reaches up under the one before it; the first reaches into the room left for it above. */
@@ -231,6 +231,8 @@ button { -webkit-tap-highlight-color: transparent; }
 }
 
 .k-chip {
+  position: relative;
+  overflow: hidden;
   flex: 1;
   min-width: 0;
   height: 44px;
@@ -244,12 +246,14 @@ button { -webkit-tap-highlight-color: transparent; }
   color: var(--ink);
   font: inherit;
   cursor: pointer;
+  transition: background-color 0.45s, color 0.45s;
 }
 .k-chip-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; font-size: 16px; font-weight: 760; font-stretch: 106%; }
 .k-chip-count { flex: none; font-size: 14px; font-weight: 740; font-variant-numeric: tabular-nums; }
 
 .k-input.k-line { flex: 1; font-size: 23px; font-weight: 640; font-stretch: 104%; padding: 8px 0 7px; }
-.k-input.k-line::placeholder { color: var(--soft); }
+.k-input.k-line::placeholder { color: var(--soft); transition: color 0.3s; }
+:root:has(.k-fly) .k-input.k-line::placeholder { color: transparent; }
 .k-input.k-line:focus { padding-bottom: 5px; }
 
 /* Every answer side by side, oldest at the left: the one in the middle is the one picked. It covers the answer, down to
@@ -264,6 +268,8 @@ button { -webkit-tap-highlight-color: transparent; }
   justify-content: center;
   background: var(--page);
   color: var(--page-ink);
+  user-select: none;
+  -webkit-user-select: none;
   --mini-w: calc(100vw * var(--mini-s));
   --mini-h: calc((100dvh - var(--dock-h, 220px) + var(--fold)) * var(--mini-s));
 }
@@ -329,128 +335,49 @@ button { -webkit-tap-highlight-color: transparent; }
   .k-point { grid-template-columns: 1fr; gap: 4px; }
 }
 
-/* How each part travels, as a view transition. Nothing travels sideways: a layer's new skin wipes down over the old, a
-   new layer grows down from under the one above it and an old one folds up under it, while the layers below move to
-   make room; going back, the newer skin lifts off upward. A layer that comes or goes with nothing staying under it is
-   swept: the layer above it grows over it or shrinks off it (src/ui/target.ts marks which). What has no name is not part
-   of a move, and stays live under it. */
+/* A move: the answer's cards drawn as copies on a stage over the grid, each placed by hand while the page's own are laid
+   out unseen under it (src/ui/target.ts). The stage sits above the dock, and under it when the dock is lifted. */
+:root[data-moving] .k-grid { visibility: hidden; }
+.k-stage { position: absolute; z-index: 4; overflow: clip; pointer-events: none; }
+.k-stage > .k-area { position: absolute; margin: 0; overflow: hidden; transition: background-color 0.45s, color 0.45s; }
+.k-stage .k-skin { box-sizing: border-box; min-height: 100%; display: flex; flex-direction: column; }
+.k-stage .k-card { min-height: 0; }
+
+/* The words a question is sent with, on their way between the line and the chip. */
+.k-fly { position: fixed; z-index: 30; margin: 0; pointer-events: none; white-space: nowrap; color: var(--page-ink); transform-origin: 0 50%; }
+.k-chip-leaving { position: absolute; pointer-events: none; }
+
+/* The overview opens and closes as a view transition: the answer shrinks into its picture among the rest, and grows
+   back out of the one picked. Nothing else is part of it. */
 :root { view-transition-name: none; }
 ::view-transition { pointer-events: none; }
-:root:active-view-transition-type(quick) { --move: 380ms; }
-::view-transition-group(*) { animation-duration: var(--move); animation-timing-function: var(--ease); }
-
-.k-grid > .k-area[data-name='a'] { view-transition-name: area-a; view-transition-class: area a; }
-.k-grid > .k-area[data-name='b'] { view-transition-name: area-b; view-transition-class: area b; }
-.k-grid > .k-area[data-name='c'] { view-transition-name: area-c; view-transition-class: area c; }
-.k-grid > .k-area[data-name='d'] { view-transition-name: area-d; view-transition-class: area d; }
-.k-grid > .k-area[data-name='e'] { view-transition-name: area-e; view-transition-class: area e; }
-.k-grid > .k-area[data-name='f'] { view-transition-name: area-f; view-transition-class: area f; }
-/* On a wide screen a card that changes column folds where it was and grows where it goes, rather than crossing over. */
-@media (min-width: 721px) {
-  .k-grid > .k-area[data-name='a'][data-column='2'] { view-transition-name: area-a-2; }
-  .k-grid > .k-area[data-name='b'][data-column='2'] { view-transition-name: area-b-2; }
-  .k-grid > .k-area[data-name='c'][data-column='2'] { view-transition-name: area-c-2; }
-  .k-grid > .k-area[data-name='d'][data-column='2'] { view-transition-name: area-d-2; }
-  .k-grid > .k-area[data-name='e'][data-column='2'] { view-transition-name: area-e-2; }
-  .k-grid > .k-area[data-name='f'][data-column='2'] { view-transition-name: area-f-2; }
-  .k-grid > .k-area[data-name='a'][data-column='3'] { view-transition-name: area-a-3; }
-  .k-grid > .k-area[data-name='b'][data-column='3'] { view-transition-name: area-b-3; }
-  .k-grid > .k-area[data-name='c'][data-column='3'] { view-transition-name: area-c-3; }
-  .k-grid > .k-area[data-name='d'][data-column='3'] { view-transition-name: area-d-3; }
-  .k-grid > .k-area[data-name='e'][data-column='3'] { view-transition-name: area-e-3; }
-  .k-grid > .k-area[data-name='f'][data-column='3'] { view-transition-name: area-f-3; }
-}
-
-/* While a move is drawn, each layer runs on below its foot in its own colour, so a box that grows past the skin it had
-   is that colour all the way down. Its group clips it at the foot. When the whole answer moves as one picture, the
-   layers keep their own feet. */
-:root:active-view-transition:not(:active-view-transition-type(deck-open, deck-close)) .k-grid > .k-area::after {
-  content: '';
-  position: absolute;
-  z-index: -1;
-  left: 0;
-  right: 0;
-  top: calc(100% - var(--fold));
-  height: 70vh;
-  background: var(--c);
-}
-
-::view-transition-group(*.area) { overflow: clip; border-radius: 0 0 var(--fold) var(--fold); }
-::view-transition-group(*.a) { z-index: 9; }
-::view-transition-group(*.b) { z-index: 8; }
-::view-transition-group(*.c) { z-index: 7; }
-::view-transition-group(*.d) { z-index: 6; }
-::view-transition-group(*.e) { z-index: 5; }
-::view-transition-group(*.f) { z-index: 4; }
-::view-transition-image-pair(*.area) { isolation: auto; }
-::view-transition-old(*.area),
-::view-transition-new(*.area) { animation: none; mix-blend-mode: normal; }
-/* Down the page, each layer starts a beat after the one above it. */
-::view-transition-new(*.b) { --lead: 45ms; }
-::view-transition-new(*.c) { --lead: 90ms; }
-::view-transition-new(*.d) { --lead: 135ms; }
-::view-transition-new(*.e) { --lead: 180ms; }
-::view-transition-new(*.f) { --lead: 225ms; }
-::view-transition-new(*.area) { animation: wipe-in calc(var(--move) - var(--lead, 0ms)) var(--ease) var(--lead, 0ms) both; }
-::view-transition-old(*.area):only-child { animation: fold-up var(--move) var(--ease) both; }
-::view-transition-new(*.swept):only-child { animation: fade-in calc(var(--move) / 4) linear both; }
-::view-transition-old(*.swept):only-child { animation: fade-out calc(var(--move) / 4) linear calc(var(--move) * 3 / 4) both; }
-:root:active-view-transition-type(back)::view-transition-new(*.area) { animation: none; }
-:root:active-view-transition-type(back)::view-transition-new(*.area):only-child { animation: wipe-in var(--move) var(--ease) both; }
-:root:active-view-transition-type(back)::view-transition-old(*.area) { z-index: 1; animation: fold-up var(--move) var(--ease) both; }
-:root:active-view-transition-type(back)::view-transition-new(*.swept):only-child { animation: fade-in calc(var(--move) / 4) linear both; }
-:root:active-view-transition-type(back)::view-transition-old(*.swept):only-child { animation: fade-out calc(var(--move) / 4) linear calc(var(--move) * 3 / 4) both; }
-
-@keyframes wipe-in {
-  from { clip-path: inset(0 0 100% 0 round 0 0 var(--fold) var(--fold)); }
-  to { clip-path: inset(0 0 0 0 round 0 0 var(--fold) var(--fold)); }
-}
-@keyframes fold-up {
-  from { clip-path: inset(0 0 0 0 round 0 0 var(--fold) var(--fold)); }
-  to { clip-path: inset(0 0 100% 0 round 0 0 var(--fold) var(--fold)); }
-}
-
-/* The dock moves with the answer: under the last foot, or over everything while it is lifted. */
-.k-dock { view-transition-name: dock; view-transition-class: dock; }
-.k-dock[data-lifted], .k-frame:has(.k-deck) .k-dock { view-transition-class: dock lifted; }
-::view-transition-group(*.dock) { z-index: 3; }
-::view-transition-group(*.lifted) { z-index: 20; }
-::view-transition-old(dock), ::view-transition-new(dock) { animation-duration: 240ms; }
-
-/* The chip's words re-ink as a card does. */
-.k-chip-title { view-transition-name: chip-title; view-transition-class: words; }
-::view-transition-group(*.words) { z-index: 21; }
-::view-transition-new(*.words) { animation: words-in calc(var(--move) * 0.8) var(--ease) calc(var(--move) * 0.2) both; }
-::view-transition-old(*.words) { animation: fade-out calc(var(--move) * 0.3) linear both; }
-:root:active-view-transition-type(back)::view-transition-old(*.words) { z-index: 1; animation: words-out var(--move) var(--ease) both; }
-:root:active-view-transition-type(back)::view-transition-new(*.words) { animation: fade-in calc(var(--move) / 2) linear both; }
-@keyframes words-in { from { clip-path: inset(0 0 100% 0); } to { clip-path: inset(0); } }
-@keyframes words-out { from { clip-path: inset(0); } to { clip-path: inset(0 0 100% 0); } }
-@keyframes fade-in { from { opacity: 0; } }
-@keyframes fade-out { to { opacity: 0; } }
-
-/* The words leave the line upward, into the chip; a question that gets no screen brings them back down. An answer that
-   comes re-inks the chip instead. */
-:root:active-view-transition-type(ask, error) .k-dock:not([data-asking]) > .k-prompt { view-transition-name: question; }
-:root:active-view-transition-type(ask, error) .k-dock[data-asking] .k-chip-title { view-transition-name: question; view-transition-class: none; }
-::view-transition-group(question) { z-index: 22; animation-duration: 480ms; }
-
-/* The deck: the answer shrinks into its picture among the rest, and grows back out of the one picked. */
+::view-transition-group(*) { animation-duration: 560ms; animation-timing-function: var(--ease); }
 .k-deck-row { view-transition-name: deck; }
 .k-mini[data-selected] > .k-miniature { view-transition-name: sheet; }
 :root:active-view-transition-type(deck-open, deck-close) .k-grid { view-transition-name: sheet; }
-:root:active-view-transition-type(deck-open, deck-close) .k-grid > .k-area { view-transition-name: none; }
-.k-frame:has(.k-deck) .k-grid, .k-frame:has(.k-deck) .k-grid > .k-area { view-transition-name: none; }
-::view-transition-group(sheet) { z-index: 10; overflow: clip; border-radius: 16px; animation-duration: 560ms; }
+.k-frame:has(.k-deck) .k-grid { view-transition-name: none; }
+::view-transition-group(sheet) { z-index: 10; overflow: clip; border-radius: 16px; }
 ::view-transition-group(deck) { z-index: 9; }
 ::view-transition-new(deck):only-child { animation: deck-in 560ms var(--ease) 80ms both; }
 ::view-transition-old(deck):only-child { animation: fade-out 280ms linear both; }
 @keyframes deck-in { from { opacity: 0; scale: 0.96; } }
+@keyframes fade-in { from { opacity: 0; } }
+@keyframes fade-out { to { opacity: 0; } }
+
+/* In the overview a picture grows as it nears the middle, wherever the row is on its way. */
+@supports (animation-timeline: view()) {
+  .k-mini { scale: 1; transition: none; animation: mini-near linear both; animation-timeline: view(inline); }
+  @keyframes mini-near {
+    0%, 32% { scale: 0.9; }
+    50% { scale: 1; }
+    68%, 100% { scale: 0.9; }
+  }
+}
 
 @media (prefers-reduced-motion: reduce) {
-  :root { --move: 200ms; }
   ::view-transition-group(*) { animation: none !important; }
   ::view-transition-new(*) { animation: fade-in 200ms linear both !important; }
   ::view-transition-old(*) { animation: fade-out 200ms linear both !important; }
-  .k-mini, .k-dock, .k-chip { transition: none; }
+  .k-mini, .k-dock, .k-chip, .k-stage > .k-area { transition: none; }
+  .k-mini { animation: none; }
 }
