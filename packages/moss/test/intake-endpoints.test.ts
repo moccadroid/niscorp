@@ -30,12 +30,12 @@ describe('runIntake — where an endpoint may call', () => {
   it('refuses a path that resolves anywhere but where it is written', () => {
     const resolves = (url: string, to: string): string =>
       `action ${ID}: endpoint "load" calls "${url}", whose path resolves to "${to}": write it as it resolves, under /integrations/acme/`;
-    for (const [url, to] of [
-      ['/integrations/acme/../other/orders', '/integrations/other/orders'],
-      ['/integrations/acme/%2e%2e/other/orders', '/integrations/other/orders'],
-      ['/integrations/acme/..\\other/orders', '/integrations/other/orders'],
-      ['/integrations/acme/../../api/vex', '/api/vex'],
-      ['/integrations/acme/./orders', '/integrations/acme/orders'],
+    for (const { url, to } of [
+      { url: '/integrations/acme/../other/orders', to: '/integrations/other/orders' },
+      { url: '/integrations/acme/%2e%2e/other/orders', to: '/integrations/other/orders' },
+      { url: '/integrations/acme/..\\other/orders', to: '/integrations/other/orders' },
+      { url: '/integrations/acme/../../api/vex', to: '/api/vex' },
+      { url: '/integrations/acme/./orders', to: '/integrations/acme/orders' },
     ]) {
       expect([url, reasonsOf(url)]).toEqual([url, [resolves(url, to)]]);
     }
