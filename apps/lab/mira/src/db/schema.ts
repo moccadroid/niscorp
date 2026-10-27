@@ -34,10 +34,17 @@ CREATE TABLE answers (
 CREATE INDEX answers_person_created ON answers (person, created_at DESC);
 `;
 
+// A row from before the column reads as written at the start of every grammar, as strata reads a missing stamp.
+const ANSWER_GRAMMAR = `
+ALTER TABLE answers ADD COLUMN grammar jsonb NOT NULL DEFAULT '{}'::jsonb;
+ALTER TABLE answers ALTER COLUMN grammar DROP DEFAULT;
+`;
+
 export const APP_SEQUENCE: Sequence = {
   id: 'mira.app',
   migrations: [
     { description: 'People, and the one-time sign-in links mailed to them', steps: sqlSteps(PEOPLE) },
     { description: 'Every answer a person was given, so their stack outlasts the shell', steps: sqlSteps(ANSWERS) },
+    { description: 'An answer keeps the grammars its screen was written at', steps: sqlSteps(ANSWER_GRAMMAR) },
   ],
 };

@@ -1,5 +1,5 @@
 import type { MossServer } from '@niscorp/moss';
-import { answersRecent } from '../app/vex/answers.entries';
+import { answerKeep, answersRecent } from '../app/vex/answers.entries';
 import { personInvite } from '../app/vex/people.entries';
 import { boot } from '../server/boot';
 import { recordOf } from '../server/compose/record';
@@ -55,10 +55,18 @@ try {
   await settle();
   const rows = await kept(ownerToken);
   check('each answer to a message is kept as a row of the person’s, and a screen opened is not', rows.length === 2 && JSON.stringify(rows).includes('The second') && !JSON.stringify(rows).includes('People'), JSON.stringify(rows).slice(0, 300));
+  check('…with the grammars its screen was written at', rows.every((row) => JSON.stringify(recordOf(row)['grammar']).includes('"nisc.nova"')), JSON.stringify(rows.map((row) => recordOf(row)['grammar'])));
+
+  const store = (context: Record<string, unknown>): Promise<Response> =>
+    Promise.resolve(server.fetch(new Request('http://mira.test/api/vex', { method: 'POST', headers: { authorization: `Bearer ${ownerToken}`, 'content-type': 'application/json' }, body: JSON.stringify({ fingerprint: answerKeep.fingerprint, context }) })));
+  const [second] = rows;
+  await store({ question: 'broken', title: 'Broken', response: '', grammar: {}, plan: { canvases: 'nonsense', arrangement: 'single', layout: {} } });
+  await store({ question: 'from later', title: 'From later', response: '', grammar: { 'nisc.nova': 999 }, plan: recordOf(second)['plan'] });
 
   shells.reset((await server.principalOf(ownerToken)) ?? '');
   const again = await open(ownerToken);
   await until(() => shown(again)['label'] === 'The second');
+  check('an answer that no longer reads, or that newer code wrote, is left out, and the rest stay', !JSON.stringify(shown(again)['stack']).includes('Broken') && !JSON.stringify(shown(again)['stack']).includes('From later'), JSON.stringify(shown(again)['stack']));
   check('a new shell opens on the answer they were last given, with its canvases', shown(again)['label'] === 'The second' && said(again, 'a') === 'One' && said(again, 'b') === 'Two', `${String(shown(again)['label'])}: ${said(again, 'a')} / ${said(again, 'b')}`);
   check('…laid out as it was', drawn(again).includes('"name":"b"'));
   check('…and the stack behind it: the first screen, then their answers in order', shown(again)['total'] === 3 && shown(again)['position'] === 3, JSON.stringify(shown(again)['stack']));

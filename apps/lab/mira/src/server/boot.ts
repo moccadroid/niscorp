@@ -1,6 +1,10 @@
 import { existsSync } from 'node:fs';
 import { createServer } from '@niscorp/moss';
 import type { MossServer, NiscApp, RunSink } from '@niscorp/moss';
+import { NOVA_SEQUENCE } from '@niscorp/nova/migrations';
+import { evaluate } from '@niscorp/prism';
+import { PRISM_SEQUENCE } from '@niscorp/prism/migrations';
+import { createUpgrader } from '@niscorp/strata';
 import { buildApp } from '../app/app';
 import { composer, dockInputs } from './compose';
 import type { Models } from './compose';
@@ -46,7 +50,7 @@ export const boot = async (config: BootConfig = configFromEnv()): Promise<Booted
     return server;
   };
   const door = createDoor({ pool: opened.pool, server: serverOf, mail: config.mail, publicUrl: config.publicUrl, owner: config.owner });
-  const compose = composer(config.models);
+  const compose = composer(config.models, await createUpgrader([NOVA_SEQUENCE, PRISM_SEQUENCE], { transform: evaluate }));
   server = await createServer(manifest((session) => [...compose(session), ...door.functions], config.runs), opened);
   await door.admitOwner();
   const up = server;

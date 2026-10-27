@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { CortexEvent, SignalClient, Usage } from '@niscorp/cortex';
 import type { FunctionDefinition, FunctionSession } from '@niscorp/moss';
 import type { LayoutNode } from '@niscorp/nova';
+import type { Upgrader } from '@niscorp/strata';
 import { ARRANGEMENTS } from '../../app/arrangements';
 import { SCREENS } from '../../app/screens';
 import type { Screen } from '../../app/screens';
@@ -45,7 +46,7 @@ export const dockInputs = ({ actions }: { actions: readonly string[] }): Record<
 });
 
 export const composer =
-  (models: Models): ((session: FunctionSession) => FunctionDefinition[]) =>
+  (models: Models, grammar: Upgrader): ((session: FunctionSession) => FunctionDefinition[]) =>
   (session) => {
     const held = new Set(session.actions);
     const catalog: Catalog = { actions: CATALOG.actions.filter((action) => held.has(action.id)), reads: [], writes: [] };
@@ -56,7 +57,7 @@ export const composer =
 
     const screenPlan = (screen: Screen): Plan => planOf('', canvasesInAreas(screen.canvases.map((canvas) => opened(canvas, catalog))), { arrangements: ARRANGEMENTS, screen, arrangement: screen.arrangement });
     const history = createHistory(screenPlan(SCREENS[0]));
-    const kept = keptAs(session.wire);
+    const kept = keptAs(session.wire, grammar);
 
     // An answer's layout goes into the frame's region through this shell's draft, where moss checks it; it is kept
     // nowhere. The draft holds one frame, taken again for each answer.
