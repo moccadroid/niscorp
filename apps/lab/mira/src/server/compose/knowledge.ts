@@ -6,7 +6,7 @@ import type { Catalog } from './catalog';
 import type { Exchange } from './history';
 import type { Person } from './person';
 import { recordOf } from './record';
-import type { OpenCard, Seen } from './screen';
+import type { Seen } from './screen';
 
 export type ComposerDeps = { catalog: Catalog; screens: readonly Screen[]; person: Person; seen: Seen };
 
@@ -51,25 +51,16 @@ export const yourPerson = (({ deps }) =>
     `- Their time now: ${timeIn(deps.seen.zone, new Date())}.`,
   ].join('\n')) satisfies Producer<ComposerDeps>;
 
-const cardSays = (card: OpenCard): string => {
-  const what = card.action === 'answer.text' ? `words: ${json(card.input['text'])}` : `${card.action}, opened with ${json(card.input)}`;
-  const shows = Object.keys(card.shows).length > 0 ? ` — shows ${json(card.shows)}` : '';
-  return `${json(card.title)} — ${what}${shows}`;
-};
 
-const cardLine = (card: OpenCard, at: number): string => `${String(at + 1)}. ${cardSays(card)}`;
-
-
-const screenLines = (seen: Seen): string[] => {
-  const where = `${String(seen.position)} of ${String(seen.total)} in the stack (${seen.stack.join(', ')})`;
-  return [
-    'THE SCREEN — what your person sees as they send the message',
-    ...(seen.first
-      ? [`The first screen, ${json(seen.label)}, ${where}: it welcomes your person, and shows ${seen.cards.map(cardSays).join('; ')}.`]
-      : [`The answer shown: ${seen.screen ? `the ${seen.label} screen` : json(seen.label)}, ${where}. Its cards in reading order, in ${seen.columns === 1 ? 'one column' : `${String(seen.columns)} columns`}:`, ...seen.cards.map(cardLine)]),
-    `The dock: the chip naming ${json(seen.chip)}, back and forward beside it${seen.said === undefined ? '' : `; under it, what you said back last: ${json(seen.said)}`}; the line; the screens ${seen.screens.join(', ')}.`,
-  ];
-};
+// The answer shown as nova holds it: its title, the screen it is when it is one of the SCREENS, its columns, and its
+// cards in reading order under their titles, each with its action, the columns it takes and its live data. The dock,
+// which the model never changes, in words.
+const screenLines = (seen: Seen): string[] => [
+  'THE SCREEN — what your person sees as they send the message: the answer shown, as nova holds it, then the dock under it',
+  json({ title: seen.label, ...(seen.screen ? { screen: seen.screenId } : {}), columns: seen.columns, cards: Object.fromEntries(seen.cards.map(({ title, action, span, data }) => [title, { action, span, data }])) }),
+  ...(seen.first ? ['It is the first screen, which welcomes your person: none of its cards can be kept, for an answer asked on it starts from an empty screen.'] : []),
+  `The dock: the chip naming ${json(seen.chip)}, ${String(seen.position)} of ${String(seen.total)} in the stack (${seen.stack.join(', ')}), back and forward beside it${seen.said === undefined ? '' : `; under it, what you said back last: ${json(seen.said)}`}; the line; the screens ${seen.screens.join(', ')}.`,
+];
 
 export const theScreen = (({ deps }) => screenLines(deps.seen).join('\n')) satisfies Producer<ComposerDeps>;
 

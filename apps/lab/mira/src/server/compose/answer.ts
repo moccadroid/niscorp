@@ -22,10 +22,12 @@ const actionRefusals = (card: Card, where: string, catalog: Catalog): string[] =
   return parsed.success ? [] : parsed.error.issues.map((issue) => `${where}: input.${issue.path.join('.')}: ${issue.message}`);
 };
 
-const cardRefusals = (card: Card, where: string, catalog: Catalog): string[] => {
-  const kinds = [card.keep !== undefined, card.action !== undefined || card.input !== undefined].filter(Boolean).length;
-  if (kinds !== 1) return [`${where}: give either "keep", or "action" with "input".`];
-  return card.keep === undefined ? actionRefusals(card, where, catalog) : [];
+// A card kept may be given an input to be written into it, and the action it is; never another.
+const cardRefusals = (card: Card, where: string, catalog: Catalog, kept: OpenCard | undefined): string[] => {
+  if (card.keep === undefined) return card.action === undefined ? [`${where}: give "keep", or "action" with "input".`] : actionRefusals(card, where, catalog);
+  if (kept === undefined) return [];
+  if (card.action !== undefined && card.action !== kept.action) return [`${where}: "${card.keep}" is ${kept.action}; a card kept stays the action it is.`];
+  return card.input === undefined ? [] : actionRefusals({ ...card, action: kept.action }, where, catalog);
 };
 
 // A card kept is the first card on the screen with its title that no card before it kept.
@@ -63,7 +65,10 @@ const placed = (cards: readonly Card[], context: AnswerContext): Placed[] => {
   });
   return cards.flatMap((card, at): Placed[] => {
     const keeps = kept[at];
-    if (keeps !== undefined) return [{ key: keeps.key, action: keeps.action, input: keeps.input, span: card.span ?? keeps.span }];
+    if (keeps !== undefined) {
+      const input = card.input === undefined ? keeps.input : opened({ action: keeps.action, input: card.input }, catalog).input;
+      return [{ key: keeps.key, action: keeps.action, input, span: card.span ?? keeps.span }];
+    }
     const given = written[at];
     if (given === undefined) return [];
     const there = same[at] ?? open[at];
@@ -79,7 +84,7 @@ export const refusalsOf = (reply: Reply, context: AnswerContext): string[] => {
   const cards = cardsOf(reply);
   const kept = keptFrom(cards, open);
   const refusals = cards.flatMap((card, at) => {
-    const own = cardRefusals(card, `cards[${at}]`, catalog);
+    const own = cardRefusals(card, `cards[${at}]`, catalog, kept[at]);
     return own.length === 0 && card.keep !== undefined && kept[at] === undefined ? [keepRefusal(card.keep, `cards[${at}]`, open)] : own;
   });
   if (refusals.length > 0) return refusals;
@@ -117,7 +122,8 @@ export const answerSoFar = (output: unknown, context: AnswerContext): Answer | u
     const parsed = CardSchema.safeParse(raw);
     if (!parsed.success) break;
     const card = cardOf(parsed.data);
-    if (cardRefusals(card, '', context.catalog).length > 0 || (card.keep !== undefined && keptFrom([...cards, card], context.open).at(-1) === undefined)) break;
+    const keeps = keptFrom([...cards, card], context.open).at(-1);
+    if (cardRefusals(card, '', context.catalog, keeps).length > 0 || (card.keep !== undefined && keeps === undefined)) break;
     cards.push(card);
   }
   if (cards.length === 0) return undefined;

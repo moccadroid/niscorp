@@ -3,7 +3,7 @@ import { CARDS_ON_A_SCREEN } from '../../app/screens';
 
 export const CardSchema = z
   .object({
-    keep: z.string().nullish().describe('Keeps a card on the screen now as it is: its title.'),
+    keep: z.string().nullish().describe('Keeps a card on the screen now: its title. With an input too, that card is written into with it.'),
     action: z.string().nullish().describe('Opens a card: the id of one of the ACTIONS.'),
     input: z
       .record(z.string(), z.unknown())
@@ -12,7 +12,7 @@ export const CardSchema = z
     span: z.number().int().min(1).max(3).nullish().describe('How many of the columns it takes; one when left out.'),
   })
   .strict()
-  .describe('One card of the screen after the answer: a card on the screen now, kept, or an action opened with its input.');
+  .describe('One card of the screen after the answer: a card on the screen now, kept as it is or written into, or an action opened with its input.');
 
 export const ReplySchema = z
   .object({
