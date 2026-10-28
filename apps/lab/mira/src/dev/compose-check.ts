@@ -50,19 +50,15 @@ try {
   check('the frame’s region holds the first screen’s arrangement', current().arrangement === FIRST.arrangement && grid().split(' ').length - 1 === room, `${String(current().arrangement)} — ${grid()}`);
 
   runs.length = 0;
-  scripted.likely([FIRST.id]);
   await ask('Two things side by side');
-  scripted.likely([]);
-  const jev = scripted.asked[scripted.asked.length - 1];
   check(
-    'each message is recorded as two runs: Jev\'s pass and the model\'s, each with its model, what it spent and how it ended',
-    runs.map((run) => `${run.agentId} ${run.model} ${run.outcome} ${run.steps} ${run.totalTokens} ${run.label}`).join(' | ') === 'mira.jev jev ok 1 110 Two things side by side | mira.compose chat ok 1 110 Two things side by side',
+    'each message is recorded as the model\'s run, with its model, what it spent and how it ended',
+    runs.map((run) => `${run.agentId} ${run.model} ${run.outcome} ${run.steps} ${run.totalTokens} ${run.label}`).join(' | ') === 'mira.compose chat ok 1 110 Two things side by side',
     JSON.stringify(runs),
   );
-  check('an answer asked on the first screen starts from an empty one: Jev is asked about the message with nothing open', jev?.state['message'] === 'Two things side by side' && Object.keys(recordOf(jev?.state['open_screen'])).length === 0, JSON.stringify(jev?.state['open_screen']));
   check(
-    '…and the model is shown the first screen as it is, told an answer starts from an empty one, and what Jev thinks',
-    prompts[0]?.includes(`The first screen, "${FIRST.label}", 1 of 1 in the stack (${FIRST.label}): it welcomes the person, and shows "Mira" — words: `) === true && prompts[0].includes('an answer asked on the first screen starts from an empty screen') && prompts[0].includes(`A FAST PICKER THINKS (a hint; how likely each belongs in the answer): actions none; screens ${FIRST.id} 0.90`),
+    'the model is shown the first screen as it is, and told an answer asked on it starts from an empty one',
+    prompts[0]?.includes(`The first screen, "${FIRST.label}", 1 of 1 in the stack (${FIRST.label}): it welcomes the person, and shows "Mira" — words: `) === true && prompts[0].includes('an answer asked on the first screen starts from an empty screen'),
     prompts[0]?.slice(0, 600) ?? '',
   );
   check('words the model says are placed where it says, in the room it gives', areas() === 'answer.text answer.text' && on('a').data['title'] === 'One' && on('b').data['title'] === 'Two' && grid() === '2: a b', `${areas()} — ${grid()}`);
@@ -90,7 +86,6 @@ try {
   const pairIds = ids();
   await ask('drop the second');
   check('an answer asked on an answer is given the screen open: its cards in reading order, each by its title, with what it holds', lastPrompt().includes('in 2 columns:\n1. "One" — words: "About One."\n2. "Two" — words: "About Two."'), lastPrompt().slice(-500));
-  check('when Jev finds nothing likely, the model is given no hint', !lastPrompt().includes('FAST PICKER'), lastPrompt().slice(-300));
   check('an answer that only empties an area marks nothing, and what stays keeps its ink', marked() === '' && inks() === 'a:turn-1', `${marked()} — ${inks()}`);
   check('a card the answer leaves out is gone, and every other stays as it was', on('b').id === '' && without('b', ids()) === without('b', pairIds), `${ids()} vs ${pairIds}`);
   const first = on('a').id;
@@ -134,7 +129,7 @@ try {
     prompts.length === 3 && prompts[1]?.includes('there is no action "weather.card"') === true && ids() === beforeWeatherCard && total() === stackBeforeWeatherCard && said().includes('did not fit'),
     `${ids()} — ${said()}`,
   );
-  check('a model run refused three times is recorded as failed, with its three steps', runs[1]?.outcome === 'failed' && runs[1]?.steps === 3 && runs[1]?.totalTokens === 330, JSON.stringify(runs[1]));
+  check('a model run refused three times is recorded as failed, with its three steps', runs[0]?.outcome === 'failed' && runs[0]?.steps === 3 && runs[0]?.totalTokens === 330, JSON.stringify(runs[0]));
 
   await ask('Three things, the last wide beneath');
   check('a layout the model wrote is the one the answer is laid out in', current().arrangement === 'written' && grid() === '2: a b c×2' && areas() === 'answer.text answer.text answer.text', `${String(current().arrangement)} — ${grid()} — ${areas()}`);
@@ -187,13 +182,13 @@ try {
     lastPrompt().slice(-700),
   );
   check('…and the reply to the message before it is no longer said', !drawn().includes('"tone":"reply"'), drawn().match(/"tone":"reply"[^\]]*\]/)?.[0] ?? '');
-  check('and its run is recorded as failed: one step, nothing spent', runs[1]?.agentId === 'mira.compose' && runs[1]?.outcome === 'failed' && runs[1]?.steps === 1 && runs[1]?.totalTokens === 0, JSON.stringify(runs[1]));
+  check('and its run is recorded as failed: one step, nothing spent', runs[0]?.agentId === 'mira.compose' && runs[0]?.outcome === 'failed' && runs[0]?.steps === 1 && runs[0]?.totalTokens === 0, JSON.stringify(runs[0]));
   scripted.unreachable(false);
 
   runs.length = 0;
   await ask('Name it at length');
   check('a reply that does not fit the reply’s schema is refused: the screen stays, and the line says it did not fit', ids() === beforeWeather && said().includes('did not fit'), said());
-  check('and its run is recorded as failed, with its three steps', runs[1]?.outcome === 'failed' && runs[1]?.steps === 3, JSON.stringify(runs[1]));
+  check('and its run is recorded as failed, with its three steps', runs[0]?.outcome === 'failed' && runs[0]?.steps === 3, JSON.stringify(runs[0]));
 
   session.dispatch('dock', { type: 'ui:click', ref: 'forward' });
   check('forward from the first screen is the answer after it, as it was', await until(() => current().position === 2 && current().question === 'Two things side by side' && on('a').data['title'] === 'One'), `position ${String(current().position)}, ${areas()}`);
@@ -260,14 +255,6 @@ try {
   check('…and the first screen cannot be closed', rows('overview', 'answers').length === pictures - 1 && recordOf(rows('overview', 'answers')[0])['label'] === FIRST.label, String(rows('overview', 'answers').length));
 } finally {
   app.server.close();
-}
-
-const jevless = await startApp(scriptedModels(SCRIPT, { jevFails: true }).models);
-try {
-  await jevless.ask('Only one thing');
-  check('when Jev cannot answer, the model answers alone', jevless.areas() === 'answer.text' && jevless.on('a').data['title'] === 'One', jevless.areas());
-} finally {
-  jevless.server.close();
 }
 
 const keyless = await startApp(scriptedModels(SCRIPT, { keyless: true }).models);

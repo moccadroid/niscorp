@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { AREAS } from '../app/shell/areas';
 import { boot } from '../server/boot';
 import type { BootConfig } from '../server/boot';
-import type { Decide, Models } from '../server/compose';
+import type { Models } from '../server/compose';
 import { recordOf } from '../server/compose/record';
 import type { SendMail } from '../server/identity';
 
@@ -28,26 +28,14 @@ const SPENT: Usage = { inputTokens: 100, outputTokens: 10, totalTokens: 110, rep
 export type Scripted = {
   models: Models;
   prompts: string[];
-  asked: { state: Record<string, unknown>; questions: Record<string, unknown> }[];
-  likely: (ids: readonly string[]) => void;
   unreachable: (is: boolean) => void;
 };
 
-// Offline, and the same every run: a decision model that finds likely only the ids it is told to, and a chat model that
-// answers each message in the run's input with its script.
-export const scriptedModels = (script: Script, options: { jevFails?: boolean; keyless?: boolean } = {}): Scripted => {
-  let likely: readonly string[] = [];
+// Offline, and the same every run: a chat model that answers each message in the run's input with its script.
+export const scriptedModels = (script: Script, options: { keyless?: boolean } = {}): Scripted => {
   let unreachable = false;
   const prompts: string[] = [];
-  const asked: Scripted['asked'] = [];
   const turns = new Map<string, number>();
-
-  const decide: Decide = async (state, questions) => {
-    if (options.jevFails === true) throw new Error('Jev did not answer');
-    asked.push({ state, questions });
-    const answer = (instructions: string): { yes: boolean; probability: number } => (likely.some((id) => instructions.includes(`"${id}"`)) ? { yes: true, probability: 0.9 } : { yes: false, probability: 0.1 });
-    return { picked: Object.fromEntries(Object.entries(questions).map(([key, question]) => [key, answer(question.instructions)])), usage: SPENT };
-  };
 
   const scripted = (request: StepRequest): StepResult => {
     const user = request.messages.map((message) => (typeof message.content === 'string' ? message.content : '')).join('\n\n');
@@ -82,8 +70,8 @@ export const scriptedModels = (script: Script, options: { jevFails?: boolean; ke
     describe: () => ({ provider: 'scripted', model: 'chat', kind: 'chat', modelKnown: false, capabilities: { nativeTools: true, nativeJsonSchema: false, nativeJsonMode: true, toolsWithStructuredOutput: false, validatesToolArgs: true, manglesNestedToolArgs: false, multimodal: false, supportsEmbedding: false } }),
   };
 
-  const models: Models = options.keyless === true ? { missing: ['GROQ_API_KEY'] } : { jev: { provider: 'scripted', model: 'jev', decide }, chat: { provider: 'scripted', model: 'chat', llm: chat, timeoutMs: 5000 }, missing: [] };
-  return { models, prompts, asked, likely: (ids) => void (likely = ids), unreachable: (is) => void (unreachable = is) };
+  const models: Models = options.keyless === true ? { missing: ['GROQ_API_KEY'] } : { chat: { provider: 'scripted', model: 'chat', llm: chat, timeoutMs: 5000 }, missing: [] };
+  return { models, prompts, unreachable: (is) => void (unreachable = is) };
 };
 
 const ShownSchema = z.looseObject({

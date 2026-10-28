@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
-import type { CortexEvent, SignalClient, Usage } from '@niscorp/cortex';
+import type { CortexEvent, SignalClient } from '@niscorp/cortex';
 import type { FunctionDefinition, FunctionSession } from '@niscorp/moss';
 import type { LayoutNode } from '@niscorp/nova';
 import type { Upgrader } from '@niscorp/strata';
@@ -21,19 +21,14 @@ import type { Exchange, History } from './history';
 import { transcriptOf } from './knowledge';
 import type { ComposerDeps } from './knowledge';
 import { drawnAreas, drawnRegion, framed } from './layout';
-import { pick } from './pick';
-import type { Decide } from './pick';
 import { arrangementOfPlan, canvasesInAreas, inked, planOf } from './plan';
 import type { Plan, ShownPlan } from './plan';
 import { canvasesStanding, drawnCards, readOpenScreen, readSeen } from './screen';
 import type { OpenCard } from './screen';
 
-export type { Decide } from './pick';
-
-export type Jev = { provider: string; model: string; decide: Decide };
 export type Chat = { provider: string; model: string; llm: SignalClient; timeoutMs: number };
 
-export type Models = { jev?: Jev; chat?: Chat; missing: readonly string[] };
+export type Models = { chat?: Chat; missing: readonly string[] };
 
 const AskSchema = z.looseObject({ asked: z.string() });
 const OpenSchema = z.looseObject({ opening: z.string() });
@@ -41,8 +36,6 @@ const GoSchema = z.looseObject({ going: z.coerce.number() });
 const CloseSchema = z.looseObject({ closing: z.coerce.number() });
 
 const reasonOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));
-
-const NO_USAGE: Usage = { inputTokens: 0, outputTokens: 0, totalTokens: 0, reported: false };
 
 const screenOf = (plan: Plan): string => JSON.stringify([plan.canvases, plan.layout, plan.label]);
 
@@ -154,23 +147,10 @@ export const composer =
       const welcome = before.screen === SCREENS[0].id;
       const from: Plan = welcome ? { ...before, canvases: {}, inks: {}, marks: {} } : before;
       const open = welcome ? [] : standingOpen;
-      const jev = models.jev;
-      const picking = performance.now();
-      const picked =
-        jev === undefined
-          ? undefined
-          : await pick(message, open, catalog, screens, jev.decide).catch((error: unknown) => {
-              console.error(`[ask] Jev could not answer "${message}": ${reasonOf(error)}`);
-              return undefined;
-            });
-      if (jev !== undefined) {
-        const usage = picked?.usage ?? NO_USAGE;
-        recordModelRun(session, { agentId: 'mira.jev', label: message, provider: jev.provider, model: jev.model, usage, steps: picked === undefined ? 0 : 1, elapsedMs: performance.now() - picking, outcome: picked === undefined ? 'failed' : 'ok' });
-      }
 
       const current = arrangementOfPlan(before);
       const columns = drawnAreas(before).columns;
-      const deps: ComposerDeps = { catalog, screens, roles: session.roles, seen: readSeen(session.shell, standingOpen, columns), ...(picked === undefined ? {} : { picks: picked.picks }) };
+      const deps: ComposerDeps = { catalog, screens, roles: session.roles, seen: readSeen(session.shell, standingOpen, columns) };
       const context: AnswerContext = { ...deps, open, columns };
       const agent = composerAgent((envelope) => {
         const refused = refusalsOf(envelope.data, context);

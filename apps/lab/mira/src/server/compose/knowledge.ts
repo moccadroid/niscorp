@@ -4,11 +4,10 @@ import type { Screen } from '../../app/screens';
 import { AREAS } from '../../app/shell/areas';
 import type { Catalog } from './catalog';
 import type { Exchange } from './history';
-import type { Picks } from './pick';
 import { recordOf } from './record';
 import type { OpenCard, Seen } from './screen';
 
-export type ComposerDeps = { catalog: Catalog; screens: readonly Screen[]; roles: readonly string[]; seen: Seen; picks?: Picks };
+export type ComposerDeps = { catalog: Catalog; screens: readonly Screen[]; roles: readonly string[]; seen: Seen };
 
 const json = (value: unknown): string => JSON.stringify(value);
 
@@ -44,13 +43,6 @@ const cardSays = (card: OpenCard): string => {
 
 const cardLine = (card: OpenCard, at: number): string => `${String(at + 1)}. ${cardSays(card)}`;
 
-// A hint that finds nothing likely reads as "nothing belongs in the answer", so the model is not given one.
-const picksLine = (picks: Picks): string | undefined => {
-  const kinds = Object.entries(picks).map(([kind, scored]) => ({ kind, likely: scored.filter((item) => item.probability >= 0.5).map((item) => `${item.name} ${item.probability.toFixed(2)}`) }));
-  if (kinds.every(({ likely }) => likely.length === 0)) return undefined;
-  return kinds.map(({ kind, likely }) => `${kind} ${likely.length > 0 ? likely.join(', ') : 'none'}`).join('; ');
-};
-
 
 const screenLines = (seen: Seen): string[] => {
   const where = `${String(seen.position)} of ${String(seen.total)} in the stack (${seen.stack.join(', ')})`;
@@ -64,11 +56,6 @@ const screenLines = (seen: Seen): string[] => {
 };
 
 export const theScreen = (({ deps }) => screenLines(deps.seen).join('\n')) satisfies Producer<ComposerDeps>;
-
-export const pickerHint = (({ deps }) => {
-  const hint = deps.picks === undefined ? undefined : picksLine(deps.picks);
-  return hint === undefined ? [] : `A FAST PICKER THINKS (a hint; how likely each belongs in the answer): ${hint}`;
-}) satisfies Producer<ComposerDeps>;
 
 // The chat so far, the oldest first: each message and what was said back to it, and the message last.
 export const transcriptOf = (conversation: readonly Exchange[], message: string): Message[] => [
