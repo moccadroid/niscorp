@@ -6,6 +6,7 @@ export type Desired = {
   actionId: string;
   input?: Record<string, unknown>;
   with?: string[];
+  row?: Record<string, unknown>;
 };
 
 export type ReconcileOptions = {
@@ -20,6 +21,13 @@ export type ReconcileResult = {
   changed: boolean;
   notes: string[];
 };
+
+export type ReconcilerOptions = ReconcileOptions & {
+  moveInstance: (canvasId: string, instanceId: string, index: number) => void;
+  keyOf: (instanceId: string) => string | undefined;
+};
+
+export type Reconciler = (shell: Shell, canvasId: string, desired: readonly Desired[], options: ReconcilerOptions) => ReconcileResult;
 
 const differs = (before: Record<string, unknown>, input: Record<string, unknown>): boolean =>
   Object.entries(input).some(([key, value]) => JSON.stringify(before[key]) !== JSON.stringify(value));

@@ -168,4 +168,6 @@ export type {
   Desired,
   ReconcileOptions,
   ReconcileResult,
+  Reconciler,
+  ReconcilerOptions,
 } from './shell';

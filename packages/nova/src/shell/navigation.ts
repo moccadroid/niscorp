@@ -20,7 +20,7 @@ export type ShellNavOps = {
   removeInstance: (canvasId: string, instanceId: string) => void;
   reconcile: (
     canvasId: string,
-    desired: readonly { actionId: string; input?: Record<string, unknown> }[],
+    desired: readonly { actionId: string; input?: Record<string, unknown>; row?: Record<string, unknown> }[],
     options: { origin: string; own?: 'pushed' | 'canvas'; with?: string[] },
   ) => void;
 };

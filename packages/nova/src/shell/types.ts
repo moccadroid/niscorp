@@ -21,6 +21,7 @@ import type { Unsubscribe } from '../shared/common';
 import type { EventBus, NovaEvent } from '../shared/event-bus';
 import type { MessageBus } from '../shared/message-bus';
 import type { IdFactory } from '../shared/ids';
+import type { Reconciler } from './reconcile';
 
 export type CanvasInitialSeed =
   | string
@@ -31,11 +32,13 @@ export type CanvasConfig = {
   mode?: 'stack' | 'list';
   actionLayout?: LayoutNode | string;
   initial?: CanvasInitialSeed | CanvasInitialSeed[];
+  reconcile?: string;
 };
 
 export type PushOptions = {
   origin?: string;
   history?: boolean;
+  key?: string;
 };
 
 export type CanvasState = {
@@ -82,6 +85,7 @@ export type ShellConfig = {
   transform?: TransformFn;
   fetch?: FetchFn;
   functions?: Record<string, FunctionHandler>;
+  reconcilers?: Record<string, Reconciler>;
   endpointTimeoutMs?: number;
   telemetry?: ShellTelemetry;
   strict?: boolean;
