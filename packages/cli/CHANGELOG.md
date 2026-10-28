@@ -1,5 +1,13 @@
 # @niscorp/cli
 
+## 0.8.2
+
+### Patch Changes
+
+- 2d9219a: `nisc dev` registers the project's `routes` on the app server, as `nisc start` does, before it checks the app's functions.
+
+  A path that `dev.owned` sent to the app server for one of those routes was answered 404 under `nisc dev` and worked under `nisc start`.
+
 ## 0.8.1
 
 ### Patch Changes
