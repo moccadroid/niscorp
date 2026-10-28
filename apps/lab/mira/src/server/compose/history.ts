@@ -1,12 +1,11 @@
+import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import type { FunctionSession } from '@niscorp/moss';
-import { LayoutNodeSchema } from '@niscorp/nova';
 import type { Upgrader } from '@niscorp/strata';
-import { SCREENS } from '../../app/screens';
+import { CARDS_ON_A_SCREEN, SCREENS } from '../../app/screens';
 import { answerClose, answerDrawn, answerKeep, answersRecent, answersSaid } from '../../app/vex/answers.entries';
-import { AreaIdSchema } from './layout';
 import { ANSWER_INKS } from './plan';
-import type { Plan, ShownPlan } from './plan';
+import type { Card, Plan, ShownPlan } from './plan';
 
 export type History = {
   current: () => ShownPlan;
@@ -18,28 +17,41 @@ export type History = {
   go: (position: number) => ShownPlan;
   back: () => ShownPlan;
   forward: () => ShownPlan;
-  keep: (canvases: Plan['canvases'], drawn: NonNullable<Plan['drawn']>) => void;
+  keep: (cards: Card[], drawn: unknown[][]) => void;
   close: (position: number) => Plan | undefined;
   restore: (past: readonly Plan[]) => void;
 };
 
-const CanvasSchema = z.object({ action: z.string(), input: z.record(z.string(), z.unknown()), intent: z.string() });
 const RowSchema = z.object({
   id: z.string(),
   question: z.string(),
   title: z.string(),
   response: z.string().nullable(),
   grammar: z.record(z.string(), z.number()).nullable(),
-  drawn: z.partialRecord(AreaIdSchema, z.array(z.unknown())).nullable().optional(),
-  plan: z.object({
-    canvases: z.partialRecord(AreaIdSchema, z.array(CanvasSchema)),
-    arrangement: z.string(),
-    layout: z.unknown(),
-    ink: z.string().optional(),
-    inks: z.partialRecord(AreaIdSchema, z.string()).optional(),
-    marks: z.partialRecord(AreaIdSchema, z.enum(['changed', 'new'])).optional(),
-  }),
+  plan: z.unknown(),
+  drawn: z.unknown(),
 });
+
+// A plan as it is kept. A card kept without a key — one from before cards had keys — is given one as it is read.
+const KeptPlanSchema = z.object({
+  columns: z.number().int().min(1).max(3),
+  ink: z.string().optional(),
+  cards: z
+    .array(
+      z.object({
+        key: z.string().optional(),
+        action: z.string(),
+        input: z.record(z.string(), z.unknown()),
+        span: z.number().int().min(1).max(3).optional(),
+        ink: z.string().optional(),
+        mark: z.enum(['changed', 'new']).optional(),
+      }),
+    )
+    .min(1)
+    .max(CARDS_ON_A_SCREEN),
+});
+
+const DrawnSchema = z.array(z.array(z.unknown()));
 
 // A message the person sent and what was said back: the answer it put up, by its id, or the answer or the screen it was
 // asked on when it put up none of its own.
@@ -52,10 +64,10 @@ export type Kept = { past: () => Promise<Plan[]>; said: () => Promise<Exchange[]
 const inkOfAnswer = (answersBefore: number): string => ANSWER_INKS[answersBefore % ANSWER_INKS.length] ?? ANSWER_INKS[0];
 const KNOWN_INKS = new Set<string>([...ANSWER_INKS, ...SCREENS.map((screen) => screen.ink)]);
 
-// A person's answers, read and written as them through vex. What they did on an answer since is not kept. A screen's
-// layout is a nova document, kept with the grammars it was written at and upgraded where it is read (rule 19). An
-// answer that no longer reads is left out, and the rest stay. A card kept without an ink the app still has takes the
-// ink of its answer's turn.
+// A person's answers, read and written as them through vex. What they did on an answer since is not kept. An answer's
+// plan is kept with the grammars it was written at and upgraded where it is read (rule 19). An answer that no longer
+// reads is left out, and the rest stay. A card kept without an ink the app still has takes the ink of its answer's
+// turn.
 export const keptAs = (wire: FunctionSession['wire'], grammar: Upgrader): Kept => {
   const post = async (fingerprint: string, context: Record<string, unknown>): Promise<unknown> => {
     const response = await wire('/api/vex', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ fingerprint, context }) });
@@ -65,10 +77,18 @@ export const keptAs = (wire: FunctionSession['wire'], grammar: Upgrader): Kept =
   const planOfRow = (row: unknown, turn: number): Plan[] => {
     try {
       const { id, question, title, response, grammar: stamp, plan, drawn } = RowSchema.parse(row);
-      const layout = LayoutNodeSchema.parse(grammar.upgrade(plan.layout, { kind: 'nisc.nova/layout', stamp }).document);
-      const ink = plan.ink !== undefined && KNOWN_INKS.has(plan.ink) ? plan.ink : inkOfAnswer(turn);
-      const inks = Object.fromEntries(Object.keys(plan.canvases).map((area) => [area, Object.entries(plan.inks ?? {}).find(([held, kept]) => held === area && KNOWN_INKS.has(kept))?.[1] ?? ink]));
-      return [{ id, question, label: title, response: response ?? '', canvases: plan.canvases, arrangement: plan.arrangement, layout, ink, inks, marks: plan.marks ?? {}, ...(drawn === null || drawn === undefined ? {} : { drawn }) }];
+      const kept = KeptPlanSchema.parse(grammar.upgrade(plan, { kind: 'mira.answers/plan', stamp }).document);
+      const ink = kept.ink !== undefined && KNOWN_INKS.has(kept.ink) ? kept.ink : inkOfAnswer(turn);
+      const cards = kept.cards.map(({ key, action, input, span, ink: own, mark }): Card => ({
+        key: key ?? randomUUID(),
+        action,
+        input,
+        span: span ?? 1,
+        ink: own !== undefined && KNOWN_INKS.has(own) ? own : ink,
+        ...(mark === undefined ? {} : { mark }),
+      }));
+      const pictured = DrawnSchema.safeParse(drawn);
+      return [{ id, question, label: title, response: response ?? '', columns: kept.columns, cards, ink, ...(pictured.success ? { drawn: pictured.data } : {}) }];
     } catch (error) {
       console.error(`[answers] an answer that no longer reads is left out of the stack: ${error instanceof Error ? error.message.slice(0, 300) : String(error)}`);
       return [];
@@ -88,8 +108,8 @@ export const keptAs = (wire: FunctionSession['wire'], grammar: Upgrader): Kept =
         return [{ id, question, title, reply: response ?? '', ...(askedOn === null ? {} : { askedOn }), ...(screen === null ? {} : { screen }) }];
       });
     },
-    keep: async ({ id, question, label, response, canvases, arrangement, layout, ink, inks, marks }) => {
-      await post(answerKeep.fingerprint, { id, question, title: label, response: response ?? '', plan: { canvases, arrangement, layout, ink, inks, marks }, grammar: grammar.stamp, askedOn: null, screen: null });
+    keep: async ({ id, question, label, response, columns, cards, ink }) => {
+      await post(answerKeep.fingerprint, { id, question, title: label, response: response ?? '', plan: { columns, cards, ink }, grammar: grammar.stamp, askedOn: null, screen: null });
     },
     drawn: async (id, drawn) => {
       await post(answerDrawn.fingerprint, { id, drawn });
@@ -103,7 +123,7 @@ export const keptAs = (wire: FunctionSession['wire'], grammar: Upgrader): Kept =
   };
 };
 
-const NOTHING: Plan = { question: '', label: '', canvases: {}, arrangement: '', layout: { component: 'Grid' }, ink: ANSWER_INKS[0], inks: {}, marks: {} };
+const NOTHING: Plan = { question: '', label: '', columns: 1, cards: [], ink: ANSWER_INKS[0] };
 
 const stackOf = (plans: readonly Plan[]): ShownPlan['stack'] => plans.map((plan, offset) => ({ position: offset + 1, label: plan.label, ink: plan.ink }));
 
@@ -133,9 +153,9 @@ export const createHistory = (first: Plan | undefined): History => {
     go: (position) => showAt(position >= 1 && position <= plans.length ? position - 1 : at),
     back: () => showAt(Math.max(0, at - 1)),
     forward: () => showAt(Math.min(plans.length - 1, at + 1)),
-    keep: (canvases, drawn) => {
+    keep: (cards, drawn) => {
       const plan = plans[at];
-      if (plan !== undefined) plans[at] = { ...plan, canvases, drawn };
+      if (plan !== undefined) plans[at] = { ...plan, cards, drawn };
     },
     // The first screen stays; closing the answer shown shows the one before it.
     close: (position) => {

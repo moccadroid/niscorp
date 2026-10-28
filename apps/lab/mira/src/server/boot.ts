@@ -6,11 +6,13 @@ import { evaluate } from '@niscorp/prism';
 import { PRISM_SEQUENCE } from '@niscorp/prism/migrations';
 import { createUpgrader } from '@niscorp/strata';
 import { buildApp } from '../app/app';
+import { ANSWERS_GRAMMAR } from '../db/answers.grammar';
 import { composer, dockInputs } from './compose';
 import type { Models } from './compose';
 import { createDoor, identitySeam, resendMail } from './identity';
 import type { Door, SendMail } from './identity';
 import { modelsFromEnv } from './models';
+import { reconcilers } from './reconcile';
 import { logRun } from './runs';
 import { runtime } from './runtime';
 import type { Runtime } from './runtime';
@@ -40,7 +42,7 @@ export const configFromEnv = (): BootConfig => {
   };
 };
 
-const manifest = (functions: NonNullable<NiscApp['functions']>, runs: RunSink): NiscApp => buildApp({ functions, identity: identitySeam, inputs: dockInputs, runs });
+const manifest = (functions: NonNullable<NiscApp['functions']>, runs: RunSink): NiscApp => buildApp({ functions, identity: identitySeam, inputs: dockInputs, runs, reconcilers });
 
 export const boot = async (config: BootConfig = configFromEnv()): Promise<Booted> => {
   const opened = await runtime(config.databaseUrl);
@@ -50,7 +52,7 @@ export const boot = async (config: BootConfig = configFromEnv()): Promise<Booted
     return server;
   };
   const door = createDoor({ pool: opened.pool, server: serverOf, mail: config.mail, publicUrl: config.publicUrl, owner: config.owner });
-  const compose = composer(config.models, await createUpgrader([NOVA_SEQUENCE, PRISM_SEQUENCE], { transform: evaluate }));
+  const compose = composer(config.models, await createUpgrader([NOVA_SEQUENCE, PRISM_SEQUENCE, ANSWERS_GRAMMAR], { transform: evaluate }));
   server = await createServer(manifest((session) => [...compose(session), ...door.functions], config.runs), opened);
   await door.admitOwner();
   const up = server;

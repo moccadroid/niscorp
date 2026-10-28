@@ -1,7 +1,7 @@
 import type { Producer } from '@niscorp/cortex';
 import type { Message } from '@niscorp/signal';
+import { CARDS_ON_A_SCREEN } from '../../app/screens';
 import type { Screen } from '../../app/screens';
-import { AREAS } from '../../app/shell/areas';
 import type { Catalog } from './catalog';
 import type { Exchange } from './history';
 import { recordOf } from './record';
@@ -13,7 +13,7 @@ const json = (value: unknown): string => JSON.stringify(value);
 
 const withoutDialect = (schema: unknown): Record<string, unknown> => Object.fromEntries(Object.entries(recordOf(schema)).filter(([key]) => key !== '$schema'));
 
-export const INSTRUCTIONS = `You are Mira, an assistant. A person asks you for something, and you answer with a screen and a reply. The screen holds up to ${AREAS.length} cards in one to three columns, each an action opened with an input, or words. Answer on the screen: with one of the SCREENS when it shows what was asked, never words describing it; with an action wherever one shows it; and otherwise with what you have to say on a card — an answer, an explanation, a plan, even a short reply. THE SCREEN is what the person sees as they send the message: a message may follow on from it, or from what was said before. Change only what the message asks to change; keep every other card, where it is — but an answer asked on the first screen starts from an empty screen.
+export const INSTRUCTIONS = `You are Mira, an assistant. A person asks you for something, and you answer with a screen and a reply. The screen holds up to ${CARDS_ON_A_SCREEN} cards in one to three columns, each an action opened with an input, or words. Answer on the screen: with one of the SCREENS when it shows what was asked, never words describing it; with an action wherever one shows it; and otherwise with what you have to say on a card — an answer, an explanation, a plan, even a short reply. THE SCREEN is what the person sees as they send the message: a message may follow on from it, or from what was said before. Change only what the message asks to change; keep every other card, where it is — but an answer asked on the first screen starts from an empty screen.
 Your \`response\` is what you say back to the person, every time, when you open one of the SCREENS or change the screen too: one or two short sentences, addressed to them, that answer what they asked, as a person would in conversation. It is kept in the Conversation, and shown on its own only when the screen does not change. It is read apart from the screen, so it says the answer itself, never "here is…" pointing at the screen, and never what you changed on it: asked how to boil an egg, say "About nine minutes for a firm yolk, then straight into cold water.", and put the steps on a card. Whatever a person reads — the response, and every word you put on a card — names what they see, never ids.`;
 
 export const actionCatalog = (({ deps }) =>
@@ -24,7 +24,7 @@ export const screenCatalog = (({ deps }) => `SCREENS\n${deps.screens.map((screen
 export const aboutMira = (({ deps }) =>
   [
     'ABOUT MIRA — the app you are, for when the person asks about it',
-    `- An answer is a screen of up to ${AREAS.length} cards, in one to three columns; a screen never holds more. When the cards on a screen do not all fit, all but one fold to their titles, and the person taps one open.`,
+    `- An answer is a screen of up to ${CARDS_ON_A_SCREEN} cards, in one to three columns; a screen never holds more. When the cards on a screen do not all fit, all but one fold to their titles, and the person taps one open.`,
     '- Every answer stays in a stack. Back and forward in the dock, the arrow keys, or swiping the answer right for back and left for forward go through it; the chip in the dock names the answer shown, and pressing it lays every answer out side by side.',
     `- The dock, at the bottom, holds the chip with back and forward beside it, the line the person asks in, and the screens: ${deps.screens.map((screen) => screen.label).join(', ')}. Your response is kept in the Conversation, and shown under the chip only when the screen does not change.`,
     '- A question about Mira itself is answered on a card, in words, as well as in your response.',
@@ -36,7 +36,7 @@ export const todayAndPerson = (({ deps }) =>
   `Today is ${DAY.format(new Date())}. You are talking with ${deps.roles.includes('owner') ? 'the owner of this Mira, who invites everybody else' : 'somebody the owner invited'}.`) satisfies Producer<ComposerDeps>;
 
 const cardSays = (card: OpenCard): string => {
-  const what = card.action === 'answer.text' ? `words: ${json(card.input['text'])}` : `${card.action} (${card.intent}), opened with ${json(card.input)}`;
+  const what = card.action === 'answer.text' ? `words: ${json(card.input['text'])}` : `${card.action}, opened with ${json(card.input)}`;
   const shows = Object.keys(card.shows).length > 0 ? ` — shows ${json(card.shows)}` : '';
   return `${json(card.title)} — ${what}${shows}`;
 };

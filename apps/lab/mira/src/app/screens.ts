@@ -1,5 +1,8 @@
-export type Canvas = { action: string; input: Record<string, unknown>; intent: string };
-export type Screen = { id: string; label: string; description: string; arrangement: string; ink: string; canvases: Canvas[] };
+// A screen holds at most this many cards.
+export const CARDS_ON_A_SCREEN = 6;
+
+export type ScreenCard = { action: string; input: Record<string, unknown>; span?: number };
+export type Screen = { id: string; label: string; description: string; columns: number; ink: string; cards: ScreenCard[] };
 
 // A person is shown the screens whose every action they hold.
 export const SCREENS: readonly [Screen, ...Screen[]] = [
@@ -7,20 +10,20 @@ export const SCREENS: readonly [Screen, ...Screen[]] = [
     id: 'start',
     label: 'Start',
     description: 'What this app is, and things to ask it.',
-    arrangement: 'pair',
+    columns: 2,
     ink: 'screen-1',
-    canvases: [
-      { action: 'answer.text', input: { title: 'Mira', text: 'Ask for what you want to see. The answer is a screen of cards, and every screen stays in the deck.', tone: 'hero' }, intent: 'what this app is' },
-      { action: 'ask.suggestions', input: { title: 'Try asking', suggestions: ['What can you do?', 'Plan a long weekend in November'] }, intent: 'things to ask' },
+    cards: [
+      { action: 'answer.text', input: { title: 'Mira', text: 'Ask for what you want to see. The answer is a screen of cards, and every screen stays in the deck.', tone: 'hero' } },
+      { action: 'ask.suggestions', input: { title: 'Try asking', suggestions: ['What can you do?', 'Plan a long weekend in November'] } },
     ],
   },
-  { id: 'people', label: 'People', description: 'Everybody who may sign in, and inviting somebody.', arrangement: 'single', ink: 'screen-2', canvases: [{ action: 'people.list', input: {}, intent: 'who may sign in' }] },
+  { id: 'people', label: 'People', description: 'Everybody who may sign in, and inviting somebody.', columns: 1, ink: 'screen-2', cards: [{ action: 'people.list', input: {} }] },
   {
     id: 'conversation',
     label: 'Conversation',
     description: 'Everything the person asked and what was said back, each opening the answer it was.',
-    arrangement: 'single',
+    columns: 1,
     ink: 'screen-3',
-    canvases: [{ action: 'ask.conversation', input: {}, intent: 'what was asked and said' }],
+    cards: [{ action: 'ask.conversation', input: {} }],
   },
 ];

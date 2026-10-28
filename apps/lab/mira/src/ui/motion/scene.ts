@@ -37,7 +37,8 @@ export const sceneOf = (api: TerminalApi): Scene => {
   return { region: JSON.stringify(region), at, deck, asking, error };
 };
 
-// Which canvas instance each area holds: a card is the same card while its instance stays, wherever it moves.
+// Which instance each area of the answer's grid holds: a card is the same card while its instance stays, wherever it
+// moves.
 export const instancesOf = (api: TerminalApi): Map<string, string> => {
   const held = new Map<string, string>();
   const instanceIn = (nodes: readonly RenderNode[]): string | undefined => {
@@ -50,19 +51,18 @@ export const instancesOf = (api: TerminalApi): Map<string, string> => {
     }
     return undefined;
   };
-  const walk = (nodes: readonly RenderNode[]): void => {
+  const walk = (nodes: readonly RenderNode[], inGrid: boolean): void => {
     for (const node of nodes) {
-      if (node.type === 'component' && node.name === 'Area' && typeof node.props['name'] === 'string') {
-        const area = node.props['name'];
-        const slot = node.children.find((child) => child.type === 'component' && child.name === 'CanvasSlot');
-        const canvas = slot?.type === 'component' ? slot.props['canvasId'] : undefined;
-        const instance = typeof canvas === 'string' ? instanceIn(api.canvasTree(canvas)) : undefined;
-        if (instance !== undefined) held.set(area, instance);
-        continue;
-      }
-      if (node.type === 'component' || node.type === 'fragment') walk(node.children);
+      if (node.type === 'fragment') walk(node.children, inGrid);
+      if (node.type !== 'component') continue;
+      const { name, props } = node;
+      if (name === 'Area' && inGrid && typeof props['name'] === 'string') {
+        const instance = instanceIn(node.children);
+        if (instance !== undefined) held.set(props['name'], instance);
+      } else if (name === 'CanvasSlot' && typeof props['canvasId'] === 'string') walk(api.canvasTree(props['canvasId']), inGrid);
+      else walk(node.children, inGrid || name === 'Grid');
     }
   };
-  walk(api.frame());
+  walk(api.frame(), false);
   return held;
 };

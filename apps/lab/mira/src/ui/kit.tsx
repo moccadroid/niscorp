@@ -117,15 +117,21 @@ const FrameProps = z.object({}).describe('The whole app: the answer, and the doc
 export const Frame: NovaComponent = ({ children }) => <div className="k-frame">{children}</div>;
 Frame.meta = { description: 'The whole app, top to bottom.', propsSchema: FrameProps };
 
-// Its height is the page's to know, as `--dock-h`, so what opens above it stops at its top.
+// Its height is the page's to know, as `--dock-h`, so what opens above it stops at its top. Its `model` is given the
+// time zone of the device it is drawn on.
 const DockProps = z.object({
   ink: Ink.optional().describe('The ink of the answer it would ask for next.'),
   asking: z.boolean().optional().describe('Whether a question is being answered.'),
   error: z.boolean().optional().describe('Whether the last question got no screen.'),
 });
-export const Dock: NovaComponent = ({ children, novaRef: _ref, novaModel: _model, ...props }) => {
+export const Dock: NovaComponent = ({ children, novaRef: _ref, novaModel, ...props }) => {
   const { ink, asking, error } = parsed(DockProps, props, {});
+  const dispatch = useNovaDispatch();
   const own = useRef<HTMLElement>(null);
+  const zoned = novaModel?.ref;
+  useEffect(() => {
+    if (zoned !== undefined) dispatch({ type: 'ui:model', ref: zoned, payload: Intl.DateTimeFormat().resolvedOptions().timeZone });
+  }, [zoned, dispatch]);
   useEffect(() => {
     const element = own.current;
     if (element === null) return undefined;

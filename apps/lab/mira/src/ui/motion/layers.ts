@@ -4,7 +4,8 @@ import type { Card } from './stage';
 export const EASE = 'cubic-bezier(0.25, 1, 0.5, 1)';
 
 type Span = { top: number; height: number };
-type Geo = { left: number; width: number; from: Span; to: Span };
+// Where a layer is, and where it goes: `fromLeft` and `fromWidth` are where it starts across.
+type Geo = { left: number; width: number; from: Span; to: Span; fromLeft: number; fromWidth: number };
 type Piece = { element: HTMLElement; id: string; says: string; under?: HTMLElement };
 
 // An answer's cards moving on the stage: the copies it shows, the ones folding away, and what is running.
@@ -68,7 +69,8 @@ const refresh = (piece: HTMLElement, card: HTMLElement): void => {
   sizeTitles(piece, card);
 };
 
-// One move from what the stage shows to `cards`, the page's cards at rest. A card both hold slides to its new place; a
+// One move from what the stage shows to `cards`, the page's cards at rest. A card both hold slides to its new place, in
+// another column too; a
 // card written where another was re-inks in place, its new skin wiping down over the old; a new card grows from under
 // the foot of the card above it while the cards below make room; a card no longer there folds up under its neighbour.
 // Every top and height shares one easing and one length, so each foot stays laid over the next at every frame. A move
@@ -81,7 +83,7 @@ export const moveLayers = (layers: Layers, cards: readonly Card[], height: numbe
   const was = columnsOf(layers.pieces.map((piece) => leftOf(piece.element)));
   const will = columnsOf(cards.map((card) => card.box.left));
   if (!reduced && was.length > 0 && (was.length !== will.length || was.some((left, at) => !sameColumn(left, will[at] ?? -1)))) return relay(layers, cards, height, pace);
-  const before = layers.pieces.map((piece) => ({ ...piece, span: spanOf(piece.element), left: leftOf(piece.element) }));
+  const before = layers.pieces.map((piece) => ({ ...piece, span: spanOf(piece.element), left: leftOf(piece.element), width: px(piece.element.style.width) }));
   const beforeLeaving = layers.leaving.map((element) => ({ element, span: spanOf(element), left: leftOf(element), width: px(element.style.width) }));
   const ids = new Set(cards.map((card) => card.id));
 
@@ -97,14 +99,15 @@ export const moveLayers = (layers: Layers, cards: readonly Card[], height: numbe
   cards.forEach((card, at) => {
     const { left, width } = card.box;
     const to = { top: card.box.top, height: card.box.height };
-    const kept = before.find((old) => old.id === card.id && sameColumn(old.left, left));
+    const kept = before.find((old) => old.id === card.id);
     const paired = kept ?? (before[at] !== undefined && !ids.has(before[at].id) && !used.has(before[at].element) && sameColumn(before[at].left, left) ? before[at] : undefined);
     if (kept !== undefined && kept.says === card.says) {
       used.add(kept.element);
       refresh(kept.element, card.element);
       pieces.push({ element: kept.element, id: card.id, says: card.says, under: kept.under });
-      geo.set(kept.element, { left, width, from: kept.span, to });
-      if (kept.under !== undefined) geo.set(kept.under, { left, width, from: kept.span, to });
+      const across = { fromLeft: kept.left, fromWidth: kept.width };
+      geo.set(kept.element, { left, width, from: kept.span, to, ...across });
+      if (kept.under !== undefined) geo.set(kept.under, { left, width, from: kept.span, to, ...across });
       if (kept.element.style.clipPath !== '') unfinished.push(kept.element);
       became.set(kept.element, kept.element);
       return;
@@ -117,15 +120,16 @@ export const moveLayers = (layers: Layers, cards: readonly Card[], height: numbe
       paired.under?.remove();
       paired.element.style.clipPath = '';
       pieces.push({ element, id: card.id, says: card.says, under: paired.element });
-      geo.set(element, { left, width, from: paired.span, to });
-      geo.set(paired.element, { left, width, from: paired.span, to });
+      const across = { fromLeft: paired.left, fromWidth: paired.width };
+      geo.set(element, { left, width, from: paired.span, to, ...across });
+      geo.set(paired.element, { left, width, from: paired.span, to, ...across });
       became.set(paired.element, element);
       wiping.push(element);
       return;
     }
     pieces.push({ element, id: card.id, says: card.says });
     growing.add(element);
-    geo.set(element, { left, width, from: { top: to.top, height: 0 }, to });
+    geo.set(element, { left, width, from: { top: to.top, height: 0 }, to, fromLeft: left, fromWidth: width });
   });
   for (const old of before) {
     if (used.has(old.element)) continue;
@@ -178,7 +182,7 @@ export const moveLayers = (layers: Layers, cards: readonly Card[], height: numbe
       } else if (leaving.includes(element)) {
         const old = oldSpans.get(element);
         if (old !== undefined) {
-          geo.set(element, { left: old.left, width: old.width, from: old.span, to: prior !== undefined ? { top: prior.to.top + prior.to.height - fold, height: fold } : { top: old.span.top, height: 0 } });
+          geo.set(element, { left: old.left, width: old.width, from: old.span, to: prior !== undefined ? { top: prior.to.top + prior.to.height - fold, height: fold } : { top: old.span.top, height: 0 }, fromLeft: old.left, fromWidth: old.width });
           element.style.zIndex = String(above !== undefined ? Number(above.style.zIndex) - (leaving.includes(above) ? 1 : 5) : 95);
         }
       }
@@ -190,13 +194,14 @@ export const moveLayers = (layers: Layers, cards: readonly Card[], height: numbe
   const animate = (element: HTMLElement, frames: Keyframe[], options: KeyframeAnimationOptions = {}): void => {
     running.push(element.animate(frames, { duration, easing: EASE, fill: 'both', ...options }));
   };
-  for (const [element, { left, width, from, to }] of geo) {
+  for (const [element, { left, width, from, to, fromLeft, fromWidth }] of geo) {
     const at = reduced && leaving.includes(element) ? from : to;
     place(element, { left, width, top: at.top, height: at.height });
-    if (reduced || (Math.abs(from.top - to.top) < 0.5 && Math.abs(from.height - to.height) < 0.5)) continue;
+    const across = Math.abs(fromLeft - left) >= 0.5 || Math.abs(fromWidth - width) >= 0.5;
+    if (reduced || (!across && Math.abs(from.top - to.top) < 0.5 && Math.abs(from.height - to.height) < 0.5)) continue;
     animate(element, [
-      { top: `${from.top}px`, height: `${from.height}px` },
-      { top: `${to.top}px`, height: `${to.height}px` },
+      { top: `${from.top}px`, height: `${from.height}px`, ...(across ? { left: `${fromLeft}px`, width: `${fromWidth}px` } : {}) },
+      { top: `${to.top}px`, height: `${to.height}px`, ...(across ? { left: `${left}px`, width: `${width}px` } : {}) },
     ]);
   }
   const fromHeight = stage.offsetHeight;

@@ -1,10 +1,9 @@
 import type { ActionDefinition, Step } from '@niscorp/nova';
 import { SCREENS } from '../../screens';
-import { AREAS } from '../../shell/areas';
 import { dockLayout } from './dock.layout';
 import { pickBackPrism, pickForwardPrism } from './dock.prism';
 
-const shown: Step[] = AREAS.map((area) => ({ reconcile: { canvas: area, to: `$.current.canvases.${area}`, action: 'action', input: 'input', own: 'canvas' as const } }));
+const shown: Step[] = [{ reconcile: { canvas: 'screen', to: '$.current.cards', action: 'action', input: 'input', own: 'canvas' } }];
 
 const closeDeck: Step = { emit: { channel: 'deck-close' } };
 
@@ -47,7 +46,7 @@ export const dockAction: ActionDefinition = {
     'Everything a person does, at the bottom: the chip naming the answer shown and where it stands, which opens every answer side by side; back and forward; the line to ask in; and the screens.',
   data: {
     screens: SCREENS.map(({ id, label }) => ({ id, label })),
-    current: { question: '', response: '', label: first.label, screen: first.id, arrangement: first.arrangement, position: 1, total: 1, stack: [{ position: 1, label: first.label, ink: first.ink }], canvases: {}, ink: first.ink, next: 'turn-1', later: 'turn-2' },
+    current: { question: '', response: '', label: first.label, screen: first.id, columns: first.columns, position: 1, total: 1, stack: [{ position: 1, label: first.label, ink: first.ink }], cards: [], ink: first.ink, next: 'turn-1', later: 'turn-2' },
     opening: '',
     going: 0,
     text: '',
@@ -58,6 +57,7 @@ export const dockAction: ActionDefinition = {
     error: '',
     browsing: false,
     browse: 1,
+    zone: '',
   },
   layout: dockLayout,
   endpoints: {

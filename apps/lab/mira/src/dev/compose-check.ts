@@ -1,7 +1,5 @@
 import { renderDocument } from '@niscorp/moss';
-import { ARRANGEMENTS } from '../app/arrangements';
 import { SCREENS } from '../app/screens';
-import { AREAS } from '../app/shell/areas';
 import { recordOf } from '../server/compose/record';
 import { drawing } from '../server/document';
 import { checks } from './checks';
@@ -23,6 +21,9 @@ const SCRIPT: Script = {
   'Show me the weather card': [{ cards: [{ action: 'weather.card', input: {}, intent: 'the weather' }] }],
   'Three things, the last wide beneath': [{ title: 'Three things', columns: 2, cards: [say('One'), say('Two'), { ...say('Three'), span: 2 }] }],
   'Two things, one given two ways': [{ cards: [say('One'), { ...keep('Two'), ...say('Two') }] }, { title: 'Two again', cards: [say('One'), say('Two')] }],
+  'the other way round, written out': [{ title: 'Two again', cards: [say('Two'), say('One')] }],
+  'Who may sign in?': [{ title: 'Who', columns: 2, cards: [{ action: 'people.list', input: {}, intent: 'who may sign in' }] }],
+  'and a note beside it': [{ title: 'Who, noted', cards: [keep('People'), say('A note', 'Invite Ada next.')] }],
   'What can you do?': [{ title: 'What it does', columns: 1, cards: [say('What this app does', 'It answers with screens.')] }],
   'Show the first screen': [{ screen: FIRST.id }],
   'What is the weather in Vienna?': [{ response: 'Nothing in this app shows the weather.', cards: [] }],
@@ -31,23 +32,26 @@ const SCRIPT: Script = {
 };
 
 const { check, finish } = checks('compose');
-const START = FIRST.canvases.map((canvas) => canvas.action).join(' ');
-const opened = AREAS.slice(0, FIRST.canvases.length);
+const START = FIRST.cards.map((card) => card.action).join(' ');
 
 const scripted = scriptedModels(SCRIPT);
 const { prompts } = scripted;
 const lastPrompt = (): string => prompts[prompts.length - 1] ?? '';
 const app = await startApp(scripted.models);
-const { on, current, total, grid, areas, ids, without, said, drawn, marked, inks, rows, runs, ask, session } = app;
+const { on, card, cards, current, total, grid, areas, ids, said, drawn, marked, inks, rows, runs, ask, session } = app;
 const browsing = (): boolean => on('dock').data['browsing'] === true;
+const titles = (): string => cards().map((held) => String(held.data['title'] ?? held.action)).join(' ');
+const listed = (place: number, key: string): unknown[] => {
+  const value = card(place).data[key];
+  return Array.isArray(value) ? value : [];
+};
 try {
   const template = '<!doctype html><html><head></head><body><div id="root"></div></body></html>';
   const page = await renderDocument({ ...drawing, server: app.server, template, request: { path: '/', cookie: `nisc.token=${app.token}` } });
   check('the page arrives drawn for the person signed in: the first screen, and the dock with the screens and the line to ask in', page.drawn && ['k-frame', 'k-dock', 'k-prompt'].every((part) => page.html.includes(part)), page.html.slice(0, 300));
 
-  check('the app opens on the first screen, every one of its canvases an area of its own, and the stack starts there', areas() === START && on('dock').action === 'ask.dock' && current().position === 1 && total() === 1, areas());
-  const room = ARRANGEMENTS.find((arrangement) => arrangement.id === FIRST.arrangement)?.areaCount;
-  check('the frame’s region holds the first screen’s arrangement', current().arrangement === FIRST.arrangement && grid().split(' ').length - 1 === room, `${String(current().arrangement)} — ${grid()}`);
+  check('the app opens on the first screen: its cards on the screen canvas, in order, and the stack starts there', areas() === START && on('dock').action === 'ask.dock' && current().position === 1 && total() === 1, areas());
+  check('the screen canvas is laid out as the first screen is: its columns, an area for each card', current().columns === FIRST.columns && grid() === '2: 1 2', `${String(current().columns)} — ${grid()}`);
 
   runs.length = 0;
   await ask('Two things side by side');
@@ -61,11 +65,11 @@ try {
     prompts[0]?.includes(`The first screen, "${FIRST.label}", 1 of 1 in the stack (${FIRST.label}): it welcomes the person, and shows "Mira" — words: `) === true && prompts[0].includes('an answer asked on the first screen starts from an empty screen'),
     prompts[0]?.slice(0, 600) ?? '',
   );
-  check('words the model says are placed where it says, in the room it gives', areas() === 'answer.text answer.text' && on('a').data['title'] === 'One' && on('b').data['title'] === 'Two' && grid() === '2: a b', `${areas()} — ${grid()}`);
-  check('words written where the first screen’s card was keep nothing of it, not its large title', on('a').data['tone'] === 'default', JSON.stringify(on('a').data));
-  check('none of the first screen’s cards stay: every card the answer put there is new, and no word on the screen says it', marked() === 'a:new b:new' && !drawn().includes('"value":"New"'), marked());
+  check('words the model says are placed where it says, in the room it gives', areas() === 'answer.text answer.text' && titles() === 'One Two' && grid() === '2: 1 2', `${areas()} — ${titles()} — ${grid()}`);
+  check('words written where the first screen’s card was keep nothing of it, not its large title', card(1).data['tone'] === 'default', JSON.stringify(card(1).data));
+  check('none of the first screen’s cards stay: every card the answer put there is new, and no word on the screen says it', marked() === '1:new 2:new' && !drawn().includes('"value":"New"'), marked());
   check('an answer that changed the screen is not said again in the dock: the screen answers', current()['said'] === undefined && !drawn().includes('"tone":"reply"'), String(current()['said']));
-  check('a card the answer wrote is in the answer’s own ink, the first of the turn', inks() === 'a:turn-1 b:turn-1' && current().ink === 'turn-1', inks());
+  check('a card the answer wrote is in the answer’s own ink, the first of the turn', inks() === '1:turn-1 2:turn-1' && current().ink === 'turn-1', inks());
   check('the line is in the ink of the answer that comes next', current().next === 'turn-2' && /"name":"Dock","props":\{"ink":"turn-2"/.test(drawn()), drawn().match(/"name":"Dock","props":\{[^}]*\}/)?.[0] ?? '');
   check('the chip in the dock names the answer shown by its title, and where it stands among the answers', drawn().includes('"label":"Two things"') && drawn().includes('"count":"2/2"'), drawn().match(/"label":"Two things"[^}]*/)?.[0] ?? '');
   session.dispatch('dock', { type: 'ui:click', ref: 'chip' });
@@ -83,12 +87,11 @@ try {
   session.dispatch('dock', { type: 'ui:key', ref: 'deck-keys', key: 'Escape' });
   check('Escape closes it on the answer that was shown', (await until(() => on('overview').action === '' && !browsing())) && current().position === 2, `${on('overview').action} ${String(current().position)}`);
 
-  const pairIds = ids();
+  const first = card(1).id;
   await ask('drop the second');
   check('an answer asked on an answer is given the screen open: its cards in reading order, each by its title, with what it holds', lastPrompt().includes('in 2 columns:\n1. "One" — words: "About One."\n2. "Two" — words: "About Two."'), lastPrompt().slice(-500));
-  check('an answer that only empties an area marks nothing, and what stays keeps its ink', marked() === '' && inks() === 'a:turn-1', `${marked()} — ${inks()}`);
-  check('a card the answer leaves out is gone, and every other stays as it was', on('b').id === '' && without('b', ids()) === without('b', pairIds), `${ids()} vs ${pairIds}`);
-  const first = on('a').id;
+  check('an answer that only drops a card marks nothing, and what stays keeps its ink', marked() === '' && inks() === '1:turn-1', `${marked()} — ${inks()}`);
+  check('a card the answer leaves out is gone, and the one that stays is the same instance', cards().length === 1 && card(1).id === first, ids());
   const inksWhileAsked = new Set<string>();
   const sampling = setInterval(() => {
     const tree = drawn();
@@ -102,14 +105,16 @@ try {
     inksWhileAsked.size === 1 && inksWhileAsked.has('turn-4 turn-3'),
     [...inksWhileAsked].join(' | '),
   );
-  check('a canvas kept stays the same canvas, in its area; what is new goes where the model puts it', on('a').id === first && on('b').data['title'] === 'Two', `${ids()}`);
-  check('a card put where nothing was is marked new, in the ink of its turn', marked() === 'b:new' && inks() === 'a:turn-1 b:turn-3', `${marked()} — ${inks()}`);
+  check('a card kept stays the same instance, in its place; what is new goes where the model puts it', card(1).id === first && card(2).data['title'] === 'Two', ids());
+  check('a card put on the screen is marked new, in the ink of its turn', marked() === '2:new' && inks() === '1:turn-1 2:turn-3', `${marked()} — ${inks()}`);
+  const [one, two] = [card(1).id, card(2).id];
   await ask('swap them');
-  check('the answer streams in: an area is placed while the rest of the reply is still being written', app.streamed() > 0, String(app.streamed()));
-  check('a canvas the model keeps from another area moves there', on('a').data['title'] === 'Two' && on('b').data['title'] === 'One', `${String(on('a').data['title'])} ${String(on('b').data['title'])}`);
-  const inB = on('b').id;
+  check('the answer streams in: a card is placed while the rest of the reply is still being written', app.streamed() > 0, String(app.streamed()));
+  check('cards the model keeps in another order move there, each the same instance it was', titles() === 'Two One' && card(1).id === two && card(2).id === one, `${titles()} — ${ids()}`);
+  check('…and a card that only moved keeps its ink and is not marked', marked() === '' && inks() === '1:turn-3 2:turn-1', `${marked()} — ${inks()}`);
   await ask('other words for the first');
-  check('a canvas the model writes again keeps its place and its instance, and takes what it is given', on('b').id === inB && on('b').data['text'] === 'Said again.', JSON.stringify(on('b').data));
+  check('a card the model writes again where it stands keeps its place and its instance, and takes what it is given', card(2).id === one && card(2).data['text'] === 'Said again.', JSON.stringify(card(2).data));
+  check('…marked as changed, in the ink of its turn', marked() === '2:changed', marked());
 
   prompts.length = 0;
   await ask('keep what is not there');
@@ -132,10 +137,28 @@ try {
   check('a model run refused three times is recorded as failed, with its three steps', runs[0]?.outcome === 'failed' && runs[0]?.steps === 3 && runs[0]?.totalTokens === 330, JSON.stringify(runs[0]));
 
   await ask('Three things, the last wide beneath');
-  check('a layout the model wrote is the one the answer is laid out in', current().arrangement === 'written' && grid() === '2: a b c×2' && areas() === 'answer.text answer.text answer.text', `${String(current().arrangement)} — ${grid()} — ${areas()}`);
+  check('the columns and the room the model gives are the ones the answer is laid out in', current().columns === 2 && grid() === '2: 1 2 3×2' && areas() === 'answer.text answer.text answer.text', `${String(current().columns)} — ${grid()} — ${areas()}`);
   prompts.length = 0;
   await ask('Two things, one given two ways');
-  check('a card given two things at once is sent back saying so', (prompts[1] ?? '').includes('cards[1]: give exactly one of') && current().arrangement === 'written' && areas() === 'answer.text answer.text' && grid() === '2: a b', `${String(current().arrangement)} — ${areas()} — ${grid()}`);
+  check('a card given two things at once is sent back saying so', (prompts[1] ?? '').includes('cards[1]: give exactly one of') && areas() === 'answer.text answer.text' && grid() === '2: 1 2', `${areas()} — ${grid()}`);
+
+  const [givenOne, givenTwo] = [card(1).id, card(2).id];
+  await ask('the other way round, written out');
+  check('cards the model writes out again as they are, in another order, are the same cards: they move, and nothing is written', titles() === 'Two One' && card(1).id === givenTwo && card(2).id === givenOne && marked() === '', `${titles()} — ${ids()} — ${marked()}`);
+
+  await ask('Who may sign in?');
+  await until(() => listed(1, 'rows').length > 0);
+  const people = card(1).id;
+  app.draw();
+  session.dispatch('screen', { type: 'ui:model', ref: 'email', payload: 'ada@example.com', origin: people });
+  await settle();
+  await ask('and a note beside it');
+  check('a card kept beside a new one is the same instance, with what was typed into it', card(1).id === people && card(1).data['email'] === 'ada@example.com' && card(2).data['title'] === 'A note', `${ids()} — ${JSON.stringify(card(1).data['email'])}`);
+  session.dispatch('dock', { type: 'ui:click', ref: 'back' });
+  check('going back to an answer that shares a card keeps that card’s instance', (await until(() => current().question === 'Who may sign in?')) && cards().length === 1 && card(1).id === people, `${String(current().question)} — ${ids()}`);
+  session.dispatch('dock', { type: 'ui:click', ref: 'forward' });
+  await until(() => current().question === 'and a note beside it');
+  await settle();
 
   const stacked = total();
   const promptsBeforeOpen = prompts.length;
@@ -148,10 +171,10 @@ try {
   await settle();
 
   const answeredBefore = app.answered();
-  session.dispatch('b', { type: 'ui:click', ref: 'suggestion', payload: 'What can you do?' });
+  session.dispatch('screen', { type: 'ui:click', ref: 'suggestion', payload: 'What can you do?', origin: card(2).id });
   check('a thing to ask, pressed on the first screen, is asked as if typed', (await until(() => app.answered() > answeredBefore)) && lastPrompt().endsWith('\n\nWhat can you do?'), lastPrompt().slice(-200));
   await settle();
-  check('words the model says are shown as words', areas() === 'answer.text' && on('a').data['title'] === 'What this app does', areas());
+  check('words the model says are shown as words', areas() === 'answer.text' && card(1).data['title'] === 'What this app does', areas());
 
   await ask('Show the first screen');
   check('the model can answer with one of the app’s screens: gone back to where it is in the stack', current().screen === FIRST.id && current().position === 1, `${String(current().position)} of ${total()}`);
@@ -178,7 +201,7 @@ try {
   check('a model that cannot be reached leaves the screen as it was, and the line says so', ids() === beforeWeather && said().includes('could not be reached'), said());
   check(
     'the model is shown the dock as the person saw it: the chip, and what it said back last under it',
-    lastPrompt().includes(`The first screen, "${FIRST.label}", `) &&lastPrompt().includes('The dock: the chip naming "Scripted", back and forward beside it; under it, what you said back last: "Nothing in this app shows the weather."; the line; the screens '),
+    lastPrompt().includes(`The first screen, "${FIRST.label}", `) && lastPrompt().includes('The dock: the chip naming "Scripted", back and forward beside it; under it, what you said back last: "Nothing in this app shows the weather."; the line; the screens '),
     lastPrompt().slice(-700),
   );
   check('…and the reply to the message before it is no longer said', !drawn().includes('"tone":"reply"'), drawn().match(/"tone":"reply"[^\]]*\]/)?.[0] ?? '');
@@ -191,7 +214,7 @@ try {
   check('and its run is recorded as failed, with its three steps', runs[0]?.outcome === 'failed' && runs[0]?.steps === 3, JSON.stringify(runs[0]));
 
   session.dispatch('dock', { type: 'ui:click', ref: 'forward' });
-  check('forward from the first screen is the answer after it, as it was', await until(() => current().position === 2 && current().question === 'Two things side by side' && on('a').data['title'] === 'One'), `position ${String(current().position)}, ${areas()}`);
+  check('forward from the first screen is the answer after it, as it was', await until(() => current().position === 2 && current().question === 'Two things side by side' && card(1).data['title'] === 'One'), `position ${String(current().position)}, ${areas()}`);
   session.dispatch('dock', { type: 'ui:click', ref: 'back' });
   check('back is the first screen again', await until(() => current().position === 1 && current().screen === FIRST.id), `position ${String(current().position)}`);
   session.dispatch('dock', { type: 'ui:key', ref: 'keys', key: 'ArrowRight' });
@@ -210,8 +233,8 @@ try {
   check(
     '…each with its cards: their titles, where its answer put them, and the inks they were in',
     JSON.stringify((deck[1]?.['layers'] as unknown[]).map((layer) => ({ ...recordOf(layer), tree: undefined }))) === JSON.stringify([
-      { name: 'a', span: 1, row: 1, column: 1, ink: 'turn-1', fresh: 'new', title: 'One', text: 'About One.' },
-      { name: 'b', span: 1, row: 1, column: 2, ink: 'turn-1', fresh: 'new', title: 'Two', text: 'About Two.' },
+      { name: '1', span: 1, row: 1, column: 1, ink: 'turn-1', fresh: 'new', title: 'One', text: 'About One.' },
+      { name: '2', span: 1, row: 1, column: 2, ink: 'turn-1', fresh: 'new', title: 'Two', text: 'About Two.' },
     ]) && JSON.stringify(recordOf((deck[1]?.['layers'] as unknown[])[0])['tree']).includes('"name":"Card","props":{"title":"One"'),
     JSON.stringify(deck[1]?.['layers']),
   );
@@ -222,22 +245,22 @@ try {
   session.dispatch('dock', { type: 'ui:click', ref: 'chip' });
   await until(() => on('overview').action === 'ask.deck' && rows('overview', 'answers').length === total());
   session.dispatch('overview', { type: 'ui:click', ref: 'mini', payload: 4 });
-  check('an answer pressed there is shown as it was, and the overview closes', await until(() => current().position === 4 && on('b').data['title'] === 'Two' && on('overview').action === '' && !browsing()), `${String(current().position)}, ${areas()}`);
+  check('an answer pressed there is shown as it was, and the overview closes', await until(() => current().position === 4 && card(2).data['title'] === 'Two' && on('overview').action === '' && !browsing()), `${String(current().position)}, ${titles()}`);
 
   await app.openScreen('conversation');
-  await until(() => rows('a', 'exchanges').length > 0);
-  const exchanges = rows('a', 'exchanges').map(recordOf);
+  await until(() => listed(1, 'exchanges').length > 0);
+  const exchanges = listed(1, 'exchanges').map(recordOf);
   const firstAsked = exchanges.find((exchange) => exchange['question'] === 'Two things side by side');
   check(
     'the Conversation screen lists every message and what was said back, the oldest first, those that changed nothing too',
-    on('a').action === 'ask.conversation' && exchanges[0]?.['question'] === 'Two things side by side' && exchanges.at(-1)?.['question'] === 'What is the weather in Vienna?' && exchanges.at(-1)?.['reply'] === 'Nothing in this app shows the weather.' && exchanges.at(-1)?.['screen'] === FIRST.id && firstAsked?.['position'] === 2,
-    `${on('a').action} ${JSON.stringify(on('a').data).slice(0, 300)} ${String(current().screen)}`,
+    card(1).action === 'ask.conversation' && exchanges[0]?.['question'] === 'Two things side by side' && exchanges.at(-1)?.['question'] === 'What is the weather in Vienna?' && exchanges.at(-1)?.['reply'] === 'Nothing in this app shows the weather.' && exchanges.at(-1)?.['screen'] === FIRST.id && firstAsked?.['position'] === 2,
+    `${card(1).action} ${JSON.stringify(card(1).data).slice(0, 300)} ${String(current().screen)}`,
   );
-  session.dispatch('a', { type: 'ui:click', ref: 'opens-answer', payload: 2 });
+  session.dispatch('screen', { type: 'ui:click', ref: 'opens-answer', payload: 2, origin: card(1).id });
   check('…and one pressed opens the answer it was', await until(() => current().position === 2 && current().question === 'Two things side by side'), `${String(current().position)} ${String(current().question)}`);
 
   await app.openScreen('people');
-  await until(() => rows('a', 'rows').length > 0);
+  await until(() => listed(1, 'rows').length > 0);
   await app.openScreen('conversation');
   session.dispatch('dock', { type: 'ui:click', ref: 'chip' });
   await until(() => on('overview').action === 'ask.deck' && rows('overview', 'answers').length === total());

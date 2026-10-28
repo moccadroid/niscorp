@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type { ActionDefinition } from '@niscorp/nova';
 import { placeable } from '../../app/action-catalog';
 import { SCREENS } from '../../app/screens';
-import type { Canvas, Screen } from '../../app/screens';
+import type { Screen } from '../../app/screens';
 import { recordOf } from './record';
 
 type Placeable = { id: string; description: string; schema: Record<string, unknown>; check: z.ZodType; defaults: Record<string, unknown> };
@@ -20,13 +20,13 @@ const placeableOf = (action: ActionDefinition): Placeable => {
   return { id: action.id, description: action.description ?? '', schema, check: z.fromJSONSchema(schema), defaults };
 };
 
-// A canvas written onto a screen holds its whole input: what it leaves out, or says is null, is its action's default, so
-// a card already there is written into exactly as a new one would open, and keeps nothing of what it showed before.
-export const opened = (canvas: Canvas, catalog: Catalog): Canvas => ({
-  ...canvas,
-  input: { ...catalog.actions.find((action) => action.id === canvas.action)?.defaults, ...Object.fromEntries(Object.entries(canvas.input).filter(([, value]) => value !== null)) },
+// A card written onto a screen holds its whole input: what it leaves out, or says is null, is its action's default, so a
+// card already there is written into exactly as a new one would open, and keeps nothing of what it showed before.
+export const opened = <C extends { action: string; input: Record<string, unknown> }>(card: C, catalog: Catalog): C => ({
+  ...card,
+  input: { ...catalog.actions.find((action) => action.id === card.action)?.defaults, ...Object.fromEntries(Object.entries(card.input).filter(([, value]) => value !== null)) },
 });
 
 export const CATALOG: Catalog = { actions: placeable.map(placeableOf) };
 
-export const screensHeld = (actions: readonly string[]): Screen[] => SCREENS.filter((screen) => screen.canvases.every((canvas) => actions.includes(canvas.action)));
+export const screensHeld = (actions: readonly string[]): Screen[] => SCREENS.filter((screen) => screen.cards.every((card) => actions.includes(card.action)));

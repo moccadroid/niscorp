@@ -1,24 +1,24 @@
 import type { ShellManifest } from '@niscorp/moss';
-import { ARRANGEMENTS } from '../arrangements';
 import { SCREENS } from '../screens';
-import { AREAS } from './areas';
 import { frameLayout } from './frame.layout';
+import { placesOf, screenLayout } from './screen.layout';
 
 const [first] = SCREENS;
-const arranged = ARRANGEMENTS.find((arrangement) => arrangement.id === first.arrangement) ?? ARRANGEMENTS[0];
 
-// Somebody signed in opens on the first screen. Nobody signed in holds none of it, and the first area gets the sign-in.
+// The answer shown is the `screen` canvas: every card on it live at once, in the order the answer gives them, matched by
+// key by the app's `keyed` reconciler. Each answer draws its own layout of it; this one is the first screen's. Nobody
+// signed in holds none of the first screen, and gets the sign-in there.
 export const shell: ShellManifest = {
   canvases: [
-    ...AREAS.map((area, at) => {
-      const canvas = first.canvases[at];
-      const opens = canvas === undefined ? [] : [{ action: canvas.action, input: canvas.input }];
-      const candidates = at === 0 ? [...opens, 'signin.door'] : opens;
-      return candidates.length === 0 ? { id: area } : { id: area, initial: candidates };
-    }),
+    {
+      id: 'screen',
+      mode: 'list',
+      reconcile: 'keyed',
+      actionLayout: screenLayout(first.columns, placesOf(first.columns, first.cards.map((card) => ({ span: card.span ?? 1, ink: first.ink }))), 1),
+      initial: ['signin.door'],
+    },
     { id: 'overview' },
     { id: 'dock', initial: 'ask.dock' },
   ],
   layout: frameLayout,
-  layoutStore: arranged === undefined ? {} : { answers: arranged.layout },
 };

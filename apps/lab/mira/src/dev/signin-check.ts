@@ -21,6 +21,7 @@ const shells = server.shells;
 if (shells === undefined) throw new Error('the manifest has no shell');
 
 const actionOn = (session: Session, canvas: string): string => session.shell.getState().canvases[canvas]?.active?.definitionId ?? '';
+const firstOn = (session: Session): string => session.shell.getState().canvases['screen']?.stack[0]?.definitionId ?? '';
 const dataOn = (session: Session, canvas: string): Record<string, unknown> => {
   const active = session.shell.getState().canvases[canvas]?.active;
   return active === undefined ? {} : (session.shell.getRuntime(active.id)?.getData() ?? {});
@@ -42,9 +43,9 @@ const ask = async (email: string): Promise<{ session: Session; sent: number }> =
   const session = await shells.session(null, null);
   session.shell.flattenRenderTree(session.shell.getShellRenderTree());
   const before = mails.length;
-  type(session, 'a', 'email', email);
-  press(session, 'a', 'send');
-  await until(() => dataOn(session, 'a')['sent'] === true || dataOn(session, 'a')['error'] !== '');
+  type(session, 'screen', 'email', email);
+  press(session, 'screen', 'send');
+  await until(() => dataOn(session, 'screen')['sent'] === true || dataOn(session, 'screen')['error'] !== '');
   await settle();
   return { session, sent: mails.length - before };
 };
@@ -60,14 +61,14 @@ const signedIn = async (email: string): Promise<{ session: Session; token: strin
 
 try {
   const nobody = await shells.session(null, null);
-  check('nobody signed in gets the sign-in and nothing else: no dock, no answers', actionOn(nobody, 'a') === 'signin.door' && actionOn(nobody, 'dock') === '', `${actionOn(nobody, 'a')} / ${actionOn(nobody, 'dock')}`);
+  check('nobody signed in gets the sign-in and nothing else: no dock, no answers', actionOn(nobody, 'screen') === 'signin.door' && actionOn(nobody, 'dock') === '', `${actionOn(nobody, 'screen')} / ${actionOn(nobody, 'dock')}`);
   const strangerPage = await page(null);
   check('the page drawn for nobody is the sign-in', strangerPage.includes('Sign in') && !strangerPage.includes('k-dock'), strangerPage.slice(0, 200));
 
   const stranger = await ask('stranger@example.com');
-  check('a stranger’s address is answered as any other, and mailed nothing', dataOn(stranger.session, 'a')['sent'] === true && stranger.sent === 0);
+  check('a stranger’s address is answered as any other, and mailed nothing', dataOn(stranger.session, 'screen')['sent'] === true && stranger.sent === 0);
   const nonsense = await ask('not an address');
-  check('what is not an email address is refused, saying so', String(dataOn(nonsense.session, 'a')['error']).includes('not an email address') && nonsense.sent === 0, String(dataOn(nonsense.session, 'a')['error']));
+  check('what is not an email address is refused, saying so', String(dataOn(nonsense.session, 'screen')['error']).includes('not an email address') && nonsense.sent === 0, String(dataOn(nonsense.session, 'screen')['error']));
 
   const owner = await ask(` ${OWNER.toUpperCase()} `);
   const link = tokenIn(mails[mails.length - 1]);
@@ -87,17 +88,17 @@ try {
   check('the owner’s dock lists the People screen', drawn(ownerSession).includes('"label":"People"'));
 
   ownerSession.dispatch('dock', { type: 'ui:click', ref: 'screen', payload: 'people' });
-  await until(() => actionOn(ownerSession, 'a') === 'people.list' && Array.isArray(dataOn(ownerSession, 'a')['rows']) && JSON.stringify(dataOn(ownerSession, 'a')['rows']).includes(OWNER));
-  check('the People screen lists who may sign in: the owner', actionOn(ownerSession, 'a') === 'people.list' && JSON.stringify(dataOn(ownerSession, 'a')['rows']).includes('"role":"owner"'));
+  await until(() => actionOn(ownerSession, 'screen') === 'people.list' && Array.isArray(dataOn(ownerSession, 'screen')['rows']) && JSON.stringify(dataOn(ownerSession, 'screen')['rows']).includes(OWNER));
+  check('the People screen lists who may sign in: the owner', actionOn(ownerSession, 'screen') === 'people.list' && JSON.stringify(dataOn(ownerSession, 'screen')['rows']).includes('"role":"owner"'));
   ownerSession.shell.flattenRenderTree(ownerSession.shell.getShellRenderTree());
-  type(ownerSession, 'a', 'email', 'nobody');
-  press(ownerSession, 'a', 'invite');
-  await until(() => dataOn(ownerSession, 'a')['error'] !== '' && dataOn(ownerSession, 'a')['inviting'] === false);
-  check('what is not an address is not invited, and the card says so in a sentence', String(dataOn(ownerSession, 'a')['error']).includes('Is it an email address?') &&!(await people()).includes('"email":"nobody"'), String(dataOn(ownerSession, 'a')['error']));
-  type(ownerSession, 'a', 'email', ' Ada@Example.com ');
-  type(ownerSession, 'a', 'name', 'Ada');
-  press(ownerSession, 'a', 'invite');
-  await until(() => JSON.stringify(dataOn(ownerSession, 'a')['rows']).includes('ada@example.com'));
+  type(ownerSession, 'screen', 'email', 'nobody');
+  press(ownerSession, 'screen', 'invite');
+  await until(() => dataOn(ownerSession, 'screen')['error'] !== '' && dataOn(ownerSession, 'screen')['inviting'] === false);
+  check('what is not an address is not invited, and the card says so in a sentence', String(dataOn(ownerSession, 'screen')['error']).includes('Is it an email address?') &&!(await people()).includes('"email":"nobody"'), String(dataOn(ownerSession, 'screen')['error']));
+  type(ownerSession, 'screen', 'email', ' Ada@Example.com ');
+  type(ownerSession, 'screen', 'name', 'Ada');
+  press(ownerSession, 'screen', 'invite');
+  await until(() => JSON.stringify(dataOn(ownerSession, 'screen')['rows']).includes('ada@example.com'));
   check('the owner invites Ada from it: a member, her address lower-cased', (await people()).includes('"email":"ada@example.com","name":"Ada","role":"member"'), await people());
 
   const ada = await signedIn('ada@example.com');
@@ -107,7 +108,7 @@ try {
   await server.fetch(new Request('http://mira.test/api/vex', { method: 'POST', headers: { authorization: `Bearer ${ownerToken}`, 'content-type': 'application/json' }, body: JSON.stringify({ fingerprint: ownerAdmit.fingerprint, context: { email: 'second@example.com' } }) }));
   check('and no write of the owner’s makes another owner', !(await people()).includes('"email":"second@example.com","name":null,"role":"owner"'), await people());
 
-  check('each sees their own screens: the owner on People, Ada still on Start', actionOn(ownerSession, 'a') === 'people.list' && actionOn(ada.session, 'a') === 'answer.text');
+  check('each sees their own screens: the owner on People, Ada still on Start', actionOn(ownerSession, 'screen') === 'people.list' && firstOn(ada.session) === 'answer.text');
   type(ada.session, 'dock', 'text', 'hello');
   ada.session.dispatch('dock', { type: 'ui:key', ref: 'text', key: 'Enter' });
   await until(() => scripted.prompts.length > 0);

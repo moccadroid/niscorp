@@ -27,7 +27,11 @@ const dataOn = (session: Session, canvas: string): Record<string, unknown> => {
   return active === undefined ? {} : (session.shell.getRuntime(active.id)?.getData() ?? {});
 };
 const shown = (session: Session): Record<string, unknown> => recordOf(dataOn(session, 'dock')['current']);
-const said = (session: Session, area: string): string => String(dataOn(session, area)['title'] ?? '');
+const cardOn = (session: Session, place: number): Record<string, unknown> => {
+  const instance = session.shell.getState().canvases['screen']?.stack[place - 1];
+  return instance === undefined ? {} : (session.shell.getRuntime(instance.id)?.getData() ?? {});
+};
+const said = (session: Session, place: number): string => String(cardOn(session, place)['title'] ?? '');
 const drawn = (session: Session): string => JSON.stringify(session.shell.flattenRenderTree(session.shell.getShellRenderTree()));
 const press = (session: Session, ref: string, payload?: string): void => session.dispatch('dock', { type: 'ui:click', ref, ...(payload === undefined ? {} : { payload }) });
 const kept = async (token: string, fingerprint = answersRecent.fingerprint): Promise<unknown[]> => {
@@ -76,18 +80,42 @@ try {
   const [second] = rows;
   const stored = [
     await store({ id: randomUUID(), question: 'broken', title: 'Broken', response: '', grammar: {}, plan: { canvases: 'nonsense', arrangement: 'single', layout: {} }, askedOn: null, screen: null }),
+    await store({
+      id: randomUUID(),
+      question: 'from before cards',
+      title: 'From before',
+      response: '',
+      grammar: { 'nisc.nova': 2, 'nisc.prism': 3 },
+      plan: {
+        canvases: { a: [{ action: 'answer.text', input: { title: 'Left', text: 'On the left.', tone: 'default' }, intent: 'left' }], b: [{ action: 'answer.text', input: { title: 'Wide', text: 'Under it.', tone: 'default' }, intent: 'wide' }] },
+        arrangement: 'written',
+        layout: { component: 'Grid', props: { columns: 2 }, children: [{ component: 'Area', props: { name: 'a', span: 1 }, children: [{ component: 'CanvasSlot', props: { canvasId: 'a' } }] }, { component: 'Area', props: { name: 'b', span: 2 }, children: [{ component: 'CanvasSlot', props: { canvasId: 'b' } }] }] },
+        ink: 'turn-2',
+        inks: { a: 'turn-1', b: 'turn-2' },
+        marks: { b: 'new' },
+      },
+      askedOn: null,
+      screen: null,
+    }),
     await store({ id: randomUUID(), question: 'from later', title: 'From later', response: '', grammar: { 'nisc.nova': 999 }, plan: recordOf(second)['plan'], askedOn: null, screen: null }),
   ];
-  check('two answers that will not read are stored', stored.every((response) => response.ok), stored.map((response) => response.status).join(' '));
+  check('two answers that will not read, and one kept before cards had keys, are stored', stored.every((response) => response.ok), stored.map((response) => response.status).join(' '));
 
   shells.reset((await server.principalOf(ownerToken)) ?? '');
   const again = await open(ownerToken);
-  await until(() => shown(again)['label'] === 'The second');
+  await until(() => shown(again)['label'] === 'From before');
   check('an answer that no longer reads, or that newer code wrote, is left out, and the rest stay', !JSON.stringify(shown(again)['stack']).includes('Broken') && !JSON.stringify(shown(again)['stack']).includes('From later'), JSON.stringify(shown(again)['stack']));
-  check('a new shell opens on the answer they were last given, with its canvases', shown(again)['label'] === 'The second' && said(again, 'a') === 'One' && said(again, 'b') === 'Two', `${String(shown(again)['label'])}: ${said(again, 'a')} / ${said(again, 'b')}`);
-  check('…laid out as it was', drawn(again).includes('"name":"b"'));
+  check(
+    'an answer kept before the screen was one canvas reads as its cards in the order of its areas, laid out, inked and marked as it was',
+    said(again, 1) === 'Left' && said(again, 2) === 'Wide' && drawn(again).includes('"name":"2","span":2,"row":2,"column":1,"ink":"turn-2","fresh":"new"') && drawn(again).includes('"name":"1","span":1,"row":1,"column":1,"ink":"turn-1"}'),
+    drawn(again).match(/"name":"Area","props":\{[^}]*\}/g)?.join(' ') ?? '',
+  );
+  press(again, 'back');
+  await until(() => shown(again)['label'] === 'The second');
+  check('a new shell opens with the answers they were given, with their cards', said(again, 1) === 'One' && said(again, 2) === 'Two', `${String(shown(again)['label'])}: ${said(again, 1)} / ${said(again, 2)}`);
+  check('…laid out as it was', drawn(again).includes('"name":"2"'));
   check('…its cards in the inks they were in, and marked as they were', shown(again)['ink'] === 'turn-2' && drawn(again).includes('"ink":"turn-2","fresh":"changed"') && drawn(again).includes('"ink":"turn-2","fresh":"new"'), String(shown(again)['ink']));
-  check('…and the stack behind it: the first screen, then their answers in order', shown(again)['total'] === 3 && shown(again)['position'] === 3, JSON.stringify(shown(again)['stack']));
+  check('…and the stack behind it: the first screen, then their answers in order', shown(again)['total'] === 4 && shown(again)['position'] === 3, JSON.stringify(shown(again)['stack']));
   again.dispatch('dock', { type: 'ui:model', ref: 'text', payload: 'And now?' });
   again.dispatch('dock', { type: 'ui:key', ref: 'text', key: 'Enter' });
   await until(() => shown(again)['said'] === 'Still two.');
@@ -99,21 +127,21 @@ try {
   );
   press(again, 'back');
   await until(() => shown(again)['label'] === 'The first');
-  check('back goes through them', said(again, 'a') === 'One' && shown(again)['position'] === 2 && shown(again)['ink'] === 'turn-1');
+  check('back goes through them', said(again, 1) === 'One' && shown(again)['position'] === 2 && shown(again)['ink'] === 'turn-1');
   press(again, 'back');
   await until(() => shown(again)['label'] === 'Start');
   check('…to the first screen', shown(again)['position'] === 1);
 
   await ask(again, 'Who is here?');
-  await until(() => Array.isArray(dataOn(again, 'a')['rows']) && JSON.stringify(dataOn(again, 'a')['rows']).includes(OWNER));
+  await until(() => Array.isArray(cardOn(again, 1)['rows']) && JSON.stringify(cardOn(again, 1)['rows']).includes(OWNER));
   press(again, 'back');
-  await until(() => shown(again)['label'] === 'The second');
+  await until(() => shown(again)['label'] === 'From before');
   await settle();
   shells.reset((await server.principalOf(ownerToken)) ?? '');
   const third = await open(ownerToken);
   await until(() => shown(third)['label'] === 'Who');
   press(third, 'back');
-  await until(() => shown(third)['label'] === 'The second');
+  await until(() => shown(third)['label'] === 'From before');
   third.dispatch('dock', { type: 'ui:click', ref: 'chip' });
   await until(() => Array.isArray(dataOn(third, 'overview')['answers']) && JSON.stringify(dataOn(third, 'overview')['answers']).includes('"label":"Who"'));
   const pictured = JSON.stringify(recordOf((dataOn(third, 'overview')['answers'] as unknown[]).map(recordOf).find((entry) => entry['label'] === 'Who'))['layers']);
@@ -125,7 +153,7 @@ try {
   shells.reset((await server.principalOf(ownerToken)) ?? '');
   const fourth = await open(ownerToken);
   await settle();
-  check('an answer closed stays closed in a new shell', !JSON.stringify(shown(fourth)['stack']).includes('"Who"') && shown(fourth)['label'] === 'The second', JSON.stringify(shown(fourth)['stack']));
+  check('an answer closed stays closed in a new shell', !JSON.stringify(shown(fourth)['stack']).includes('"Who"') && shown(fourth)['label'] === 'From before', JSON.stringify(shown(fourth)['stack']));
   check('…and stays in the conversation', JSON.stringify(await kept(ownerToken, answersSaid.fingerprint)).includes('Who is here?'));
 
   await server.fetch(new Request('http://mira.test/api/vex', { method: 'POST', headers: { authorization: `Bearer ${ownerToken}`, 'content-type': 'application/json' }, body: JSON.stringify({ fingerprint: personInvite.fingerprint, context: { email: 'ada@example.com', name: 'Ada' } }) }));

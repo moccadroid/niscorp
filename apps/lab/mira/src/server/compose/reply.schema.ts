@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { AREAS } from '../../app/shell/areas';
+import { CARDS_ON_A_SCREEN } from '../../app/screens';
 import type { Said } from './plan';
 
 export const CardSchema = z
@@ -27,7 +27,7 @@ export const ReplySchema = z
     columns: z.number().int().min(1).max(3).nullish().describe('How many columns the cards are laid out in; as on the screen now when left out.'),
     cards: z
       .array(CardSchema)
-      .max(AREAS.length)
+      .max(CARDS_ON_A_SCREEN)
       .nullish()
       .describe('The screen after the answer: every card on it, kept or new, in reading order, row by row. Left out or empty, the screen stays as it is.'),
     screen: z.string().nullish().describe('The id of one of the SCREENS, only when the message asks for that screen as it is; then no cards.'),

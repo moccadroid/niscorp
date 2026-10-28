@@ -10,6 +10,7 @@ export type AppSeams = {
   identity: NonNullable<NiscApp['identity']>;
   inputs: NonNullable<ShellManifest['inputs']>;
   runs: RunSink;
+  reconcilers: NonNullable<NiscApp['reconcilers']>;
 };
 
 export const buildApp = (seams: AppSeams): NiscApp =>
@@ -23,4 +24,5 @@ export const buildApp = (seams: AppSeams): NiscApp =>
     identity: seams.identity,
     functions: seams.functions,
     runs: seams.runs,
+    reconcilers: seams.reconcilers,
   });

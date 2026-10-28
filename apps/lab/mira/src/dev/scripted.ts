@@ -3,7 +3,6 @@ import type { MossServer, RunRecord, RunSink } from '@niscorp/moss';
 import { routeResponse } from '@niscorp/signal';
 import type { StepRequest, StepResult } from '@niscorp/signal';
 import { z } from 'zod';
-import { AREAS } from '../app/shell/areas';
 import { boot } from '../server/boot';
 import type { BootConfig } from '../server/boot';
 import type { Models } from '../server/compose';
@@ -78,7 +77,7 @@ const ShownSchema = z.looseObject({
   question: z.string().optional(),
   response: z.string().optional(),
   screen: z.string().optional(),
-  arrangement: z.string().optional(),
+  columns: z.number().optional(),
   position: z.number().optional(),
   total: z.number().optional(),
   stack: z.array(z.looseObject({ position: z.number(), label: z.string() })).optional(),
@@ -95,13 +94,15 @@ export type App = {
   session: Session;
   runs: RunRecord[];
   on: (canvas: string) => Canvas;
+  cards: () => Canvas[];
+  card: (place: number) => Canvas;
   current: () => z.infer<typeof ShownSchema>;
   draw: () => void;
   answered: () => number;
   streamed: () => number;
   areas: () => string;
   ids: () => string;
-  without: (area: string, of: string) => string;
+  without: (place: number, of: string) => string;
   rows: (canvas: string, key: string) => unknown[];
   total: () => number;
   said: () => string;
@@ -146,6 +147,10 @@ export const startApp = async (models: Models): Promise<App> => {
     const active = shell.getState().canvases[canvas]?.active;
     return { action: active?.definitionId ?? '', id: active?.id ?? '', data: active === undefined ? {} : (shell.getRuntime(active.id)?.getData() ?? {}) };
   };
+  // The cards of the answer shown: the screen canvas's instances, in order.
+  const cards = (): Canvas[] => (shell.getState().canvases['screen']?.stack ?? []).map((instance) => ({ action: instance.definitionId, id: instance.id, data: shell.getRuntime(instance.id)?.getData() ?? {} }));
+  const card = (place: number): Canvas => cards()[place - 1] ?? { action: '', id: '', data: {} };
+  const screenTree = (): unknown => shell.getCanvasRenderTree('screen');
   const nodesOf = (value: unknown): Record<string, unknown>[] => (Array.isArray(value) ? value.map(recordOf) : []);
   const named = (name: string, nodes: unknown): Record<string, unknown>[] => nodesOf(nodes).flatMap((node) => (node['name'] === name ? [node] : named(name, node['children'])));
   const current = (): z.infer<typeof ShownSchema> => ShownSchema.safeParse(on('dock').data['current']).data ?? {};
@@ -159,13 +164,15 @@ export const startApp = async (models: Models): Promise<App> => {
     session,
     runs,
     on,
+    cards,
+    card,
     current,
     draw,
     answered: () => answered,
     streamed: () => streamed,
-    areas: () => AREAS.map((area) => on(area).action).filter((action) => action !== '').join(' '),
-    ids: () => AREAS.map((area) => `${area}:${on(area).id}`).join(' '),
-    without: (area, of) => of.replace(new RegExp(`${area}:\\S*`), ''),
+    areas: () => cards().map((held) => held.action).join(' '),
+    ids: () => cards().map((held, at) => `${String(at + 1)}:${held.id}`).join(' '),
+    without: (place, of) => of.replace(new RegExp(`(^| )${String(place)}:\\S*`), ''),
     rows: (canvas, key) => {
       const value = on(canvas).data[key];
       return Array.isArray(value) ? value : [];
@@ -173,9 +180,9 @@ export const startApp = async (models: Models): Promise<App> => {
     total: () => Number(current().total),
     said: () => String(on('dock').data['error'] ?? ''),
     drawn: () => JSON.stringify(shell.flattenRenderTree(shell.getShellRenderTree())),
-    // The frame's `answers` region as the shell draws it: its columns, and each area's name and span.
+    // The screen canvas as the shell draws it: its columns, and each area's name and span.
     grid: () => {
-      const answers = named('Grid', shell.getShellRenderTree())[0] ?? {};
+      const answers = named('Grid', screenTree())[0] ?? {};
       const held = nodesOf(answers['children']).map((area) => {
         const own = recordOf(area['props']);
         return `${String(own['name'])}${Number(own['span'] ?? 1) > 1 ? `×${String(own['span'])}` : ''}`;
@@ -183,13 +190,13 @@ export const startApp = async (models: Models): Promise<App> => {
       return `${String(recordOf(answers['props'])['columns'])}: ${held.join(' ')}`;
     },
     marked: () =>
-      named('Area', shell.getShellRenderTree())
+      named('Area', screenTree())
         .map((area) => recordOf(area['props']))
         .filter((props) => props['fresh'] !== undefined)
         .map((props) => `${String(props['name'])}:${String(props['fresh'])}`)
         .join(' '),
     inks: () =>
-      named('Area', shell.getShellRenderTree())
+      named('Area', screenTree())
         .map((area) => recordOf(area['props']))
         .map((props) => `${String(props['name'])}:${String(props['ink'])}`)
         .join(' '),
