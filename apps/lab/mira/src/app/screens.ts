@@ -9,7 +9,7 @@ export const SCREENS: readonly [Screen, ...Screen[]] = [
   {
     id: 'start',
     label: 'Start',
-    description: 'What this app is, and things to ask it.',
+    description: 'Start: what Mira is, and things to ask.',
     columns: 2,
     ink: 'screen-1',
     cards: [
@@ -17,11 +17,11 @@ export const SCREENS: readonly [Screen, ...Screen[]] = [
       { action: 'ask.suggestions', input: { title: 'Try asking', suggestions: ['What can you do?', 'Plan a long weekend in November'] } },
     ],
   },
-  { id: 'people', label: 'People', description: 'Everybody who may sign in, and inviting somebody.', columns: 1, ink: 'screen-2', cards: [{ action: 'people.list', input: {} }] },
+  { id: 'people', label: 'People', description: 'People: everyone who can sign in, and inviting someone.', columns: 1, ink: 'screen-2', cards: [{ action: 'people.list', input: {} }] },
   {
     id: 'conversation',
     label: 'Conversation',
-    description: 'Everything the person asked and what was said back, each opening the answer it was.',
+    description: 'Conversation: everything your person asked and what you answered.',
     columns: 1,
     ink: 'screen-3',
     cards: [{ action: 'ask.conversation', input: {} }],

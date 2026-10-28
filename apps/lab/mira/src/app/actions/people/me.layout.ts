@@ -2,7 +2,7 @@ import type { LayoutNode } from '@niscorp/nova';
 
 export const meLayout: LayoutNode = {
   component: 'Card',
-  props: { title: 'You' },
+  props: { title: 'Your name' },
   children: [
     {
       if: '$.me.name',

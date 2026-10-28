@@ -136,8 +136,8 @@ try {
   check('the model is offered only what the person may use: the owner the People card, Ada not', ownerPrompt.includes('people.list') && !adaPrompt.includes('people.list'));
   check(
     'the model is told who it talks with: Ada by the name she keeps, invited by the owner; the owner, who has given no name, to be asked for one',
-    adaPrompt.includes('YOUR PERSON\n- Their name: "Ada L.".\n- The owner of this Mira invited them.') && ownerPrompt.includes('- Their name: you do not know it yet.') && ownerPrompt.includes('- They own this Mira'),
-    adaPrompt.slice(adaPrompt.indexOf('YOUR PERSON'), adaPrompt.indexOf('YOUR PERSON') + 200),
+    adaPrompt.includes('YOUR PERSON\n- Name: Ada L.\n- The owner of this Mira invited them.') && ownerPrompt.includes('- Name: not known yet\n') && ownerPrompt.includes('- They own this Mira'),
+    adaPrompt.slice(adaPrompt.lastIndexOf('YOUR PERSON'), adaPrompt.lastIndexOf('YOUR PERSON') + 200),
   );
   check('and nobody is given the app’s reads and writes', [ownerPrompt, adaPrompt].every((prompt) => !prompt.includes('people/') && !prompt.includes('links/') && !prompt.includes('answers/')));
 } catch (error) {

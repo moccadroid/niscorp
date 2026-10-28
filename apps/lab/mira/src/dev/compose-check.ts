@@ -17,10 +17,11 @@ const SCRIPT: Script = {
   'the second again, beside it': [{ title: 'Second again', cards: [keep('One'), say('Two')] }],
   'swap them': [{ title: 'Swapped', cards: [keep('Two'), keep('One')] }],
   'other words for the first': [{ title: 'Said again', cards: [keep('Two'), say('One', 'Said again.')] }],
-  'keep what is not there': [{ cards: [keep('Three'), keep('Two'), keep('Two')] }, { cards: [keep('Two'), keep('One')] }],
+  'keep what is not there': [{ cards: [keep('Three')] }, { cards: [keep('Two'), keep('One')] }],
+  'keep one card twice': [{ cards: [keep('Two'), keep('Two')] }, { cards: [keep('Two'), keep('One')] }],
   'Show me the weather card': [{ cards: [{ action: 'weather.card', input: {} }] }],
   'Three things, the last wide beneath': [{ title: 'Three things', columns: 2, cards: [say('One'), say('Two'), { ...say('Three'), span: 2 }] }],
-  'Two things, one given two ways': [{ cards: [say('One'), { ...keep('Two'), action: 'people.list', input: {} }] }, { title: 'Two again', cards: [say('One'), { ...keep('Two'), ...say('Two', 'Written into.') }] }],
+  'Two things, one given two ways': [{ cards: [say('One'), { ...keep('Two'), action: 'people.list', input: {} }] }, { title: 'Two again', cards: [say('One'), { ...keep('Two'), input: { title: 'Two', text: 'Written into.' } }] }],
   'the other way round, written out': [{ title: 'Two again', cards: [say('Two', 'Written into.'), say('One')] }],
   'Who may sign in?': [{ title: 'Who', columns: 2, cards: [{ action: 'people.list', input: {} }] }],
   'and a note beside it': [{ title: 'Who, noted', cards: [keep('People'), say('A note', 'Invite Ada next.')] }],
@@ -31,12 +32,6 @@ const SCRIPT: Script = {
   'Only one thing': [{ columns: 1, cards: [say('One')] }],
   'Call me Max': [{ response: 'Max it is.', title: 'You', columns: 1, cards: [{ action: 'people.me', input: { name: 'Max' } }] }],
   'Hello again': [{ response: 'Hello, Max.', cards: [] }],
-  'Plan two days, showing them as you go': [
-    { $call: 'place', args: { columns: 2, cards: [say('Day one'), say('Day two')] } },
-    { response: 'Two days, and what to pack.', title: 'Two days', cards: [keep('Day one'), keep('Day two'), { ...say('Packing'), span: 2 }] },
-  ],
-  'Put something up, then stop': [{ $call: 'place', args: { columns: 1, cards: [say('Placed')] } }, { response: 'There it is.', title: 'Placed', cards: [] }],
-  'Place what is not there': [{ $call: 'place', args: { cards: [{ action: 'weather.card', input: {} }] } }, { title: 'One', cards: [say('One')] }],
   'How is the People card drawn?': [{ $call: 'read_action', args: { action: 'people.list' } }, { response: 'As a list, with a form under it.', cards: [] }],
 };
 
@@ -72,14 +67,16 @@ try {
     JSON.stringify(runs),
   );
   check(
-    'the model is shown the first screen as nova holds it, its cards with their live data, and told an answer asked on it starts from an empty one',
-    prompts[0]?.includes(`{"title":"${FIRST.label}","screen":"${FIRST.id}","columns":2,"cards":{"Mira":{"action":"answer.text","span":1,"data":{"title":"Mira","text":`) === true &&
-      prompts[0].includes('It is the first screen, which welcomes your person: none of its cards can be kept, for an answer asked on it starts from an empty screen.'),
+    'the model is shown the first screen as nova holds it, its cards in order with their live data, and told an answer asked on it replaces them',
+    prompts[0]?.includes(`{"title":"${FIRST.label}","screen":"${FIRST.id}","columns":2,"cards":[{"title":"Mira","action":"answer.text","span":1,"data":{"title":"Mira","text":`) === true &&
+      prompts[0].includes('This is the Start screen: an answer asked here replaces all its cards.'),
     prompts[0]?.slice(0, 600) ?? '',
   );
   check(
-    'the model is told about its person: no name yet, so to ask for one; that they own this Mira; and their time, where their device is',
-    prompts[0]?.includes('YOUR PERSON\n- Their name: you do not know it yet. End your response by asking what they would like you to call them') === true && prompts[0].includes('- They own this Mira') && prompts[0].includes(' (Europe/Vienna).'),
+    'the model is told about its person — no name yet, that they own this Mira, their local time where their device is — and to ask for a name it does not know',
+    prompts[0]?.includes('YOUR PERSON\n- Name: not known yet\n- They own this Mira and invite the other people who use it.\n- Their local date and time: ') === true &&
+      prompts[0].includes(' (Europe/Vienna).') &&
+      prompts[0].includes("If you don't know your person's name yet, ask for it."),
     prompts[0]?.slice(prompts[0].indexOf('YOUR PERSON'), prompts[0].indexOf('YOUR PERSON') + 400) ?? '',
   );
   check('words the model says are placed where it says, in the room it gives', areas() === 'answer.text answer.text' && titles() === 'One Two' && grid() === '2: 1 2', `${areas()} — ${titles()} — ${grid()}`);
@@ -108,7 +105,7 @@ try {
   await ask('drop the second');
   check(
     'an answer asked on an answer is given the screen open as nova holds it: its columns, and its cards in reading order under their titles, each with its action, columns and data',
-    lastPrompt().includes('{"title":"Two things","columns":2,"cards":{"One":{"action":"answer.text","span":1,"data":{"title":"One","text":"About One.","tone":"default"}},"Two":{"action":"answer.text","span":1,"data":{"title":"Two","text":"About Two.","tone":"default"}}}}'),
+    lastPrompt().includes('{"title":"Two things","columns":2,"cards":[{"title":"One","action":"answer.text","span":1,"data":{"title":"One","text":"About One.","tone":"default"}},{"title":"Two","action":"answer.text","span":1,"data":{"title":"Two","text":"About Two.","tone":"default"}}]}'),
     lastPrompt().slice(lastPrompt().indexOf('THE SCREEN'), lastPrompt().indexOf('THE SCREEN') + 600),
   );
   check('an answer that only drops a card marks nothing, and what stays keeps its ink', marked() === '' && inks() === '1:turn-1', `${marked()} — ${inks()}`);
@@ -139,11 +136,10 @@ try {
 
   prompts.length = 0;
   await ask('keep what is not there');
-  check(
-    'keeping a card that is not on the screen, or one card twice, is sent back saying so, with the cards that are',
-    (prompts[1] ?? '').includes('cards[0]: there is no card "Three" on the screen; its cards are "Two", "One".') && (prompts[1] ?? '').includes('cards[2]: the card "Two" is kept already'),
-    prompts[1]?.slice(-400) ?? '',
-  );
+  check('keeping a card that is not on the screen is sent back, naming the titles that are', (prompts[1] ?? '').includes('"Two"|"One"'), prompts[1]?.slice(-400) ?? '');
+  prompts.length = 0;
+  await ask('keep one card twice');
+  check('keeping one card twice is sent back saying so', (prompts[1] ?? '').includes('cards[1]: the card "Two" is kept already'), prompts[1]?.slice(-400) ?? '');
 
   const beforeWeatherCard = ids();
   const stackBeforeWeatherCard = total();
@@ -152,7 +148,7 @@ try {
   await ask('Show me the weather card');
   check(
     'an answer refused three times leaves the screen as it was, and the line says so',
-    prompts.length === 3 && prompts[1]?.includes('there is no action "weather.card"') === true && ids() === beforeWeatherCard && total() === stackBeforeWeatherCard && said().includes('did not fit'),
+    prompts.length === 3 && ids() === beforeWeatherCard && total() === stackBeforeWeatherCard && said().includes('did not fit'),
     `${ids()} — ${said()}`,
   );
   check('a model run refused three times is recorded as failed, with its three steps', runs[0]?.outcome === 'failed' && runs[0]?.steps === 3 && runs[0]?.totalTokens === 330, JSON.stringify(runs[0]));
@@ -162,7 +158,7 @@ try {
   prompts.length = 0;
   const kept = card(2).id;
   await ask('Two things, one given two ways');
-  check('a card kept as another action is sent back saying so', (prompts[1] ?? '').includes('cards[1]: "Two" is answer.text; a card kept stays the action it is.'), prompts[1]?.slice(-300) ?? '');
+  check('a card both kept and added is sent back', prompts.length === 2 && (prompts[1] ?? '').includes('Your output was invalid'), prompts[1]?.slice(-300) ?? '');
   check('a card kept with an input is that card written into, its instance kept', areas() === 'answer.text answer.text' && grid() === '2: 1 2' && card(2).id === kept && card(2).data['text'] === 'Written into.' && marked().includes('2:changed'), `${areas()} — ${grid()} — ${JSON.stringify(card(2).data)} — ${marked()}`);
 
   const [givenOne, givenTwo] = [card(1).id, card(2).id];
@@ -224,7 +220,7 @@ try {
   check('a model that cannot be reached leaves the screen as it was, and the line says so', ids() === beforeWeather && said().includes('could not be reached'), said());
   check(
     'the model is shown the dock as the person saw it: the chip, and what it said back last under it',
-    lastPrompt().includes(`"screen":"${FIRST.id}"`) && /The dock: the chip naming "Scripted", 1 of \d+ in the stack \([^)]*\), back and forward beside it; under it, what you said back last: "Nothing in this app shows the weather."; the line; the screens /.test(lastPrompt()),
+    lastPrompt().includes(`"screen":"${FIRST.id}"`) && /The dock under it, which you cannot change: the chip "Scripted" \(answer 1 of \d+: [^)]*\), back and forward, the line to type in, and the screens Start, People, Conversation\. Under the chip is what you said last: "Nothing in this app shows the weather\."/.test(lastPrompt()),
     lastPrompt().slice(-700),
   );
   check('…and the reply to the message before it is no longer said', !drawn().includes('"tone":"reply"'), drawn().match(/"tone":"reply"[^\]]*\]/)?.[0] ?? '');
@@ -308,17 +304,8 @@ try {
   session.dispatch('screen', { type: 'ui:click', ref: 'save', origin: card(1).id });
   check('…which keeps it when they press Save', await until(() => recordOf(card(1).data['me'])['name'] === 'Max'), JSON.stringify(card(1).data));
   await ask('Hello again');
-  check('and from then on the model knows their name', lastPrompt().includes('YOUR PERSON\n- Their name: "Max".'), lastPrompt().slice(lastPrompt().indexOf('YOUR PERSON'), lastPrompt().indexOf('YOUR PERSON') + 200));
+  check('and from then on the model knows their name', lastPrompt().includes('YOUR PERSON\n- Name: Max\n'), lastPrompt().slice(lastPrompt().lastIndexOf('YOUR PERSON'), lastPrompt().lastIndexOf('YOUR PERSON') + 200));
 
-  prompts.length = 0;
-  await ask('Plan two days, showing them as you go');
-  check('cards the model places while at work are told back to it, and go up before it replies', (prompts[1] ?? '').includes('Placed: "Day one", "Day two".') && app.streamed() > 0, prompts[1]?.slice(-300) ?? '');
-  check('…and its reply keeps them from the screen as placed, with what it adds', titles() === 'Day one Day two Packing' && grid() === '2: 1 2 3×2' && marked() === '1:new 2:new 3:new', `${titles()} — ${grid()} — ${marked()}`);
-  await ask('Put something up, then stop');
-  check('a reply with no cards after the model placed some leaves the screen as it placed it, an answer of its own', titles() === 'Placed' && current().question === 'Put something up, then stop', `${titles()} — ${String(current().question)}`);
-  prompts.length = 0;
-  await ask('Place what is not there');
-  check('cards that would not hold are not placed, and the model is told why', (prompts[1] ?? '').includes('Nothing was placed:\n') && (prompts[1] ?? '').includes('there is no action "weather.card"') && titles() === 'One', `${titles()} — ${prompts[1]?.slice(-300) ?? ''}`);
   prompts.length = 0;
   await ask('How is the People card drawn?');
   check('the model may read one of its actions whole: its data and its layout', (prompts[1] ?? '').includes('"id":"people.list"') && (prompts[1] ?? '').includes('"layout":{"component":"Card"'), prompts[1]?.slice(-400) ?? '');

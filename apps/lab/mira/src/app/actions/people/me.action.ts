@@ -16,10 +16,10 @@ const save: Step[] = [
 
 export const meAction: ActionDefinition = {
   id: 'people.me',
-  title: 'You',
-  description: 'The name Mira calls the person by, and a field to give it; they press Save.',
+  title: 'Your name',
+  description: 'Your name: the name Mira calls your person, and a box to change it. Your person presses Save.',
   data: { me: {}, name: '', saving: false, error: '' },
-  input: z.toJSONSchema(z.object({ name: z.string().optional().describe('The name they want to be called, when the message gives it.') })),
+  input: z.toJSONSchema(z.object({ name: z.string().optional().describe('The name to put in the box, if they told you one.') })),
   layout: meLayout,
   endpoints: {
     load: { url: '/api/vex', method: 'POST', request: { fingerprint: personMe.fingerprint, context: {} }, target: 'me' },

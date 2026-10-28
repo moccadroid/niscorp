@@ -4,15 +4,15 @@ import type { CortexEvent, SignalClient } from '@niscorp/cortex';
 import type { FunctionDefinition, FunctionSession } from '@niscorp/moss';
 import type { LayoutNode } from '@niscorp/nova';
 import type { Upgrader } from '@niscorp/strata';
-import { actions } from '../../app/action-catalog';
 import { CARDS_ON_A_SCREEN, SCREENS } from '../../app/screens';
 import type { Screen } from '../../app/screens';
 import { recordModelRun } from '../runs';
 import { answerOf, answerSoFar, refusalsOf } from './answer';
-import type { Answer, AnswerContext } from './answer';
+import type { AnswerContext } from './answer';
 import { CATALOG, opened, screensHeld } from './catalog';
 import type { Catalog } from './catalog';
 import { composerAgent } from './composer.agent';
+import { replySchemaFor } from './reply.schema';
 import { deckOf } from './deck';
 import { createHistory, keptAs } from './history';
 import type { Exchange, History } from './history';
@@ -24,8 +24,7 @@ import type { Plan, ShownPlan } from './plan';
 import { readPerson } from './person';
 import { drawnCards, readOpenScreen, readSeen, standingCards } from './screen';
 import type { OpenCard } from './screen';
-import { placeTool, readActionTool } from './tools';
-import type { Screen as Placing } from './reply.schema';
+import { readActionTool } from './tools';
 
 export type Chat = { provider: string; model: string; llm: SignalClient; timeoutMs: number };
 
@@ -38,12 +37,6 @@ const CloseSchema = z.looseObject({ closing: z.coerce.number() });
 
 const reasonOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));
 
-// The cards an answer put up, as the screen holds them for the next reply to keep.
-const openOf = (answer: Answer): OpenCard[] =>
-  answer.cards.map(({ key, action, input, span }) => {
-    const named = input['title'];
-    return { key, title: typeof named === 'string' ? named : (actions[action]?.title ?? action), span, action, input, data: input };
-  });
 
 // How many of the person's last messages, with what was said back, the model is given.
 const CONVERSATION_GIVEN = 10;
@@ -163,19 +156,10 @@ export const composer =
 
       const { columns } = before;
       const deps: ComposerDeps = { catalog, screens, person: await readPerson(session), seen: readSeen(session.shell, standingOpen, columns) };
-      const freshKeys = (): string[] => Array.from({ length: CARDS_ON_A_SCREEN }, () => randomUUID());
-      let context: AnswerContext = { ...deps, open, columns, fresh: freshKeys() };
-      // What `place` put on the screen while the model was at work: the screen its reply keeps cards from.
-      const place = (screen: Placing): string => {
-        const reply = { title: soFar?.label ?? '', columns: screen.columns ?? null, cards: screen.cards, screen: null };
-        const refused = refusalsOf(reply, context);
-        if (refused.length > 0) return `Nothing was placed:\n${refused.join('\n')}`;
-        const answer: Answer = answerOf(reply, context);
-        context = { ...context, open: openOf(answer), columns: answer.columns, fresh: freshKeys() };
-        moveTo(history.next(planOf(message, answer, from, history.nextInk())));
-        return `Placed: ${context.open.map((card) => JSON.stringify(card.title)).join(', ')}.`;
-      };
-      const agent = composerAgent((envelope) => {
+      const fresh = Array.from({ length: CARDS_ON_A_SCREEN }, () => randomUUID());
+      const { reply, card } = replySchemaFor(catalog, open.map((held) => held.title), screens.map((screen) => screen.id));
+      const context: AnswerContext = { ...deps, open, columns, fresh, card };
+      const agent = composerAgent(reply, (envelope) => {
         const refused = refusalsOf(envelope.data, context);
         return refused.length === 0 ? { ok: true } : { retry: refused.map((reason) => `- ${reason}`).join('\n') };
       });
@@ -191,7 +175,7 @@ export const composer =
         if (screenOf(plan) === screenOf(soFar ?? before)) return;
         moveTo(plan);
       };
-      const result = await agent.run(input, { llm: chat.llm, deps, tools: [readActionTool(catalog), placeTool(place)], signal: AbortSignal.timeout(chat.timeoutMs), onEvent: streamed }).result;
+      const result = await agent.run(input, { llm: chat.llm, deps, tools: [readActionTool(catalog)], signal: AbortSignal.timeout(chat.timeoutMs), onEvent: streamed }).result;
       const { usage, steps, elapsedMs } = result.meta;
       recordModelRun(session, { agentId: agent.agentId, label: message, provider: chat.provider, model: chat.model, usage, steps, elapsedMs, outcome: result.ok ? 'ok' : 'failed' });
       if (asked !== turn) return history.current();

@@ -14,24 +14,30 @@ const json = (value: unknown): string => JSON.stringify(value);
 
 const withoutDialect = (schema: unknown): Record<string, unknown> => Object.fromEntries(Object.entries(recordOf(schema)).filter(([key]) => key !== '$schema'));
 
-export const INSTRUCTIONS = `You are Mira, the assistant of one person: YOUR PERSON, below. You care about them: you call them by their name once you know it, and you answer as someone who wants things to go well for them. They ask you for something, and you answer with a screen and a reply. The screen holds up to ${CARDS_ON_A_SCREEN} cards in one to three columns, each one of the ACTIONS opened with an input. Answer on the screen: with one of the SCREENS when it shows what was asked, never words describing it; with an action wherever one shows it; and otherwise with what you have to say in words, on answer.text — an answer, an explanation, a plan, even a short reply. THE SCREEN is what your person sees as they send the message: a message may follow on from it, or from what was said before. Change only what the message asks to change; keep every other card, where it is — but an answer asked on the first screen starts from an empty screen.
-Your \`response\` is what you say back to your person, every time, when you open one of the SCREENS or change the screen too: one or two short sentences, addressed to them, that answer what they asked, as a person would in conversation. It is kept in the Conversation, and shown on its own only when the screen does not change. It is read apart from the screen, so it says the answer itself, never "here is…" pointing at the screen, and never what you changed on it: asked how to boil an egg, say "About nine minutes for a firm yolk, then straight into cold water.", and put the steps on a card. Whatever your person reads — the response, and every word you put on a card — names what they see, never ids.`;
+export const INSTRUCTIONS = [
+  'You are Mira, the assistant of one person: your person, described under YOUR PERSON. You care about them, and you call them by their name once you know it.',
+  `Every answer is a screen: up to ${CARDS_ON_A_SCREEN} cards in one to three columns, each card one of the ACTIONS opened with an input. Your reply's data is the screen after your answer: keep a card that is on THE SCREEN by its title, add a card from ACTIONS with its input, or open one of the SCREENS. Change only what the message asks for and keep everything else. When no action shows the answer, put it on an answer.text card.`,
+  'Your `response` is what you say to your person, every time: one or two short, plain sentences that answer them. Never describe the screen, and never say something happened that did not. Everything your person reads — your response and the words on cards — is in plain words, never ids.',
+  "If you don't know your person's name yet, ask for it. When they tell you, open people.me with it; it is saved only when they press Save.",
+].join('\n');
 
 export const actionCatalog = (({ deps }) =>
-  `ACTIONS — each card you can open: its id, what it shows, and the input schema it is opened with\n${deps.catalog.actions.map((action) => `- ${action.id}: ${action.description} Input: ${json(withoutDialect(action.schema))}`).join('\n') || 'none'}`) satisfies Producer<ComposerDeps>;
+  [
+    'ACTIONS — the cards you can add to the screen: id — what it shows, then the input schema it is opened with',
+    ...deps.catalog.actions.map((action) => `${action.id} — ${action.description}\n  input: ${json(withoutDialect(action.schema))}`),
+  ].join('\n')) satisfies Producer<ComposerDeps>;
 
-export const screenCatalog = (({ deps }) => `SCREENS\n${deps.screens.map((screen) => `- ${screen.id}: ${screen.description}`).join('\n')}`) satisfies Producer<ComposerDeps>;
+export const screenCatalog = (({ deps }) => ['SCREENS — ready-made screens your person can open from the dock', ...deps.screens.map((screen) => `${screen.id} — ${screen.description}`)].join('\n')) satisfies Producer<ComposerDeps>;
 
 export const aboutMira = (({ deps }) =>
   [
-    'ABOUT MIRA — the app you are, for when your person asks about it',
-    `- An answer is a screen of up to ${CARDS_ON_A_SCREEN} cards, in one to three columns; a screen never holds more. When the cards on a screen do not all fit, all but one fold to their titles, and your person taps one open.`,
-    '- Every answer stays in a stack. Back and forward in the dock, the arrow keys, or swiping the answer right for back and left for forward go through it; the chip in the dock names the answer shown, and pressing it lays every answer out side by side.',
-    `- The dock, at the bottom, holds the chip with back and forward beside it, the line your person asks in, and the screens: ${deps.screens.map((screen) => screen.label).join(', ')}. Your response is kept in the Conversation, and shown under the chip only when the screen does not change.`,
-    '- A question about Mira itself is answered on a card, in words, as well as in your response.',
+    'ABOUT MIRA — for when your person asks about the app',
+    `- An answer is a screen of up to ${CARDS_ON_A_SCREEN} cards in one to three columns. When the cards do not all fit, all but one shrink to their titles; your person taps one to open it.`,
+    '- Every answer stays in a stack. Back and forward in the dock, the arrow keys, or swiping (right for back, left for forward) move through it. The chip in the dock names the answer shown; pressing it shows every answer side by side.',
+    `- The dock at the bottom holds the chip with back and forward, the line your person types in, and the screens: ${deps.screens.map((screen) => screen.label).join(', ')}. Your response is kept in the Conversation, and shown under the chip when the screen does not change.`,
   ].join('\n')) satisfies Producer<ComposerDeps>;
 
-// The time where they are, in the zone their device gave; the server's, until it has.
+// Their local date and time, in the zone their device gave; the server's, until it has.
 const timeIn = (zone: string | undefined, now: Date): string => {
   const asked = { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' } as const;
   try {
@@ -44,22 +50,18 @@ const timeIn = (zone: string | undefined, now: Date): string => {
 export const yourPerson = (({ deps }) =>
   [
     'YOUR PERSON',
-    deps.person.name === undefined
-      ? '- Their name: you do not know it yet. End your response by asking what they would like you to call them — once: when a response of yours above asked already, do not ask again. When they tell you, open the You card (people.me) with it: the name is kept only when they press Save there.'
-      : `- Their name: ${json(deps.person.name)}.`,
-    deps.person.owner ? '- They own this Mira, and invite everybody else who may sign in.' : '- The owner of this Mira invited them.',
-    `- Their time now: ${timeIn(deps.seen.zone, new Date())}.`,
+    `- Name: ${deps.person.name ?? 'not known yet'}`,
+    deps.person.owner ? '- They own this Mira and invite the other people who use it.' : '- The owner of this Mira invited them.',
+    `- Their local date and time: ${timeIn(deps.seen.zone, new Date())}.`,
   ].join('\n')) satisfies Producer<ComposerDeps>;
 
-
-// The answer shown as nova holds it: its title, the screen it is when it is one of the SCREENS, its columns, and its
-// cards in reading order under their titles, each with its action, the columns it takes and its live data. The dock,
-// which the model never changes, in words.
+// The answer shown as nova holds it: its title, the screen it is when it is one of the SCREENS, its columns, and its cards
+// in order, each with its title, action, width and live data. The dock, which the model cannot change, in words.
 const screenLines = (seen: Seen): string[] => [
-  'THE SCREEN — what your person sees as they send the message: the answer shown, as nova holds it, then the dock under it',
-  json({ title: seen.label, ...(seen.screen ? { screen: seen.screenId } : {}), columns: seen.columns, cards: Object.fromEntries(seen.cards.map(({ title, action, span, data }) => [title, { action, span, data }])) }),
-  ...(seen.first ? ['It is the first screen, which welcomes your person: none of its cards can be kept, for an answer asked on it starts from an empty screen.'] : []),
-  `The dock: the chip naming ${json(seen.chip)}, ${String(seen.position)} of ${String(seen.total)} in the stack (${seen.stack.join(', ')}), back and forward beside it${seen.said === undefined ? '' : `; under it, what you said back last: ${json(seen.said)}`}; the line; the screens ${seen.screens.join(', ')}.`,
+  'THE SCREEN — what your person sees right now: the answer shown, as nova holds it (its cards in order, each with its action, width and live data):',
+  json({ title: seen.label, ...(seen.screenId === undefined ? {} : { screen: seen.screenId }), columns: seen.columns, cards: seen.cards.map(({ title, action, span, data }) => ({ title, action, span, data })) }),
+  ...(seen.first ? ['This is the Start screen: an answer asked here replaces all its cards.'] : []),
+  `The dock under it, which you cannot change: the chip ${json(seen.chip)} (answer ${String(seen.position)} of ${String(seen.total)}: ${seen.stack.join(', ')}), back and forward, the line to type in, and the screens ${seen.screens.join(', ')}.${seen.said === undefined ? '' : ` Under the chip is what you said last: ${json(seen.said)}`}`,
 ];
 
 export const theScreen = (({ deps }) => screenLines(deps.seen).join('\n')) satisfies Producer<ComposerDeps>;

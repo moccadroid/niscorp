@@ -4,16 +4,18 @@ import type { Catalog } from './catalog';
 import type { ComposerDeps } from './knowledge';
 import type { Placed } from './plan';
 import { recordOf } from './record';
-import { CardSchema, cardOf, cardsOf } from './reply.schema';
+import { cardOf, cardsOf } from './reply.schema';
 import type { Card, Reply } from './reply.schema';
 import type { OpenCard } from './screen';
+import type { z } from 'zod';
 
 // No cards keep the screen as it is.
 export type Answer = { title: string; screen?: string; cards: Placed[]; columns: number };
 
 // `open`: the cards on the screen now an answer may keep, in reading order; `columns`: how many it is laid out in;
-// `fresh`: the key a card this answer opens takes, by its place, the same while the answer streams and when it ends.
-export type AnswerContext = ComposerDeps & { open: readonly OpenCard[]; columns: number; fresh: readonly string[] };
+// `fresh`: the key a card this answer opens takes, by its place, the same while the answer streams and when it ends;
+// `card`: what one card of this message's reply is.
+export type AnswerContext = ComposerDeps & { open: readonly OpenCard[]; columns: number; fresh: readonly string[]; card: z.ZodType<Record<string, unknown>> };
 
 const actionRefusals = (card: Card, where: string, catalog: Catalog): string[] => {
   const action = catalog.actions.find((candidate) => candidate.id === card.action);
@@ -22,12 +24,10 @@ const actionRefusals = (card: Card, where: string, catalog: Catalog): string[] =
   return parsed.success ? [] : parsed.error.issues.map((issue) => `${where}: input.${issue.path.join('.')}: ${issue.message}`);
 };
 
-// A card kept may be given an input to be written into it, and the action it is; never another.
+// A card kept may be given an input to be written into it, which its action's schema must take.
 const cardRefusals = (card: Card, where: string, catalog: Catalog, kept: OpenCard | undefined): string[] => {
   if (card.keep === undefined) return card.action === undefined ? [`${where}: give "keep", or "action" with "input".`] : actionRefusals(card, where, catalog);
-  if (kept === undefined) return [];
-  if (card.action !== undefined && card.action !== kept.action) return [`${where}: "${card.keep}" is ${kept.action}; a card kept stays the action it is.`];
-  return card.input === undefined ? [] : actionRefusals({ ...card, action: kept.action }, where, catalog);
+  return kept === undefined || card.input === undefined ? [] : actionRefusals({ ...card, action: kept.action }, where, catalog);
 };
 
 // A card kept is the first card on the screen with its title that no card before it kept.
@@ -119,7 +119,7 @@ export const answerSoFar = (output: unknown, context: AnswerContext): Answer | u
   if (!Array.isArray(written) || typeof data['screen'] === 'string') return undefined;
   const cards: Card[] = [];
   for (const raw of data['screen'] === undefined ? written.slice(0, -1) : written) {
-    const parsed = CardSchema.safeParse(raw);
+    const parsed = context.card.safeParse(raw);
     if (!parsed.success) break;
     const card = cardOf(parsed.data);
     const keeps = keptFrom([...cards, card], context.open).at(-1);

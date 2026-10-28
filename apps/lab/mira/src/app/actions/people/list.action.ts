@@ -17,12 +17,12 @@ const invite: Step[] = [
 export const listAction: ActionDefinition = {
   id: 'people.list',
   title: 'People',
-  description: 'Everybody who may sign in, and a form to invite somebody by email address; the owner presses Invite.',
+  description: 'People: everyone who can sign in, and a form to invite someone by email. Your person presses Invite.',
   data: { rows: [], email: '', name: '', inviting: false, error: '' },
   input: z.toJSONSchema(
     z.object({
-      email: z.string().optional().describe('The email address of somebody to invite, when the message names one.'),
-      name: z.string().optional().describe('Their name, when the message gives it.'),
+      email: z.string().optional().describe('The email address to put in the invite form, if they gave one.'),
+      name: z.string().optional().describe('The name to put in the invite form, if they gave one.'),
     }),
   ),
   layout: listLayout,
