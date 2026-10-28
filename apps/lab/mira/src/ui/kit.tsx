@@ -767,15 +767,44 @@ export const Mini: NovaComponent = ({ children, novaRef, novaModel: _model, ...p
       setTimeout(() => mini.removeEventListener('click', swallow, { capture: true }), 0);
       const dy = event.clientY - y;
       const from = { translate: mini.style.translate, opacity: mini.style.opacity || '1' };
+      const away = event.type !== 'pointercancel' && (dy < -mini.offsetHeight * 0.25 || -dy / Math.max(1, performance.now() - at) > 0.6);
+      const deck = mini.closest('.k-deck');
+      const copy = mini.cloneNode(true);
+      if (!away || deck === null || !(copy instanceof HTMLElement)) {
+        mini.style.translate = '';
+        mini.style.opacity = '';
+        mini.animate([from, { translate: '0 0', opacity: 1 }], { duration: 320, easing: 'cubic-bezier(0.25, 1, 0.5, 1)' });
+        return;
+      }
+      // The close is sent at once and a copy flies off in its place, so the others close the gap as soon as it is done.
+      const box = mini.getBoundingClientRect();
+      Object.assign(copy.style, {
+        position: 'fixed',
+        left: `${String(box.left + (box.width - mini.offsetWidth) / 2)}px`,
+        top: `${String(box.top)}px`,
+        width: `${String(mini.offsetWidth)}px`,
+        margin: '0',
+        translate: '0 0',
+        scale: getComputedStyle(mini).scale,
+        animation: 'none',
+        transition: 'none',
+        pointerEvents: 'none',
+      });
+      deck.append(copy);
+      mini.style.visibility = 'hidden';
       mini.style.translate = '';
       mini.style.opacity = '';
-      const away = event.type !== 'pointercancel' && (dy < -mini.offsetHeight * 0.25 || -dy / Math.max(1, performance.now() - at) > 0.6);
-      const flight = mini.animate(away ? [from, { translate: `0 ${-window.innerHeight}px`, opacity: 0 }] : [from, { translate: '0 0', opacity: 1 }], {
-        duration: away ? 260 : 320,
-        easing: 'cubic-bezier(0.25, 1, 0.5, 1)',
-        fill: away ? 'forwards' : 'none',
-      });
-      if (away) void flight.finished.then(() => close.current(), () => undefined);
+      close.current();
+      void copy
+        .animate([{ opacity: from.opacity }, { translate: `0 ${-window.innerHeight}px`, opacity: 0 }], { duration: 260, easing: 'cubic-bezier(0.25, 1, 0.5, 1)', fill: 'forwards' })
+        .finished.then(
+          () => copy.remove(),
+          () => copy.remove(),
+        );
+      // A close that did not happen gives the picture back.
+      setTimeout(() => {
+        if (mini.isConnected) mini.style.visibility = '';
+      }, 4000);
     };
     mini.addEventListener('pointerdown', onDown);
     mini.addEventListener('pointermove', onMove);
