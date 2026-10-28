@@ -9,7 +9,7 @@ import type { Script } from './scripted';
 const [FIRST] = SCREENS;
 
 const keep = (title: string) => ({ keep: title });
-const say = (title: string, text = `About ${title}.`) => ({ say: { title, text } });
+const say = (title: string, text = `About ${title}.`) => ({ action: 'answer.text', input: { title, text } });
 
 const SCRIPT: Script = {
   'Two things side by side': [{ response: 'Put the two side by side.', title: 'Two things', columns: 2, cards: [say('One'), say('Two')] }],
@@ -18,18 +18,18 @@ const SCRIPT: Script = {
   'swap them': [{ title: 'Swapped', cards: [keep('Two'), keep('One')] }],
   'other words for the first': [{ title: 'Said again', cards: [keep('Two'), say('One', 'Said again.')] }],
   'keep what is not there': [{ cards: [keep('Three'), keep('Two'), keep('Two')] }, { cards: [keep('Two'), keep('One')] }],
-  'Show me the weather card': [{ cards: [{ action: 'weather.card', input: {}, intent: 'the weather' }] }],
+  'Show me the weather card': [{ cards: [{ action: 'weather.card', input: {} }] }],
   'Three things, the last wide beneath': [{ title: 'Three things', columns: 2, cards: [say('One'), say('Two'), { ...say('Three'), span: 2 }] }],
   'Two things, one given two ways': [{ cards: [say('One'), { ...keep('Two'), ...say('Two') }] }, { title: 'Two again', cards: [say('One'), say('Two')] }],
   'the other way round, written out': [{ title: 'Two again', cards: [say('Two'), say('One')] }],
-  'Who may sign in?': [{ title: 'Who', columns: 2, cards: [{ action: 'people.list', input: {}, intent: 'who may sign in' }] }],
+  'Who may sign in?': [{ title: 'Who', columns: 2, cards: [{ action: 'people.list', input: {} }] }],
   'and a note beside it': [{ title: 'Who, noted', cards: [keep('People'), say('A note', 'Invite Ada next.')] }],
   'What can you do?': [{ title: 'What it does', columns: 1, cards: [say('What this app does', 'It answers with screens.')] }],
   'Show the first screen': [{ screen: FIRST.id }],
   'What is the weather in Vienna?': [{ response: 'Nothing in this app shows the weather.', cards: [] }],
   'Name it at length': [{ title: 'A title that runs on well past the forty characters a title may have', cards: [] }],
   'Only one thing': [{ columns: 1, cards: [say('One')] }],
-  'Call me Max': [{ response: 'Max it is.', title: 'You', columns: 1, cards: [{ action: 'people.me', input: { name: 'Max' }, intent: 'the name to call them' }] }],
+  'Call me Max': [{ response: 'Max it is.', title: 'You', columns: 1, cards: [{ action: 'people.me', input: { name: 'Max' } }] }],
   'Hello again': [{ response: 'Hello, Max.', cards: [] }],
 };
 
@@ -149,7 +149,7 @@ try {
   check('the columns and the room the model gives are the ones the answer is laid out in', current().columns === 2 && grid() === '2: 1 2 3×2' && areas() === 'answer.text answer.text answer.text', `${String(current().columns)} — ${grid()} — ${areas()}`);
   prompts.length = 0;
   await ask('Two things, one given two ways');
-  check('a card given two things at once is sent back saying so', (prompts[1] ?? '').includes('cards[1]: give exactly one of') && areas() === 'answer.text answer.text' && grid() === '2: 1 2', `${areas()} — ${grid()}`);
+  check('a card given two things at once is sent back saying so', (prompts[1] ?? '').includes('cards[1]: give either "keep", or "action" with "input".') && areas() === 'answer.text answer.text' && grid() === '2: 1 2', `${areas()} — ${grid()}`);
 
   const [givenOne, givenTwo] = [card(1).id, card(2).id];
   await ask('the other way round, written out');

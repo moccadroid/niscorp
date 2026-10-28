@@ -2,7 +2,6 @@ import { CARDS_ON_A_SCREEN } from '../../app/screens';
 import { opened } from './catalog';
 import type { Catalog } from './catalog';
 import type { ComposerDeps } from './knowledge';
-import { wordsInput } from './plan';
 import type { Placed } from './plan';
 import { recordOf } from './record';
 import { CardSchema, cardOf, cardsOf } from './reply.schema';
@@ -24,9 +23,9 @@ const actionRefusals = (card: Card, where: string, catalog: Catalog): string[] =
 };
 
 const cardRefusals = (card: Card, where: string, catalog: Catalog): string[] => {
-  const kinds = [card.keep !== undefined, card.action !== undefined || card.input !== undefined, card.say !== undefined].filter(Boolean).length;
-  if (kinds !== 1) return [`${where}: give exactly one of "keep", "action" with "input", or "say".`];
-  return card.keep === undefined && card.say === undefined ? actionRefusals(card, where, catalog) : [];
+  const kinds = [card.keep !== undefined, card.action !== undefined || card.input !== undefined].filter(Boolean).length;
+  if (kinds !== 1) return [`${where}: give either "keep", or "action" with "input".`];
+  return card.keep === undefined ? actionRefusals(card, where, catalog) : [];
 };
 
 // A card kept is the first card on the screen with its title that no card before it kept.
@@ -54,9 +53,8 @@ const placed = (cards: readonly Card[], context: AnswerContext): Placed[] => {
   const kept = keptFrom(cards, open);
   const taken = new Set(kept.flatMap((card) => (card === undefined ? [] : [card.key])));
   const written = cards.map((card, at) => {
-    if (kept[at] !== undefined) return undefined;
-    if (card.say !== undefined) return { action: 'answer.text', input: wordsInput(card.say) };
-    return card.action === undefined ? undefined : opened({ action: card.action, input: card.input ?? {} }, catalog);
+    if (kept[at] !== undefined || card.action === undefined) return undefined;
+    return opened({ action: card.action, input: card.input ?? {} }, catalog);
   });
   const same = written.map((card) => {
     const match = card === undefined ? undefined : open.find((candidate) => !taken.has(candidate.key) && candidate.action === card.action && JSON.stringify(candidate.input) === JSON.stringify(card.input));

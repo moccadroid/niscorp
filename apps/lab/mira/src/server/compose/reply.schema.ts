@@ -1,6 +1,5 @@
 import { z } from 'zod';
 import { CARDS_ON_A_SCREEN } from '../../app/screens';
-import type { Said } from './plan';
 
 export const CardSchema = z
   .object({
@@ -10,16 +9,10 @@ export const CardSchema = z
       .record(z.string(), z.unknown())
       .nullish()
       .describe("What the card is opened with, as its action's input schema says; a form's fields carry what the message gives for them."),
-    intent: z.string().nullish().describe('Why the card is there, in a few words.'),
-    say: z
-      .object({ title: z.string().max(60).describe('A few words.'), text: z.string().max(1000).describe('What there is to read: a few sentences, or a line for each step or item.') })
-      .strict()
-      .nullish()
-      .describe('A card of words: what you have to say — an answer, an explanation, steps, a list — where no screen or action shows it.'),
     span: z.number().int().min(1).max(3).nullish().describe('How many of the columns it takes; one when left out.'),
   })
   .strict()
-  .describe('One card of the screen after the answer: exactly one of keep, action with input and intent, or say.');
+  .describe('One card of the screen after the answer: a card on the screen now, kept, or an action opened with its input.');
 
 export const ReplySchema = z
   .object({
@@ -36,14 +29,12 @@ export const ReplySchema = z
 
 export type Reply = z.infer<typeof ReplySchema>;
 
-export type Card = { keep?: string; action?: string; input?: Record<string, unknown>; intent?: string; say?: Said; span?: number };
+export type Card = { keep?: string; action?: string; input?: Record<string, unknown>; span?: number };
 
-export const cardOf = ({ keep, action, input, intent, say, span }: z.infer<typeof CardSchema>): Card => ({
+export const cardOf = ({ keep, action, input, span }: z.infer<typeof CardSchema>): Card => ({
   ...(keep ? { keep: keep.trim() } : {}),
   ...(action ? { action } : {}),
   ...(input ? { input } : {}),
-  ...(intent ? { intent } : {}),
-  ...(say ? { say: { title: say.title.trim(), text: say.text.trim() } } : {}),
   ...(span ? { span } : {}),
 });
 

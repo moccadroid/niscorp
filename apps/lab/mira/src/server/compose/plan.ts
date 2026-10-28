@@ -1,7 +1,4 @@
-import { actions } from '../../app/action-catalog';
 import type { Mark } from '../../app/shell/screen.layout';
-
-export type Said = { title: string; text: string };
 
 // Each answer to a message takes the next of these, in turn; what colour each is, is the kit's.
 export const ANSWER_INKS = ['turn-1', 'turn-2', 'turn-3', 'turn-4', 'turn-5'] as const;
@@ -21,8 +18,6 @@ export type Plan = { id?: string; question: string; response?: string; label: st
 // `next` is the ink of the answer the line asks for; `later`, of the one after it, which the line takes while it is asked.
 // `said` is what the model said back to a message that left the screen as it was.
 export type ShownPlan = Plan & { position: number; total: number; stack: { position: number; label: string; ink: string }[]; next: string; later: string; said?: string };
-
-export const wordsInput = (said: Said): Record<string, unknown> => ({ ...actions['answer.text']?.data, title: said.title, text: said.text });
 
 // The cards of an answer after `before`'s: a card it left as it was keeps the ink it had; one it opened is in the
 // answer's own ink, marked new; one it wrote into, in the answer's ink, marked changed.

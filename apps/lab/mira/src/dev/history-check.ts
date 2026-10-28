@@ -10,11 +10,11 @@ import { OWNER, offline, scriptedModels, settle, until } from './scripted';
 const { check, finish } = checks('history');
 
 const scripted = scriptedModels({
-  'One thing': [{ title: 'The first', columns: 1, cards: [{ say: { title: 'One', text: 'The first answer.' } }] }],
-  'Two things': [{ title: 'The second', columns: 2, cards: [{ say: { title: 'One', text: 'Again.' } }, { say: { title: 'Two', text: 'Beside it.' } }] }],
+  'One thing': [{ title: 'The first', columns: 1, cards: [{ action: 'answer.text', input: { title: 'One', text: 'The first answer.' } }] }],
+  'Two things': [{ title: 'The second', columns: 2, cards: [{ action: 'answer.text', input: { title: 'One', text: 'Again.' } }, { action: 'answer.text', input: { title: 'Two', text: 'Beside it.' } }] }],
   'How many are there?': [{ title: 'Count', response: 'There are two cards on this screen.', cards: [] }],
   'And now?': [{ title: 'Count again', response: 'Still two.', cards: [] }],
-  'Who is here?': [{ title: 'Who', columns: 1, cards: [{ action: 'people.list', input: {}, intent: 'who is here' }] }],
+  'Who is here?': [{ title: 'Who', columns: 1, cards: [{ action: 'people.list', input: {} }] }],
 });
 const { server, door } = await boot(offline(scripted.models, () => undefined));
 const shells = server.shells;
@@ -87,7 +87,7 @@ try {
       response: '',
       grammar: { 'nisc.nova': 2, 'nisc.prism': 3 },
       plan: {
-        canvases: { a: [{ action: 'answer.text', input: { title: 'Left', text: 'On the left.', tone: 'default' }, intent: 'left' }], b: [{ action: 'answer.text', input: { title: 'Wide', text: 'Under it.', tone: 'default' }, intent: 'wide' }] },
+        canvases: { a: [{ action: 'answer.text', input: { title: 'Left', text: 'On the left.', tone: 'default' } }], b: [{ action: 'answer.text', input: { title: 'Wide', text: 'Under it.', tone: 'default' } }] },
         arrangement: 'written',
         layout: { component: 'Grid', props: { columns: 2 }, children: [{ component: 'Area', props: { name: 'a', span: 1 }, children: [{ component: 'CanvasSlot', props: { canvasId: 'a' } }] }, { component: 'Area', props: { name: 'b', span: 2 }, children: [{ component: 'CanvasSlot', props: { canvasId: 'b' } }] }] },
         ink: 'turn-2',

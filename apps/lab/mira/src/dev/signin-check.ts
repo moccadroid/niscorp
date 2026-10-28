@@ -12,7 +12,7 @@ import { OWNER, offline, scriptedModels, settle, until } from './scripted';
 const { check, finish } = checks('signin');
 
 const mails: Mail[] = [];
-const scripted = scriptedModels({ hello: [{ title: 'Hello', cards: [{ say: { title: 'Hello', text: 'Hi.' } }] }] });
+const scripted = scriptedModels({ hello: [{ title: 'Hello', cards: [{ action: 'answer.text', input: { title: 'Hello', text: 'Hi.' } }] }] });
 const { server, door } = await boot(offline(scripted.models, () => undefined, async (mail) => void mails.push(mail)));
 door.routes(server);
 await server.checkFunctions();
