@@ -7,6 +7,7 @@
   --page: var(--full);
   --page-ink: var(--hink);
   --fold: 30px;
+  --slide-gap: 24px;
   --ease: cubic-bezier(0.25, 1, 0.5, 1);
   --move: 640ms;
   --mini-s: 0.56;
@@ -21,6 +22,7 @@
 /* Provenance: each answer's turn is a colour, and so is each screen. */
 [data-ink='screen-1'] { --full: oklab(87.86% -0.0037 0.1642); --tint: oklab(93.4% -0.0152 0.1179); --hink: oklab(29.31% 0.0059 0.0598); }
 [data-ink='screen-2'] { --full: oklab(79.01% -0.1431 0.0365); --tint: oklab(90.76% -0.0772 0.0144); --hink: oklab(30.31% -0.059 0.0102); }
+[data-ink='screen-3'] { --full: oklab(91.2% 0.0042 0.0268); --tint: oklab(95.6% 0.0021 0.0142); --hink: oklab(26.4% 0.0105 0.0198); }
 [data-ink='turn-1'] { --full: oklab(75.29% 0.1022 0.1317); --tint: oklab(86.37% 0.043 0.0841); --hink: oklab(27.17% 0.0545 0.0549); }
 [data-ink='turn-2'] { --full: oklab(73.43% 0.1884 -0.0242); --tint: oklab(85.87% 0.0912 -0.0203); --hink: oklab(27.61% 0.1126 -0.0066); }
 [data-ink='turn-3'] { --full: oklab(74.2% -0.0638 -0.1292); --tint: oklab(88.17% -0.0387 -0.0558); --hink: oklab(27.52% -0.0256 -0.0778); }
@@ -30,6 +32,7 @@
 /* The page behind everything is the colour of the line: what shows past the last layer is the next card. */
 :root:has(.k-dock[data-ink='screen-1']) { --page: oklab(87.86% -0.0037 0.1642); --page-ink: oklab(29.31% 0.0059 0.0598); }
 :root:has(.k-dock[data-ink='screen-2']) { --page: oklab(79.01% -0.1431 0.0365); --page-ink: oklab(30.31% -0.059 0.0102); }
+:root:has(.k-dock[data-ink='screen-3']) { --page: oklab(91.2% 0.0042 0.0268); --page-ink: oklab(26.4% 0.0105 0.0198); }
 :root:has(.k-dock[data-ink='turn-1']) { --page: oklab(75.29% 0.1022 0.1317); --page-ink: oklab(27.17% 0.0545 0.0549); }
 :root:has(.k-dock[data-ink='turn-2']) { --page: oklab(73.43% 0.1884 -0.0242); --page-ink: oklab(27.61% 0.1126 -0.0066); }
 :root:has(.k-dock[data-ink='turn-3']) { --page: oklab(74.2% -0.0638 -0.1292); --page-ink: oklab(27.52% -0.0256 -0.0778); }
@@ -47,7 +50,7 @@ button { -webkit-tap-highlight-color: transparent; }
 /* nova's DOM adapter wraps a canvas and an action in elements of its own; React does not. They take no room. */
 [data-canvas], [data-component='ActionSlot'] { display: contents; }
 
-.k-frame { position: relative; overflow: clip; min-height: 100dvh; display: flex; flex-direction: column; touch-action: pan-y; }
+.k-frame { position: relative; overflow: clip; height: 100dvh; display: flex; flex-direction: column; touch-action: pan-y; }
 
 /* The layers: edge to edge, each one's rounded foot laid over the next, sharing the screen between them. Every layer
    reaches up under the one before it; the first reaches into the room left for it above. */
@@ -60,7 +63,20 @@ button { -webkit-tap-highlight-color: transparent; }
   align-content: stretch;
   padding-top: var(--fold);
 }
-.k-grid { flex: 1; }
+.k-grid { flex: 1; min-height: 0; grid-template-rows: var(--rows, none); }
+
+/* The answer is one screen: cards that do not fit fold to their titles, and the open one scrolls inside itself (the
+   Grid, in src/ui/kit.tsx, says which rows fold). */
+.k-grid[data-folded] { align-content: start; }
+.k-grid[data-folded] > .k-area { overflow: hidden; }
+.k-grid[data-folded] > .k-area:not([data-open]) { cursor: pointer; }
+.k-grid[data-folded] > .k-area:not([data-open]) .k-card-title { font-size: 24px; }
+.k-grid[data-folded] > .k-area > .k-card > :not(.k-card-title) { transition: opacity 0.3s; }
+.k-grid[data-folded] > .k-area:not([data-open]) > .k-card > :not(.k-card-title) { opacity: 0; }
+.k-grid[data-folded] > .k-area[data-open] { overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
+.k-grid[data-folded] > .k-area[data-open]::-webkit-scrollbar { display: none; }
+.k-grid[data-turning] { transition: grid-template-rows 0.45s var(--ease); }
+.k-grid[data-turning] .k-card-title { transition: font-size 0.45s var(--ease); }
 
 .k-area {
   position: relative;
@@ -149,6 +165,11 @@ button { -webkit-tap-highlight-color: transparent; }
   text-underline-offset: 6px;
 }
 .k-button.k-link[aria-current='page'] { text-decoration-color: currentColor; }
+/* Something asked, and what was said back: the conversation's lines, each opening the answer it was. */
+.k-button.k-exchange { display: grid; gap: 4px; width: 100%; padding: 12px 0 14px; border-radius: 0; border-top: 3px solid currentColor; background: none; color: inherit; text-align: left; }
+.k-button.k-exchange:disabled { opacity: 0.6; }
+.k-button-label { font-size: 18px; font-weight: 760; line-height: 1.28; }
+.k-button-note { font-size: 15px; font-weight: 500; line-height: 1.36; }
 
 .k-input {
   flex: 1 1 200px;
@@ -182,27 +203,28 @@ button { -webkit-tap-highlight-color: transparent; }
 .k-checked .k-box::after { content: '✓'; color: var(--c); font-size: 12px; font-weight: 820; }
 .k-checked .k-check-label { text-decoration: line-through; }
 
-/* The dock: the last layer, the colour of what comes next. It lies under the last card's foot, and is lifted over the
-   answer, its own top rounded, while the answer runs on under it. */
+/* The dock: the last layer, the colour of what comes next, under the last card's foot. Over the overview it is lifted,
+   its own top rounded. */
 .k-dock {
   --well: color-mix(in oklab, var(--c), #fff 34%);
   --soft: color-mix(in oklab, var(--c), var(--ink) 90%);
-  position: sticky;
-  bottom: 0;
+  position: relative;
   z-index: 3;
   margin-top: calc(-1 * var(--fold));
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-areas: 'error error' 'controls controls' 'line line' 'links send';
+  grid-template-areas: 'error error' 'controls controls' 'reply reply' 'line line' 'links send';
   gap: 8px 12px;
   padding: calc(var(--fold) + 12px) max(18px, env(safe-area-inset-right, 0px)) calc(12px + env(safe-area-inset-bottom, 0px)) max(18px, env(safe-area-inset-left, 0px));
   background: var(--c);
   color: var(--ink);
   transition: background-color 0.45s, color 0.45s, border-radius 0.3s var(--ease);
 }
-.k-dock[data-lifted], .k-frame:has(.k-deck) .k-dock { z-index: 20; border-radius: var(--fold) var(--fold) 0 0; }
+.k-frame:has(.k-deck) .k-dock { z-index: 20; border-radius: var(--fold) var(--fold) 0 0; }
 .k-dock[data-error] { --c: var(--error); --ink: var(--error-ink); }
 .k-dock > .k-error { grid-area: error; font-size: 18px; line-height: 1.28; }
+/* What the assistant said back when the screen did not change: under the chip that names it. */
+.k-dock > .k-reply { grid-area: reply; padding: 2px 4px 0; font-size: 17px; line-height: 1.32; font-weight: 600; text-wrap: pretty; }
 .k-dock > .k-controls { grid-area: controls; flex-wrap: nowrap; }
 .k-dock[data-error] > .k-controls { display: none; }
 .k-dock > .k-prompt { grid-area: line; display: flex; }
@@ -299,7 +321,7 @@ button { -webkit-tap-highlight-color: transparent; }
 .k-mini:not([data-selected]) > :is(.k-quote, .k-muted) { opacity: 0; }
 
 @media (min-width: 721px) {
-  :root { --fold: 48px; --mini-s: 0.34; font-size: 19px; }
+  :root { --fold: 48px; --slide-gap: 48px; --mini-s: 0.34; font-size: 19px; }
   .k-grid[data-columns='2'], .k-miniature-sheet[data-columns='2'] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .k-grid[data-columns='3'], .k-miniature-sheet[data-columns='3'] { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .k-area[data-span='2'] { grid-column: span 2; }
@@ -315,16 +337,17 @@ button { -webkit-tap-highlight-color: transparent; }
   .k-area > .k-text.k-mark { left: 48px; top: calc(var(--fold) + 10px); font-size: 12px; }
   .k-area:is(:first-child, [data-row='1']) > .k-mark { top: 16px; }
   .k-card-title { font-size: 60px; }
+  .k-grid[data-folded] > .k-area:not([data-open]) .k-card-title { font-size: 34px; }
   .k-hero > .k-card-title { font-size: 80px; }
   .k-lead { font-size: 24px; }
   .k-dock {
     grid-template-columns: auto minmax(0, 1fr) auto;
-    grid-template-areas: 'error error error' 'links controls controls' 'line line send';
+    grid-template-areas: 'error error error' 'links controls controls' '. reply reply' 'line line send';
     gap: 12px 28px;
     padding: calc(var(--fold) + 16px) 48px 28px;
   }
   .k-dock > .k-error { font-size: 21px; }
-  .k-dock > .k-controls { justify-self: end; width: min(100%, 540px); }
+  .k-dock > :is(.k-controls, .k-reply) { justify-self: end; width: min(100%, 540px); box-sizing: border-box; }
   .k-dock[data-error] > .k-controls { display: flex; }
   .k-input.k-line { font-size: 30px; }
   .k-deck-row { gap: 28px; }
@@ -336,12 +359,13 @@ button { -webkit-tap-highlight-color: transparent; }
 }
 
 /* A move: the answer's cards drawn as copies on a stage over the grid, each placed by hand while the page's own are laid
-   out unseen under it (src/ui/target.ts). The stage sits above the dock, and under it when the dock is lifted. */
+   out unseen under it (src/ui/target.ts). The stage sits above the dock. */
 :root[data-moving] .k-grid { visibility: hidden; }
 .k-stage { position: absolute; z-index: 4; overflow: clip; pointer-events: none; }
 .k-stage > .k-area { position: absolute; margin: 0; overflow: hidden; transition: background-color 0.45s, color 0.45s; }
 .k-stage .k-skin { box-sizing: border-box; min-height: 100%; display: flex; flex-direction: column; }
 .k-stage .k-card { min-height: 0; }
+.k-stage .k-card-title { transition: font-size 0.45s var(--ease); }
 
 /* The words a question is sent with, on their way between the line and the chip. */
 .k-fly { position: fixed; z-index: 30; margin: 0; pointer-events: none; white-space: nowrap; color: var(--page-ink); transform-origin: 0 50%; }

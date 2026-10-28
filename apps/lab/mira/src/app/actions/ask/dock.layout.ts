@@ -36,6 +36,10 @@ export const dockLayout: LayoutNode = {
   children: [
     { if: '$.error', then: { component: 'Text', props: { tone: 'error' }, children: '{{$.error}}' } },
     steps,
+    {
+      if: { $if: '$.asking', $then: false, $else: { $if: { $eq: ['$.current.question', '$.asked'] }, $then: '$.current.said', $else: false } },
+      then: { component: 'Text', props: { tone: 'reply' }, children: '{{$.current.said}}' },
+    },
     { component: 'Prompt', children: [{ component: 'Input', ref: 'text', model: '$.text', props: { placeholder: 'What would you like to see?', clearOnEnter: true, tone: 'line' } }] },
     {
       component: 'Row',

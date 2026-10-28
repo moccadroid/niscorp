@@ -6,7 +6,7 @@ export const charter: Charter = {
   member: {
     actions: ['ask.*', 'answer.*'],
     data: ['answers.read', 'answers.write.insert'],
-    functions: ['ask', 'screens.open', 'answers.back', 'answers.forward', 'answers.go', 'answers.current', 'answers.deck'],
+    functions: ['ask', 'screens.open', 'answers.back', 'answers.forward', 'answers.go', 'answers.current', 'answers.deck', 'answers.conversation'],
   },
 
   // `inviting`: the row rule a person the owner invites is written under (src/app/vex).

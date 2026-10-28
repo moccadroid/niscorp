@@ -1,4 +1,4 @@
-import { copyOf, place, stageOver } from './stage';
+import { copyOf, place, sizeTitles, stageOver } from './stage';
 import type { Card } from './stage';
 
 export const EASE = 'cubic-bezier(0.25, 1, 0.5, 1)';
@@ -40,6 +40,7 @@ export const holdLayers = (grid: HTMLElement, cards: readonly Card[]): Layers =>
     element.style.zIndex = String(zOf(at));
     place(element, card.box);
     stage.append(element);
+    element.scrollTop = card.element.scrollTop;
     return { element, id: card.id, says: card.says };
   });
   return { stage, grid, pieces, leaving: [], running: [] };
@@ -64,6 +65,7 @@ const refresh = (piece: HTMLElement, card: HTMLElement): void => {
   for (const name of ['--c', '--ink']) piece.style.setProperty(name, style.getPropertyValue(name));
   const skin = piece.querySelector<HTMLElement>(':scope > .k-skin');
   if (skin !== null) skin.style.padding = style.padding;
+  sizeTitles(piece, card);
   const was = piece.querySelector<HTMLElement>(':scope > .k-mark');
   const mark = card.querySelector<HTMLElement>(':scope > .k-mark');
   if (was?.textContent === (mark?.textContent ?? undefined)) return;
@@ -119,6 +121,7 @@ export const moveLayers = (layers: Layers, cards: readonly Card[], height: numbe
     }
     const element = copyOf(card.element);
     stage.append(element);
+    element.scrollTop = card.element.scrollTop;
     if (paired !== undefined) {
       used.add(paired.element);
       paired.under?.remove();
@@ -279,6 +282,7 @@ const relay = (layers: Layers, cards: readonly Card[], height: number, pace: Pac
     element.style.zIndex = String(zOf(index));
     place(element, card.box);
     stage.append(element);
+    element.scrollTop = card.element.scrollTop;
     const { top, height: tall } = card.box;
     const hidden = `inset(0px 0px ${tall}px 0px round 0px 0px ${fold}px ${fold}px)`;
     animate(element, [

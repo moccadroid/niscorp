@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ChangeEvent, type KeyboardEvent } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ChangeEvent, type CSSProperties, type KeyboardEvent, type MouseEvent as TapEvent } from 'react';
 import { z } from 'zod';
 import { useNovaDispatch } from '@niscorp/nova/adapters/react';
 import type { NovaComponent } from '@niscorp/nova/adapters/react';
@@ -17,7 +17,7 @@ const parsed = <S extends z.ZodRawShape>(schema: z.ZodObject<S>, props: Record<s
 
 const cell = (value: unknown): string => (value === null || value === undefined ? '' : typeof value === 'object' ? JSON.stringify(value) : String(value));
 
-export const INKS = ['turn-1', 'turn-2', 'turn-3', 'turn-4', 'turn-5', 'screen-1', 'screen-2'] as const;
+export const INKS = ['turn-1', 'turn-2', 'turn-3', 'turn-4', 'turn-5', 'screen-1', 'screen-2', 'screen-3'] as const;
 const Ink = z.enum(INKS).describe('The ink: the turn of the answer that put it there, or the screen it is on.');
 const Place = z.number().int().min(1).max(6);
 
@@ -40,10 +40,10 @@ Heading.meta = { description: 'The page’s title.', propsSchema: HeadingProps }
 
 const TextProps = z.object({
   tone: z
-    .enum(['default', 'lead', 'muted', 'strong', 'display', 'right', 'wrong', 'error', 'title', 'meta', 'quote', 'mark', 'tag'])
+    .enum(['default', 'lead', 'muted', 'strong', 'display', 'right', 'wrong', 'error', 'title', 'meta', 'quote', 'mark', 'tag', 'reply'])
     .optional()
     .describe(
-      'default | lead: the sentence a card opens with | muted | strong | display: one big figure | right: a right answer, said | wrong: a wrong answer, said | error | title: what a picture shows | meta: where a thing stands, small | quote: words a person wrote | mark: what the last answer did to an area, one word | tag: what a thing in a list is, one word',
+      'default | lead: the sentence a card opens with | muted | strong | display: one big figure | right: a right answer, said | wrong: a wrong answer, said | error | title: what a picture shows | meta: where a thing stands, small | quote: words a person wrote | mark: what the last answer did to an area, one word | tag: what a thing in a list is, one word | reply: what the assistant said back, a sentence',
     ),
 });
 export const Text: NovaComponent = ({ children, novaRef: _ref, novaModel: _model, ...props }) => {
@@ -57,11 +57,12 @@ const ARROWS = { back: 'M15 4.5 7.5 12l7.5 7.5', forward: 'M9 4.5 16.5 12 9 19.5
 const ButtonProps = z.object({
   label: z.string().optional().describe('What the button says; falls back to its children. With an icon, what it is called.'),
   tone: z
-    .enum(['primary', 'suggestion', 'link', 'choice', 'chosen', 'right', 'wrong'])
+    .enum(['primary', 'suggestion', 'link', 'choice', 'chosen', 'right', 'wrong', 'exchange'])
     .optional()
     .describe(
-      'primary: what the action does | suggestion: a thing to ask | link: opens another screen | choice: one of a set to choose from | chosen: the one of the set that is chosen | right: the right one of a set, once picked | wrong: a wrong one, picked',
+      'primary: what the action does | suggestion: a thing to ask | link: opens another screen | choice: one of a set to choose from | chosen: the one of the set that is chosen | right: the right one of a set, once picked | wrong: a wrong one, picked | exchange: something asked, with what was said back as its note',
     ),
+  note: z.string().optional().describe('A second line under the label: what came of it.'),
   icon: z.enum(['back', 'forward']).optional().describe('Drawn instead of the label: back | forward.'),
   current: z.boolean().optional().describe('Whether it is the one open now, of a set of links.'),
   disabled: z.boolean().optional().describe('Whether it can be pressed now.'),
@@ -69,7 +70,7 @@ const ButtonProps = z.object({
 });
 export const Button: NovaComponent = ({ children, novaRef, novaModel: _model, ...props }) => {
   const dispatch = useNovaDispatch();
-  const { label, tone, icon, current, disabled, value } = parsed(ButtonProps, props, {});
+  const { label, tone, icon, current, disabled, value, note } = parsed(ButtonProps, props, {});
   const kind = icon !== undefined ? 'step' : tone;
   return (
     <button
@@ -84,6 +85,11 @@ export const Button: NovaComponent = ({ children, novaRef, novaModel: _model, ..
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <path d={ARROWS[icon]} />
         </svg>
+      ) : note !== undefined ? (
+        <>
+          <span className="k-button-label">{label ?? children}</span>
+          <span className="k-button-note">{note}</span>
+        </>
       ) : (
         (label ?? children)
       )}
@@ -113,8 +119,7 @@ const FrameProps = z.object({}).describe('The whole app: the answer, and the doc
 export const Frame: NovaComponent = ({ children }) => <div className="k-frame">{children}</div>;
 Frame.meta = { description: 'The whole app, top to bottom.', propsSchema: FrameProps };
 
-// Lifted while the answer runs on under it. Its height is the page's to know, as `--dock-h`, so what opens above it
-// stops at its top.
+// Its height is the page's to know, as `--dock-h`, so what opens above it stops at its top.
 const DockProps = z.object({
   ink: Ink.optional().describe('The ink of the answer it would ask for next.'),
   asking: z.boolean().optional().describe('Whether a question is being answered.'),
@@ -123,49 +128,138 @@ const DockProps = z.object({
 export const Dock: NovaComponent = ({ children, novaRef: _ref, novaModel: _model, ...props }) => {
   const { ink, asking, error } = parsed(DockProps, props, {});
   const own = useRef<HTMLElement>(null);
-  const [lifted, setLifted] = useState(false);
   useEffect(() => {
     const element = own.current;
     if (element === null) return undefined;
     const root = document.documentElement;
-    const measure = (): void => {
-      root.style.setProperty('--dock-h', `${element.offsetHeight}px`);
-      setLifted(root.scrollHeight - window.scrollY - window.innerHeight > 2);
-    };
+    const measure = (): void => root.style.setProperty('--dock-h', `${element.offsetHeight}px`);
     measure();
     const sizes = new ResizeObserver(measure);
     sizes.observe(element);
-    sizes.observe(document.body);
-    window.addEventListener('scroll', measure, { passive: true });
-    window.addEventListener('resize', measure);
     return () => {
       sizes.disconnect();
-      window.removeEventListener('scroll', measure);
-      window.removeEventListener('resize', measure);
       root.style.removeProperty('--dock-h');
     };
   }, []);
   return (
-    <footer ref={own} className="k-dock" data-ink={ink} data-asking={asking === true ? '' : undefined} data-error={error === true ? '' : undefined} data-lifted={lifted ? '' : undefined}>
+    <footer ref={own} className="k-dock" data-ink={ink} data-asking={asking === true ? '' : undefined} data-error={error === true ? '' : undefined}>
       {children}
     </footer>
   );
 };
-Dock.meta = { description: 'What stays at the bottom while the answer scrolls above it: the last layer, in the ink of the next answer.', propsSchema: DockProps };
+Dock.meta = { description: 'What stays at the bottom, under the answer: the last layer, in the ink of the next answer.', propsSchema: DockProps };
 
 const GridProps = z.object({
   columns: z.number().int().min(1).max(3).optional().describe('How many columns its areas are laid out in on a wide screen: 1 to 3.'),
   at: z.number().int().min(0).optional().describe('Where the answer it shows stands among the answers.'),
 });
+const useBeforePaint = typeof window === 'undefined' ? useEffect : useLayoutEffect;
+
+type Folded = { rows: string; open: string };
+
+// The answer is one screen. Cards that fit share it; when they do not, every row folds to the strip its titles need but
+// one, the row of the card tapped open or else of the first the answer changed, which takes the rest and scrolls inside
+// itself. Tapping a folded card opens it.
+const foldOf = (grid: HTMLElement, tapped: string | undefined): Folded | undefined => {
+  const areas = [...grid.querySelectorAll<HTMLElement>(':scope > .k-area')].filter((area) => area.querySelector('.k-card') !== null);
+  if (areas.length === 0) return undefined;
+  const wide = matchMedia('(min-width: 721px)').matches;
+  const rowOf = (area: HTMLElement, at: number): number => (wide ? Number(area.dataset['row'] ?? at + 1) : at + 1);
+  const held = { rows: grid.style.getPropertyValue('--rows'), align: grid.style.alignContent, folded: grid.hasAttribute('data-folded') };
+  const opened = areas.filter((area) => area.hasAttribute('data-open'));
+  for (const area of opened) area.removeAttribute('data-open');
+  grid.style.setProperty('--rows', 'none');
+  grid.style.alignContent = 'start';
+  grid.removeAttribute('data-folded');
+  const fold = Number.parseFloat(getComputedStyle(grid).paddingTop) || 0;
+  const natural = new Map<number, number>();
+  areas.forEach((area, at) => natural.set(rowOf(area, at), Math.max(natural.get(rowOf(area, at)) ?? 0, area.offsetHeight - fold)));
+  grid.setAttribute('data-folded', '');
+  const strip = new Map<number, number>();
+  areas.forEach((area, at) => {
+    const title = area.querySelector<HTMLElement>('.k-card-title') ?? area.querySelector<HTMLElement>('.k-card > *');
+    const reach = title === null ? area.offsetHeight : title.offsetTop + (Number.parseFloat(getComputedStyle(title).lineHeight) || title.offsetHeight);
+    strip.set(rowOf(area, at), Math.max(strip.get(rowOf(area, at)) ?? 0, reach + fold * 0.5 + 8 - fold));
+  });
+  const room = grid.clientHeight - fold;
+  grid.style.setProperty('--rows', held.rows);
+  grid.style.alignContent = held.align;
+  grid.toggleAttribute('data-folded', held.folded);
+  for (const area of opened) area.setAttribute('data-open', '');
+  const order = [...natural.keys()].sort((a, b) => a - b);
+  if (order.reduce((sum, row) => sum + (natural.get(row) ?? 0), 0) <= room + 1) return undefined;
+  const open = areas.find((area) => area.dataset['name'] === tapped) ?? areas.find((area) => area.dataset['fresh'] !== undefined) ?? areas[0];
+  const openRow = open === undefined ? order[0] : rowOf(open, areas.indexOf(open));
+  const folded = order.filter((row) => row !== openRow).reduce((sum, row) => sum + (strip.get(row) ?? 0), 0);
+  const rows = order.map((row) => Math.round(row === openRow ? Math.max(strip.get(row) ?? 0, room - folded) : (strip.get(row) ?? 0)));
+  return { rows: rows.map((row) => `${row}px`).join(' '), open: open?.dataset['name'] ?? '' };
+};
+
 export const Grid: NovaComponent = ({ children, novaRef: _ref, novaModel: _model, ...props }) => {
-  const { columns } = parsed(GridProps, props, {});
+  const { columns, at } = parsed(GridProps, props, {});
+  const own = useRef<HTMLElement>(null);
+  const [folded, setFolded] = useState<Folded | undefined>(undefined);
+  const [tapped, setTapped] = useState<string | undefined>(undefined);
+  const [turning, setTurning] = useState(false);
+  const lay = useRef<() => void>(() => undefined);
+  lay.current = () => {
+    const grid = own.current;
+    if (grid === null) return;
+    const next = foldOf(grid, tapped);
+    for (const area of grid.querySelectorAll<HTMLElement>(':scope > .k-area')) area.toggleAttribute('data-open', next !== undefined && area.dataset['name'] === next.open);
+    setFolded((was) => (was?.rows === next?.rows && was?.open === next?.open ? was : next));
+  };
+  useEffect(() => setTapped(undefined), [at]);
+  useBeforePaint(() => lay.current());
+  useEffect(() => {
+    const grid = own.current;
+    if (grid === null) return undefined;
+    let queued = false;
+    const soon = (): void => {
+      if (queued) return;
+      queued = true;
+      requestAnimationFrame(() => {
+        queued = false;
+        lay.current();
+      });
+    };
+    const content = new MutationObserver(soon);
+    content.observe(grid, { childList: true, subtree: true, characterData: true });
+    window.addEventListener('resize', soon);
+    return () => {
+      content.disconnect();
+      window.removeEventListener('resize', soon);
+    };
+  }, []);
+  useEffect(() => {
+    if (!turning) return undefined;
+    const done = setTimeout(() => setTurning(false), 520);
+    return () => clearTimeout(done);
+  }, [turning]);
+  const onTap = (event: TapEvent<HTMLElement>): void => {
+    const area = event.target instanceof Element ? event.target.closest<HTMLElement>('.k-grid > .k-area') : null;
+    const name = area?.dataset['name'];
+    if (folded === undefined || name === undefined || name === folded.open) return;
+    event.preventDefault();
+    event.stopPropagation();
+    setTurning(true);
+    setTapped(name);
+  };
   return (
-    <main className="k-grid" data-columns={columns ?? 2}>
+    <main
+      ref={own}
+      className="k-grid"
+      data-columns={columns ?? 2}
+      data-folded={folded === undefined ? undefined : ''}
+      data-turning={turning ? '' : undefined}
+      style={folded === undefined ? undefined : ({ '--rows': folded.rows } as CSSProperties)}
+      onClickCapture={onTap}
+    >
       {children}
     </main>
   );
 };
-Grid.meta = { description: 'Areas laid over each other, one under the next; in columns on a wide screen.', propsSchema: GridProps };
+Grid.meta = { description: 'Areas laid over each other, one under the next, on one screen: those that do not fit fold to their titles, and one is open; in columns on a wide screen.', propsSchema: GridProps };
 
 const AreaProps = z.object({
   name: z.string().describe('Which canvas it holds.'),

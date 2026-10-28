@@ -167,11 +167,22 @@ try {
   await ask('What is the weather in Vienna?');
   check('an answer that changes nothing leaves the screen as it was, and adds nothing to the stack', ids() === beforeWeather && total() === stackBeforeWeather && said() === '', `${ids()} — ${String(total())} — ${said()}`);
   check('and the bar says what was asked, and why nothing changed', current().question === 'What is the weather in Vienna?' && current().response === 'Nothing in this app shows the weather.', JSON.stringify(current()).slice(0, 200));
+  check(
+    '…and the reply is said in the dock, under the chip',
+    current()['said'] === 'Nothing in this app shows the weather.' && drawn().includes('"tone":"reply"},"children":[{"type":"text","value":"Nothing in this app shows the weather."'),
+    drawn().match(/"tone":"reply"[^\]]*\]/)?.[0] ?? 'no reply in the dock',
+  );
+  check(
+    'the model is given what the person asked before and what it replied, the oldest first, before the message',
+    /CONVERSATION[^\n]*\n(- .*\n)*- "Show the first screen" — you replied "Scripted\."/.test(lastPrompt()) && lastPrompt().indexOf('CONVERSATION') < lastPrompt().indexOf('MESSAGE: What is the weather in Vienna?'),
+    lastPrompt().slice(0, 600),
+  );
 
   scripted.unreachable(true);
   runs.length = 0;
   await ask('Only one thing');
   check('a model that cannot be reached leaves the screen as it was, and the line says so', ids() === beforeWeather && said().includes('could not be reached'), said());
+  check('…and the reply to the message before it is no longer said', !drawn().includes('"tone":"reply"'), drawn().match(/"tone":"reply"[^\]]*\]/)?.[0] ?? '');
   check('and its run is recorded as failed: one step, nothing spent', runs[1]?.agentId === 'mira.compose' && runs[1]?.outcome === 'failed' && runs[1]?.steps === 1 && runs[1]?.totalTokens === 0, JSON.stringify(runs[1]));
   scripted.unreachable(false);
 
@@ -213,6 +224,18 @@ try {
   await until(() => on('overview').action === 'ask.deck' && rows('overview', 'answers').length === total());
   session.dispatch('overview', { type: 'ui:click', ref: 'mini', payload: 4 });
   check('an answer pressed there is shown as it was, and the overview closes', await until(() => current().position === 4 && on('b').data['title'] === 'Two' && on('overview').action === '' && !browsing()), `${String(current().position)}, ${areas()}`);
+
+  await app.openScreen('conversation');
+  await until(() => rows('a', 'exchanges').length > 0);
+  const exchanges = rows('a', 'exchanges').map(recordOf);
+  const firstAsked = exchanges.find((exchange) => exchange['question'] === 'Two things side by side');
+  check(
+    'the Conversation screen lists every message and what was said back, the newest first, those that changed nothing too',
+    on('a').action === 'ask.conversation' && exchanges[0]?.['question'] === 'What is the weather in Vienna?' && exchanges[0]['reply'] === 'Nothing in this app shows the weather.' && exchanges[0]['screen'] === FIRST.id && firstAsked?.['position'] === 2,
+    `${on('a').action} ${JSON.stringify(on('a').data).slice(0, 300)} ${String(current().screen)}`,
+  );
+  session.dispatch('a', { type: 'ui:click', ref: 'opens-answer', payload: 2 });
+  check('…and one pressed opens the answer it was', await until(() => current().position === 2 && current().question === 'Two things side by side'), `${String(current().position)} ${String(current().question)}`);
 } finally {
   app.server.close();
 }

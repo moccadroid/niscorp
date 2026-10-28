@@ -43,7 +43,6 @@ export const miraTarget = (config: { root: HTMLElement; registry: ComponentRegis
     let turn = 0;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let deadline: number | undefined;
-    const scrolled = new Map<number, number>();
     let deck: 'starting' | 'settling' | 'moving' | undefined;
     let heard: (() => void) | undefined;
 
@@ -95,7 +94,6 @@ export const miraTarget = (config: { root: HTMLElement; registry: ComponentRegis
       if (grid === null) return false;
       motion = { kind: 'layers', layers: holdLayers(grid, cardsOf(grid, painted)), turn: ++turn, again: 0 };
       hideGrid(true);
-      if (window.scrollY > 0) window.scrollTo({ top: 0, behavior: reducedMotion() ? 'instant' : 'smooth' });
       return true;
     };
 
@@ -128,7 +126,6 @@ export const miraTarget = (config: { root: HTMLElement; registry: ComponentRegis
       slide.next = undefined;
       slide.offset = 0;
       slide.direction = (shown.at ?? 0) < (current.to ?? 0) ? -1 : 1;
-      if (current.to !== undefined) scrolled.set(current.to, window.scrollY);
       current.from = current.to;
       runSlide();
     };
@@ -144,13 +141,11 @@ export const miraTarget = (config: { root: HTMLElement; registry: ComponentRegis
       if (shown.at === current.from || (current.slide.next !== undefined && current.swipe !== 'following')) return;
       showNext(current.slide, cardsOf(grid, painted), restingHeight(grid));
       current.to = shown.at;
-      window.scrollTo({ top: scrolled.get(shown.at ?? 0) ?? 0, behavior: 'instant' });
       if (current.swipe !== 'following') playTo('end');
     };
     const startSlide = (direction: 1 | -1, swipe: boolean): boolean => {
       const grid = gridOf();
       if (grid === null) return false;
-      if (shown.at !== undefined) scrolled.set(shown.at, window.scrollY);
       motion = { kind: 'slide', slide: holdSlide(grid, cardsOf(grid, painted), direction), from: shown.at, to: undefined, ...(swipe ? { swipe: 'following' as const } : {}), turn: ++turn };
       hideGrid(true);
       if (!swipe) giveUp(motion);

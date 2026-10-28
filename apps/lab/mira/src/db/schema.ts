@@ -40,11 +40,20 @@ ALTER TABLE answers ADD COLUMN grammar jsonb NOT NULL DEFAULT '{}'::jsonb;
 ALTER TABLE answers ALTER COLUMN grammar DROP DEFAULT;
 `;
 
+// A message whose answer left the screen as it was, or showed one of the app's screens, is kept too, with no screen of
+// its own: the answer or the screen it was asked on is what it opens from the conversation.
+const EVERY_MESSAGE = `
+ALTER TABLE answers ALTER COLUMN plan DROP NOT NULL;
+ALTER TABLE answers ADD COLUMN asked_on uuid;
+ALTER TABLE answers ADD COLUMN screen text;
+`;
+
 export const APP_SEQUENCE: Sequence = {
   id: 'mira.app',
   migrations: [
     { description: 'People, and the one-time sign-in links mailed to them', steps: sqlSteps(PEOPLE) },
     { description: 'Every answer a person was given, so their stack outlasts the shell', steps: sqlSteps(ANSWERS) },
     { description: 'An answer keeps the grammars its screen was written at', steps: sqlSteps(ANSWER_GRAMMAR) },
+    { description: 'Every message answered is kept, the ones that left the screen as it was too', steps: sqlSteps(EVERY_MESSAGE) },
   ],
 };

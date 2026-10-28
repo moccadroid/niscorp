@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import type { CortexEvent, SignalClient, Usage } from '@niscorp/cortex';
 import type { FunctionDefinition, FunctionSession } from '@niscorp/moss';
@@ -16,6 +17,7 @@ import type { Catalog } from './catalog';
 import { composerAgent } from './composer.agent';
 import { deckOf } from './deck';
 import { createHistory, keptAs } from './history';
+import type { Exchange, History } from './history';
 import { messageInput } from './knowledge';
 import { drawnRegion, framed } from './layout';
 import { pick } from './pick';
@@ -42,6 +44,17 @@ const NO_USAGE: Usage = { inputTokens: 0, outputTokens: 0, totalTokens: 0, repor
 
 const screenOf = (plan: Plan): string => JSON.stringify([plan.canvases, plan.layout, plan.label]);
 
+// How many of the person's last messages, with what was said back, the model is given.
+const CONVERSATION_GIVEN = 10;
+
+// An exchange opens the answer it put up, or the answer it was asked on, while either is in the stack; otherwise the
+// screen it was asked on or showed; otherwise nothing.
+const conversationOf = (exchanges: readonly Exchange[], history: History): Record<string, unknown>[] =>
+  [...exchanges].reverse().map(({ id, question, title, reply, askedOn, screen }) => {
+    const at = [id, askedOn].map((answer) => (answer === undefined ? -1 : history.indexOf((plan) => plan.id === answer))).find((index) => index >= 0) ?? -1;
+    return { id, question, title, reply, ...(at >= 0 ? { position: at + 1 } : screen !== undefined ? { screen } : {}) };
+  });
+
 export const dockInputs = ({ actions }: { actions: readonly string[] }): Record<string, Record<string, unknown>> => ({
   dock: { screens: screensHeld(actions).map(({ id, label }) => ({ id, label })) },
 });
@@ -55,10 +68,20 @@ export const composer =
     const screens = screensHeld(session.actions);
     // What the person did last: an answer for anything earlier is no longer shown.
     let turn = 0;
+    // A reply that changed nothing stays in the dock until the person asks again or moves along the stack.
+    let said: string | undefined;
+    const withSaid = (plan: ShownPlan): ShownPlan => (said === undefined ? plan : { ...plan, said });
 
     const screenPlan = (screen: Screen): Plan => planOf('', canvasesInAreas(screen.canvases.map((canvas) => opened(canvas, catalog))), { arrangements: ARRANGEMENTS, screen, arrangement: screen.arrangement, ink: screen.ink });
     const history = createHistory(screenPlan(SCREENS[0]));
     const kept = keptAs(session.wire, grammar);
+    // Every message the person sent and what was said back, the oldest first: the model is given the last of them, and
+    // the conversation lists them all.
+    const exchanges: Exchange[] = [];
+    const remember = (exchange: Exchange, keeping: Promise<void>): void => {
+      exchanges.push(exchange);
+      keeping.catch((error: unknown) => console.error(`[ask] "${exchange.question}" was answered and not kept: ${reasonOf(error)}`));
+    };
 
     // An answer's layout goes into the frame's region through this shell's draft, where moss checks it; it is kept
     // nowhere. The draft holds one frame, taken again for each answer.
@@ -97,6 +120,7 @@ export const composer =
     const leave = (to: () => ShownPlan): Promise<ShownPlan> => {
       standing();
       turn += 1;
+      said = undefined;
       soFar = undefined;
       return show(to());
     };
@@ -116,6 +140,7 @@ export const composer =
       if (chat === undefined) throw new Error(`Set ${models.missing.join(' and ')} in .env, and start the app again.`);
       const open = standing();
       const asked = (turn += 1);
+      said = undefined;
       const offered = await (usable ??= withUsable(catalog, session.wire));
       const deps = { catalog: offered, screens, arrangements: ARRANGEMENTS };
       const before = history.current();
@@ -139,7 +164,7 @@ export const composer =
         const refused = refusalsOf(envelope.data, context);
         return refused.length === 0 ? { ok: true } : { retry: refused.map((reason) => `- ${reason}`).join('\n') };
       });
-      const input = messageInput(message, open, { id: before.arrangement, layout: before.layout }, picked?.picks);
+      const input = messageInput(message, open, { id: before.arrangement, layout: before.layout }, picked?.picks, exchanges.slice(-CONVERSATION_GIVEN));
       // A correction starts the answer again from the screen the message was asked on.
       const streamed = (event: CortexEvent): void => {
         if (asked !== turn) return;
@@ -167,13 +192,23 @@ export const composer =
       const answer = answerOf(result.output.data, context);
       const response = result.output.response?.trim() ?? '';
       const screen = answer.screen === undefined ? undefined : screens.find((candidate) => candidate.id === answer.screen);
-      if (screen !== undefined) return show(showScreen(screen, response));
+      if (screen !== undefined) {
+        const exchange = { id: randomUUID(), question: message, title: answer.title === '' ? screen.label : answer.title, reply: response, screen: screen.id };
+        remember(exchange, kept.keepSaid(exchange));
+        return show(showScreen(screen, response));
+      }
       if (Object.keys(answer.canvases).length === 0) throw new Error('Nothing here answers that yet.');
-      const plan = { ...inked(planOf(message, answer.canvases, { arrangements: ARRANGEMENTS, arrangement: answer.arrangement ?? current, label: answer.title, ink: history.nextInk() }), before), response };
+      const id = randomUUID();
+      const plan = { ...inked(planOf(message, answer.canvases, { arrangements: ARRANGEMENTS, arrangement: answer.arrangement ?? current, label: answer.title, ink: history.nextInk() }), before), response, id };
       // An answer that leaves the screen as it is adds nothing to the stack; the dock still names what was asked, and why
       // nothing changed.
-      if (screenOf({ ...plan, label: before.label }) === screenOf(before)) return show({ ...before, question: message, label: answer.title, response });
-      kept.keep(plan).catch((error: unknown) => console.error(`[ask] "${message}" was shown and not kept: ${reasonOf(error)}`));
+      if (screenOf({ ...plan, label: before.label }) === screenOf(before)) {
+        const exchange = { id, question: message, title: answer.title, reply: response, ...(before.id === undefined ? {} : { askedOn: before.id }), ...(before.screen === undefined ? {} : { screen: before.screen }) };
+        remember(exchange, kept.keepSaid(exchange));
+        said = response;
+        return show(withSaid({ ...before, question: message, label: answer.title, response }));
+      }
+      remember({ id, question: message, title: answer.title, reply: response }, kept.keep(plan));
       return show(history.add(plan));
     };
 
@@ -188,7 +223,15 @@ export const composer =
     const restoredFirst =
       <T>(run: (data: unknown) => Promise<T>) =>
       async (data: unknown): Promise<T> => {
-        await (restored ??= kept.past().then(history.restore, (error: unknown) => console.error(`[answers] the person's answers could not be read: ${reasonOf(error)}`)));
+        await (restored ??= Promise.all([
+          kept.past().then(history.restore),
+          kept.said().then((past) => {
+            exchanges.unshift(...past);
+          }),
+        ]).then(
+          () => undefined,
+          (error: unknown) => console.error(`[answers] the person's answers could not be read: ${reasonOf(error)}`),
+        ));
         return run(data);
       };
 
@@ -198,11 +241,17 @@ export const composer =
       { id: 'answers.back', description: 'Shows the answer before the one shown, and answers its plan.', execute: restoredFirst(async () => leave(history.back)) },
       { id: 'answers.forward', description: 'Shows the answer after the one shown, and answers its plan.', execute: restoredFirst(async () => leave(history.forward)) },
       { id: 'answers.go', description: 'Shows one answer from the stack. Send { going: <its position> }; answers its plan.', execute: restoredFirst(async (data) => leave(() => history.go(GoSchema.parse(data).going))) },
-      { id: 'answers.current', description: 'Answers the plan shown, or, while an answer streams, the answer so far.', execute: restoredFirst(async () => soFar ?? show(history.current())) },
+      { id: 'answers.current', description: 'Answers the plan shown, or, while an answer streams, the answer so far.', execute: restoredFirst(async () => soFar ?? show(withSaid(history.current()))) },
       {
         id: 'answers.deck',
         description: 'Every answer in the stack, as the overview draws it: its position and title, what was asked, what the model said it did, and its cards with their titles and words. Send nothing.',
         execute: restoredFirst(async () => deckOf(history.all(), history.current().position)),
+      },
+      {
+        id: 'answers.conversation',
+        description:
+          'Everything the person asked and what was said back, the newest first, each with what it opens: the position of its answer in the stack, or a screen. Send nothing.',
+        execute: restoredFirst(async () => conversationOf(exchanges, history)),
       },
     ];
   };

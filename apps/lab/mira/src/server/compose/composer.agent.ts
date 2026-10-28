@@ -1,6 +1,6 @@
 import { defineAgent } from '@niscorp/cortex';
 import type { AgentDefinition, OutputValidator } from '@niscorp/cortex';
-import { actionCatalog, arrangementCatalog, INSTRUCTIONS, readCatalog, screenCatalog, writeCatalog } from './knowledge';
+import { aboutMira, actionCatalog, arrangementCatalog, INSTRUCTIONS, readCatalog, screenCatalog, writeCatalog } from './knowledge';
 import type { ComposerDeps } from './knowledge';
 import { ReplySchema } from './reply.schema';
 import type { Reply } from './reply.schema';
@@ -11,7 +11,7 @@ export const composerAgent = (validate: OutputValidator<Reply>): AgentDefinition
     id: 'mira.compose',
     description: 'Answers a message with a screen composed from the app’s actions.',
     instructions: INSTRUCTIONS,
-    context: [actionCatalog, readCatalog, writeCatalog, screenCatalog, arrangementCatalog],
+    context: [actionCatalog, readCatalog, writeCatalog, screenCatalog, arrangementCatalog, aboutMira],
     // An agent with no tools on Groq would be sent the envelope as Groq's loose JSON schema, and gpt-oss answers this one
     // worse there: emit carries the contract in the prompt, as every Groq agent with tools gets it.
     output: { schema: ReplySchema, response: 'required', strategy: 'emit', validate },

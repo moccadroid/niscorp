@@ -56,6 +56,7 @@ export const copyOf = (area: HTMLElement): HTMLElement => {
   const mark = area.querySelector<HTMLElement>(':scope > .k-mark');
   const copiedMark = copy.querySelector<HTMLElement>(':scope > .k-mark');
   if (mark !== null && copiedMark !== null) copiedMark.style.top = getComputedStyle(mark).top;
+  sizeTitles(copy, area);
   const fields = area.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('input, textarea');
   copy.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('input, textarea').forEach((field, at) => field.setAttribute('value', fields[at]?.value ?? ''));
   copy.setAttribute('aria-hidden', 'true');
@@ -76,6 +77,15 @@ export const stageOver = (grid: HTMLElement, fixed: boolean): HTMLElement => {
     grid.parentElement?.append(stage);
   }
   return stage;
+};
+
+// A title is the size its card's place gives it: smaller while the card is folded.
+export const sizeTitles = (copy: HTMLElement, area: HTMLElement): void => {
+  const titles = area.querySelectorAll<HTMLElement>('.k-card-title');
+  copy.querySelectorAll<HTMLElement>('.k-card-title').forEach((title, at) => {
+    const from = titles[at];
+    if (from !== undefined) title.style.fontSize = getComputedStyle(from).fontSize;
+  });
 };
 
 export const place = (element: HTMLElement, box: Pick<Box, 'left' | 'width'> & { top: number; height: number }): void => {

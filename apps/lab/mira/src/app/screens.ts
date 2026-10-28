@@ -15,4 +15,12 @@ export const SCREENS: readonly [Screen, ...Screen[]] = [
     ],
   },
   { id: 'people', label: 'People', description: 'Everybody who may sign in, and inviting somebody.', arrangement: 'single', ink: 'screen-2', canvases: [{ action: 'people.list', input: {}, intent: 'who may sign in' }] },
+  {
+    id: 'conversation',
+    label: 'Conversation',
+    description: 'Everything the person asked and what was said back, each opening the answer it was.',
+    arrangement: 'single',
+    ink: 'screen-3',
+    canvases: [{ action: 'ask.conversation', input: {}, intent: 'what was asked and said' }],
+  },
 ];
