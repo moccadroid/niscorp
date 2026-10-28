@@ -1,5 +1,15 @@
 # @niscorp/vex
 
+## 0.4.2
+
+### Patch Changes
+
+- 2a6f8d6: An insert's `onConflict.set` is held to every `match` rule of the update phase, one on a column of the conflict target included: each becomes a WHERE on the DO UPDATE half, so a conflict with a row the caller may not update writes nothing and returns no row.
+
+  Before, a `match` on a conflict-target column was left out, on the reasoning that the insert pins that column from scope. Where the policy's insert phase does not pin it — no insert rule for that column, or two merged roles of which one may insert anywhere — an entry that takes that column's value from the caller let them overwrite, and read back, a row their update rule excludes.
+
+- 915efe6: `@niscorp/vex/pg` exports `createPgPool(pool, parsers?)`, which shapes a node-postgres `pg.Pool` as the `PgPool` the Postgres adapter and cache take, with a `transaction` that checks one client out of the pool and runs `BEGIN`/`COMMIT` (`ROLLBACK` when the callback throws) on it — what the cache's `init()`, batch mutations and per-read statement timeouts need. It also exports `RAW_DATE_PARSERS`, the same constant as `@niscorp/vex/pglite`'s. `pg` is now listed as an optional peer.
+
 ## 0.4.1
 
 ### Patch Changes
