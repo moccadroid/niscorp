@@ -71,7 +71,7 @@ try {
   );
   check(
     'the model is told about its person: no name yet, so to ask for one; that they own this Mira; and their time, where their device is',
-    prompts[0]?.includes('YOUR PERSON\n- Their name: you do not know it yet. Ask them what they would like you to call them') === true && prompts[0].includes('- They own this Mira') && prompts[0].includes(' (Europe/Vienna).'),
+    prompts[0]?.includes('YOUR PERSON\n- Their name: you do not know it yet. End your response by asking what they would like you to call them') === true && prompts[0].includes('- They own this Mira') && prompts[0].includes(' (Europe/Vienna).'),
     prompts[0]?.slice(prompts[0].indexOf('YOUR PERSON'), prompts[0].indexOf('YOUR PERSON') + 400) ?? '',
   );
   check('words the model says are placed where it says, in the room it gives', areas() === 'answer.text answer.text' && titles() === 'One Two' && grid() === '2: 1 2', `${areas()} — ${titles()} — ${grid()}`);

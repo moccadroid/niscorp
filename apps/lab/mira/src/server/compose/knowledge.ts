@@ -45,7 +45,7 @@ export const yourPerson = (({ deps }) =>
   [
     'YOUR PERSON',
     deps.person.name === undefined
-      ? '- Their name: you do not know it yet. Ask them what they would like you to call them, and when they tell you, open the You card (people.me) with it, for them to save.'
+      ? '- Their name: you do not know it yet. End your response by asking what they would like you to call them — once: when a response of yours above asked already, do not ask again. When they tell you, open the You card (people.me) with it: the name is kept only when they press Save there.'
       : `- Their name: ${json(deps.person.name)}.`,
     deps.person.owner ? '- They own this Mira, and invite everybody else who may sign in.' : '- The owner of this Mira invited them.',
     `- Their time now: ${timeIn(deps.seen.zone, new Date())}.`,
