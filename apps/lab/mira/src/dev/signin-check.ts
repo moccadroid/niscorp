@@ -1,6 +1,7 @@
 import { renderDocument } from '@niscorp/moss';
 import type { MossServer } from '@niscorp/moss';
-import { personInvite, ownerAdmit, peopleList } from '../app/vex/people.entries';
+import { personInvite, personMe, personName, ownerAdmit, peopleList } from '../app/vex/people.entries';
+import { recordOf } from '../server/compose/record';
 import { linkIssue } from '../app/vex/links.entries';
 import { boot } from '../server/boot';
 import { drawing } from '../server/document';
@@ -105,6 +106,21 @@ try {
   check('Ada signs in by her own link, and holds the app but not the People screen', actionOn(ada.session, 'dock') === 'ask.dock' && !drawn(ada.session).includes('"label":"People"'));
   const adaInvites = await server.fetch(new Request('http://mira.test/api/vex', { method: 'POST', headers: { authorization: `Bearer ${ada.token}`, 'content-type': 'application/json' }, body: JSON.stringify({ fingerprint: personInvite.fingerprint, context: { email: 'eve@example.com', name: 'Eve' } }) }));
   check('Ada cannot invite anybody', !adaInvites.ok && !(await people()).includes('eve@example.com'), String(adaInvites.status));
+  const vexAs = (token: string, fingerprint: string, context: Record<string, unknown>): Promise<Response> =>
+    Promise.resolve(server.fetch(new Request('http://mira.test/api/vex', { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify({ fingerprint, context }) })));
+  const resultOf = async (response: Response): Promise<unknown> => recordOf(await response.json())['result'];
+  const one = (value: unknown): Record<string, unknown> => recordOf(Array.isArray(value) ? value[0] : value);
+  const adaRow = one(await resultOf(await vexAs(ada.token, personMe.fingerprint, {})));
+  const ownerRow = (await people()).split('\n').map((line) => recordOf(JSON.parse(line))).find((row) => row['email'] === OWNER) ?? {};
+  await vexAs(ada.token, personName.fingerprint, { id: ownerRow['id'], name: 'Not the owner' });
+  const adaNames = await vexAs(ada.token, personName.fingerprint, { id: adaRow['id'], name: 'Ada L.' });
+  check(
+    'Ada keeps the name she wants to be called by on her own row, and cannot write one on the owner’s',
+    adaNames.ok && (await people()).includes('"email":"ada@example.com","name":"Ada L.","role":"member"') && !(await people()).includes('Not the owner'),
+    await people(),
+  );
+  const adaReads = recordOf(await (await vexAs(ada.token, peopleList.fingerprint, {})).json())['result'];
+  check('Ada reads her own row of people, and nobody else’s', Array.isArray(adaReads) && adaReads.length === 1 && JSON.stringify(adaReads).includes('ada@example.com'), JSON.stringify(adaReads));
   await server.fetch(new Request('http://mira.test/api/vex', { method: 'POST', headers: { authorization: `Bearer ${ownerToken}`, 'content-type': 'application/json' }, body: JSON.stringify({ fingerprint: ownerAdmit.fingerprint, context: { email: 'second@example.com' } }) }));
   check('and no write of the owner’s makes another owner', !(await people()).includes('"email":"second@example.com","name":null,"role":"owner"'), await people());
 
@@ -118,6 +134,11 @@ try {
   await until(() => scripted.prompts.length > 1);
   const [adaPrompt = '', ownerPrompt = ''] = scripted.prompts;
   check('the model is offered only what the person may use: the owner the People card, Ada not', ownerPrompt.includes('people.list') && !adaPrompt.includes('people.list'));
+  check(
+    'the model is told who it talks with: Ada by the name she keeps, invited by the owner; the owner, who has given no name, to be asked for one',
+    adaPrompt.includes('YOUR PERSON\n- Their name: "Ada L.".\n- The owner of this Mira invited them.') && ownerPrompt.includes('- Their name: you do not know it yet.') && ownerPrompt.includes('- They own this Mira'),
+    adaPrompt.slice(adaPrompt.indexOf('YOUR PERSON'), adaPrompt.indexOf('YOUR PERSON') + 200),
+  );
   check('and nobody is given the app’s reads and writes', [ownerPrompt, adaPrompt].every((prompt) => !prompt.includes('people/') && !prompt.includes('links/') && !prompt.includes('answers/')));
 } catch (error) {
   check('the sign-in ran to the end', false, error instanceof Error ? (error.stack ?? error.message) : String(error));

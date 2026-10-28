@@ -39,4 +39,18 @@ export const ownerAdmit: SeedMutation = {
   mutation: { op: 'insert', table: 'people', values: { email: { $context: 'email' }, role: 'owner' }, onConflict: { target: ['email'] } },
 };
 
-export const PEOPLE_ENTRIES: readonly (SeedEntry | SeedMutation)[] = [personRole, personByEmail, peopleList, personInvite, ownerAdmit];
+export const personMe: SeedEntry = {
+  fingerprint: 'people/me',
+  intent: 'The person asking: their row, the name Mira calls them by, and their address',
+  shape: { id: '', name: '', email: '' },
+  dsl: { from: ['people'], fields: ['people.id', 'people.name', 'people.email'], filter: { eq: ['people.id', { $scope: 'userId' }] } },
+};
+
+// Only their own row: the row rule each role writes `people` under (src/app/vex).
+export const personName: SeedMutation = {
+  fingerprint: 'people/name',
+  intent: 'Keep the name a person wants Mira to call them by, on their own row',
+  mutation: { op: 'update', table: 'people', set: { name: { $context: 'name' } }, where: { eq: ['people.id', { $context: 'id' }] } },
+};
+
+export const PEOPLE_ENTRIES: readonly (SeedEntry | SeedMutation)[] = [personRole, personByEmail, peopleList, personInvite, ownerAdmit, personMe, personName];

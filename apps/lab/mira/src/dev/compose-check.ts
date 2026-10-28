@@ -29,6 +29,8 @@ const SCRIPT: Script = {
   'What is the weather in Vienna?': [{ response: 'Nothing in this app shows the weather.', cards: [] }],
   'Name it at length': [{ title: 'A title that runs on well past the forty characters a title may have', cards: [] }],
   'Only one thing': [{ columns: 1, cards: [say('One')] }],
+  'Call me Max': [{ response: 'Max it is.', title: 'You', columns: 1, cards: [{ action: 'people.me', input: { name: 'Max' }, intent: 'the name to call them' }] }],
+  'Hello again': [{ response: 'Hello, Max.', cards: [] }],
 };
 
 const { check, finish } = checks('compose');
@@ -53,6 +55,8 @@ try {
   check('the app opens on the first screen: its cards on the screen canvas, in order, and the stack starts there', areas() === START && on('dock').action === 'ask.dock' && current().position === 1 && total() === 1, areas());
   check('the screen canvas is laid out as the first screen is: its columns, an area for each card', current().columns === FIRST.columns && grid() === '2: 1 2', `${String(current().columns)} — ${grid()}`);
 
+  app.draw();
+  session.dispatch('dock', { type: 'ui:model', ref: 'zone', payload: 'Europe/Vienna' });
   runs.length = 0;
   await ask('Two things side by side');
   check(
@@ -62,8 +66,13 @@ try {
   );
   check(
     'the model is shown the first screen as it is, and told an answer asked on it starts from an empty one',
-    prompts[0]?.includes(`The first screen, "${FIRST.label}", 1 of 1 in the stack (${FIRST.label}): it welcomes the person, and shows "Mira" — words: `) === true && prompts[0].includes('an answer asked on the first screen starts from an empty screen'),
+    prompts[0]?.includes(`The first screen, "${FIRST.label}", 1 of 1 in the stack (${FIRST.label}): it welcomes your person, and shows "Mira" — words: `) === true && prompts[0].includes('an answer asked on the first screen starts from an empty screen'),
     prompts[0]?.slice(0, 600) ?? '',
+  );
+  check(
+    'the model is told about its person: no name yet, so to ask for one; that they own this Mira; and their time, where their device is',
+    prompts[0]?.includes('YOUR PERSON\n- Their name: you do not know it yet. Ask them what they would like you to call them') === true && prompts[0].includes('- They own this Mira') && prompts[0].includes(' (Europe/Vienna).'),
+    prompts[0]?.slice(prompts[0].indexOf('YOUR PERSON'), prompts[0].indexOf('YOUR PERSON') + 400) ?? '',
   );
   check('words the model says are placed where it says, in the room it gives', areas() === 'answer.text answer.text' && titles() === 'One Two' && grid() === '2: 1 2', `${areas()} — ${titles()} — ${grid()}`);
   check('words written where the first screen’s card was keep nothing of it, not its large title', card(1).data['tone'] === 'default', JSON.stringify(card(1).data));
@@ -276,6 +285,16 @@ try {
   session.dispatch('overview', { type: 'ui:click', ref: 'close', payload: 1 });
   await settle();
   check('…and the first screen cannot be closed', rows('overview', 'answers').length === pictures - 1 && recordOf(rows('overview', 'answers')[0])['label'] === FIRST.label, String(rows('overview', 'answers').length));
+  session.dispatch('dock', { type: 'ui:key', ref: 'deck-keys', key: 'Escape' });
+  await until(() => on('overview').action === '');
+
+  await ask('Call me Max');
+  await until(() => card(1).action === 'people.me' && recordOf(card(1).data['me'])['email'] === OWNER);
+  check('the model opens the You card with the name it is given, for the person to save', card(1).action === 'people.me' && card(1).data['name'] === 'Max' && recordOf(card(1).data['me'])['name'] === null, JSON.stringify(card(1).data));
+  session.dispatch('screen', { type: 'ui:click', ref: 'save', origin: card(1).id });
+  check('…which keeps it when they press Save', await until(() => recordOf(card(1).data['me'])['name'] === 'Max'), JSON.stringify(card(1).data));
+  await ask('Hello again');
+  check('and from then on the model knows their name', lastPrompt().includes('YOUR PERSON\n- Their name: "Max".'), lastPrompt().slice(lastPrompt().indexOf('YOUR PERSON'), lastPrompt().indexOf('YOUR PERSON') + 200));
 } finally {
   app.server.close();
 }

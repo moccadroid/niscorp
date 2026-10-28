@@ -32,6 +32,7 @@ const steps: LayoutNode = {
 
 export const dockLayout: LayoutNode = {
   component: 'Dock',
+  ref: 'zone',
   model: '$.zone',
   props: { ink: { $if: '$.asking', $then: '$.lineInk', $else: '$.current.next' }, asking: '$.asking', error: { $if: '$.error', $then: true, $else: false } },
   children: [

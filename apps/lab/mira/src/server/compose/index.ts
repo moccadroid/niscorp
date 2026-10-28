@@ -20,6 +20,7 @@ import type { ComposerDeps } from './knowledge';
 import { drawnLayout, SCREEN_LAYOUT_REF } from './layout';
 import { planOf, screenOf } from './plan';
 import type { Plan, ShownPlan } from './plan';
+import { readPerson } from './person';
 import { drawnCards, readOpenScreen, readSeen, standingCards } from './screen';
 import type { OpenCard } from './screen';
 
@@ -151,7 +152,7 @@ export const composer =
       const open = welcome ? [] : standingOpen;
 
       const { columns } = before;
-      const deps: ComposerDeps = { catalog, screens, roles: session.roles, seen: readSeen(session.shell, standingOpen, columns) };
+      const deps: ComposerDeps = { catalog, screens, person: await readPerson(session), seen: readSeen(session.shell, standingOpen, columns) };
       const fresh = Array.from({ length: CARDS_ON_A_SCREEN }, () => randomUUID());
       const context: AnswerContext = { ...deps, open, columns, fresh };
       const agent = composerAgent((envelope) => {

@@ -6,11 +6,13 @@ import { PEOPLE_ENTRIES } from './people.entries';
 export const ENTRIES: readonly (SeedEntry | SeedMutation)[] = [...PEOPLE_ENTRIES, ...LINK_ENTRIES, ...ANSWER_ENTRIES];
 
 // Somebody the owner invites is a member, invited by the owner: `inviteeRole` is a constant on the owner's identity, so
-// no write of theirs makes another owner. The owner let in at boot was invited by nobody.
+// no write of theirs makes another owner. The owner let in at boot was invited by nobody. A member reads their own row
+// only, and anybody changes only their own.
 export const BEHAVIORS: ScopeBehaviors = {
   people: {
     default: {},
-    inviting: { insert: [{ set: 'invited_by', to: 'userId' }, { set: 'role', to: 'inviteeRole' }] },
+    inviting: { insert: [{ set: 'invited_by', to: 'userId' }, { set: 'role', to: 'inviteeRole' }], update: [{ match: 'id', to: 'userId' }] },
+    self: { read: [{ match: 'id', to: 'userId' }], update: [{ match: 'id', to: 'userId' }] },
   },
   answers: { read: [{ match: 'person', to: 'userId' }], insert: [{ set: 'person', to: 'userId' }], update: [{ match: 'person', to: 'userId' }] },
 };
