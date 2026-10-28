@@ -24,7 +24,7 @@ import { pick } from './pick';
 import type { Decide } from './pick';
 import { arrangementOfPlan, canvasesInAreas, canvasesOfPlan, inked, planOf } from './plan';
 import type { Plan, ShownPlan } from './plan';
-import { canvasesStanding, readOpenScreen, showsStanding } from './screen';
+import { canvasesStanding, drawnCards, readOpenScreen } from './screen';
 import type { OpenCanvas } from './screen';
 
 export type { Decide } from './pick';
@@ -37,6 +37,7 @@ export type Models = { jev?: Jev; chat?: Chat; missing: readonly string[] };
 const AskSchema = z.looseObject({ asked: z.string() });
 const OpenSchema = z.looseObject({ opening: z.string() });
 const GoSchema = z.looseObject({ going: z.coerce.number() });
+const CloseSchema = z.looseObject({ closing: z.coerce.number() });
 
 const reasonOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));
 
@@ -68,7 +69,8 @@ export const composer =
     const screens = screensHeld(session.actions);
     // What the person did last: an answer for anything earlier is no longer shown.
     let turn = 0;
-    // What the model said back stays in the dock until the person asks again or moves along the stack.
+    // What the model said back to a message that left the screen as it was stays in the dock until the person asks again
+    // or moves along the stack.
     let said: string | undefined;
     const withSaid = (plan: ShownPlan): ShownPlan => (said === undefined ? plan : { ...plan, said });
 
@@ -110,15 +112,15 @@ export const composer =
     };
 
     // Before anything else is shown, the screen as the person left it is kept with the answer it is on — unless an answer
-    // is streaming in over it — and what its cards showed is kept on the answer's row, for the overview.
+    // is streaming in over it — and its cards as they were drawn are kept on the answer's row, for the overview.
     const standing = (): OpenCanvas[] => {
       const left = history.current();
       const open = readOpenScreen(session.shell, left);
       if (soFar !== undefined) return open;
-      const shows = showsStanding(open);
-      history.keep(canvasesStanding(open), shows);
-      if (left.id !== undefined && JSON.stringify(shows) !== JSON.stringify(left.shows ?? {})) {
-        kept.shown(left.id, shows).catch((error: unknown) => console.error(`[answers] what "${left.label}" showed was not kept: ${reasonOf(error)}`));
+      const drawn = drawnCards(session.shell);
+      history.keep(canvasesStanding(open), drawn);
+      if (left.id !== undefined && JSON.stringify(drawn) !== JSON.stringify(left.drawn ?? {})) {
+        kept.drawn(left.id, drawn).catch((error: unknown) => console.error(`[answers] how "${left.label}" was drawn was not kept: ${reasonOf(error)}`));
       }
       return open;
     };
@@ -144,12 +146,16 @@ export const composer =
       if (message === '') return history.current();
       const chat = models.chat;
       if (chat === undefined) throw new Error(`Set ${models.missing.join(' and ')} in .env, and start the app again.`);
-      const open = standing();
+      const standingOpen = standing();
       const asked = (turn += 1);
       said = undefined;
       const offered = await (usable ??= withUsable(catalog, session.wire));
       const deps = { catalog: offered, screens, arrangements: ARRANGEMENTS };
       const before = history.current();
+      // The first screen welcomes; an answer asked on it starts from an empty screen, and none of its cards stay.
+      const welcome = before.screen === SCREENS[0].id;
+      const from: Plan = welcome ? { ...before, canvases: {}, inks: {}, marks: {} } : before;
+      const open = welcome ? [] : standingOpen;
       const jev = models.jev;
       const picking = performance.now();
       const picked =
@@ -165,7 +171,7 @@ export const composer =
       }
 
       const current = arrangementOfPlan(before);
-      const context: AnswerContext = { ...deps, open: canvasesOfPlan(before), current };
+      const context: AnswerContext = { ...deps, open: canvasesOfPlan(from), current };
       const agent = composerAgent((envelope) => {
         const refused = refusalsOf(envelope.data, context);
         return refused.length === 0 ? { ok: true } : { retry: refused.map((reason) => `- ${reason}`).join('\n') };
@@ -177,8 +183,8 @@ export const composer =
         if (event.type === 'retry' && soFar !== undefined) moveTo(undefined);
         if (event.type !== 'output-partial') return;
         const answer = answerSoFar(event.output, context);
-        if (answer === undefined) return;
-        const plan = history.next(inked(planOf(message, answer.canvases, { arrangements: ARRANGEMENTS, arrangement: answer.arrangement ?? current, label: answer.title, ink: history.nextInk() }), before));
+        if (answer === undefined || Object.keys(answer.canvases).length === 0) return;
+        const plan = history.next(inked(planOf(message, answer.canvases, { arrangements: ARRANGEMENTS, arrangement: answer.arrangement ?? current, label: answer.title, ink: history.nextInk() }), from));
         if (screenOf(plan) === screenOf(soFar ?? before)) return;
         moveTo(plan);
       };
@@ -201,23 +207,22 @@ export const composer =
       if (screen !== undefined) {
         const exchange = { id: randomUUID(), question: message, title: answer.title === '' ? screen.label : answer.title, reply: response, screen: screen.id };
         remember(exchange, kept.keepSaid(exchange));
-        said = response;
-        return show(withSaid({ ...showScreen(screen, response), question: message }));
+        return show({ ...showScreen(screen, response), question: message });
       }
-      if (Object.keys(answer.canvases).length === 0) throw new Error('Nothing here answers that yet.');
+      const nothingPlaced = Object.keys(answer.canvases).length === 0;
+      if (nothingPlaced && !welcome) throw new Error('Nothing here answers that yet.');
       const id = randomUUID();
-      const plan = { ...inked(planOf(message, answer.canvases, { arrangements: ARRANGEMENTS, arrangement: answer.arrangement ?? current, label: answer.title, ink: history.nextInk() }), before), response, id };
-      // An answer that leaves the screen as it is adds nothing to the stack; the dock still names what was asked, and why
-      // nothing changed.
-      if (screenOf({ ...plan, label: before.label }) === screenOf(before)) {
+      const plan = { ...inked(planOf(message, answer.canvases, { arrangements: ARRANGEMENTS, arrangement: answer.arrangement ?? current, label: answer.title, ink: history.nextInk() }), from), response, id };
+      // An answer that leaves the screen as it is adds nothing to the stack; the dock still names what was asked, and says
+      // what the model said back, the one place it is said.
+      if (nothingPlaced || screenOf({ ...plan, label: before.label }) === screenOf(before)) {
         const exchange = { id, question: message, title: answer.title, reply: response, ...(before.id === undefined ? {} : { askedOn: before.id }), ...(before.screen === undefined ? {} : { screen: before.screen }) };
         remember(exchange, kept.keepSaid(exchange));
         said = response;
         return show(withSaid({ ...before, question: message, label: answer.title, response }));
       }
       remember({ id, question: message, title: answer.title, reply: response }, kept.keep(plan));
-      said = response;
-      return show(withSaid(history.add(plan)));
+      return show(history.add(plan));
     };
 
     const open = async (data: unknown): Promise<ShownPlan> => {
@@ -253,7 +258,25 @@ export const composer =
       {
         id: 'answers.deck',
         description: 'Every answer in the stack, as the overview draws it: its position and title, what was asked, what the model said it did, and its cards with their titles and words. Send nothing.',
-        execute: restoredFirst(async () => deckOf(history.all(), history.current().position, showsStanding(readOpenScreen(session.shell, history.current())))),
+        execute: restoredFirst(async () => deckOf(history.all(), history.current().position, drawnCards(session.shell))),
+      },
+      {
+        id: 'answers.close',
+        description: 'Closes one answer in the stack: it leaves the stack, and stays in the conversation; the first screen stays. Send { closing: <its position> }; answers the overview again.',
+        execute: restoredFirst(async (data) => {
+          const position = CloseSchema.parse(data).closing;
+          if (position === history.current().position) {
+            standing();
+            turn += 1;
+            soFar = undefined;
+            said = undefined;
+          }
+          const closed = history.close(position);
+          if (closed?.id !== undefined) kept.close(closed.id).catch((error: unknown) => console.error(`[answers] "${closed.label}" was closed and not kept closed: ${reasonOf(error)}`));
+          if (closed !== undefined) await show(history.current());
+          // The page is not drawn again yet: the answer now shown is drawn as it was kept.
+          return deckOf(history.all(), history.current().position, history.current().drawn ?? {});
+        }),
       },
       {
         id: 'answers.conversation',

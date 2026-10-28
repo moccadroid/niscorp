@@ -117,7 +117,16 @@ try {
   third.dispatch('dock', { type: 'ui:click', ref: 'chip' });
   await until(() => Array.isArray(dataOn(third, 'overview')['answers']) && JSON.stringify(dataOn(third, 'overview')['answers']).includes('"label":"Who"'));
   const pictured = JSON.stringify(recordOf((dataOn(third, 'overview')['answers'] as unknown[]).map(recordOf).find((entry) => entry['label'] === 'Who'))['layers']);
-  check('what a card filled with data showed is kept with its answer: a new shell’s overview draws it by its people', pictured.includes(OWNER), pictured.slice(0, 300));
+  check('an answer’s cards as nova drew them are kept with it: a new shell’s overview draws it by its people', pictured.includes(OWNER) && pictured.includes('"name":"Card"'), pictured.slice(0, 300));
+  const who = (dataOn(third, 'overview')['answers'] as unknown[]).map(recordOf).find((entry) => entry['label'] === 'Who');
+  third.dispatch('overview', { type: 'ui:click', ref: 'close', payload: who?.['position'] });
+  await until(() => !JSON.stringify(dataOn(third, 'overview')['answers']).includes('"label":"Who"'));
+  await settle();
+  shells.reset((await server.principalOf(ownerToken)) ?? '');
+  const fourth = await open(ownerToken);
+  await settle();
+  check('an answer closed stays closed in a new shell', !JSON.stringify(shown(fourth)['stack']).includes('"Who"') && shown(fourth)['label'] === 'The second', JSON.stringify(shown(fourth)['stack']));
+  check('…and stays in the conversation', JSON.stringify(await kept(ownerToken, answersSaid.fingerprint)).includes('Who is here?'));
 
   await server.fetch(new Request('http://mira.test/api/vex', { method: 'POST', headers: { authorization: `Bearer ${ownerToken}`, 'content-type': 'application/json' }, body: JSON.stringify({ fingerprint: personInvite.fingerprint, context: { email: 'ada@example.com', name: 'Ada' } }) }));
   const adaToken = (await door.signIn('ada@example.com')) ?? '';

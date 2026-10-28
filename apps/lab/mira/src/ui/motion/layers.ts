@@ -1,4 +1,4 @@
-import { copyOf, place, sizeTitles, stageOver } from './stage';
+import { copyOf, place, scrollLike, sizeTitles, stageOver } from './stage';
 import type { Card } from './stage';
 
 export const EASE = 'cubic-bezier(0.25, 1, 0.5, 1)';
@@ -40,7 +40,7 @@ export const holdLayers = (grid: HTMLElement, cards: readonly Card[]): Layers =>
     element.style.zIndex = String(zOf(at));
     place(element, card.box);
     stage.append(element);
-    element.scrollTop = card.element.scrollTop;
+    scrollLike(element, card.element);
     return { element, id: card.id, says: card.says };
   });
   return { stage, grid, pieces, leaving: [], running: [] };
@@ -111,7 +111,7 @@ export const moveLayers = (layers: Layers, cards: readonly Card[], height: numbe
     }
     const element = copyOf(card.element);
     stage.append(element);
-    element.scrollTop = card.element.scrollTop;
+    scrollLike(element, card.element);
     if (paired !== undefined) {
       used.add(paired.element);
       paired.under?.remove();
@@ -272,7 +272,7 @@ const relay = (layers: Layers, cards: readonly Card[], height: number, pace: Pac
     element.style.zIndex = String(zOf(index));
     place(element, card.box);
     stage.append(element);
-    element.scrollTop = card.element.scrollTop;
+    scrollLike(element, card.element);
     const { top, height: tall } = card.box;
     const hidden = `inset(0px 0px ${tall}px 0px round 0px 0px ${fold}px ${fold}px)`;
     animate(element, [

@@ -85,6 +85,13 @@ export const sizeTitles = (copy: HTMLElement, area: HTMLElement): void => {
   });
 };
 
+// A card scrolled inside itself shows the same lines in its copy.
+export const scrollLike = (copy: HTMLElement, area: HTMLElement): void => {
+  const from = area.querySelector<HTMLElement>('.k-card');
+  const to = copy.querySelector<HTMLElement>('.k-card');
+  if (from !== null && to !== null) to.scrollTop = from.scrollTop;
+};
+
 export const place = (element: HTMLElement, box: Pick<Box, 'left' | 'width'> & { top: number; height: number }): void => {
   Object.assign(element.style, { left: `${box.left}px`, width: `${box.width}px`, top: `${box.top}px`, height: `${box.height}px` });
 };

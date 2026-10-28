@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ChangeEvent, type CSSProperties, type KeyboardEvent, type MouseEvent as TapEvent } from 'react';
 import { z } from 'zod';
-import { useNovaDispatch } from '@niscorp/nova/adapters/react';
+import { RenderTree, useNovaDispatch } from '@niscorp/nova/adapters/react';
+import type { RenderNode } from '@niscorp/nova';
 import type { NovaComponent } from '@niscorp/nova/adapters/react';
 
 // A value a component does not take falls back to its default on its own; the others still hold.
@@ -52,7 +53,7 @@ export const Text: NovaComponent = ({ children, novaRef: _ref, novaModel: _model
 };
 Text.meta = { description: 'A paragraph.', propsSchema: TextProps };
 
-const ARROWS = { back: 'M15 4.5 7.5 12l7.5 7.5', forward: 'M9 4.5 16.5 12 9 19.5' } as const;
+const ARROWS = { back: 'M15 4.5 7.5 12l7.5 7.5', forward: 'M9 4.5 16.5 12 9 19.5', close: 'M6.5 6.5l11 11M17.5 6.5l-11 11' } as const;
 
 const ButtonProps = z.object({
   label: z.string().optional().describe('What the button says; falls back to its children. With an icon, what it is called.'),
@@ -62,7 +63,7 @@ const ButtonProps = z.object({
     .describe(
       'primary: what the action does | suggestion: a thing to ask | link: opens another screen | choice: one of a set to choose from | chosen: the one of the set that is chosen | right: the right one of a set, once picked | wrong: a wrong one, picked | asked: what the person said, in a conversation',
     ),
-  icon: z.enum(['back', 'forward']).optional().describe('Drawn instead of the label: back | forward.'),
+  icon: z.enum(['back', 'forward', 'close']).optional().describe('Drawn instead of the label: back | forward | close.'),
   current: z.boolean().optional().describe('Whether it is the one open now, of a set of links.'),
   disabled: z.boolean().optional().describe('Whether it can be pressed now.'),
   value: z.unknown().optional().describe('Sent with the click as its payload.'),
@@ -78,7 +79,10 @@ export const Button: NovaComponent = ({ children, novaRef, novaModel: _model, ..
       aria-label={icon !== undefined ? label : undefined}
       aria-current={current === true ? 'page' : undefined}
       disabled={disabled === true}
-      onClick={() => dispatch({ type: 'ui:click', ...(novaRef !== undefined ? { ref: novaRef } : {}), ...(value !== undefined ? { payload: value } : {}) })}
+      onClick={(event) => {
+        event.stopPropagation();
+        dispatch({ type: 'ui:click', ...(novaRef !== undefined ? { ref: novaRef } : {}), ...(value !== undefined ? { payload: value } : {}) });
+      }}
     >
       {icon !== undefined ? (
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -277,7 +281,7 @@ const CardProps = z.object({
   title: z.string().optional().describe('What the card shows, in a few words.'),
   tone: z.enum(['default', 'hero', 'log']).optional().describe('default | hero: the card a screen opens with | log: read from its foot, the newest last: it opens at the newest'),
 });
-// A log stays at its newest as lines come in, in whatever holds it scrolling.
+// A log stays at its newest as lines come in.
 export const Card: NovaComponent = ({ children, novaRef: _ref, novaModel: _model, ...props }) => {
   const { title, tone } = parsed(CardProps, props, {});
   const own = useRef<HTMLElement>(null);
@@ -285,8 +289,7 @@ export const Card: NovaComponent = ({ children, novaRef: _ref, novaModel: _model
     const card = own.current;
     if (tone !== 'log' || card === null) return undefined;
     const toEnd = (): void => {
-      const holder = card.closest<HTMLElement>('.k-area');
-      if (holder !== null) holder.scrollTop = holder.scrollHeight;
+      card.scrollTop = card.scrollHeight;
     };
     toEnd();
     const lines = new MutationObserver(() => requestAnimationFrame(toEnd));
@@ -373,44 +376,46 @@ const InputProps = z.object({
 });
 // While it has focus, what is typed wins over what the shell echoes back, so a round trip to the server never takes a
 // keystroke away. A line sent with Enter keeps its words until the shell empties it, so they are still there as they go.
+// The line grows with what is typed; Shift and Enter start a new line in it.
 export const Input: NovaComponent = ({ novaRef, novaModel, ...props }) => {
   const dispatch = useNovaDispatch();
   const { placeholder, value, clearOnEnter, tone } = parsed(InputProps, props, {});
   const [draft, setDraft] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
+  const own = useRef<HTMLTextAreaElement>(null);
   const ref = novaModel?.ref ?? novaRef;
   const echoed = cell(value);
   const emptied = sent && echoed === '';
+  const shown = emptied ? '' : (draft ?? echoed);
   useEffect(() => {
     if (!emptied) return;
     setSent(false);
     setDraft(null);
   }, [emptied]);
-  const onChange = (event: ChangeEvent<HTMLInputElement>): void => {
+  useBeforePaint(() => {
+    const line = own.current;
+    if (line === null) return;
+    line.style.height = 'auto';
+    line.style.height = `${line.scrollHeight}px`;
+  }, [shown]);
+  const onChange = (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>): void => {
     setSent(false);
     setDraft(event.target.value);
     if (novaModel !== undefined) dispatch({ type: 'ui:model', ref: novaModel.ref, payload: event.target.value });
   };
   // A line with nothing in it has nothing to send.
-  const onKeyDown = (event: KeyboardEvent<HTMLInputElement>): void => {
+  const onKeyDown = (event: KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>): void => {
+    if (event.key === 'Enter' && event.shiftKey && tone === 'line') return;
+    if (event.key === 'Enter' && tone === 'line') event.preventDefault();
     const sends = event.key === 'Enter' && clearOnEnter === true;
     if (sends && event.currentTarget.value.trim() === '') return;
     if (ref !== undefined) dispatch({ type: 'ui:key', ref, key: event.key });
     if (sends) setSent(true);
   };
-  return (
-    <input
-      className={tone === 'line' ? 'k-input k-line' : 'k-input'}
-      placeholder={placeholder}
-      value={emptied ? '' : (draft ?? echoed)}
-      onChange={onChange}
-      onKeyDown={onKeyDown}
-      onFocus={() => setDraft(echoed)}
-      onBlur={() => setDraft(null)}
-    />
-  );
+  const common = { placeholder, value: shown, onChange, onKeyDown, onFocus: () => setDraft(echoed), onBlur: () => setDraft(null) };
+  return tone === 'line' ? <textarea ref={own} className="k-input k-line" rows={1} {...common} /> : <input className="k-input" {...common} />;
 };
-Input.meta = { description: 'A line of text, bound to data with the node’s `model`; Enter is a ui:key.', propsSchema: InputProps };
+Input.meta = { description: 'A field of text, bound to data with the node’s `model`; Enter is a ui:key. The line grows with what is typed.', propsSchema: InputProps };
 
 const PromptProps = z.object({}).describe('The line to ask in.');
 export const Prompt: NovaComponent = ({ children }) => <div className="k-prompt">{children}</div>;
@@ -441,9 +446,9 @@ export const Keys: NovaComponent = ({ novaRef, novaModel: _model, ...props }) =>
     const root = document.documentElement;
     const onKey = (event: globalThis.KeyboardEvent): void => {
       if (event.metaKey || event.ctrlKey || event.altKey || event.defaultPrevented) return;
-      if (!['ArrowLeft', 'ArrowRight', 'Enter', 'Escape'].includes(event.key)) return;
+      if (!['ArrowLeft', 'ArrowRight', 'Enter', 'Escape', 'Delete'].includes(event.key)) return;
       if (capture !== true && typedInto(event.target) && !(event.key.startsWith('Arrow') && emptyField(event.target))) return;
-      if (event.key === 'Enter' && ((typedInto(event.target) && !emptyField(event.target)) || (event.target instanceof Element && event.target.closest('button, a') !== null))) return;
+      if ((event.key === 'Enter' || event.key === 'Delete') && ((typedInto(event.target) && !emptyField(event.target)) || (event.target instanceof Element && event.target.closest('button, a') !== null))) return;
       if (event.key.startsWith('Arrow')) event.preventDefault();
       press.current(event.key);
     };
@@ -500,7 +505,7 @@ export const Keys: NovaComponent = ({ novaRef, novaModel: _model, ...props }) =>
   }, [capture]);
   return null;
 };
-Keys.meta = { description: 'Draws nothing: the arrow keys, Enter and Escape pressed on the page, and a sideways swipe, each sent as a ui:key with its ref.', propsSchema: KeysProps };
+Keys.meta = { description: 'Draws nothing: the arrow keys, Enter, Escape and Delete pressed on the page, and a sideways swipe, each sent as a ui:key with its ref.', propsSchema: KeysProps };
 
 const valueOf = (element: Element | null | undefined): number | undefined => {
   const value = Number(element?.getAttribute('data-value'));
@@ -545,6 +550,22 @@ export const Deck: NovaComponent = ({ children, novaModel, novaRef: _ref, ...pro
     steering.current = glides;
     scroller.scrollTo({ left, behavior: glides ? 'smooth' : 'instant' });
   };
+  // A picture closed leaves a gap the others slide over to close.
+  const places = useRef(new Map<Element, number>());
+  useBeforePaint(() => {
+    const scroller = row.current;
+    if (scroller === null) return;
+    const now = new Map<Element, number>();
+    for (const picture of pictures()) {
+      if (!(picture instanceof HTMLElement)) continue;
+      const was = places.current.get(picture);
+      now.set(picture, picture.offsetLeft);
+      if (was !== undefined && Math.abs(was - picture.offsetLeft) > 1 && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        picture.animate([{ translate: `${was - picture.offsetLeft}px 0` }, { translate: '0 0' }], { duration: 380, easing: 'cubic-bezier(0.25, 1, 0.5, 1)' });
+      }
+    }
+    places.current = now;
+  });
   // Placed at the picture picked as soon as there are pictures; after that, it scrolls only to a pick made elsewhere.
   const placed = useRef(false);
   useEffect(() => {
@@ -662,30 +683,110 @@ export const Deck: NovaComponent = ({ children, novaModel, novaRef: _ref, ...pro
 };
 Deck.meta = { description: 'Pictures side by side, the one in the middle picked; writes its value to the node’s `model`.', propsSchema: DeckProps };
 
+// A picture swiped up is closed: it flies off, and is sent as Delete on it, with its value.
 const MiniProps = z.object({
   value: z.number().describe('Which picture it is; sent with the click as its payload.'),
   selected: z.boolean().optional().describe('Whether it is the one picked.'),
+  closable: z.boolean().optional().describe('Whether it can be swiped up and away, closing it.'),
 });
 export const Mini: NovaComponent = ({ children, novaRef, novaModel: _model, ...props }) => {
   const dispatch = useNovaDispatch();
-  const { value, selected } = parsed(MiniProps, props, { value: 0 });
+  const { value, selected, closable } = parsed(MiniProps, props, { value: 0 });
+  const own = useRef<HTMLElement>(null);
+  const close = useRef<() => void>(() => undefined);
+  close.current = () => {
+    if (novaRef !== undefined) dispatch({ type: 'ui:key', ref: novaRef, key: 'Delete', payload: value });
+  };
+  useEffect(() => {
+    const mini = own.current;
+    if (mini === null || closable !== true) return undefined;
+    let lift: { id: number; x: number; y: number; at: number; on: boolean } | undefined;
+    const onDown = (event: PointerEvent): void => {
+      if (event.button !== 0 || (event.target instanceof Element && event.target.closest('button') !== null)) return;
+      lift = { id: event.pointerId, x: event.clientX, y: event.clientY, at: performance.now(), on: false };
+    };
+    const onMove = (event: PointerEvent): void => {
+      if (lift === undefined || event.pointerId !== lift.id) return;
+      const dx = event.clientX - lift.x;
+      const dy = event.clientY - lift.y;
+      if (!lift.on) {
+        if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy)) {
+          lift = undefined;
+          return;
+        }
+        if (dy > -12) return;
+        lift.on = true;
+        mini.setPointerCapture(event.pointerId);
+      }
+      mini.style.translate = `0 ${Math.min(0, dy)}px`;
+      mini.style.opacity = String(Math.max(0.2, 1 + Math.min(0, dy) / 500));
+    };
+    const onUp = (event: PointerEvent): void => {
+      if (lift === undefined || event.pointerId !== lift.id) return;
+      const { y, at, on } = lift;
+      lift = undefined;
+      if (!on) return;
+      const swallow = (click: MouseEvent): void => click.stopPropagation();
+      mini.addEventListener('click', swallow, { capture: true, once: true });
+      setTimeout(() => mini.removeEventListener('click', swallow, { capture: true }), 0);
+      const dy = event.clientY - y;
+      const from = { translate: mini.style.translate, opacity: mini.style.opacity || '1' };
+      mini.style.translate = '';
+      mini.style.opacity = '';
+      const away = event.type !== 'pointercancel' && (dy < -mini.offsetHeight * 0.25 || -dy / Math.max(1, performance.now() - at) > 0.6);
+      const flight = mini.animate(away ? [from, { translate: `0 ${-window.innerHeight}px`, opacity: 0 }] : [from, { translate: '0 0', opacity: 1 }], {
+        duration: away ? 260 : 320,
+        easing: 'cubic-bezier(0.25, 1, 0.5, 1)',
+        fill: away ? 'forwards' : 'none',
+      });
+      if (away) void flight.finished.then(() => close.current(), () => undefined);
+    };
+    mini.addEventListener('pointerdown', onDown);
+    mini.addEventListener('pointermove', onMove);
+    mini.addEventListener('pointerup', onUp);
+    mini.addEventListener('pointercancel', onUp);
+    return () => {
+      mini.removeEventListener('pointerdown', onDown);
+      mini.removeEventListener('pointermove', onMove);
+      mini.removeEventListener('pointerup', onUp);
+      mini.removeEventListener('pointercancel', onUp);
+    };
+  }, [closable]);
   return (
-    <figure className="k-mini" data-value={value} data-selected={selected === true ? '' : undefined} onClick={() => dispatch({ type: 'ui:click', ...(novaRef !== undefined ? { ref: novaRef } : {}), payload: value })}>
+    <figure ref={own} className="k-mini" data-value={value} data-selected={selected === true ? '' : undefined} onClick={() => dispatch({ type: 'ui:click', ...(novaRef !== undefined ? { ref: novaRef } : {}), payload: value })}>
       {children}
     </figure>
   );
 };
-Mini.meta = { description: 'One picture in a deck, with its caption under it; dispatches ui:click with its ref and its value.', propsSchema: MiniProps };
+Mini.meta = { description: 'One picture in a deck, with its caption under it; dispatches ui:click with its ref and its value, and, swiped up when closable, ui:key Delete with its value.', propsSchema: MiniProps };
 
+// A screen drawn small: laid out as the full-size grid lays it, its cards folded as the grid folds them.
 const MiniatureProps = z.object({ columns: z.number().int().min(1).max(3).optional().describe('How many columns its areas are laid out in on a wide screen.') });
 export const Miniature: NovaComponent = ({ children, novaRef: _ref, novaModel: _model, ...props }) => {
   const { columns } = parsed(MiniatureProps, props, {});
+  const sheet = useRef<HTMLDivElement>(null);
+  useBeforePaint(() => {
+    const own = sheet.current;
+    if (own === null) return;
+    const folded = foldOf(own, undefined);
+    own.style.setProperty('--rows', folded?.rows ?? 'none');
+    own.toggleAttribute('data-folded', folded !== undefined);
+    for (const area of own.querySelectorAll<HTMLElement>(':scope > .k-area')) area.toggleAttribute('data-open', folded !== undefined && area.dataset['name'] === folded.open);
+  });
   return (
-    <div className="k-miniature" aria-hidden="true">
-      <div className="k-miniature-sheet" data-columns={columns ?? 2}>
+    <div className="k-miniature" aria-hidden="true" inert>
+      <div ref={sheet} className="k-miniature-sheet" data-columns={columns ?? 2}>
         {children}
       </div>
     </div>
   );
 };
-Miniature.meta = { description: 'Areas drawn small, laid out as the full-size grid lays them.', propsSchema: MiniatureProps };
+Miniature.meta = { description: 'Areas drawn small, laid out and folded as the full-size grid lays them out.', propsSchema: MiniatureProps };
+
+// Cards as nova drew them, drawn again: what a screen looked like.
+const PictureProps = z.object({ tree: z.array(z.unknown()).describe('The cards as nova drew them: their render tree.') });
+export const Picture: NovaComponent = ({ novaRef: _ref, novaModel: _model, ...props }) => {
+  const { tree } = parsed(PictureProps, props, { tree: [] });
+  return <RenderTree nodes={tree as RenderNode[]} />;
+};
+Picture.meta = { description: 'Cards drawn from a render tree nova made: a screen as it was drawn.', propsSchema: PictureProps };

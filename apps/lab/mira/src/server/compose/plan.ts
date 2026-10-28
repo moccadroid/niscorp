@@ -16,8 +16,8 @@ export const ANSWER_INKS = ['turn-1', 'turn-2', 'turn-3', 'turn-4', 'turn-5'] as
 export type Mark = 'changed' | 'new';
 
 // Each area's canvas sits in an array, as nova's `reconcile` takes it. A card keeps the ink of the answer that put it
-// there; `marks` says what this answer did to an area; `shows`, what each card showed when the person last left it. An
-// answer to a message has the id of its row; a screen has none.
+// there; `marks` says what this answer did to an area; `drawn`, each area's cards as nova drew them when the person last
+// left it. An answer to a message has the id of its row; a screen has none.
 export type Plan = {
   id?: string;
   question: string;
@@ -30,11 +30,11 @@ export type Plan = {
   ink: string;
   inks: Partial<Record<AreaId, string>>;
   marks: Partial<Record<AreaId, Mark>>;
-  shows?: Partial<Record<AreaId, Record<string, unknown>>>;
+  drawn?: Partial<Record<AreaId, unknown[]>>;
 };
 
 // `next` is the ink of the answer the line asks for; `later`, of the one after it, which the line takes while it is asked.
-// `said` is what the model said back to the message just answered.
+// `said` is what the model said back to a message that left the screen as it was.
 export type ShownPlan = Plan & { position: number; total: number; stack: { position: number; label: string; ink: string }[]; next: string; later: string; said?: string };
 
 export const wordsCanvas = (said: Said): Canvas => ({ action: 'answer.text', input: { title: said.title, text: said.text }, intent: `the words "${said.title}"` });

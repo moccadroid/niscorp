@@ -1,4 +1,4 @@
-import type { Shell } from '@niscorp/nova';
+import type { RenderNode, Shell } from '@niscorp/nova';
 import { AREAS } from '../../app/shell/areas';
 import type { AreaId } from '../../app/shell/areas';
 import { inputKeysOf } from './catalog';
@@ -39,4 +39,20 @@ export const readOpenScreen = (shell: Shell, plan: Plan): OpenCanvas[] =>
 
 export const canvasesStanding = (open: readonly OpenCanvas[]): Plan['canvases'] => Object.fromEntries(open.map(({ area, action, intent, input }) => [area, [{ action, input, intent }]]));
 
-export const showsStanding = (open: readonly OpenCanvas[]): NonNullable<Plan['shows']> => Object.fromEntries(open.filter(({ shows }) => Object.keys(shows).length > 0).map(({ area, shows }) => [area, shows]));
+const cardsIn = (nodes: readonly RenderNode[]): RenderNode[] =>
+  nodes.flatMap((node) => (node.type === 'component' && node.name === 'ActionSlot' ? node.children : node.type === 'fragment' ? cardsIn(node.children) : []));
+
+// Each area's cards as nova drew them, for the overview to draw the answer by.
+export const drawnCards = (shell: Shell): NonNullable<Plan['drawn']> => {
+  const drawn: NonNullable<Plan['drawn']> = {};
+  const walk = (nodes: readonly RenderNode[]): void => {
+    for (const node of nodes) {
+      const name = node.type === 'component' && node.name === 'Area' ? node.props['name'] : undefined;
+      const area = AREAS.find((known) => known === name);
+      if (node.type === 'component' && area !== undefined) drawn[area] = cardsIn(node.children);
+      else if (node.type === 'component' || node.type === 'fragment') walk(node.children);
+    }
+  };
+  walk(shell.flattenRenderTree(shell.getShellRenderTree()));
+  return drawn;
+};

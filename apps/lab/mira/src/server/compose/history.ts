@@ -3,7 +3,7 @@ import type { FunctionSession } from '@niscorp/moss';
 import { LayoutNodeSchema } from '@niscorp/nova';
 import type { Upgrader } from '@niscorp/strata';
 import { SCREENS } from '../../app/screens';
-import { answerKeep, answerShown, answersRecent, answersSaid } from '../../app/vex/answers.entries';
+import { answerClose, answerDrawn, answerKeep, answersRecent, answersSaid } from '../../app/vex/answers.entries';
 import { AreaIdSchema } from './layout';
 import { ANSWER_INKS } from './plan';
 import type { Plan, ShownPlan } from './plan';
@@ -18,7 +18,8 @@ export type History = {
   go: (position: number) => ShownPlan;
   back: () => ShownPlan;
   forward: () => ShownPlan;
-  keep: (canvases: Plan['canvases'], shows: NonNullable<Plan['shows']>) => void;
+  keep: (canvases: Plan['canvases'], drawn: NonNullable<Plan['drawn']>) => void;
+  close: (position: number) => Plan | undefined;
   restore: (past: readonly Plan[]) => void;
 };
 
@@ -29,7 +30,7 @@ const RowSchema = z.object({
   title: z.string(),
   response: z.string().nullable(),
   grammar: z.record(z.string(), z.number()).nullable(),
-  shows: z.partialRecord(AreaIdSchema, z.record(z.string(), z.unknown())).nullable().optional(),
+  drawn: z.partialRecord(AreaIdSchema, z.array(z.unknown())).nullable().optional(),
   plan: z.object({
     canvases: z.partialRecord(AreaIdSchema, z.array(CanvasSchema)),
     arrangement: z.string(),
@@ -46,7 +47,7 @@ export type Exchange = { id: string; question: string; title: string; reply: str
 
 const SaidSchema = z.object({ id: z.string(), question: z.string(), title: z.string(), response: z.string().nullable(), asked_on: z.string().nullable(), screen: z.string().nullable() });
 
-export type Kept = { past: () => Promise<Plan[]>; said: () => Promise<Exchange[]>; keep: (plan: Plan & { id: string }) => Promise<void>; keepSaid: (exchange: Exchange) => Promise<void>; shown: (id: string, shows: NonNullable<Plan['shows']>) => Promise<void> };
+export type Kept = { past: () => Promise<Plan[]>; said: () => Promise<Exchange[]>; keep: (plan: Plan & { id: string }) => Promise<void>; keepSaid: (exchange: Exchange) => Promise<void>; drawn: (id: string, drawn: NonNullable<Plan['drawn']>) => Promise<void>; close: (id: string) => Promise<void> };
 
 const inkOfAnswer = (answersBefore: number): string => ANSWER_INKS[answersBefore % ANSWER_INKS.length] ?? ANSWER_INKS[0];
 const KNOWN_INKS = new Set<string>([...ANSWER_INKS, ...SCREENS.map((screen) => screen.ink)]);
@@ -63,11 +64,11 @@ export const keptAs = (wire: FunctionSession['wire'], grammar: Upgrader): Kept =
   };
   const planOfRow = (row: unknown, turn: number): Plan[] => {
     try {
-      const { id, question, title, response, grammar: stamp, plan, shows } = RowSchema.parse(row);
+      const { id, question, title, response, grammar: stamp, plan, drawn } = RowSchema.parse(row);
       const layout = LayoutNodeSchema.parse(grammar.upgrade(plan.layout, { kind: 'nisc.nova/layout', stamp }).document);
       const ink = plan.ink !== undefined && KNOWN_INKS.has(plan.ink) ? plan.ink : inkOfAnswer(turn);
       const inks = Object.fromEntries(Object.keys(plan.canvases).map((area) => [area, Object.entries(plan.inks ?? {}).find(([held, kept]) => held === area && KNOWN_INKS.has(kept))?.[1] ?? ink]));
-      return [{ id, question, label: title, response: response ?? '', canvases: plan.canvases, arrangement: plan.arrangement, layout, ink, inks, marks: plan.marks ?? {}, ...(shows === null || shows === undefined ? {} : { shows }) }];
+      return [{ id, question, label: title, response: response ?? '', canvases: plan.canvases, arrangement: plan.arrangement, layout, ink, inks, marks: plan.marks ?? {}, ...(drawn === null || drawn === undefined ? {} : { drawn }) }];
     } catch (error) {
       console.error(`[answers] an answer that no longer reads is left out of the stack: ${error instanceof Error ? error.message.slice(0, 300) : String(error)}`);
       return [];
@@ -90,8 +91,11 @@ export const keptAs = (wire: FunctionSession['wire'], grammar: Upgrader): Kept =
     keep: async ({ id, question, label, response, canvases, arrangement, layout, ink, inks, marks }) => {
       await post(answerKeep.fingerprint, { id, question, title: label, response: response ?? '', plan: { canvases, arrangement, layout, ink, inks, marks }, grammar: grammar.stamp, askedOn: null, screen: null });
     },
-    shown: async (id, shows) => {
-      await post(answerShown.fingerprint, { id, shows });
+    drawn: async (id, drawn) => {
+      await post(answerDrawn.fingerprint, { id, drawn });
+    },
+    close: async (id) => {
+      await post(answerClose.fingerprint, { id, closedAt: new Date().toISOString() });
     },
     keepSaid: async ({ id, question, title, reply, askedOn, screen }) => {
       await post(answerKeep.fingerprint, { id, question, title, response: reply, plan: null, grammar: grammar.stamp, askedOn: askedOn ?? null, screen: screen ?? null });
@@ -129,9 +133,17 @@ export const createHistory = (first: Plan | undefined): History => {
     go: (position) => showAt(position >= 1 && position <= plans.length ? position - 1 : at),
     back: () => showAt(Math.max(0, at - 1)),
     forward: () => showAt(Math.min(plans.length - 1, at + 1)),
-    keep: (canvases, shows) => {
+    keep: (canvases, drawn) => {
       const plan = plans[at];
-      if (plan !== undefined) plans[at] = { ...plan, canvases, shows };
+      if (plan !== undefined) plans[at] = { ...plan, canvases, drawn };
+    },
+    // The first screen stays; closing the answer shown shows the one before it.
+    close: (position) => {
+      const index = position - 1;
+      if (index < 1 || index >= plans.length) return undefined;
+      const [closed] = plans.splice(index, 1);
+      if (at >= index) at = Math.max(0, at - 1);
+      return closed;
     },
     restore: (past) => {
       plans.push(...past);

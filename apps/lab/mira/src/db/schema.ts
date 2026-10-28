@@ -53,6 +53,14 @@ const ANSWER_SHOWS = `
 ALTER TABLE answers ADD COLUMN shows jsonb;
 `;
 
+// The overview draws an answer by its cards as nova drew them, not by what they showed; and an answer closed there
+// leaves the stack.
+const ANSWER_DRAWN = `
+ALTER TABLE answers DROP COLUMN shows;
+ALTER TABLE answers ADD COLUMN drawn jsonb;
+ALTER TABLE answers ADD COLUMN closed_at timestamptz;
+`;
+
 export const APP_SEQUENCE: Sequence = {
   id: 'mira.app',
   migrations: [
@@ -61,5 +69,6 @@ export const APP_SEQUENCE: Sequence = {
     { description: 'An answer keeps the grammars its screen was written at', steps: sqlSteps(ANSWER_GRAMMAR) },
     { description: 'Every message answered is kept, the ones that left the screen as it was too', steps: sqlSteps(EVERY_MESSAGE) },
     { description: 'An answer keeps what its cards showed when it was last left', steps: sqlSteps(ANSWER_SHOWS) },
+    { description: 'An answer keeps its cards as they were drawn, and when it was closed', steps: sqlSteps(ANSWER_DRAWN) },
   ],
 };

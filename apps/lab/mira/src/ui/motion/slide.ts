@@ -1,6 +1,6 @@
 import { EASE } from './layers';
 import type { Pace } from './layers';
-import { copyOf, place, stageOver } from './stage';
+import { copyOf, place, scrollLike, stageOver } from './stage';
 import type { Card } from './stage';
 
 // Back and forward move along the stack, which the overview lays out oldest at the left: going forward, the answer
@@ -18,7 +18,7 @@ const sheetOf = (grid: HTMLElement, cards: readonly Card[], fixed: boolean): HTM
     element.style.zIndex = String(100 - (at + 1) * 10);
     place(element, card.box);
     sheet.append(element);
-    element.scrollTop = card.element.scrollTop;
+    scrollLike(element, card.element);
   });
   return sheet;
 };

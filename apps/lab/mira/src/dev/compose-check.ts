@@ -63,15 +63,15 @@ try {
     runs.map((run) => `${run.agentId} ${run.model} ${run.outcome} ${run.steps} ${run.totalTokens} ${run.label}`).join(' | ') === 'mira.jev jev ok 1 110 Two things side by side | mira.compose chat ok 1 110 Two things side by side',
     JSON.stringify(runs),
   );
-  check('Jev is asked about the message with the open screen: an intent for each canvas', jev?.state['message'] === 'Two things side by side' && Object.keys(recordOf(jev?.state['open_screen'])).join() === opened.join(), JSON.stringify(jev?.state['open_screen']));
+  check('an answer asked on the first screen starts from an empty one: Jev is asked about the message with nothing open', jev?.state['message'] === 'Two things side by side' && Object.keys(recordOf(jev?.state['open_screen'])).length === 0, JSON.stringify(jev?.state['open_screen']));
   check(
-    'the model is given the open screen by area — where each area is, what each holds — and what Jev thinks',
-    prompts[0]?.includes(`arrangement ${FIRST.arrangement}: `) === true && prompts[0].includes(`- a: ${FIRST.canvases[0]?.action ?? ''}`) && prompts[0].includes(`A FAST PICKER THINKS (a hint; how likely each belongs in the answer): actions none; reads none; writes none; screens ${FIRST.id} 0.90`),
+    '…and the model is told nothing is open, and what Jev thinks',
+    prompts[0]?.includes(`OPEN SCREEN — arrangement ${FIRST.arrangement}: `) === true && prompts[0].includes('\nnothing\n') && prompts[0].includes(`A FAST PICKER THINKS (a hint; how likely each belongs in the answer): actions none; reads none; writes none; screens ${FIRST.id} 0.90`),
     prompts[0]?.slice(0, 600) ?? '',
   );
   check('words the model says are placed where it says, in the room it gives', areas() === 'answer.text answer.text' && on('a').data['title'] === 'One' && on('b').data['title'] === 'Two' && grid() === '2: a b', `${areas()} — ${grid()}`);
-  check('the areas the answer changed are marked so, and no word on the screen says it', marked() === 'a:changed b:changed' && !drawn().includes('"value":"Changed"'), marked());
-  check('what the model said back is said in the dock after an answer that changed the screen, too', current()['said'] === 'Put the two side by side.' && drawn().includes('"tone":"reply"},"children":[{"type":"text","value":"Put the two side by side."'), String(current()['said']));
+  check('none of the first screen’s cards stay: every card the answer put there is new, and no word on the screen says it', marked() === 'a:new b:new' && !drawn().includes('"value":"New"'), marked());
+  check('an answer that changed the screen is not said again in the dock: the screen answers', current()['said'] === undefined && !drawn().includes('"tone":"reply"'), String(current()['said']));
   check('a card the answer wrote is in the answer’s own ink, the first of the turn', inks() === 'a:turn-1 b:turn-1' && current().ink === 'turn-1', inks());
   check('the line is in the ink of the answer that comes next', current().next === 'turn-2' && /"name":"Dock","props":\{"ink":"turn-2"/.test(drawn()), drawn().match(/"name":"Dock","props":\{[^}]*\}/)?.[0] ?? '');
   check('the chip in the dock names the answer shown by its title, and where it stands among the answers', drawn().includes('"label":"Two things"') && drawn().includes('"count":"2/2"'), drawn().match(/"label":"Two things"[^}]*/)?.[0] ?? '');
@@ -92,6 +92,7 @@ try {
 
   const pairIds = ids();
   await ask('drop the second');
+  check('an answer asked on an answer is given the screen open, by area: where each is, what each holds', lastPrompt().includes('- a: answer.text — ') && lastPrompt().includes('- b: answer.text — '), lastPrompt().slice(-500));
   check('when Jev finds nothing likely, the model is given no hint', !lastPrompt().includes('FAST PICKER'), lastPrompt().slice(-300));
   check('an answer that only empties an area marks nothing, and what stays keeps its ink', marked() === '' && inks() === 'a:turn-1', `${marked()} — ${inks()}`);
   check('an area the model drops is emptied, and every other stays as it was', on('b').id === '' && without('b', ids()) === without('b', pairIds), `${ids()} vs ${pairIds}`);
@@ -211,10 +212,10 @@ try {
   );
   check(
     '…each with its cards: their titles, where its answer put them, and the inks they were in',
-    JSON.stringify(deck[1]?.['layers']) === JSON.stringify([
-      { name: 'a', span: 1, row: 1, column: 1, ink: 'turn-1', fresh: 'changed', title: 'One', text: 'About One.' },
-      { name: 'b', span: 1, row: 1, column: 2, ink: 'turn-1', fresh: 'changed', title: 'Two', text: 'About Two.' },
-    ]),
+    JSON.stringify((deck[1]?.['layers'] as unknown[]).map((layer) => ({ ...recordOf(layer), tree: undefined }))) === JSON.stringify([
+      { name: 'a', span: 1, row: 1, column: 1, ink: 'turn-1', fresh: 'new', title: 'One', text: 'About One.' },
+      { name: 'b', span: 1, row: 1, column: 2, ink: 'turn-1', fresh: 'new', title: 'Two', text: 'About Two.' },
+    ]) && JSON.stringify(recordOf((deck[1]?.['layers'] as unknown[])[0])['tree']).includes('"name":"Card","props":{"title":"One"'),
     JSON.stringify(deck[1]?.['layers']),
   );
   session.dispatch('dock', { type: 'ui:click', ref: 'deck-forward' });
@@ -244,7 +245,17 @@ try {
   session.dispatch('dock', { type: 'ui:click', ref: 'chip' });
   await until(() => on('overview').action === 'ask.deck' && rows('overview', 'answers').length === total());
   const pictured = JSON.stringify(recordOf(rows('overview', 'answers').map(recordOf).find((entry) => entry['label'] === 'People'))['layers']);
-  check('the overview draws a card filled with data by what it showed when it was left: People by the people in it', pictured.includes(OWNER), pictured.slice(0, 300));
+  check('the overview draws an answer by its cards as nova drew them: People with the people in it', pictured.includes(OWNER) && pictured.includes('"name":"Card"'), pictured.slice(0, 300));
+  const pictures = rows('overview', 'answers').length;
+  session.dispatch('overview', { type: 'ui:click', ref: 'close', payload: 2 });
+  check(
+    'an answer closed in the overview leaves it, and the stack',
+    await until(() => rows('overview', 'answers').length === pictures - 1 && total() === pictures - 1),
+    `${String(rows('overview', 'answers').length)} pictures, ${String(total())} in the stack, from ${String(pictures)}`,
+  );
+  session.dispatch('overview', { type: 'ui:click', ref: 'close', payload: 1 });
+  await settle();
+  check('…and the first screen cannot be closed', rows('overview', 'answers').length === pictures - 1 && recordOf(rows('overview', 'answers')[0])['label'] === FIRST.label, String(rows('overview', 'answers').length));
 } finally {
   app.server.close();
 }

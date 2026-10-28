@@ -37,7 +37,7 @@ export const EntrySchema = z
       .object({ title: z.string().max(60).describe('A few words.'), text: z.string().max(1000).describe('What there is to read: a few sentences, or a line for each step or item.') })
       .strict()
       .nullish()
-      .describe('Puts words here: an answer to read — an explanation, steps, a list — or something no action shows.'),
+      .describe('Puts words here: what you have to say — an answer, an explanation, steps, a list — where no screen or action shows it.'),
     drop: z.boolean().nullish().describe('Empties this area.'),
   })
   .strict()

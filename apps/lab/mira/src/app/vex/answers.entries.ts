@@ -22,21 +22,27 @@ export const answerKeep: SeedMutation = {
 
 export const answersRecent: SeedEntry = {
   fingerprint: 'answers/recent',
-  intent: 'The answers that put up a screen the person was given last, the newest first',
-  shape: [{ id: '', question: '', title: '', response: '', plan: {}, grammar: {}, shows: {} }],
+  intent: 'The answers that put up a screen the person was given last and has not closed, the newest first',
+  shape: [{ id: '', question: '', title: '', response: '', plan: {}, grammar: {}, drawn: {} }],
   dsl: {
     from: ['answers'],
-    fields: ['answers.id', 'answers.question', 'answers.title', 'answers.response', 'answers.plan', 'answers.grammar', 'answers.shows'],
-    filter: { isNotNull: 'answers.plan' },
+    fields: ['answers.id', 'answers.question', 'answers.title', 'answers.response', 'answers.plan', 'answers.grammar', 'answers.drawn'],
+    filter: { and: [{ isNotNull: 'answers.plan' }, { isNull: 'answers.closed_at' }] },
     sort: [{ field: 'answers.created_at', dir: 'desc' }, { field: 'answers.id', dir: 'desc' }],
     limit: 50,
   },
 };
 
-export const answerShown: SeedMutation = {
-  fingerprint: 'answers/shown',
-  intent: 'Keep what each card of an answer showed when the person left it',
-  mutation: { op: 'update', table: 'answers', set: { shows: { $context: 'shows' } }, where: { eq: ['answers.id', { $context: 'id' }] } },
+export const answerDrawn: SeedMutation = {
+  fingerprint: 'answers/drawn',
+  intent: 'Keep the cards of an answer as they were drawn when the person left it',
+  mutation: { op: 'update', table: 'answers', set: { drawn: { $context: 'drawn' } }, where: { eq: ['answers.id', { $context: 'id' }] } },
+};
+
+export const answerClose: SeedMutation = {
+  fingerprint: 'answers/close',
+  intent: 'Close an answer: it leaves the stack, and stays in the conversation',
+  mutation: { op: 'update', table: 'answers', set: { closed_at: { $context: 'closedAt' } }, where: { eq: ['answers.id', { $context: 'id' }] } },
 };
 
 export const answersSaid: SeedEntry = {
@@ -51,4 +57,4 @@ export const answersSaid: SeedEntry = {
   },
 };
 
-export const ANSWER_ENTRIES: readonly (SeedEntry | SeedMutation)[] = [answerKeep, answerShown, answersRecent, answersSaid];
+export const ANSWER_ENTRIES: readonly (SeedEntry | SeedMutation)[] = [answerKeep, answerDrawn, answerClose, answersRecent, answersSaid];

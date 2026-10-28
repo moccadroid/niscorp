@@ -76,6 +76,7 @@ export const dockAction: ActionDefinition = {
     { message: 'go', do: go },
     { message: 'deck-selected', do: [{ set: 'browse', value: '@event.payload' }] },
     { message: 'deck-closed', do: [{ set: 'browsing', value: false }] },
+    { message: 'answer-closed', do: [{ call: 'current', onSuccess: shown }] },
     { event: 'ui:key', key: 'Enter', ref: 'text', do: ask },
     { event: 'ui:click', ref: 'send', do: ask },
     { event: 'ui:click', ref: 'screen', do: open },
@@ -91,5 +92,6 @@ export const dockAction: ActionDefinition = {
     { event: 'ui:key', ref: 'deck-keys', key: 'ArrowRight', do: pick(pickForwardPrism) },
     { event: 'ui:key', ref: 'deck-keys', key: 'Enter', do: deckOpen },
     { event: 'ui:key', ref: 'deck-keys', key: 'Escape', do: [closeDeck] },
+    { event: 'ui:key', ref: 'deck-keys', key: 'Delete', do: [{ emit: { channel: 'deck-close-picked' } }] },
   ],
 };

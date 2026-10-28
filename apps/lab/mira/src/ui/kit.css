@@ -67,14 +67,14 @@ button { -webkit-tap-highlight-color: transparent; }
 
 /* The answer is one screen: cards that do not fit fold to their titles, and the open one scrolls inside itself (the
    Grid, in src/ui/kit.tsx, says which rows fold). */
-.k-grid[data-folded] { align-content: start; }
-.k-grid[data-folded] > .k-area { overflow: hidden; }
-.k-grid[data-folded] > .k-area:not([data-open]) { cursor: pointer; }
-.k-grid[data-folded] > .k-area:not([data-open]) .k-card-title { font-size: 24px; }
-.k-grid[data-folded] > .k-area > .k-card > :not(.k-card-title) { transition: opacity 0.3s; }
-.k-grid[data-folded] > .k-area:not([data-open]) > .k-card > :not(.k-card-title) { opacity: 0; }
-.k-grid[data-folded] > .k-area[data-open] { overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
-.k-grid[data-folded] > .k-area[data-open]::-webkit-scrollbar { display: none; }
+:is(.k-grid, .k-miniature-sheet)[data-folded] { align-content: start; }
+:is(.k-grid, .k-miniature-sheet)[data-folded] > .k-area { overflow: hidden; }
+:is(.k-grid, .k-miniature-sheet)[data-folded] > .k-area:not([data-open]) { cursor: pointer; }
+:is(.k-grid, .k-miniature-sheet)[data-folded] > .k-area:not([data-open]) .k-card-title { font-size: 24px; }
+:is(.k-grid, .k-miniature-sheet)[data-folded] > .k-area > .k-card > :not(.k-card-title) { transition: opacity 0.3s; }
+:is(.k-grid, .k-miniature-sheet)[data-folded] > .k-area:not([data-open]) > .k-card > :not(.k-card-title) { opacity: 0; }
+:is(.k-grid, .k-miniature-sheet)[data-folded] > .k-area[data-open] > .k-card { min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
+:is(.k-grid, .k-miniature-sheet)[data-folded] > .k-area[data-open] > .k-card::-webkit-scrollbar { display: none; }
 .k-grid[data-turning] { transition: grid-template-rows 0.45s var(--ease); }
 .k-grid[data-turning] .k-card-title { transition: font-size 0.45s var(--ease); }
 
@@ -264,7 +264,7 @@ button { -webkit-tap-highlight-color: transparent; }
 .k-chip-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; font-size: 16px; font-weight: 760; font-stretch: 106%; }
 .k-chip-count { flex: none; font-size: 14px; font-weight: 740; font-variant-numeric: tabular-nums; }
 
-.k-input.k-line { flex: 1; font-size: 23px; font-weight: 640; font-stretch: 104%; padding: 8px 0 7px; }
+.k-input.k-line { flex: 1; display: block; font-size: 23px; font-weight: 640; font-stretch: 104%; line-height: 1.25; padding: 8px 0 7px; resize: none; overflow-y: auto; max-height: calc(5lh + 15px); scrollbar-width: none; }
 .k-input.k-line::placeholder { color: var(--soft); transition: color 0.3s; }
 :root:has(.k-fly) .k-input.k-line::placeholder { color: transparent; }
 .k-input.k-line:focus { padding-bottom: 5px; }
@@ -299,10 +299,14 @@ button { -webkit-tap-highlight-color: transparent; }
 }
 .k-deck-row::-webkit-scrollbar { display: none; }
 .k-deck-row[data-dragging] { cursor: grabbing; scroll-snap-type: none; }
-.k-mini { flex: none; width: var(--mini-w); margin: 0; scroll-snap-align: center; scale: 0.9; transform-origin: 50% 0; transition: scale 0.35s var(--ease); cursor: pointer; }
+.k-mini { position: relative; flex: none; width: var(--mini-w); margin: 0; scroll-snap-align: center; scale: 0.9; transform-origin: 50% 0; transition: scale 0.35s var(--ease); cursor: pointer; touch-action: pan-x; }
+/* Closing a picture: swiped up on a touch screen, the × in its corner where there is a pointer to hover with. */
+.k-mini > .k-step { position: absolute; top: 10px; right: 10px; z-index: 2; width: 34px; height: 34px; opacity: 0; transition: opacity 0.2s; }
+@media (hover: hover) { .k-mini:hover > .k-step, .k-mini > .k-step:focus-visible { opacity: 1; } }
+@media (hover: none) { .k-mini > .k-step { display: none; } }
 .k-mini[data-selected] { scale: 1; }
 .k-miniature { position: relative; width: var(--mini-w); height: var(--mini-h); border-radius: 16px; overflow: hidden; background: var(--page); }
-.k-miniature-sheet { position: absolute; top: 0; left: 0; width: 100vw; height: calc(100dvh - var(--dock-h, 220px) + var(--fold)); scale: var(--mini-s); transform-origin: 0 0; pointer-events: none; }
+.k-miniature-sheet { position: absolute; top: 0; left: 0; width: 100vw; height: calc(100dvh - var(--dock-h, 220px) + var(--fold)); grid-template-rows: var(--rows, none); scale: var(--mini-s); transform-origin: 0 0; pointer-events: none; }
 .k-mini > .k-text { color: var(--page-ink); }
 .k-mini > .k-title { padding-top: 14px; font-size: 25px; line-height: 0.96; font-weight: 860; font-stretch: 112%; letter-spacing: -0.02em; }
 .k-mini > .k-meta { margin-top: 8px; font-size: 12.5px; font-weight: 820; letter-spacing: 0.09em; text-transform: uppercase; }
@@ -326,7 +330,7 @@ button { -webkit-tap-highlight-color: transparent; }
   .k-area:is([data-row='2'], [data-row='4'], [data-row='6']):is([data-column='1'], [data-column='3']) { --c: var(--tint); }
   .k-grid[data-columns='1'] > .k-area:nth-child(even), .k-miniature-sheet[data-columns='1'] > .k-area:nth-child(even) { --c: var(--tint); }
   .k-card-title { font-size: 60px; }
-  .k-grid[data-folded] > .k-area:not([data-open]) .k-card-title { font-size: 34px; }
+  :is(.k-grid, .k-miniature-sheet)[data-folded] > .k-area:not([data-open]) .k-card-title { font-size: 34px; }
   .k-hero > .k-card-title { font-size: 80px; }
   .k-lead { font-size: 24px; }
   .k-dock {
@@ -353,7 +357,7 @@ button { -webkit-tap-highlight-color: transparent; }
 .k-stage { position: absolute; z-index: 4; overflow: clip; pointer-events: none; }
 .k-stage > .k-area { position: absolute; margin: 0; overflow: hidden; transition: background-color 0.45s, color 0.45s; }
 .k-stage .k-skin { box-sizing: border-box; min-height: 100%; display: flex; flex-direction: column; }
-.k-stage .k-card { min-height: 0; }
+.k-stage .k-card { min-height: 0; overflow: hidden; }
 .k-stage .k-card-title { transition: font-size 0.45s var(--ease); }
 
 /* The words a question is sent with, on their way between the line and the chip. */
