@@ -31,6 +31,7 @@ const CanvasSchema = z
     mode: z.enum(['stack', 'list']).optional(),
     actionLayout: z.union([z.string(), layout]).optional(),
     initial: z.union([CanvasSeedSchema, z.array(CanvasSeedSchema)]).optional(),
+    reconcile: z.string().optional(),
   })
   .strict();
 
@@ -96,10 +97,22 @@ const fields = {
   functions: seam.optional(),
   onSession: seam.optional(),
   runs: seam.optional(),
+  reconcilers: z.record(z.string(), seam).optional(),
   reactions: z.array(ReactionSchema).readonly().optional(),
 } satisfies Record<keyof NiscApp, z.ZodType>;
 
-const ManifestSchema = z.object(fields).strict();
+const ManifestSchema = z
+  .object(fields)
+  .strict()
+  .superRefine((app, ctx) => {
+    const shells = [{ at: ['shell'], shell: app.shell }, ...Object.entries(app.pages ?? {}).map(([name, page]) => ({ at: ['pages', name], shell: page }))];
+    for (const { at, shell } of shells) {
+      for (const [index, canvas] of (shell?.canvases ?? []).entries()) {
+        if (canvas.reconcile === undefined || Object.hasOwn(app.reconcilers ?? {}, canvas.reconcile)) continue;
+        ctx.addIssue({ code: 'custom', path: [...at, 'canvases', index, 'reconcile'], message: `"${canvas.reconcile}" is not a reconciler the app hands over in \`reconcilers\`` });
+      }
+    }
+  });
 
 type Issue = z.core.$ZodIssue;
 type Place = { path: readonly PropertyKey[]; message: string };

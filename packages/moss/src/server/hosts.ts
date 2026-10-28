@@ -14,7 +14,7 @@ import type { ShellHost, ShellHostConfig } from '../shells';
 import type { Env, MossServer } from './moss-server';
 
 export type ShellHostsDeps = {
-  app: Pick<NiscApp, 'shell' | 'pages' | 'phrases' | 'functions' | 'onSession' | 'runs' | 'phraseKeys'>;
+  app: Pick<NiscApp, 'shell' | 'pages' | 'phrases' | 'functions' | 'onSession' | 'runs' | 'phraseKeys' | 'reconcilers'>;
   runtime: Pick<NiscRuntime, 'telemetry' | 'shellIdleMs' | 'shellFrameDelta' | 'endpointTimeoutMs'>;
   identity: Pick<Identity, 'resolve' | 'composeScope'>;
   running: Pick<RunningManifest, 'artifactsFor' | 'sessionArtifacts' | 'draftSavingFor' | 'functionsWritten' | 'readPublished'>;
@@ -66,6 +66,7 @@ const hostConfig = (deps: ShellHostsDeps, shell: ShellManifest, kept: boolean): 
       ...(app.functions !== undefined ? { functions: app.functions } : {}),
       ...(app.onSession !== undefined ? { onSession: app.onSession } : {}),
       ...(app.runs !== undefined ? { runs: app.runs } : {}),
+      ...(app.reconcilers !== undefined ? { reconcilers: app.reconcilers } : {}),
     },
     ...(app.phraseKeys !== undefined ? { phraseKeys: app.phraseKeys } : {}),
     kept,

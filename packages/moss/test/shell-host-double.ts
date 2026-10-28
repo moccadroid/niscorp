@@ -54,6 +54,7 @@ export const hostConfig = (setup: HostSetup): ShellHostConfig => {
       ...(app.functions !== undefined ? { functions: app.functions } : {}),
       ...(app.onSession !== undefined ? { onSession: app.onSession } : {}),
       ...(app.runs !== undefined ? { runs: app.runs } : {}),
+      ...(app.reconcilers !== undefined ? { reconcilers: app.reconcilers } : {}),
     },
     ...(app.phraseKeys !== undefined ? { phraseKeys: app.phraseKeys } : {}),
     ...(setup.kept !== undefined ? { kept: setup.kept } : {}),

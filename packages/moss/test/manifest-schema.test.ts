@@ -24,7 +24,7 @@ const whole = (): NiscApp => ({
   ],
   resources: { deals: ['deals'], crm: { entities: ['deals'] } },
   shell: {
-    canvases: [{ id: 'main', initial: ['home', { action: 'panel', input: { open: true }, with: ['sheet'] }] }, { id: 'tray', mode: 'list', actionLayout: plain }],
+    canvases: [{ id: 'main', initial: ['home', { action: 'panel', input: { open: true }, with: ['sheet'] }] }, { id: 'tray', mode: 'list', actionLayout: plain, reconcile: 'keyed' }],
     layout: { component: 'CanvasSlot', props: { canvas: 'main' } },
     layoutStore: { dock: plain },
     fragments: { sheet: { kind: 'fragment', id: 'sheet', layout: { slot: 'body' } } },
@@ -42,6 +42,7 @@ const whole = (): NiscApp => ({
   functions: () => ({}),
   onSession: () => undefined,
   runs: () => undefined,
+  reconcilers: { keyed: () => ({ changed: false, notes: [] }) },
   reactions: [{ table: 'deals', op: 'update', run: () => undefined }],
 });
 
@@ -118,6 +119,20 @@ describe('the manifest’s schema', () => {
       'shell.canvases.1.initial.0.action: Invalid input: expected string, received undefined',
       'pages.about.path: Invalid input: expected string, received undefined',
     ]);
+  });
+
+  it('refuses a canvas that names a reconciler the app does not hand over, in the app’s shell and in a page’s', () => {
+    const misfits = manifestMisfits({
+      ...whole(),
+      shell: { canvases: [{ id: 'tray', reconcile: 'keyed' }, { id: 'other', reconcile: 'nowhere' }] },
+      pages: { about: { path: '/about', canvases: [{ id: 'main', reconcile: 'toString' }] } },
+    });
+    expect(misfits).toEqual([
+      'shell.canvases.1.reconcile: "nowhere" is not a reconciler the app hands over in `reconcilers`',
+      'pages.about.canvases.0.reconcile: "toString" is not a reconciler the app hands over in `reconcilers`',
+    ]);
+    expect(manifestMisfits({ ...whole(), reconcilers: undefined })).toEqual(['shell.canvases.1.reconcile: "keyed" is not a reconciler the app hands over in `reconcilers`']);
+    expect(manifestMisfits({ ...whole(), reconcilers: { keyed: 'keyed' } })).toEqual(['reconcilers.keyed: expected a function']);
   });
 
   it('refuses a layout store name under which an action’s own layout is kept, in the app’s shell and in a page’s', () => {

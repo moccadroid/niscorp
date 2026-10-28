@@ -1,7 +1,7 @@
 import type { Sequence } from '@niscorp/strata';
 import type { GenerateDsl, MapToShape, QueryResponse, ScopeBehaviors, SeedEntry, SeedMutation } from '@niscorp/vex';
 import type { Charter } from '@niscorp/charter';
-import type { ActionDefinition, ActionFragment, CanvasConfig, FetchFn, FunctionDefinition, FunctionHandler, LayoutNode, Shell } from '@niscorp/nova';
+import type { ActionDefinition, ActionFragment, CanvasConfig, FetchFn, FunctionDefinition, FunctionHandler, LayoutNode, Reconciler, Shell } from '@niscorp/nova';
 import type { PhraseKeys, Phrasebook } from '@niscorp/nova/i18n';
 import type { Feature } from '../feature';
 import type { IdentityRecord } from '../identity';
@@ -58,6 +58,7 @@ export type NiscApp = {
   // anything that touches `session.shell`.
   onSession?: (session: FunctionSession) => void;
   runs?: RunSink;
+  reconcilers?: Record<string, Reconciler>;
   reactions?: readonly {
     table: string;
     op?: 'insert' | 'update' | 'delete';

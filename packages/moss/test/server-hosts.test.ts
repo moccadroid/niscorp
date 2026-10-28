@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { scopeGrants } from '@niscorp/vex';
-import type { ActionDefinition, ActionFragment, LayoutNode } from '@niscorp/nova';
+import type { ActionDefinition, ActionFragment, LayoutNode, Reconciler, Shell } from '@niscorp/nova';
 import type { SeedEntry } from '@niscorp/vex';
 import { createRunningManifest } from '../src/artifactory';
 import type { FunctionSession, NiscApp, ShellManifest } from '../src/manifest';
@@ -489,6 +489,47 @@ describe('the shell hosts — what each host is told', () => {
       await hosts.shells?.session('t', 'usr_1');
       await sessions[0]?.revoke();
       expect(forgotten).toEqual(['usr_1']);
+    } finally {
+      hosts.stop();
+    }
+  });
+});
+
+describe('the shell hosts — a canvas reconciled by one of the app’s reconcilers', () => {
+  const card: ActionDefinition = { id: 'card', data: { text: '' }, layout: { component: 'Text', children: '$.text' } };
+  const dock: ActionDefinition = {
+    id: 'dock',
+    data: { cards: [{ key: 'k1', action: 'card', input: { text: 'one' } }, { key: 'k2', action: 'card', input: { text: 'two' } }] },
+    lifecycle: { mount: [{ reconcile: { canvas: 'cards', to: '$.cards', action: 'action', input: 'input', own: 'canvas' } }] },
+  };
+  const listed: LayoutNode = { for: '$.instances', as: 'instance', do: { component: 'ActionSlot', props: { instanceId: '$instance.id' } } };
+  const canvases = [{ id: 'side', initial: 'dock' }, { id: 'cards', mode: 'list' as const, actionLayout: listed, reconcile: 'keyed' }];
+  const handed: Shell[] = [];
+  const keyed: Reconciler = (shell, canvasId, desired, { origin, keyOf }) => {
+    handed.push(shell);
+    for (const entry of desired) {
+      const key = String(entry.row?.['key']);
+      if (!shell.getCanvasState(canvasId).stack.some((item) => keyOf(item.id) === key)) shell.push(canvasId, entry.actionId, entry.input, entry.with, { origin, key });
+    }
+    return { changed: true, notes: [] };
+  };
+  const reconciling: NiscApp = { charter: { public: ['dock', 'card'] }, actions: { dock, card }, shell: { canvases }, pages: { board: { path: '/board', canvases } }, reconcilers: { keyed } };
+  const placed = (snapshot: { trees: Record<string, unknown> } | undefined): string[] => JSON.stringify(snapshot?.trees['cards']).match(/"instanceId":"[^"]+"/g) ?? [];
+
+  it('reconciles it on the app’s shell and on a page’s, in the build a document is drawn from and the socket’s alike, handed the shell `session.shell` is', async () => {
+    const running = createRunningManifest({ shipped: reconciling, grants: scopeGrants([]), shells: [] });
+    const hosts = buildShellHosts({ ...depsWith(running), app: reconciling });
+    try {
+      const drawn = await hosts.shells?.snapshot(null, null);
+      const session = await hosts.shells?.session(null, null, drawn?.seed === undefined ? {} : { seed: drawn.seed });
+      expect(placed(drawn)).toHaveLength(2);
+      expect(session?.shell.getCanvasState('cards').stack.map((item) => `"instanceId":"${item.id}"`)).toEqual(placed(drawn));
+      expect(handed.at(-1)).toBe(session?.shell);
+      expect(() => handed[0]?.registerAction(card)).toThrow("registerAction was called on a session's shell");
+
+      const page = await hosts.pageAt('/board')?.host.snapshot(null, null);
+      expect(placed(page)).toHaveLength(2);
+      expect(JSON.stringify(page?.trees['cards'])).toContain('two');
     } finally {
       hosts.stop();
     }

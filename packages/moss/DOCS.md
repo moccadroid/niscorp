@@ -67,6 +67,7 @@ type NiscApp = {
   functions?: (session: FunctionSession) => readonly FunctionDefinition[] | Record<string, FunctionHandler>;
   onSession?: (session: FunctionSession) => void;
   runs?: RunSink;
+  reconcilers?: Record<string, Reconciler>;           // what reconciles a canvas that names one
   reactions?: readonly { table; op?; run }[];         // see "Reacting to writes"
   // what is added to moss that is not its core (see "Features"); `Feature` is not exported
   features?: readonly Feature[];
@@ -74,8 +75,8 @@ type NiscApp = {
 ```
 
 Every field is an artifact (authored data) except the code seams — `scope`,
-`identity`, `phrases`, `functions`, `onSession`, `runs`, a reaction's `run`
-— and `features`. Absent `shell`, the app serves data only
+`identity`, `phrases`, `functions`, `onSession`, `runs`, `reconcilers`, a
+reaction's `run` — and `features`. Absent `shell`, the app serves data only
 (no server shells). Absent `functions`, `fn:` endpoints fail loudly.
 
 - `assignments` is optional: an app that declares `identity` answers roles per
@@ -175,6 +176,19 @@ Every field is an artifact (authored data) except the code seams — `scope`,
     answer from.
   - `session` is the session that recorded the run, so a sink can write the
     record through `session.wire`, as the caller.
+- `reconcilers` — nova `Reconciler`s by name. A canvas whose `reconcile` names
+  one, in the app's shell or a page's, is reconciled by it whenever a
+  `reconcile` step aims at it (nova's SHELL_DOCS.md, "A canvas that names its
+  own reconciler"): handed each row as written, it decides what is kept,
+  matched, moved and removed — several cards of one action on one list canvas,
+  matched by a key and kept in the list's order. Every shell moss builds holds
+  them, the app's and each page's, the one a document is drawn from and the
+  socket's: from one seed, a reconciler that answers the same rows the same
+  way places the same instances in both. A reconciler
+  is handed the shell `session.shell` is: what would change what the shell is
+  made of throws there. **The boot is refused** where a canvas names one the
+  app does not hand over: ``shell.canvases.1.reconcile: "keyed" is not a
+  reconciler the app hands over in `reconcilers` ``.
 - `grammars` — strata sequences for documents only this app defines the shape
   of (its kit's component props). See "Documents are read in this code's
   grammars" below.
@@ -214,7 +228,8 @@ A `CanvasSeed` is an action id or `{ action, input?, with? }`, and a
 `ShellCanvas` is nova's canvas config with `initial` widened to one seed or a
 list of candidates. Neither type is exported by name: `ShellManifest['canvases']`
 carries both. Of a list of candidates, the first action the principal holds
-mounts; a canvas none of whose candidates they hold starts empty.
+mounts; a canvas none of whose candidates they hold starts empty. A canvas's
+`reconcile` names one of the app's `reconcilers`.
 
 `components` is the kit as the server knows it: each component's name, with
 its `meta` (a `description`, and `propsSchema`, the zod schema of its props).
@@ -1932,7 +1947,7 @@ for (const error of report.errors) console.error(`${error.check}: ${error.detail
   over it the layout of their own they marked in use), the
   fragments, the entries, the component names), the
   app's code a shell calls (`inputs`, `seeds`, `phrases`, `functions`,
-  `onSession`, `runs`), the wire for a token, and its limits. Everything in
+  `onSession`, `runs`, `reconcilers`), the wire for a token, and its limits. Everything in
   that answer but who somebody is comes from the running manifest, which is
   asked once for each build and once for each adopt
   (`artifactsFor`, `src/artifactory/running.ts`): an action, a layout, a fragment and an entry
