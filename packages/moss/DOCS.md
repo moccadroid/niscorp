@@ -67,6 +67,7 @@ type NiscApp = {
   functions?: (session: FunctionSession) => readonly FunctionDefinition[] | Record<string, FunctionHandler>;
   onSession?: (session: FunctionSession) => void;
   runs?: RunSink;
+  reconcilers?: Record<string, Reconciler>;           // what reconciles a canvas that names one
   reactions?: readonly { table; op?; run }[];         // see "Reacting to writes"
   // what is added to moss that is not its core (see "Features"); `Feature` is not exported
   features?: readonly Feature[];
@@ -74,8 +75,8 @@ type NiscApp = {
 ```
 
 Every field is an artifact (authored data) except the code seams — `scope`,
-`identity`, `phrases`, `functions`, `onSession`, `runs`, a reaction's `run`
-— and `features`. Absent `shell`, the app serves data only
+`identity`, `phrases`, `functions`, `onSession`, `runs`, `reconcilers`, a
+reaction's `run` — and `features`. Absent `shell`, the app serves data only
 (no server shells). Absent `functions`, `fn:` endpoints fail loudly.
 
 - `assignments` is optional: an app that declares `identity` answers roles per
@@ -175,6 +176,19 @@ Every field is an artifact (authored data) except the code seams — `scope`,
     answer from.
   - `session` is the session that recorded the run, so a sink can write the
     record through `session.wire`, as the caller.
+- `reconcilers` — nova `Reconciler`s by name. A canvas whose `reconcile` names
+  one, in the app's shell or a page's, is reconciled by it whenever a
+  `reconcile` step aims at it (nova's SHELL_DOCS.md, "A canvas that names its
+  own reconciler"): handed each row as written, it decides what is kept,
+  matched, moved and removed — several cards of one action on one list canvas,
+  matched by a key and kept in the list's order. Every shell moss builds holds
+  them, the app's and each page's, the one a document is drawn from and the
+  socket's: from one seed, a reconciler that answers the same rows the same
+  way places the same instances in both. A reconciler
+  is handed the shell `session.shell` is: what would change what the shell is
+  made of throws there. **The boot is refused** where a canvas names one the
+  app does not hand over: ``shell.canvases.1.reconcile: "keyed" is not a
+  reconciler the app hands over in `reconcilers` ``.
 - `grammars` — strata sequences for documents only this app defines the shape
   of (its kit's component props). See "Documents are read in this code's
   grammars" below.
@@ -214,7 +228,8 @@ A `CanvasSeed` is an action id or `{ action, input?, with? }`, and a
 `ShellCanvas` is nova's canvas config with `initial` widened to one seed or a
 list of candidates. Neither type is exported by name: `ShellManifest['canvases']`
 carries both. Of a list of candidates, the first action the principal holds
-mounts; a canvas none of whose candidates they hold starts empty.
+mounts; a canvas none of whose candidates they hold starts empty. A canvas's
+`reconcile` names one of the app's `reconcilers`.
 
 `components` is the kit as the server knows it: each component's name, with
 its `meta` (a `description`, and `propsSchema`, the zod schema of its props).
@@ -1354,8 +1369,16 @@ It's a Hono app — mount it, extend it, or hand it to a listener.
   app keeps for them, and the one a page built for each connection of theirs.
   `false` = no record was held.
 - `invalidateTag(tag): number` — forget every identity record wearing the
-  tag the app put on it (`IdentityRecord.tag`); answers how many. Forgets, does
-  not reset shells.
+  tag the app put on it (`IdentityRecord.tag`); answers how many. Then every
+  living shell adopts, as after `refresh` ("A change is the server's", under
+  `shells` below): it is brought level with what its principal holds now, in
+  place, so a function or an action their new roles do not grant is no longer
+  held. No shell is reset: what people were in the middle of stays. Every
+  living shell, not only those of the records forgotten: a record can be
+  dropped while its shell lives (past `runtime.identityMax`, or unread for
+  `runtime.identityIdleMs`), and no tag finds it then. So each call asks the app's
+  `identity` again for every signed-in person with a living shell whose
+  record is not held.
 - `identity(principal): Promise<IdentityRecord>` — who one principal is,
   resolved the way a request resolves it: `{ roles, scope, installed? }`,
   through the same cache the request path uses. `null` is nobody signed in.
@@ -1924,7 +1947,7 @@ for (const error of report.errors) console.error(`${error.check}: ${error.detail
   over it the layout of their own they marked in use), the
   fragments, the entries, the component names), the
   app's code a shell calls (`inputs`, `seeds`, `phrases`, `functions`,
-  `onSession`, `runs`), the wire for a token, and its limits. Everything in
+  `onSession`, `runs`, `reconcilers`), the wire for a token, and its limits. Everything in
   that answer but who somebody is comes from the running manifest, which is
   asked once for each build and once for each adopt
   (`artifactsFor`, `src/artifactory/running.ts`): an action, a layout, a fragment and an entry
@@ -2015,9 +2038,13 @@ for (const error of report.errors) console.error(`${error.check}: ${error.detail
     `false` = they hold no shell, which is an answer, not an error. The
     replacement is built from what the shell was opened with (for a page's,
     the inputs of its path and its id seed), and a shell's resets run one
-    after another. A reset whose build throws, or has not landed within
-    `runtime.endpointTimeoutMs`, is logged and leaves the shell that stood;
-    the reset after it goes ahead.
+    after another. A reset that arrives while another waits for its turn is
+    answered by that one, whose build has read nothing yet; it is never
+    answered by the build under way, which may have read what it builds from
+    before the change the later reset is for. So a burst of resets costs two
+    builds at most: the one under way and one more. A reset whose build
+    throws, or has not landed within `runtime.endpointTimeoutMs`, is logged
+    and leaves the shell that stood; the reset after it goes ahead.
 - What `ShellHost.session(token, principal)` returns (a type that is not
   exported by name: `Awaited<ReturnType<ShellHost['session']>>`):
   `{ shell, attach, detach, resync, dispatch, publish, back, popTo, reset }`. The living nova `Shell`,
@@ -2136,7 +2163,12 @@ server.nudge('usr_ada', 'notes-changed');
   canvases are the broken thing, so it must not travel through one. It is
   protocol-level, not app-level — no action declares it and no charter grants
   it — and it is answered by the frames it produces, not by an envelope of its
-  own.
+  own. Any terminal may send it, signed in or not, and each one that is acted
+  on is a whole build: who somebody is, what they hold, and the app's
+  `inputs`, `phrases`, `functions` and `seeds`. Resets that arrive while one
+  waits for its turn are answered by it (`reset(principal)`, under `shells`),
+  so a burst costs two builds at most. Nothing limits how often: a terminal
+  that sends one each time a build lands keeps one build of its shell running.
 - `back` names no canvas either, and for a related reason: back is one gesture
   over the whole shell, and the terminal that sends it has no idea which canvas
   moved last — it is served trees, not stacks. The shell decides what back
@@ -2620,9 +2652,14 @@ hash of one key (a unique index on `integrations.key_hash`).
 **What intake holds a bundle to**, before any of it is kept. It is upgraded by
 its grammar stamps and read by the bundle's schema. Each action is named
 `ext.<audience>.<integration>.<name>` under the integration's own id; each of
-its endpoints is a fingerprint the app serves or a URL under
+its endpoints is a fingerprint the app serves, called on one of the app's vex
+routes (`/api/vex`, `/api/<resource>/vex`), or a URL under
 `/integrations/<id>/` (and not under `hook/`, the door that asks for no
-session), and none is `fn:`; its layout composes what the app's kit has; and no
+session), and none is `fn:`. The path of that URL, up to its `?`, is written
+as it resolves, because the path a URL parser reads is the one that is
+routed: a `..`, `.`, `%2e` or `\` that would move it is refused, and so is a
+`{{…}}` template, which is filled in when the endpoint is called; one in the
+query is taken. Its layout composes what the app's kit has; and no
 chain of its steps, laid over the app's own actions, runs for ever. Then
 `extension` is read by the app's schema and held to the app's `check`. Every
 reason, moss's and the app's, is reported together, and any one refuses the

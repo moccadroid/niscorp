@@ -54,7 +54,7 @@ export type ReconcileNavigation = {
     own?: 'pushed' | 'canvas';
     with?: string[];
     origin?: string;
-    desired: { actionId: string; input?: Record<string, unknown> }[];
+    desired: { actionId: string; input?: Record<string, unknown>; row?: Record<string, unknown> }[];
   };
 };
 

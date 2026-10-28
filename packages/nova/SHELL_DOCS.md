@@ -61,6 +61,7 @@ type ShellConfig = {
   fetch?: FetchFn;                       // fetch implementation for endpoint calls
   transform?: TransformFn;               // evaluator for endpoint `request`/`response` configs (Prism etc.)
   functions?: Record<string, FunctionHandler>;  // handlers for `{ fn: '<name>' }` endpoints
+  reconcilers?: Record<string, Reconciler>;  // what reconciles a canvas that names one (see reconcileCanvas below)
   endpointTimeoutMs?: number;            // how long an endpoint call waits for its reply before it
                                          // fails to `onError` (default 30000); an endpoint's own
                                          // `timeoutMs` wins
@@ -104,6 +105,8 @@ type CanvasConfig = {
                                          // A string is the id of a layout in the layout store
   initial?: CanvasInitialSeed | CanvasInitialSeed[];  // pre-populate the stack on shell creation;
                                          // a list is pushed left to right
+  reconcile?: string;                    // the name, in ShellConfig.reconcilers, of what reconciles
+                                         // this canvas; without it, reconcileCanvas does
 };
 
 // A seed is an action id, or an object with input and fragment composition.
@@ -255,6 +258,7 @@ type PushOptions = {
   origin?: string;     // who is placing this — read back with shell.originOf(instanceId)
   history?: boolean;   // default true; false keeps the push out of the navigation journal,
                        // so `back` cannot undo it
+  key?: string;        // which row the instance stands for — read back by a reconciler's keyOf
 };
 ```
 
@@ -388,7 +392,28 @@ const { changed, notes } = reconcileCanvas(
 );
 ```
 
-`origin` (required) is stamped on everything the call pushes. `own: 'pushed'` (default) moves only instances carrying that origin; `own: 'canvas'` moves everything on the canvas. One instance per action id. An optional `definitionOf(actionId)` enables the re-aim rule: when a live instance's input changed and that input carries a key the action declares in its `input` and its mount-time load reads through an endpoint `request`, the instance is re-opened instead of written into. A desired entry's `with` names the fragments the action is composed with when the call pushes it, as `push` takes them. `notes` lists what the call did, in order (`placed notes`, `closed timer`, `set minutes on timer`), for a log or a trace.
+`origin` (required) is stamped on everything the call pushes. `own: 'pushed'` (default) moves only instances carrying that origin; `own: 'canvas'` moves everything on the canvas. One instance per action id. An optional `definitionOf(actionId)` enables the re-aim rule: when a live instance's input changed and that input carries a key the action declares in its `input` and its mount-time load reads through an endpoint `request`, the instance is re-opened instead of written into. A desired entry's `with` names the fragments the action is composed with when the call pushes it, as `push` takes them; its `row` is the row the `reconcile` step read it from, and `reconcileCanvas` does not read it. `notes` lists what the call did, in order (`placed notes`, `closed timer`, `set minutes on timer`), for a log or a trace. It never reorders: what it keeps stays where it is, and what it places goes on top.
+
+#### A canvas that names its own reconciler
+
+A canvas with `reconcile: 'keyed'` is reconciled by `ShellConfig.reconcilers.keyed` instead, whenever a `reconcile` step aims at it. A `Reconciler` is called as `reconcileCanvas` is, and returns what it does:
+
+```ts
+type Reconciler = (shell: Shell, canvasId: string, desired: readonly Desired[], options: ReconcilerOptions) => ReconcileResult;
+
+type ReconcilerOptions = ReconcileOptions & {
+  moveInstance: (canvasId: string, instanceId: string, index: number) => void;
+  keyOf: (instanceId: string) => string | undefined;
+};
+```
+
+- `desired` is the step's list, less the rows naming an action the shell does not have. Each entry carries its `row` as the action holds it, so the reconciler reads whatever names a row (a key field) itself; do not change it.
+- `options` carries the step's `origin` and `own`, and `definitionOf`.
+- `moveInstance` puts an instance at a position on a canvas (`0` is first; an index past either end is that end; an instance that is not there is left alone). It re-mounts nothing — the instance keeps its data, and the adapters keep its element. On a stack canvas, a move that changes the top suspends the old top and resumes the new one. It writes nothing to the navigation journal.
+- `keyOf` answers the `key` an instance was pushed with (`shell.push(…, { origin, key })`), and nothing once it is gone. An instance `back` re-opens carries none.
+- Return `changed: true` whenever anything on the canvas changed, moves included: only then is the position before the call kept for `back`. Everything the reconciler does is one navigation.
+
+A canvas naming a reconciler the shell was not given is refused (`DefinitionValidationError`) by `createShell` and by `addCanvas`. nova ships no keyed reconciler: which rows match, and what a kept one is given, is the app's to say.
 
 ### Render-tree access
 

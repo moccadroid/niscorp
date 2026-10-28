@@ -25,4 +25,4 @@ export { CANVAS_SLOT_NAME, ACTION_SLOT_NAME } from './slot-names';
 export { headOf, isHeadNode } from './head';
 export type { ScreenHead } from './head';
 export { reconcileCanvas } from './reconcile';
-export type { Desired, ReconcileOptions, ReconcileResult } from './reconcile';
+export type { Desired, ReconcileOptions, ReconcileResult, Reconciler, ReconcilerOptions } from './reconcile';

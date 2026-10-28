@@ -68,6 +68,7 @@ export type Cell = {
   principal: string | null;
   opening?: ShellOpening;
   resetting?: Promise<void>;
+  hasWaitingReset?: boolean;
   // How many of the host's changes its shell reflects.
   changes: number;
 };

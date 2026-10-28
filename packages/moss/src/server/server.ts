@@ -107,7 +107,7 @@ const assemble = async ({ app, runtime, session, revokeSessions, data }: ServerD
   const hosts = buildShellHosts({ app, runtime, identity, running, data, savedAs: saved.of, wire: createInternalWire(server), wrapWire: composeWireWraps(registered), revokeSessions });
   stops.push(hosts.stop);
 
-  const signals = buildSignals({ fabric: runtime.fabric, identity, reset: hosts.reset, adopt: hosts.adoptFor, deliver: hosts.deliver });
+  const signals = buildSignals({ fabric: runtime.fabric, identity, reset: hosts.reset, adopt: hosts.adoptFor, adoptAll: hosts.adopt, deliver: hosts.deliver });
 
   running.onChange(() => {
     // Before the adopt, which resolves each principal again.

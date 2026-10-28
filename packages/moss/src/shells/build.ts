@@ -1,5 +1,5 @@
 import { createComponentRegistry, createLayoutStore, createShell } from '@niscorp/nova';
-import type { CanvasConfig, FunctionHandler, PublicActionRuntime, Shell } from '@niscorp/nova';
+import type { CanvasConfig, FunctionHandler, PublicActionRuntime, Reconciler, Shell } from '@niscorp/nova';
 import { evaluate } from '@niscorp/prism';
 import { functionsIn } from '../manifest';
 import type { CanvasSeed, ShellCanvas } from '../manifest';
@@ -170,6 +170,15 @@ export const buildShell = async (host: HostState, asked: BuildRequest): Promise<
   const layoutStore = createLayoutStore();
   for (const [refId, node] of Object.entries(made.layoutStore ?? {})) layoutStore.set(refId, node);
 
+  // A reconciler is app code: it is handed the shell `session.shell` is, which refuses what would change what the
+  // shell is made of. A mount can reconcile while the shell is still being made, so the guarded shell is made on demand.
+  let guarded: Shell | undefined;
+  const guardedOf = (shell: Shell): Shell => (guarded ??= sessionShellOf(shell));
+  const reconcilers: Record<string, Reconciler> = {};
+  for (const [name, reconcile] of Object.entries(hooks.reconcilers ?? {})) {
+    reconcilers[name] = (reconciled, canvasId, desired, options) => reconcile(guardedOf(reconciled), canvasId, desired, options);
+  }
+
   // Two builds from one seed mint the same instance ids: the shell a document
   // was rendered from, and the one the socket builds a moment later for the
   // same visitor.
@@ -187,12 +196,13 @@ export const buildShell = async (host: HostState, asked: BuildRequest): Promise<
       evaluate(config, source !== null && typeof source === 'object' && !Array.isArray(source) ? { ...source, userId, today: today() } : source),
     fetch: wire,
     functions: functions.held,
+    ...(hooks.reconcilers === undefined ? {} : { reconcilers }),
     ...(config.limits?.endpointTimeoutMs === undefined ? {} : { endpointTimeoutMs: config.limits.endpointTimeoutMs }),
     // An empty book is withheld: nova runs its phrase pass whenever one is given.
     ...(Object.keys(phrases).length === 0 ? {} : { phrases }),
     ...(config.phraseKeys === undefined ? {} : { phraseKeys: config.phraseKeys }),
   });
-  const sessionShell = sessionShellOf(shell);
+  const sessionShell = guardedOf(shell);
   shellRef.shell = shell;
   shellRef.sessionShell = sessionShell;
 

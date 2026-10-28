@@ -233,7 +233,7 @@ const resolveReconcile = (step: ReconcileEffect, ctx: StepContext): NavigationEf
     const actionId = row[action];
     if (typeof actionId !== 'string' || actionId === '') return [];
     const seeded = input === undefined ? undefined : row[input];
-    return [isObject(seeded) ? { actionId, input: seeded } : { actionId }];
+    return [isObject(seeded) ? { actionId, input: seeded, row } : { actionId, row }];
   });
   return { reconcile: { ...rest, desired } };
 };

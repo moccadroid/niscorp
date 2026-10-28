@@ -16,17 +16,27 @@ export type SignalDeps = {
   identity: Pick<Identity, 'invalidate' | 'invalidateTag'>;
   reset: (principal: string) => boolean;
   adopt: (principal: string) => void;
+  adoptAll: () => void;
   deliver: (principal: string, channel: string, payload?: unknown) => boolean;
 };
 
-export const buildSignals = ({ fabric, identity, reset, adopt, deliver }: SignalDeps): Signals => {
+export const buildSignals = ({ fabric, identity, reset, adopt, adoptAll, deliver }: SignalDeps): Signals => {
   const origin = randomBytes(8).toString('hex');
   const applyInvalidateIdentity = (principal: string): boolean => {
     const held = identity.invalidate(principal);
     reset(principal);
     return held;
   };
-  const applyInvalidateTag = (tag: string): number => identity.invalidateTag(tag).length;
+  // Adopts and does not reset, unlike `invalidateIdentity`: what a tenant's
+  // people may reach changed, not who they are, and a reset would discard what
+  // they were in the middle of. Every living shell adopts, not only those of
+  // the records forgotten: a shell outlives its record, and one whose record
+  // was dropped wears no tag to be found by.
+  const applyInvalidateTag = (tag: string): number => {
+    const forgotten = identity.invalidateTag(tag).length;
+    adoptAll();
+    return forgotten;
+  };
   const applyNudge = (principal: string, channel: string): void => {
     deliver(principal, channel);
   };
@@ -44,9 +54,6 @@ export const buildSignals = ({ fabric, identity, reset, adopt, deliver }: Signal
       return held;
     },
     invalidateTag: (tag) => {
-      // Forgets and does not reset, unlike `invalidateIdentity`: what a tenant's
-      // people may reach changed, not who they are, and living shells adopt that
-      // in place. A reset would discard what they were in the middle of.
       const forgotten = applyInvalidateTag(tag);
       publish({ kind: 'invalidate-tag', tag });
       return forgotten;

@@ -927,11 +927,9 @@ Two guarantees, both enforced before any SQL runs:
   unique column sets in the message — never a runtime surprise.
 - **DO UPDATE is an update and is governed like one.** Declaring `set`
   requires the update (or `write` umbrella) phase — an insert-only grant
-  refuses it. Update-phase `set` rules stamp identity into the DO UPDATE SET;
-  `match` rules whose column the conflict target already pins are inherently
-  satisfied (the inserted, scope-pinned value must equal the existing row's
-  for a conflict to arise), and any other `match` compiles to a WHERE on the
-  DO UPDATE half — the RLS boundary, again. `mutationEffect` declares the
+  refuses it. Update-phase `set` rules stamp identity into the DO UPDATE SET,
+  and every update-phase `match` compiles to a WHERE on the DO UPDATE half —
+  the RLS boundary, again. `mutationEffect` declares the
   entry as the insert-plus-update it really is, so discovery visibility
   follows the same rule.
 

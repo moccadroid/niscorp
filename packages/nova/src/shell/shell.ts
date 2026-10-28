@@ -8,6 +8,7 @@ import { createEventBus } from '../shared/event-bus';
 import { createMessageBus } from '../shared/message-bus';
 import type { Unsubscribe } from '../shared/common';
 import {
+  DefinitionValidationError,
   LifecycleError,
   NovaError,
   ShellDisposedError,
@@ -20,6 +21,7 @@ import { createCanvas, type Canvas } from './canvas';
 import { DEFAULT_ACTION_LAYOUT, DEFAULT_SHELL_LAYOUT } from './default-layouts';
 import { flattenRenderTree } from './flatten-render-tree';
 import { reconcileCanvas } from './reconcile';
+import type { Reconciler } from './reconcile';
 import { createJournal, DEFAULT_HISTORY_DEPTH } from './journal';
 import type { HistoryEntry, HistoryFrame } from './journal';
 import { createLifecycleOps } from './lifecycle-ops';
@@ -89,6 +91,8 @@ export const createShell = (config: ShellConfig): Shell => {
 
   const origins = new Map<string, string>();
 
+  const keys = new Map<string, string>();
+
   const births = new Map<string, { action: string; input?: Record<string, unknown>; with?: string[] }>();
 
   const journal = createJournal(config.historyDepth ?? DEFAULT_HISTORY_DEPTH);
@@ -102,18 +106,31 @@ export const createShell = (config: ShellConfig): Shell => {
     onChain: chains.hold,
     onUnmount: (instanceId) => {
       origins.delete(instanceId);
+      keys.delete(instanceId);
       births.delete(instanceId);
     },
   });
 
+  const reconcilerOf = (cfg: CanvasConfig): Reconciler | undefined => {
+    if (cfg.reconcile === undefined) return undefined;
+    const named = config.reconcilers !== undefined && Object.hasOwn(config.reconcilers, cfg.reconcile) ? config.reconcilers[cfg.reconcile] : undefined;
+    if (named !== undefined) return named;
+    const message = `canvas "${cfg.id}" names the reconciler "${cfg.reconcile}", which the shell was not given`;
+    throw new DefinitionValidationError(message, { failures: [{ id: cfg.id, issues: [{ code: 'custom', path: ['reconcile'], message, input: cfg.reconcile }] }] });
+  };
+
   const canvases = new Map<string, Canvas>();
   const actionLayouts = new Map<string, LayoutNode | string>();
   const listCanvases = new Set<string>();
-  for (const cfg of config.canvases) {
+  const canvasReconcilers = new Map<string, Reconciler>();
+  const holdCanvas = (cfg: CanvasConfig): void => {
+    const reconciler = reconcilerOf(cfg);
     canvases.set(cfg.id, createCanvas(cfg.id));
     if (cfg.actionLayout !== undefined) actionLayouts.set(cfg.id, cfg.actionLayout);
     if (cfg.mode === 'list') listCanvases.add(cfg.id);
-  }
+    if (reconciler !== undefined) canvasReconcilers.set(cfg.id, reconciler);
+  };
+  for (const cfg of config.canvases) holdCanvas(cfg);
 
   const canvasOrder: string[] = config.canvases.map((cfg) => cfg.id);
   let canvasLayout = config.canvasLayout;
@@ -296,12 +313,16 @@ export const createShell = (config: ShellConfig): Shell => {
       const known = desired
         .filter((entry) => actionOf(entry.actionId) !== undefined)
         .map((entry) => (options.with === undefined ? entry : { ...entry, with: options.with }));
+      const asked = {
+        origin: options.origin,
+        ...(options.own === undefined ? {} : { own: options.own }),
+        definitionOf: actionOf,
+      };
+      const named = canvasReconcilers.get(cid);
       const result = journal.mute(() =>
-        reconcileCanvas(shell, cid, known, {
-          origin: options.origin,
-          ...(options.own === undefined ? {} : { own: options.own }),
-          definitionOf: actionOf,
-        }),
+        named === undefined
+          ? reconcileCanvas(shell, cid, known, asked)
+          : named(shell, cid, known, { ...asked, moveInstance, keyOf: (instanceId) => keys.get(instanceId) }),
       );
       if (result.changed) journal.record(cid, before);
     },
@@ -360,6 +381,7 @@ export const createShell = (config: ShellConfig): Shell => {
       ...(fragmentIds === undefined ? {} : { with: fragmentIds }),
     });
     if (options?.origin !== undefined) origins.set(runtime.instance.id, options.origin);
+    if (options?.key !== undefined) keys.set(runtime.instance.id, options.key);
     fireState();
     return runtime.instance.id;
   };
@@ -377,6 +399,25 @@ export const createShell = (config: ShellConfig): Shell => {
     }
     journal.consume(canvasId);
     if (!listCanvases.has(canvasId) && canvas.peek() !== previousTop) ops.resumeTop(canvas);
+    fireState();
+  };
+
+  // Not a navigation: the journal neither records nor spends an entry for it.
+  const moveInstance = (canvasId: string, instanceId: string, index: number): void => {
+    if (disposed) return;
+    guardNoPendingStrictError();
+    const canvas = canvases.get(canvasId);
+    if (canvas === undefined) return;
+    const last = canvas.stack.length - 1;
+    const from = canvas.stack.findIndex((inst) => inst.id === instanceId);
+    const to = Math.min(Math.max(Math.trunc(index), 0), last);
+    if (from < 0 || Number.isNaN(to) || from === to) return;
+    const topMoves = !listCanvases.has(canvasId) && (from === last || to === last);
+    if (topMoves) ops.suspendTop(canvas);
+    const order = canvas.clearStack();
+    order.splice(to, 0, ...order.splice(from, 1));
+    for (const inst of order) canvas.pushInstance(inst);
+    if (topMoves) ops.resumeTop(canvas);
     fireState();
   };
 
@@ -522,9 +563,7 @@ export const createShell = (config: ShellConfig): Shell => {
   const addCanvas = (cfg: CanvasConfig): void => {
     guard();
     if (canvases.has(cfg.id)) return;
-    canvases.set(cfg.id, createCanvas(cfg.id));
-    if (cfg.actionLayout !== undefined) actionLayouts.set(cfg.id, cfg.actionLayout);
-    if (cfg.mode === 'list') listCanvases.add(cfg.id);
+    holdCanvas(cfg);
     canvasOrder.push(cfg.id);
     seedCanvas(cfg);
     fireState();
@@ -541,6 +580,7 @@ export const createShell = (config: ShellConfig): Shell => {
     announced.delete(canvasId);
     actionLayouts.delete(canvasId);
     listCanvases.delete(canvasId);
+    canvasReconcilers.delete(canvasId);
     const index = canvasOrder.indexOf(canvasId);
     if (index >= 0) canvasOrder.splice(index, 1);
     fireState();

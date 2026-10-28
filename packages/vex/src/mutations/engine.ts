@@ -196,9 +196,7 @@ const writeGate = (table: string, op: 'insert' | 'update' | 'delete', policy: Sc
   return { rule, rules: [...(rule.write ?? []), ...(specific ?? [])] };
 };
 
-// The ON CONFLICT half is governed as the UPDATE it is. A `match` on a column
-// of the conflict target gets no WHERE, on the reasoning that the insert pins
-// that column from scope and so conflicts only with a row holding the same value.
+// The ON CONFLICT half is governed as the UPDATE it is.
 const scopeInsertParts = <V extends MutationValue | ItemRef>(
   table: string,
   rawValues: Record<string, V>,
@@ -232,7 +230,7 @@ const scopeInsertParts = <V extends MutationValue | ItemRef>(
     for (const r of [...(gate.rule.write ?? []), ...(gate.rule.update ?? [])]) {
       if ('set' in r) {
         conflict = { ...conflict, set: { ...(conflict.set ?? {}), [r.set]: { $scope: r.to } } };
-      } else if (!conflict.target.includes(r.match)) {
+      } else {
         const boundary = boundaryOf(table, r);
         conflict = { ...conflict, where: conflict.where === undefined ? boundary : { and: [conflict.where, boundary] } };
       }

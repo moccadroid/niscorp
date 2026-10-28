@@ -1,5 +1,22 @@
 # @niscorp/moss
 
+## 0.8.2
+
+### Patch Changes
+
+- 5e07fbb: An app can hand moss the functions that reconcile its canvases: `NiscApp.reconcilers`, nova `Reconciler`s by name, and a canvas's `reconcile` naming one — in the app's shell and in a page's. Every shell moss builds holds them (the app's and each page's, the one a document is drawn from and the socket's), and a reconciler is handed the shell `session.shell` is, which refuses what would change what the shell is made of. The boot is refused where a canvas names a reconciler the app does not hand over. A manifest without `reconcilers`, and a canvas without `reconcile`, are read and served as before.
+- 98695fb: Resets of a shell that arrive while another waits for its turn are answered by that one: a burst of `reset` messages costs two builds at most, the one under way and one more. A reset is still never answered by the build already under way.
+
+  Before, every `reset` message from any terminal, signed in or not, queued a whole build of its own: 200 messages were 200 builds, each asking who the person is and what they hold, and running the app's `inputs`, `phrases`, `functions` and `seeds`.
+
+- b43afd8: Integration intake holds an endpoint's URL to where it is routed. A path under `/integrations/<id>/` is refused when it resolves anywhere else (`..`, `.`, `%2e`, `\`) or holds a `{{…}}` template before its `?`, and a call to the app is refused unless it is one of the app's vex routes (`/api/vex`, `/api/<resource>/vex`).
+
+  Before, intake read only the start of the URL as written, while the in-process wire resolves it before routing: an approved integration could reach another integration's proxy, or any route of the app, as the signed-in person. An integration whose bundle has such an endpoint is refused, with a sentence for each, when it is next registered; one imported before this release keeps the endpoints it was imported with until then.
+
+- 6ba0eeb: `server.invalidateTag(tag)` has every living shell adopt, in this process and in every other one the fabric reaches, as `refresh` does: a function or an action the new roles do not grant is no longer held, and no shell is reset.
+
+  Before, it only forgot the identity records, so after a role change applied through it a connected person kept calling the `fn:` endpoints their shell was built with until they disconnected. Each call now asks the app's `identity` again for every signed-in person with a living shell whose record is not held.
+
 ## 0.8.1
 
 ### Patch Changes

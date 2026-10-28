@@ -1,5 +1,33 @@
 # @niscorp/nisc
 
+## 0.8.4
+
+### Patch Changes
+
+- 2d9219a: `nisc dev` registers the project's `routes` on the app server, as `nisc start` does, before it checks the app's functions.
+
+  A path that `dev.owned` sent to the app server for one of those routes was answered 404 under `nisc dev` and worked under `nisc start`.
+
+- e130a62: The rulebook names `reconcilers` among the manifest's code seams (rule 7a) and its code fields (verification 6a): a function a canvas names with `reconcile`, which decides from a `reconcile` step's rows what that canvas keeps, matches, moves and removes.
+- Updated dependencies [2d9219a]
+- Updated dependencies [5e07fbb]
+- Updated dependencies [98695fb]
+- Updated dependencies [b43afd8]
+- Updated dependencies [6ba0eeb]
+- Updated dependencies [a72f2bb]
+- Updated dependencies [2a6f8d6]
+- Updated dependencies [915efe6]
+  - @niscorp/cli@0.8.2
+  - @niscorp/moss@0.8.2
+  - @niscorp/nova@0.5.1
+  - @niscorp/vex@0.4.2
+
+## 0.8.3
+
+### Patch Changes
+
+- 2757814: A model-first app's AGENTS.md now names every helper in `src/dev/live-ask.ts` that only the tour's cases use (`at`, `listOf`, `tour`), so following its "Remove the tour" list leaves nothing of the tour behind. Its "the model never presses anything" line no longer gives the tour's checklist as its example.
+
 ## 0.8.2
 
 ### Patch Changes

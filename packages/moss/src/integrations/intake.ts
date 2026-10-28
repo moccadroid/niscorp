@@ -56,6 +56,8 @@ type CheckContext = Omit<IntakeContext, 'extension'>;
 
 const AUDIENCE = /^[a-z][a-z0-9-]*$/;
 
+const VEX_ROUTE = /^\/api\/(?:[A-Za-z0-9_-]+\/)?vex$/;
+
 export type IntakeResult<Extension = undefined> = { ok: true; bundle: Bundle; extension: Extension | undefined } | { ok: false; reasons: string[] };
 
 const upgradeBundle = (payload: unknown, upgrader: Upgrader | undefined): { ok: true; payload: unknown } | { ok: false; reasons: string[] } => {
@@ -79,6 +81,15 @@ const upgradeBundle = (payload: unknown, upgrader: Upgrader | undefined): { ok: 
   }
 };
 
+const ownPathReasons = (endpoint: string, url: string, path: string, own: string): string[] => {
+  if (path.includes('{{')) return [`${endpoint} calls "${url}", whose path is filled in when it is called: only the query, after "?", may hold a template`];
+  // What is routed is the path a URL parser reads, and `..`, `%2e` and `\` move it.
+  const resolved = new URL(path, 'http://nisc.local').pathname;
+  if (resolved !== path) return [`${endpoint} calls "${url}", whose path resolves to "${resolved}": write it as it resolves, under ${own}`];
+  if (path.startsWith(`${own}hook/`)) return [`${endpoint} is under /hook/, which is the unauthenticated webhook path`];
+  return [];
+};
+
 const endpointReasons = (id: string, action: ActionDefinition, ctx: CheckContext): string[] => {
   const reasons: string[] = [];
   for (const [name, endpoint] of Object.entries(action.endpoints ?? {})) {
@@ -88,13 +99,12 @@ const endpointReasons = (id: string, action: ActionDefinition, ctx: CheckContext
     }
     const url = endpoint.url;
     const own = `/integrations/${ctx.integrationId}/`;
-    if (url.startsWith(own)) {
-      if (url.startsWith(`${own}hook/`)) {
-        reasons.push(`action ${id}: endpoint "${name}" is under /hook/, which is the unauthenticated webhook path`);
-      }
+    const path = url.split('?')[0] ?? '';
+    if (path.startsWith(own)) {
+      reasons.push(...ownPathReasons(`action ${id}: endpoint "${name}"`, url, path, own));
       continue;
     }
-    if (!url.startsWith('/api/')) {
+    if (!VEX_ROUTE.test(url)) {
       reasons.push(`action ${id}: endpoint "${name}" calls "${url}" — only ${own}* or /api/*/vex`);
       continue;
     }

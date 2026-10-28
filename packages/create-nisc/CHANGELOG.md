@@ -1,5 +1,15 @@
 # create-nisc
 
+## 0.8.4
+
+No changes in this release.
+
+## 0.8.3
+
+### Patch Changes
+
+- 2757814: A model-first app's AGENTS.md now names every helper in `src/dev/live-ask.ts` that only the tour's cases use (`at`, `listOf`, `tour`), so following its "Remove the tour" list leaves nothing of the tour behind. Its "the model never presses anything" line no longer gives the tour's checklist as its example.
+
 ## 0.8.2
 
 ### Patch Changes

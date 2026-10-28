@@ -331,6 +331,8 @@ Makes a canvas hold exactly the actions a list in the action's data names: missi
 
 When a listed action is already mounted and its row's input changed, the new input is written into the live instance — unless the row's input carries a key (changed or not) that the action declares in its `input` and its `mount` calls read through an endpoint `request`, in which case the instance is re-opened.
 
+That is how a canvas is reconciled when it names no reconciler. A canvas that names one (`reconcile` on the canvas, see `SHELL_DOCS.md`) is reconciled by it instead, from the same step: it is handed each row as written beside the action and input read from it, and decides what is kept, matched, moved and removed — several instances of one action included.
+
 ### `reload`
 
 ```ts

@@ -226,6 +226,13 @@ there — stamped with its definition id — while `'canvas'` treats the whole c
 as the action's. Added at grammar `nisc.nova` 1: a reader at 0 refuses an action
 that uses it (`TOO_NEW`).
 
+What reconciling means is nova's own unless the canvas names a reconciler the app
+handed the shell (`CanvasConfig.reconcile`, `ShellConfig.reconcilers`): then that
+function decides, from the same step, handed each row as written — several
+instances of one action matched by a key and kept in the list's order, say. It may
+move an instance without re-mounting it (`moveInstance`) and ask which key one was
+pushed with (`keyOf`). See SHELL_DOCS.md, `reconcileCanvas`.
+
 The runtime is a closure factory (`createActionRuntime`) — no classes.
 It owns a reactive data store, an `AbortController`, the trigger
 handles, and the model-binding listeners.
@@ -248,7 +255,7 @@ definition at construction (boundary Zod validation) and returns a
 `getShellRenderTree`, `getCanvasRenderTree`, `flattenRenderTree`,
 `dispatch`, `publish`, `onStateChange`, `onDataChange`, `onEndpoint`,
 `onCanvasChange`, `dispose`. Canvases are `CanvasConfig`s (`{ id, mode?,
-actionLayout?, initial? }`) — a canvas can pre-seed its stack, declare how
+actionLayout?, initial?, reconcile? }`) — a canvas can pre-seed its stack, declare how
 its instances are arranged, and hold them as a `stack` (default: the top is
 active, the rest suspended) or a `list` (every instance stays live). The shell maintains a stack per
 canvas, drives lifecycle hooks via the runtime, composes any `with`

@@ -31,6 +31,7 @@ export type ShellHooks = {
   functions?: NiscApp['functions'];
   onSession?: NiscApp['onSession'];
   runs?: NiscApp['runs'];
+  reconcilers?: NiscApp['reconcilers'];
 };
 
 export type ShellLimits = {
