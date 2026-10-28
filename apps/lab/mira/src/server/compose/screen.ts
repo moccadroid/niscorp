@@ -38,3 +38,5 @@ export const readOpenScreen = (shell: Shell, plan: Plan): OpenCanvas[] =>
   });
 
 export const canvasesStanding = (open: readonly OpenCanvas[]): Plan['canvases'] => Object.fromEntries(open.map(({ area, action, intent, input }) => [area, [{ action, input, intent }]]));
+
+export const showsStanding = (open: readonly OpenCanvas[]): NonNullable<Plan['shows']> => Object.fromEntries(open.filter(({ shows }) => Object.keys(shows).length > 0).map(({ area, shows }) => [area, shows]));

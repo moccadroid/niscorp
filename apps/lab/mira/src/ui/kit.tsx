@@ -26,7 +26,7 @@ export const Page: NovaComponent = ({ children }) => <main className="k-page">{c
 Page.meta = { description: 'The page: a centred column.', propsSchema: PageProps };
 
 const RowProps = z.object({
-  tone: z.enum(['default', 'entry', 'controls', 'links']).optional().describe('default | entry: one entry of a list | controls: back, what is shown, forward | links: links to other screens'),
+  tone: z.enum(['default', 'entry', 'controls', 'links', 'exchange']).optional().describe('default | entry: one entry of a list | controls: back, what is shown, forward | links: links to other screens | exchange: something asked, and what was said back'),
 });
 export const Row: NovaComponent = ({ children, novaRef: _ref, novaModel: _model, ...props }) => {
   const { tone } = parsed(RowProps, props, {});
@@ -40,10 +40,10 @@ Heading.meta = { description: 'The page’s title.', propsSchema: HeadingProps }
 
 const TextProps = z.object({
   tone: z
-    .enum(['default', 'lead', 'muted', 'strong', 'display', 'right', 'wrong', 'error', 'title', 'meta', 'quote', 'mark', 'tag', 'reply'])
+    .enum(['default', 'lead', 'muted', 'strong', 'display', 'right', 'wrong', 'error', 'title', 'meta', 'quote', 'tag', 'reply'])
     .optional()
     .describe(
-      'default | lead: the sentence a card opens with | muted | strong | display: one big figure | right: a right answer, said | wrong: a wrong answer, said | error | title: what a picture shows | meta: where a thing stands, small | quote: words a person wrote | mark: what the last answer did to an area, one word | tag: what a thing in a list is, one word | reply: what the assistant said back, a sentence',
+      'default | lead: the sentence a card opens with | muted | strong | display: one big figure | right: a right answer, said | wrong: a wrong answer, said | error | title: what a picture shows | meta: where a thing stands, small | quote: words a person wrote | tag: what a thing in a list is, one word | reply: what the assistant said back, a sentence',
     ),
 });
 export const Text: NovaComponent = ({ children, novaRef: _ref, novaModel: _model, ...props }) => {
@@ -57,12 +57,11 @@ const ARROWS = { back: 'M15 4.5 7.5 12l7.5 7.5', forward: 'M9 4.5 16.5 12 9 19.5
 const ButtonProps = z.object({
   label: z.string().optional().describe('What the button says; falls back to its children. With an icon, what it is called.'),
   tone: z
-    .enum(['primary', 'suggestion', 'link', 'choice', 'chosen', 'right', 'wrong', 'exchange'])
+    .enum(['primary', 'suggestion', 'link', 'choice', 'chosen', 'right', 'wrong', 'asked'])
     .optional()
     .describe(
-      'primary: what the action does | suggestion: a thing to ask | link: opens another screen | choice: one of a set to choose from | chosen: the one of the set that is chosen | right: the right one of a set, once picked | wrong: a wrong one, picked | exchange: something asked, with what was said back as its note',
+      'primary: what the action does | suggestion: a thing to ask | link: opens another screen | choice: one of a set to choose from | chosen: the one of the set that is chosen | right: the right one of a set, once picked | wrong: a wrong one, picked | asked: what the person said, in a conversation',
     ),
-  note: z.string().optional().describe('A second line under the label: what came of it.'),
   icon: z.enum(['back', 'forward']).optional().describe('Drawn instead of the label: back | forward.'),
   current: z.boolean().optional().describe('Whether it is the one open now, of a set of links.'),
   disabled: z.boolean().optional().describe('Whether it can be pressed now.'),
@@ -70,7 +69,7 @@ const ButtonProps = z.object({
 });
 export const Button: NovaComponent = ({ children, novaRef, novaModel: _model, ...props }) => {
   const dispatch = useNovaDispatch();
-  const { label, tone, icon, current, disabled, value, note } = parsed(ButtonProps, props, {});
+  const { label, tone, icon, current, disabled, value } = parsed(ButtonProps, props, {});
   const kind = icon !== undefined ? 'step' : tone;
   return (
     <button
@@ -85,11 +84,6 @@ export const Button: NovaComponent = ({ children, novaRef, novaModel: _model, ..
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <path d={ARROWS[icon]} />
         </svg>
-      ) : note !== undefined ? (
-        <>
-          <span className="k-button-label">{label ?? children}</span>
-          <span className="k-button-note">{note}</span>
-        </>
       ) : (
         (label ?? children)
       )}
@@ -281,12 +275,26 @@ Area.meta = { description: 'One area of an answer: a layer, its foot over the ne
 
 const CardProps = z.object({
   title: z.string().optional().describe('What the card shows, in a few words.'),
-  tone: z.enum(['default', 'hero']).optional().describe('default | hero: the card a screen opens with'),
+  tone: z.enum(['default', 'hero', 'log']).optional().describe('default | hero: the card a screen opens with | log: read from its foot, the newest last: it opens at the newest'),
 });
+// A log stays at its newest as lines come in, in whatever holds it scrolling.
 export const Card: NovaComponent = ({ children, novaRef: _ref, novaModel: _model, ...props }) => {
   const { title, tone } = parsed(CardProps, props, {});
+  const own = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const card = own.current;
+    if (tone !== 'log' || card === null) return undefined;
+    const toEnd = (): void => {
+      const holder = card.closest<HTMLElement>('.k-area');
+      if (holder !== null) holder.scrollTop = holder.scrollHeight;
+    };
+    toEnd();
+    const lines = new MutationObserver(() => requestAnimationFrame(toEnd));
+    lines.observe(card, { childList: true, subtree: true });
+    return () => lines.disconnect();
+  }, [tone]);
   return (
-    <article className={tone === 'hero' ? 'k-card k-hero' : 'k-card'}>
+    <article ref={own} className={tone === 'hero' ? 'k-card k-hero' : tone === 'log' ? 'k-card k-log' : 'k-card'}>
       {title !== undefined && title !== '' ? <h2 className="k-card-title">{title}</h2> : null}
       {children}
     </article>

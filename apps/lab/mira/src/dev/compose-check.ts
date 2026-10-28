@@ -5,7 +5,7 @@ import { AREAS } from '../app/shell/areas';
 import { recordOf } from '../server/compose/record';
 import { drawing } from '../server/document';
 import { checks } from './checks';
-import { scriptedModels, settle, startApp, until } from './scripted';
+import { OWNER, scriptedModels, settle, startApp, until } from './scripted';
 import type { Script } from './scripted';
 
 const [FIRST] = SCREENS;
@@ -70,7 +70,8 @@ try {
     prompts[0]?.slice(0, 600) ?? '',
   );
   check('words the model says are placed where it says, in the room it gives', areas() === 'answer.text answer.text' && on('a').data['title'] === 'One' && on('b').data['title'] === 'Two' && grid() === '2: a b', `${areas()} — ${grid()}`);
-  check('the areas the answer changed are marked so, in a word on the screen', marked() === 'a:changed b:changed' && (drawn().match(/"tone":"mark"\},"children":\[\{"type":"text","value":"Changed"/g) ?? []).length === 2, marked());
+  check('the areas the answer changed are marked so, and no word on the screen says it', marked() === 'a:changed b:changed' && !drawn().includes('"value":"Changed"'), marked());
+  check('what the model said back is said in the dock after an answer that changed the screen, too', current()['said'] === 'Put the two side by side.' && drawn().includes('"tone":"reply"},"children":[{"type":"text","value":"Put the two side by side."'), String(current()['said']));
   check('a card the answer wrote is in the answer’s own ink, the first of the turn', inks() === 'a:turn-1 b:turn-1' && current().ink === 'turn-1', inks());
   check('the line is in the ink of the answer that comes next', current().next === 'turn-2' && /"name":"Dock","props":\{"ink":"turn-2"/.test(drawn()), drawn().match(/"name":"Dock","props":\{[^}]*\}/)?.[0] ?? '');
   check('the chip in the dock names the answer shown by its title, and where it stands among the answers', drawn().includes('"label":"Two things"') && drawn().includes('"count":"2/2"'), drawn().match(/"label":"Two things"[^}]*/)?.[0] ?? '');
@@ -109,7 +110,7 @@ try {
     [...inksWhileAsked].join(' | '),
   );
   check('a canvas kept stays the same canvas, in its area; what is new goes where the model puts it', on('a').id === first && on('b').data['title'] === 'Two', `${ids()}`);
-  check('a card put where nothing was is marked new, in the ink of its turn', marked() === 'b:new' && inks() === 'a:turn-1 b:turn-3' && /"tone":"mark"\},"children":\[\{"type":"text","value":"New"/.test(drawn()), `${marked()} — ${inks()}`);
+  check('a card put where nothing was is marked new, in the ink of its turn', marked() === 'b:new' && inks() === 'a:turn-1 b:turn-3', `${marked()} — ${inks()}`);
   await ask('swap them');
   check('the answer streams in: an area is placed while the rest of the reply is still being written', app.streamed() > 0, String(app.streamed()));
   check('a canvas the model keeps from another area moves there', on('a').data['title'] === 'Two' && on('b').data['title'] === 'One', `${String(on('a').data['title'])} ${String(on('b').data['title'])}`);
@@ -211,8 +212,8 @@ try {
   check(
     '…each with its cards: their titles, where its answer put them, and the inks they were in',
     JSON.stringify(deck[1]?.['layers']) === JSON.stringify([
-      { name: 'a', span: 1, row: 1, column: 1, ink: 'turn-1', fresh: 'changed', mark: 'Changed', title: 'One', text: 'About One.' },
-      { name: 'b', span: 1, row: 1, column: 2, ink: 'turn-1', fresh: 'changed', mark: 'Changed', title: 'Two', text: 'About Two.' },
+      { name: 'a', span: 1, row: 1, column: 1, ink: 'turn-1', fresh: 'changed', title: 'One', text: 'About One.' },
+      { name: 'b', span: 1, row: 1, column: 2, ink: 'turn-1', fresh: 'changed', title: 'Two', text: 'About Two.' },
     ]),
     JSON.stringify(deck[1]?.['layers']),
   );
@@ -230,12 +231,20 @@ try {
   const exchanges = rows('a', 'exchanges').map(recordOf);
   const firstAsked = exchanges.find((exchange) => exchange['question'] === 'Two things side by side');
   check(
-    'the Conversation screen lists every message and what was said back, the newest first, those that changed nothing too',
-    on('a').action === 'ask.conversation' && exchanges[0]?.['question'] === 'What is the weather in Vienna?' && exchanges[0]['reply'] === 'Nothing in this app shows the weather.' && exchanges[0]['screen'] === FIRST.id && firstAsked?.['position'] === 2,
+    'the Conversation screen lists every message and what was said back, the oldest first, those that changed nothing too',
+    on('a').action === 'ask.conversation' && exchanges[0]?.['question'] === 'Two things side by side' && exchanges.at(-1)?.['question'] === 'What is the weather in Vienna?' && exchanges.at(-1)?.['reply'] === 'Nothing in this app shows the weather.' && exchanges.at(-1)?.['screen'] === FIRST.id && firstAsked?.['position'] === 2,
     `${on('a').action} ${JSON.stringify(on('a').data).slice(0, 300)} ${String(current().screen)}`,
   );
   session.dispatch('a', { type: 'ui:click', ref: 'opens-answer', payload: 2 });
   check('…and one pressed opens the answer it was', await until(() => current().position === 2 && current().question === 'Two things side by side'), `${String(current().position)} ${String(current().question)}`);
+
+  await app.openScreen('people');
+  await until(() => rows('a', 'rows').length > 0);
+  await app.openScreen('conversation');
+  session.dispatch('dock', { type: 'ui:click', ref: 'chip' });
+  await until(() => on('overview').action === 'ask.deck' && rows('overview', 'answers').length === total());
+  const pictured = JSON.stringify(recordOf(rows('overview', 'answers').map(recordOf).find((entry) => entry['label'] === 'People'))['layers']);
+  check('the overview draws a card filled with data by what it showed when it was left: People by the people in it', pictured.includes(OWNER), pictured.slice(0, 300));
 } finally {
   app.server.close();
 }

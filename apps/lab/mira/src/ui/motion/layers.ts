@@ -66,16 +66,6 @@ const refresh = (piece: HTMLElement, card: HTMLElement): void => {
   const skin = piece.querySelector<HTMLElement>(':scope > .k-skin');
   if (skin !== null) skin.style.padding = style.padding;
   sizeTitles(piece, card);
-  const was = piece.querySelector<HTMLElement>(':scope > .k-mark');
-  const mark = card.querySelector<HTMLElement>(':scope > .k-mark');
-  if (was?.textContent === (mark?.textContent ?? undefined)) return;
-  if (was !== null) void was.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 200, fill: 'both' }).finished.then(() => was.remove(), () => was.remove());
-  if (mark === null) return;
-  const copy = mark.cloneNode(true);
-  if (!(copy instanceof HTMLElement)) return;
-  copy.style.top = getComputedStyle(mark).top;
-  piece.prepend(copy);
-  copy.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 260, delay: 120, fill: 'backwards' });
 };
 
 // One move from what the stage shows to `cards`, the page's cards at rest. A card both hold slides to its new place; a

@@ -34,10 +34,10 @@ export const EntrySchema = z
       .describe("What the canvas is opened with, as its action's input schema says. A read's params carry every value it is asked with; a form's fields carry what the message gives for them."),
     intent: z.string().nullish().describe('Why the canvas is there, in a few words.'),
     say: z
-      .object({ title: z.string().max(60).describe('A few words.'), text: z.string().max(240).describe('At most two short sentences.') })
+      .object({ title: z.string().max(60).describe('A few words.'), text: z.string().max(1000).describe('What there is to read: a few sentences, or a line for each step or item.') })
       .strict()
       .nullish()
-      .describe('Puts words here: only when the message asks about this app itself, or for something no action shows.'),
+      .describe('Puts words here: an answer to read — an explanation, steps, a list — or something no action shows.'),
     drop: z.boolean().nullish().describe('Empties this area.'),
   })
   .strict()

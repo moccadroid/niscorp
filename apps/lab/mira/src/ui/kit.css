@@ -101,23 +101,12 @@ button { -webkit-tap-highlight-color: transparent; }
 /* An area with nothing in it takes no room. */
 .k-area:not(:has(.k-card)) { display: none; }
 
-/* The ink says what the last answer changed first; the word says it for everyone. */
-.k-area > .k-text.k-mark {
-  position: absolute;
-  left: 22px;
-  top: calc(var(--fold) + 4px);
-  font-size: 11px;
-  line-height: 1;
-  font-weight: 820;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-}
-:is(.k-grid, .k-miniature-sheet) > .k-area:first-child > .k-mark { top: calc(9px + env(safe-area-inset-top, 0px)); }
 
 .k-card { flex: 1; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .k-card-title { margin: 0; font-size: 36px; line-height: 0.94; font-weight: 860; font-stretch: 114%; letter-spacing: -0.025em; text-wrap: balance; overflow-wrap: anywhere; }
 .k-hero > .k-card-title { font-size: 46px; }
 .k-text { margin: 0; line-height: 1.38; max-width: 36em; overflow-wrap: anywhere; }
+.k-card > .k-text { white-space: pre-line; }
 .k-lead { font-size: 19px; line-height: 1.3; font-weight: 560; }
 .k-strong { font-weight: 760; }
 .k-display { font-size: 64px; font-weight: 860; font-stretch: 112%; line-height: 1; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
@@ -165,11 +154,13 @@ button { -webkit-tap-highlight-color: transparent; }
   text-underline-offset: 6px;
 }
 .k-button.k-link[aria-current='page'] { text-decoration-color: currentColor; }
-/* Something asked, and what was said back: the conversation's lines, each opening the answer it was. */
-.k-button.k-exchange { display: grid; gap: 4px; width: 100%; padding: 12px 0 14px; border-radius: 0; border-top: 3px solid currentColor; background: none; color: inherit; text-align: left; }
-.k-button.k-exchange:disabled { opacity: 0.6; }
-.k-button-label { font-size: 18px; font-weight: 760; line-height: 1.28; }
-.k-button-note { font-size: 15px; font-weight: 500; line-height: 1.36; }
+/* The conversation: what the person said on their side, each opening the answer it got, and what was said back on the
+   other. */
+.k-row.k-exchange { flex-direction: column; align-items: stretch; gap: 8px; padding: 8px 0 6px; }
+.k-button.k-asked { align-self: flex-end; max-width: 84%; padding: 10px 16px 11px; border-radius: 20px 20px 6px 20px; font-size: 16px; font-weight: 660; line-height: 1.3; text-align: left; }
+.k-button.k-asked:disabled { cursor: default; }
+.k-card .k-text.k-reply { max-width: 88%; font-size: 17px; line-height: 1.38; font-weight: 520; }
+.k-miniature .k-text { white-space: pre-line; }
 
 .k-input {
   flex: 1 1 200px;
@@ -223,7 +214,7 @@ button { -webkit-tap-highlight-color: transparent; }
 .k-frame:has(.k-deck) .k-dock { z-index: 20; border-radius: var(--fold) var(--fold) 0 0; }
 .k-dock[data-error] { --c: var(--error); --ink: var(--error-ink); }
 .k-dock > .k-error { grid-area: error; font-size: 18px; line-height: 1.28; }
-/* What the assistant said back when the screen did not change: under the chip that names it. */
+/* What the assistant said back to the message just answered: under the chip that names it. */
 .k-dock > .k-reply { grid-area: reply; padding: 2px 4px 0; font-size: 17px; line-height: 1.32; font-weight: 600; text-wrap: pretty; }
 .k-dock > .k-controls { grid-area: controls; flex-wrap: nowrap; }
 .k-dock[data-error] > .k-controls { display: none; }
@@ -334,8 +325,6 @@ button { -webkit-tap-highlight-color: transparent; }
   .k-area:is([data-row='1'], [data-row='3'], [data-row='5'])[data-column='2'],
   .k-area:is([data-row='2'], [data-row='4'], [data-row='6']):is([data-column='1'], [data-column='3']) { --c: var(--tint); }
   .k-grid[data-columns='1'] > .k-area:nth-child(even), .k-miniature-sheet[data-columns='1'] > .k-area:nth-child(even) { --c: var(--tint); }
-  .k-area > .k-text.k-mark { left: 48px; top: calc(var(--fold) + 10px); font-size: 12px; }
-  .k-area:is(:first-child, [data-row='1']) > .k-mark { top: 16px; }
   .k-card-title { font-size: 60px; }
   .k-grid[data-folded] > .k-area:not([data-open]) .k-card-title { font-size: 34px; }
   .k-hero > .k-card-title { font-size: 80px; }

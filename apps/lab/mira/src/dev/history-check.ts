@@ -14,6 +14,7 @@ const scripted = scriptedModels({
   'Two things': [{ title: 'The second', areas: [{ area: 'a', say: { title: 'One', text: 'Again.' } }, { area: 'b', say: { title: 'Two', text: 'Beside it.' } }], arrangement: 'pair' }],
   'How many are there?': [{ title: 'Count', response: 'There are two cards on this screen.', areas: [] }],
   'And now?': [{ title: 'Count again', response: 'Still two.', areas: [] }],
+  'Who is here?': [{ title: 'Who', areas: [{ area: 'a', action: 'people.list', input: {}, intent: 'who is here' }], arrangement: 'single' }],
 });
 const { server, door } = await boot(offline(scripted.models, () => undefined));
 const shells = server.shells;
@@ -102,6 +103,21 @@ try {
   press(again, 'back');
   await until(() => shown(again)['label'] === 'Start');
   check('…to the first screen', shown(again)['position'] === 1);
+
+  await ask(again, 'Who is here?');
+  await until(() => Array.isArray(dataOn(again, 'a')['rows']) && JSON.stringify(dataOn(again, 'a')['rows']).includes(OWNER));
+  press(again, 'back');
+  await until(() => shown(again)['label'] === 'The second');
+  await settle();
+  shells.reset((await server.principalOf(ownerToken)) ?? '');
+  const third = await open(ownerToken);
+  await until(() => shown(third)['label'] === 'Who');
+  press(third, 'back');
+  await until(() => shown(third)['label'] === 'The second');
+  third.dispatch('dock', { type: 'ui:click', ref: 'chip' });
+  await until(() => Array.isArray(dataOn(third, 'overview')['answers']) && JSON.stringify(dataOn(third, 'overview')['answers']).includes('"label":"Who"'));
+  const pictured = JSON.stringify(recordOf((dataOn(third, 'overview')['answers'] as unknown[]).map(recordOf).find((entry) => entry['label'] === 'Who'))['layers']);
+  check('what a card filled with data showed is kept with its answer: a new shell’s overview draws it by its people', pictured.includes(OWNER), pictured.slice(0, 300));
 
   await server.fetch(new Request('http://mira.test/api/vex', { method: 'POST', headers: { authorization: `Bearer ${ownerToken}`, 'content-type': 'application/json' }, body: JSON.stringify({ fingerprint: personInvite.fingerprint, context: { email: 'ada@example.com', name: 'Ada' } }) }));
   const adaToken = (await door.signIn('ada@example.com')) ?? '';

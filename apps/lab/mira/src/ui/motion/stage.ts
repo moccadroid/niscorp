@@ -51,11 +51,8 @@ export const copyOf = (area: HTMLElement): HTMLElement => {
   const skin = document.createElement('div');
   skin.className = 'k-skin';
   skin.style.padding = style.padding;
-  skin.append(...[...copy.childNodes].filter((node) => !(node instanceof HTMLElement && node.classList.contains('k-mark'))));
+  skin.append(...copy.childNodes);
   copy.append(skin);
-  const mark = area.querySelector<HTMLElement>(':scope > .k-mark');
-  const copiedMark = copy.querySelector<HTMLElement>(':scope > .k-mark');
-  if (mark !== null && copiedMark !== null) copiedMark.style.top = getComputedStyle(mark).top;
   sizeTitles(copy, area);
   const fields = area.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('input, textarea');
   copy.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('input, textarea').forEach((field, at) => field.setAttribute('value', fields[at]?.value ?? ''));

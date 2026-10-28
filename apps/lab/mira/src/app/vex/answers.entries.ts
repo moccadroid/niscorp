@@ -23,14 +23,20 @@ export const answerKeep: SeedMutation = {
 export const answersRecent: SeedEntry = {
   fingerprint: 'answers/recent',
   intent: 'The answers that put up a screen the person was given last, the newest first',
-  shape: [{ id: '', question: '', title: '', response: '', plan: {}, grammar: {} }],
+  shape: [{ id: '', question: '', title: '', response: '', plan: {}, grammar: {}, shows: {} }],
   dsl: {
     from: ['answers'],
-    fields: ['answers.id', 'answers.question', 'answers.title', 'answers.response', 'answers.plan', 'answers.grammar'],
+    fields: ['answers.id', 'answers.question', 'answers.title', 'answers.response', 'answers.plan', 'answers.grammar', 'answers.shows'],
     filter: { isNotNull: 'answers.plan' },
     sort: [{ field: 'answers.created_at', dir: 'desc' }, { field: 'answers.id', dir: 'desc' }],
     limit: 50,
   },
+};
+
+export const answerShown: SeedMutation = {
+  fingerprint: 'answers/shown',
+  intent: 'Keep what each card of an answer showed when the person left it',
+  mutation: { op: 'update', table: 'answers', set: { shows: { $context: 'shows' } }, where: { eq: ['answers.id', { $context: 'id' }] } },
 };
 
 export const answersSaid: SeedEntry = {
@@ -45,4 +51,4 @@ export const answersSaid: SeedEntry = {
   },
 };
 
-export const ANSWER_ENTRIES: readonly (SeedEntry | SeedMutation)[] = [answerKeep, answersRecent, answersSaid];
+export const ANSWER_ENTRIES: readonly (SeedEntry | SeedMutation)[] = [answerKeep, answerShown, answersRecent, answersSaid];

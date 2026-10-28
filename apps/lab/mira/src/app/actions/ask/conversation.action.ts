@@ -4,7 +4,7 @@ import { conversationLayout } from './conversation.layout';
 export const conversationAction: ActionDefinition = {
   id: 'ask.conversation',
   title: 'Conversation',
-  description: 'Everything the person asked and what was said back, the newest first; pressing one opens the answer it was, or the screen it was asked on.',
+  description: 'The conversation: everything the person asked and what was said back, the oldest first, opening at the newest; pressing something asked opens the answer it was, or the screen it was asked on.',
   data: { exchanges: [] },
   layout: conversationLayout,
   endpoints: { said: { fn: 'answers.conversation', target: 'exchanges' } },

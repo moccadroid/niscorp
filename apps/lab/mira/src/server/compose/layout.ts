@@ -88,7 +88,6 @@ export const drawnAreas = (plan: Plan): { columns: number; areas: DrawnArea[] } 
   return { columns, areas: last === undefined || used === columns ? areas : [...areas.slice(0, -1), { ...last, span: columns - last.column + 1 }] };
 };
 
-export const MARK_WORDS: Record<Mark, string> = { changed: 'Changed', new: 'New' };
 
 // The frame's region as a plan is drawn: its grid, told which answer it shows, holding only the areas the plan fills,
 // each saying in a word what this answer did to it.
@@ -100,7 +99,7 @@ export const drawnRegion = (plan: ShownPlan): LayoutNode => {
     children: areas.map(({ name, ...props }) => ({
       component: 'Area',
       props: { name, ...props },
-      children: [...(props.fresh !== undefined ? [{ component: 'Text', props: { tone: 'mark' }, children: MARK_WORDS[props.fresh] }] : []), { component: 'CanvasSlot', props: { canvasId: name } }],
+      children: [{ component: 'CanvasSlot', props: { canvasId: name } }],
     })),
   });
 };

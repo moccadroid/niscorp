@@ -48,6 +48,11 @@ ALTER TABLE answers ADD COLUMN asked_on uuid;
 ALTER TABLE answers ADD COLUMN screen text;
 `;
 
+// What each of an answer's cards showed when the person last left it, for the overview's pictures.
+const ANSWER_SHOWS = `
+ALTER TABLE answers ADD COLUMN shows jsonb;
+`;
+
 export const APP_SEQUENCE: Sequence = {
   id: 'mira.app',
   migrations: [
@@ -55,5 +60,6 @@ export const APP_SEQUENCE: Sequence = {
     { description: 'Every answer a person was given, so their stack outlasts the shell', steps: sqlSteps(ANSWERS) },
     { description: 'An answer keeps the grammars its screen was written at', steps: sqlSteps(ANSWER_GRAMMAR) },
     { description: 'Every message answered is kept, the ones that left the screen as it was too', steps: sqlSteps(EVERY_MESSAGE) },
+    { description: 'An answer keeps what its cards showed when it was last left', steps: sqlSteps(ANSWER_SHOWS) },
   ],
 };

@@ -24,7 +24,7 @@ import { pick } from './pick';
 import type { Decide } from './pick';
 import { arrangementOfPlan, canvasesInAreas, canvasesOfPlan, inked, planOf } from './plan';
 import type { Plan, ShownPlan } from './plan';
-import { canvasesStanding, readOpenScreen } from './screen';
+import { canvasesStanding, readOpenScreen, showsStanding } from './screen';
 import type { OpenCanvas } from './screen';
 
 export type { Decide } from './pick';
@@ -47,10 +47,10 @@ const screenOf = (plan: Plan): string => JSON.stringify([plan.canvases, plan.lay
 // How many of the person's last messages, with what was said back, the model is given.
 const CONVERSATION_GIVEN = 10;
 
-// An exchange opens the answer it put up, or the answer it was asked on, while either is in the stack; otherwise the
-// screen it was asked on or showed; otherwise nothing.
+// The conversation, the oldest first. An exchange opens the answer it put up, or the answer it was asked on, while
+// either is in the stack; otherwise the screen it was asked on or showed; otherwise nothing.
 const conversationOf = (exchanges: readonly Exchange[], history: History): Record<string, unknown>[] =>
-  [...exchanges].reverse().map(({ id, question, title, reply, askedOn, screen }) => {
+  exchanges.map(({ id, question, title, reply, askedOn, screen }) => {
     const at = [id, askedOn].map((answer) => (answer === undefined ? -1 : history.indexOf((plan) => plan.id === answer))).find((index) => index >= 0) ?? -1;
     return { id, question, title, reply, ...(at >= 0 ? { position: at + 1 } : screen !== undefined ? { screen } : {}) };
   });
@@ -68,7 +68,7 @@ export const composer =
     const screens = screensHeld(session.actions);
     // What the person did last: an answer for anything earlier is no longer shown.
     let turn = 0;
-    // A reply that changed nothing stays in the dock until the person asks again or moves along the stack.
+    // What the model said back stays in the dock until the person asks again or moves along the stack.
     let said: string | undefined;
     const withSaid = (plan: ShownPlan): ShownPlan => (said === undefined ? plan : { ...plan, said });
 
@@ -110,10 +110,16 @@ export const composer =
     };
 
     // Before anything else is shown, the screen as the person left it is kept with the answer it is on — unless an answer
-    // is streaming in over it.
+    // is streaming in over it — and what its cards showed is kept on the answer's row, for the overview.
     const standing = (): OpenCanvas[] => {
-      const open = readOpenScreen(session.shell, history.current());
-      if (soFar === undefined) history.keep(canvasesStanding(open));
+      const left = history.current();
+      const open = readOpenScreen(session.shell, left);
+      if (soFar !== undefined) return open;
+      const shows = showsStanding(open);
+      history.keep(canvasesStanding(open), shows);
+      if (left.id !== undefined && JSON.stringify(shows) !== JSON.stringify(left.shows ?? {})) {
+        kept.shown(left.id, shows).catch((error: unknown) => console.error(`[answers] what "${left.label}" showed was not kept: ${reasonOf(error)}`));
+      }
       return open;
     };
 
@@ -195,7 +201,8 @@ export const composer =
       if (screen !== undefined) {
         const exchange = { id: randomUUID(), question: message, title: answer.title === '' ? screen.label : answer.title, reply: response, screen: screen.id };
         remember(exchange, kept.keepSaid(exchange));
-        return show(showScreen(screen, response));
+        said = response;
+        return show(withSaid({ ...showScreen(screen, response), question: message }));
       }
       if (Object.keys(answer.canvases).length === 0) throw new Error('Nothing here answers that yet.');
       const id = randomUUID();
@@ -209,7 +216,8 @@ export const composer =
         return show(withSaid({ ...before, question: message, label: answer.title, response }));
       }
       remember({ id, question: message, title: answer.title, reply: response }, kept.keep(plan));
-      return show(history.add(plan));
+      said = response;
+      return show(withSaid(history.add(plan)));
     };
 
     const open = async (data: unknown): Promise<ShownPlan> => {
@@ -245,12 +253,12 @@ export const composer =
       {
         id: 'answers.deck',
         description: 'Every answer in the stack, as the overview draws it: its position and title, what was asked, what the model said it did, and its cards with their titles and words. Send nothing.',
-        execute: restoredFirst(async () => deckOf(history.all(), history.current().position)),
+        execute: restoredFirst(async () => deckOf(history.all(), history.current().position, showsStanding(readOpenScreen(session.shell, history.current())))),
       },
       {
         id: 'answers.conversation',
         description:
-          'Everything the person asked and what was said back, the newest first, each with what it opens: the position of its answer in the stack, or a screen. Send nothing.',
+          'Everything the person asked and what was said back, the oldest first, each with what it opens: the position of its answer in the stack, or a screen. Send nothing.',
         execute: restoredFirst(async () => conversationOf(exchanges, history)),
       },
     ];

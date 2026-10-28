@@ -5,7 +5,7 @@ export const charter: Charter = {
 
   member: {
     actions: ['ask.*', 'answer.*'],
-    data: ['answers.read', 'answers.write.insert'],
+    data: ['answers.read', 'answers.write.insert', 'answers.write.update'],
     functions: ['ask', 'screens.open', 'answers.back', 'answers.forward', 'answers.go', 'answers.current', 'answers.deck', 'answers.conversation'],
   },
 

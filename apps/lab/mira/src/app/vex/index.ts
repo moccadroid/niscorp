@@ -12,5 +12,5 @@ export const BEHAVIORS: ScopeBehaviors = {
     default: {},
     inviting: { insert: [{ set: 'invited_by', to: 'userId' }, { set: 'role', to: 'inviteeRole' }] },
   },
-  answers: { read: [{ match: 'person', to: 'userId' }], insert: [{ set: 'person', to: 'userId' }] },
+  answers: { read: [{ match: 'person', to: 'userId' }], insert: [{ set: 'person', to: 'userId' }], update: [{ match: 'person', to: 'userId' }] },
 };

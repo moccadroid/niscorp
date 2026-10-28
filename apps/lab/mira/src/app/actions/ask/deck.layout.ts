@@ -4,7 +4,6 @@ const layer: LayoutNode = {
   component: 'Area',
   props: { name: '$layer.name', span: '$layer.span', row: '$layer.row', column: '$layer.column', ink: '$layer.ink', fresh: '$layer.fresh' },
   children: [
-    { if: '$layer.mark', then: { component: 'Text', props: { tone: 'mark' }, children: '{{$layer.mark}}' } },
     { component: 'Card', props: { title: '{{$layer.title}}' }, children: [{ if: '$layer.text', then: { component: 'Text', children: '{{$layer.text}}' } }] },
   ],
 };
