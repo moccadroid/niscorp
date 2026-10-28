@@ -1,4 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
+import { actions } from '../../app/action-catalog';
 import type { Arrangement } from '../../app/arrangements';
 import type { Canvas } from '../../app/screens';
 import { AREAS } from '../../app/shell/areas';
@@ -37,11 +38,9 @@ export type Plan = {
 // `said` is what the model said back to a message that left the screen as it was.
 export type ShownPlan = Plan & { position: number; total: number; stack: { position: number; label: string; ink: string }[]; next: string; later: string; said?: string };
 
-export const wordsCanvas = (said: Said): Canvas => ({ action: 'answer.text', input: { title: said.title, text: said.text }, intent: `the words "${said.title}"` });
+export const wordsCanvas = (said: Said): Canvas => ({ action: 'answer.text', input: { ...actions['answer.text']?.data, title: said.title, text: said.text }, intent: `the words "${said.title}"` });
 
 export const canvasesInAreas = (canvases: readonly Canvas[]): AreaCanvases => Object.fromEntries(canvases.slice(0, AREAS.length).map((canvas, at) => [AREAS[at], canvas]));
-
-export const canvasesOfPlan = (plan: Plan): AreaCanvases => Object.fromEntries(AREAS.flatMap((area) => plan.canvases[area]?.slice(0, 1).map((canvas) => [area, canvas]) ?? []));
 
 export const arrangementOfPlan = (plan: Plan): string | WrittenLayout => (plan.arrangement === 'written' ? { layout: plan.layout, areas: areasInLayout(plan.layout) } : plan.arrangement);
 

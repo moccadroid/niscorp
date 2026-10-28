@@ -1,70 +1,50 @@
 import { z } from 'zod';
 import { AREAS } from '../../app/shell/areas';
-import type { AreaId } from '../../app/shell/areas';
-import { AreaIdSchema } from './layout';
 import type { Said } from './plan';
 
-const GridSchema = z
+export const CardSchema = z
   .object({
-    columns: z.number().int().min(1).max(3).describe('How many columns the areas are laid out in.'),
-    areas: z
-      .array(
-        z
-          .object({
-            name: AreaIdSchema.describe('An area the answer uses.'),
-            span: z.number().int().min(1).max(3).nullish().describe('How many of the columns it takes; one when left out.'),
-          })
-          .strict(),
-      )
-      .min(1)
-      .max(AREAS.length)
-      .describe('The areas the answer uses, in the order they are drawn, row by row.'),
-  })
-  .strict()
-  .describe('A layout of your own, only when no arrangement suits, or the message says where things go and no arrangement puts them there.');
-
-export const EntrySchema = z
-  .object({
-    area: AreaIdSchema.describe('The area this entry is for.'),
-    keep: AreaIdSchema.nullish().describe('Moves the canvas now in that area here, unchanged. That area is then empty, unless another entry gives it something.'),
-    action: z.string().nullish().describe('Puts a canvas here: the id of one of the ACTIONS.'),
+    keep: z.string().nullish().describe('Keeps a card on the screen now as it is: its title.'),
+    action: z.string().nullish().describe('Opens a card: the id of one of the ACTIONS.'),
     input: z
       .record(z.string(), z.unknown())
       .nullish()
-      .describe("What the canvas is opened with, as its action's input schema says. A read's params carry every value it is asked with; a form's fields carry what the message gives for them."),
-    intent: z.string().nullish().describe('Why the canvas is there, in a few words.'),
+      .describe("What the card is opened with, as its action's input schema says; a form's fields carry what the message gives for them."),
+    intent: z.string().nullish().describe('Why the card is there, in a few words.'),
     say: z
       .object({ title: z.string().max(60).describe('A few words.'), text: z.string().max(1000).describe('What there is to read: a few sentences, or a line for each step or item.') })
       .strict()
       .nullish()
-      .describe('Puts words here: what you have to say — an answer, an explanation, steps, a list — where no screen or action shows it.'),
-    drop: z.boolean().nullish().describe('Empties this area.'),
+      .describe('A card of words: what you have to say — an answer, an explanation, steps, a list — where no screen or action shows it.'),
+    span: z.number().int().min(1).max(3).nullish().describe('How many of the columns it takes; one when left out.'),
   })
   .strict()
-  .describe('What one area holds after the answer: exactly one of keep, action with input and intent, say, or drop.');
+  .describe('One card of the screen after the answer: exactly one of keep, action with input and intent, or say.');
 
 export const ReplySchema = z
   .object({
     title: z.string().max(40).describe('What the answer is, in at most four words ("The charter", "How reads work"), never the message repeated. It names the answer among the others.'),
-    areas: z.array(EntrySchema).max(AREAS.length).nullish().describe('An entry for each area that changes. An area left out stays as it is, unless the arrangement has no such area.'),
-    arrangement: z.string().nullish().describe('The id of one of the ARRANGEMENTS, only when the answer needs other room than the one on screen; every area used must be in it.'),
-    grid: GridSchema.nullish(),
-    screen: z.string().nullish().describe('The id of one of the SCREENS, only when the message asks for that screen as it is; then no areas.'),
+    columns: z.number().int().min(1).max(3).nullish().describe('How many columns the cards are laid out in; as on the screen now when left out.'),
+    cards: z
+      .array(CardSchema)
+      .max(AREAS.length)
+      .nullish()
+      .describe('The screen after the answer: every card on it, kept or new, in reading order, row by row. Left out or empty, the screen stays as it is.'),
+    screen: z.string().nullish().describe('The id of one of the SCREENS, only when the message asks for that screen as it is; then no cards.'),
   })
   .strict();
 
 export type Reply = z.infer<typeof ReplySchema>;
 
-export type Entry = { area: AreaId; keep?: AreaId; action?: string; input?: Record<string, unknown>; intent?: string; say?: Said; drop: boolean };
+export type Card = { keep?: string; action?: string; input?: Record<string, unknown>; intent?: string; say?: Said; span?: number };
 
-export const entryOf = ({ area, keep, action, input, intent, say, drop }: z.infer<typeof EntrySchema>): Entry => ({
-  area,
-  ...(keep ? { keep } : {}),
+export const cardOf = ({ keep, action, input, intent, say, span }: z.infer<typeof CardSchema>): Card => ({
+  ...(keep ? { keep: keep.trim() } : {}),
   ...(action ? { action } : {}),
   ...(input ? { input } : {}),
   ...(intent ? { intent } : {}),
   ...(say ? { say: { title: say.title.trim(), text: say.text.trim() } } : {}),
-  drop: drop === true,
+  ...(span ? { span } : {}),
 });
 
-export const entriesOf = (reply: Reply): Entry[] => (reply.areas ?? []).map(entryOf);
+export const cardsOf = (reply: Reply): Card[] => (reply.cards ?? []).map(cardOf);

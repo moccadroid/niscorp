@@ -10,11 +10,11 @@ import { OWNER, offline, scriptedModels, settle, until } from './scripted';
 const { check, finish } = checks('history');
 
 const scripted = scriptedModels({
-  'One thing': [{ title: 'The first', areas: [{ area: 'a', say: { title: 'One', text: 'The first answer.' } }], arrangement: 'single' }],
-  'Two things': [{ title: 'The second', areas: [{ area: 'a', say: { title: 'One', text: 'Again.' } }, { area: 'b', say: { title: 'Two', text: 'Beside it.' } }], arrangement: 'pair' }],
-  'How many are there?': [{ title: 'Count', response: 'There are two cards on this screen.', areas: [] }],
-  'And now?': [{ title: 'Count again', response: 'Still two.', areas: [] }],
-  'Who is here?': [{ title: 'Who', areas: [{ area: 'a', action: 'people.list', input: {}, intent: 'who is here' }], arrangement: 'single' }],
+  'One thing': [{ title: 'The first', columns: 1, cards: [{ say: { title: 'One', text: 'The first answer.' } }] }],
+  'Two things': [{ title: 'The second', columns: 2, cards: [{ say: { title: 'One', text: 'Again.' } }, { say: { title: 'Two', text: 'Beside it.' } }] }],
+  'How many are there?': [{ title: 'Count', response: 'There are two cards on this screen.', cards: [] }],
+  'And now?': [{ title: 'Count again', response: 'Still two.', cards: [] }],
+  'Who is here?': [{ title: 'Who', columns: 1, cards: [{ action: 'people.list', input: {}, intent: 'who is here' }] }],
 });
 const { server, door } = await boot(offline(scripted.models, () => undefined));
 const shells = server.shells;
@@ -94,7 +94,7 @@ try {
   const prompt = scripted.prompts[scripted.prompts.length - 1] ?? '';
   check(
     '…and the model is given what they asked before this shell, and what it replied',
-    prompt.includes('- "Two things" — you replied') && prompt.includes('- "How many are there?" — you replied "There are two cards on this screen."'),
+    prompt.includes('\n\nTwo things\n\nScripted.\n\n') && prompt.includes('\n\nHow many are there?\n\nThere are two cards on this screen.\n\n') && prompt.endsWith('\n\nAnd now?'),
     prompt.slice(0, 500),
   );
   press(again, 'back');

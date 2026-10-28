@@ -11,7 +11,7 @@ import { OWNER, offline, scriptedModels, settle, until } from './scripted';
 const { check, finish } = checks('signin');
 
 const mails: Mail[] = [];
-const scripted = scriptedModels({ hello: [{ title: 'Hello', areas: [{ area: 'a', say: { title: 'Hello', text: 'Hi.' } }] }] });
+const scripted = scriptedModels({ hello: [{ title: 'Hello', cards: [{ say: { title: 'Hello', text: 'Hi.' } }] }] });
 const { server, door } = await boot(offline(scripted.models, () => undefined, async (mail) => void mails.push(mail)));
 door.routes(server);
 await server.checkFunctions();
@@ -116,8 +116,8 @@ try {
   ownerSession.dispatch('dock', { type: 'ui:key', ref: 'text', key: 'Enter' });
   await until(() => scripted.prompts.length > 1);
   const [adaPrompt = '', ownerPrompt = ''] = scripted.prompts;
-  check('the model is offered only what the person may use: the owner the People card and its reads, Ada neither', ownerPrompt.includes('people.list') && ownerPrompt.includes(peopleList.fingerprint) && !adaPrompt.includes('people.list') && !adaPrompt.includes('people/'));
-  check('and nobody is offered the links', !ownerPrompt.includes('links/') && !adaPrompt.includes('links/'));
+  check('the model is offered only what the person may use: the owner the People card, Ada not', ownerPrompt.includes('people.list') && !adaPrompt.includes('people.list'));
+  check('and nobody is given the app’s reads and writes', [ownerPrompt, adaPrompt].every((prompt) => !prompt.includes('people/') && !prompt.includes('links/') && !prompt.includes('answers/')));
 } catch (error) {
   check('the sign-in ran to the end', false, error instanceof Error ? (error.stack ?? error.message) : String(error));
 }

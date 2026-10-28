@@ -53,10 +53,11 @@ export const scriptedModels = (script: Script, options: { jevFails?: boolean; ke
     const user = request.messages.map((message) => (typeof message.content === 'string' ? message.content : '')).join('\n\n');
     prompts.push(user);
     if (unreachable) throw new Error('the provider did not answer');
-    const message = /^MESSAGE: (.*)$/m.exec(user)?.[1] ?? '';
+    // The message is the person's last one the script knows: a correction cortex sends after it is not.
+    const message = [...request.messages].reverse().flatMap((sent) => (sent.role === 'user' && typeof sent.content === 'string' && sent.content in script ? [sent.content] : []))[0] ?? '';
     const turn = turns.get(message) ?? 0;
     turns.set(message, turn + 1);
-    const replies = script[message] ?? [{ areas: [] }];
+    const replies = script[message] ?? [{ cards: [] }];
     const { response = 'Scripted.', ...data } = replies[Math.min(turn, replies.length - 1)] ?? {};
     const content = JSON.stringify({ response, data: { title: 'Scripted', ...data } });
     const base: StepResult = { content, toolCalls: [], usage: SPENT, finishReason: 'stop', raw: null };

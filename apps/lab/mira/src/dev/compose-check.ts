@@ -10,28 +10,24 @@ import type { Script } from './scripted';
 
 const [FIRST] = SCREENS;
 
-const keep = (area: string, from = area) => ({ area, keep: from });
-const say = (area: string, title: string, text = `About ${title}.`) => ({ area, say: { title, text } });
-const gridOf = (columns: number, ...areas: [string, number][]): unknown => ({ columns, areas: areas.map(([name, span]) => ({ name, span })) });
+const keep = (title: string) => ({ keep: title });
+const say = (title: string, text = `About ${title}.`) => ({ say: { title, text } });
 
 const SCRIPT: Script = {
-  'Two things side by side': [{ response: 'Put the two side by side.', title: 'Two things', areas: [say('a', 'One'), say('b', 'Two')], arrangement: 'pair' }],
-  'drop the second': [{ title: 'One thing', areas: [{ area: 'b', drop: true }] }],
-  'the second again, beside it': [{ title: 'Second again', areas: [keep('a'), say('b', 'Two')] }],
-  'swap them': [{ title: 'Swapped', areas: [keep('a', 'b'), keep('b', 'a')] }],
-  'other words for the first': [{ title: 'Said again', areas: [say('b', 'One', 'Said again.')] }],
-  'keep what is not there': [{ areas: [keep('a', 'f'), say('c', 'Three')] }, { areas: [keep('a')] }],
-  'Show me the weather card': [{ areas: [{ area: 'a', action: 'weather.card', input: {}, intent: 'the weather' }] }],
-  'Three things, the last wide beneath': [{ title: 'Three things', areas: [say('a', 'One'), say('b', 'Two'), say('c', 'Three')], grid: gridOf(2, ['a', 1], ['b', 1], ['c', 2]) }],
-  'Two things, in a grid of my own': [
-    { areas: [say('a', 'One'), say('b', 'Two'), { area: 'c', drop: true }], grid: gridOf(2, ['a', 1], ['a', 1]) },
-    { title: 'Two again', areas: [say('a', 'One'), say('b', 'Two'), { area: 'c', drop: true }] },
-  ],
-  'What can you do?': [{ title: 'What it does', areas: [say('a', 'What this app does', 'It answers with screens.')], arrangement: 'single' }],
+  'Two things side by side': [{ response: 'Put the two side by side.', title: 'Two things', columns: 2, cards: [say('One'), say('Two')] }],
+  'drop the second': [{ title: 'One thing', cards: [keep('One')] }],
+  'the second again, beside it': [{ title: 'Second again', cards: [keep('One'), say('Two')] }],
+  'swap them': [{ title: 'Swapped', cards: [keep('Two'), keep('One')] }],
+  'other words for the first': [{ title: 'Said again', cards: [keep('Two'), say('One', 'Said again.')] }],
+  'keep what is not there': [{ cards: [keep('Three'), keep('Two'), keep('Two')] }, { cards: [keep('Two'), keep('One')] }],
+  'Show me the weather card': [{ cards: [{ action: 'weather.card', input: {}, intent: 'the weather' }] }],
+  'Three things, the last wide beneath': [{ title: 'Three things', columns: 2, cards: [say('One'), say('Two'), { ...say('Three'), span: 2 }] }],
+  'Two things, one given two ways': [{ cards: [say('One'), { ...keep('Two'), ...say('Two') }] }, { title: 'Two again', cards: [say('One'), say('Two')] }],
+  'What can you do?': [{ title: 'What it does', columns: 1, cards: [say('What this app does', 'It answers with screens.')] }],
   'Show the first screen': [{ screen: FIRST.id }],
-  'What is the weather in Vienna?': [{ response: 'Nothing in this app shows the weather.', areas: [] }],
-  'Name it at length': [{ title: 'A title that runs on well past the forty characters a title may have', areas: [] }],
-  'Only one thing': [{ areas: [say('a', 'One')], arrangement: 'single' }],
+  'What is the weather in Vienna?': [{ response: 'Nothing in this app shows the weather.', cards: [] }],
+  'Name it at length': [{ title: 'A title that runs on well past the forty characters a title may have', cards: [] }],
+  'Only one thing': [{ columns: 1, cards: [say('One')] }],
 };
 
 const { check, finish } = checks('compose');
@@ -65,11 +61,12 @@ try {
   );
   check('an answer asked on the first screen starts from an empty one: Jev is asked about the message with nothing open', jev?.state['message'] === 'Two things side by side' && Object.keys(recordOf(jev?.state['open_screen'])).length === 0, JSON.stringify(jev?.state['open_screen']));
   check(
-    '…and the model is told nothing is open, and what Jev thinks',
-    prompts[0]?.includes(`OPEN SCREEN — arrangement ${FIRST.arrangement}: `) === true && prompts[0].includes('\nnothing\n') && prompts[0].includes(`A FAST PICKER THINKS (a hint; how likely each belongs in the answer): actions none; reads none; writes none; screens ${FIRST.id} 0.90`),
+    '…and the model is shown the first screen as it is, told an answer starts from an empty one, and what Jev thinks',
+    prompts[0]?.includes(`The first screen, "${FIRST.label}", 1 of 1 in the stack (${FIRST.label}): it welcomes the person, and shows "Mira" — words: `) === true && prompts[0].includes('an answer asked on the first screen starts from an empty screen') && prompts[0].includes(`A FAST PICKER THINKS (a hint; how likely each belongs in the answer): actions none; screens ${FIRST.id} 0.90`),
     prompts[0]?.slice(0, 600) ?? '',
   );
   check('words the model says are placed where it says, in the room it gives', areas() === 'answer.text answer.text' && on('a').data['title'] === 'One' && on('b').data['title'] === 'Two' && grid() === '2: a b', `${areas()} — ${grid()}`);
+  check('words written where the first screen’s card was keep nothing of it, not its large title', on('a').data['tone'] === 'default', JSON.stringify(on('a').data));
   check('none of the first screen’s cards stay: every card the answer put there is new, and no word on the screen says it', marked() === 'a:new b:new' && !drawn().includes('"value":"New"'), marked());
   check('an answer that changed the screen is not said again in the dock: the screen answers', current()['said'] === undefined && !drawn().includes('"tone":"reply"'), String(current()['said']));
   check('a card the answer wrote is in the answer’s own ink, the first of the turn', inks() === 'a:turn-1 b:turn-1' && current().ink === 'turn-1', inks());
@@ -92,10 +89,10 @@ try {
 
   const pairIds = ids();
   await ask('drop the second');
-  check('an answer asked on an answer is given the screen open, by area: where each is, what each holds', lastPrompt().includes('- a: answer.text — ') && lastPrompt().includes('- b: answer.text — '), lastPrompt().slice(-500));
+  check('an answer asked on an answer is given the screen open: its cards in reading order, each by its title, with what it holds', lastPrompt().includes('in 2 columns:\n1. "One" — words: "About One."\n2. "Two" — words: "About Two."'), lastPrompt().slice(-500));
   check('when Jev finds nothing likely, the model is given no hint', !lastPrompt().includes('FAST PICKER'), lastPrompt().slice(-300));
   check('an answer that only empties an area marks nothing, and what stays keeps its ink', marked() === '' && inks() === 'a:turn-1', `${marked()} — ${inks()}`);
-  check('an area the model drops is emptied, and every other stays as it was', on('b').id === '' && without('b', ids()) === without('b', pairIds), `${ids()} vs ${pairIds}`);
+  check('a card the answer leaves out is gone, and every other stays as it was', on('b').id === '' && without('b', ids()) === without('b', pairIds), `${ids()} vs ${pairIds}`);
   const first = on('a').id;
   const inksWhileAsked = new Set<string>();
   const sampling = setInterval(() => {
@@ -122,8 +119,8 @@ try {
   prompts.length = 0;
   await ask('keep what is not there');
   check(
-    'keeping an area that is empty, or using one the arrangement does not have, is sent back saying so',
-    (prompts[1] ?? '').includes('there is nothing in area f to keep') && (prompts[1] ?? '').includes('has no area c'),
+    'keeping a card that is not on the screen, or one card twice, is sent back saying so, with the cards that are',
+    (prompts[1] ?? '').includes('cards[0]: there is no card "Three" on the screen; its cards are "Two", "One".') && (prompts[1] ?? '').includes('cards[2]: the card "Two" is kept already'),
     prompts[1]?.slice(-400) ?? '',
   );
 
@@ -142,8 +139,8 @@ try {
   await ask('Three things, the last wide beneath');
   check('a layout the model wrote is the one the answer is laid out in', current().arrangement === 'written' && grid() === '2: a b c×2' && areas() === 'answer.text answer.text answer.text', `${String(current().arrangement)} — ${grid()} — ${areas()}`);
   prompts.length = 0;
-  await ask('Two things, in a grid of my own');
-  check('a grid that names an area twice is sent back saying so, and the arrangement on screen stays', (prompts[1] ?? '').includes('the grid names an area twice') && current().arrangement === 'written' && areas() === 'answer.text answer.text', `${String(current().arrangement)} — ${areas()}`);
+  await ask('Two things, one given two ways');
+  check('a card given two things at once is sent back saying so', (prompts[1] ?? '').includes('cards[1]: give exactly one of') && current().arrangement === 'written' && areas() === 'answer.text answer.text' && grid() === '2: a b', `${String(current().arrangement)} — ${areas()} — ${grid()}`);
 
   const stacked = total();
   const promptsBeforeOpen = prompts.length;
@@ -157,7 +154,7 @@ try {
 
   const answeredBefore = app.answered();
   session.dispatch('b', { type: 'ui:click', ref: 'suggestion', payload: 'What can you do?' });
-  check('a thing to ask, pressed on the first screen, is asked as if typed', (await until(() => app.answered() > answeredBefore)) && lastPrompt().includes('MESSAGE: What can you do?'), lastPrompt().slice(-200));
+  check('a thing to ask, pressed on the first screen, is asked as if typed', (await until(() => app.answered() > answeredBefore)) && lastPrompt().endsWith('\n\nWhat can you do?'), lastPrompt().slice(-200));
   await settle();
   check('words the model says are shown as words', areas() === 'answer.text' && on('a').data['title'] === 'What this app does', areas());
 
@@ -175,8 +172,8 @@ try {
     drawn().match(/"tone":"reply"[^\]]*\]/)?.[0] ?? 'no reply in the dock',
   );
   check(
-    'the model is given what the person asked before and what it replied, the oldest first, before the message',
-    /CONVERSATION[^\n]*\n(- .*\n)*- "Show the first screen" — you replied "Scripted\."/.test(lastPrompt()) && lastPrompt().indexOf('CONVERSATION') < lastPrompt().indexOf('MESSAGE: What is the weather in Vienna?'),
+    'the model is given the chat so far: what the person asked before and what it replied, the oldest first, and the message last',
+    lastPrompt().endsWith('\n\nShow the first screen\n\nScripted.\n\nWhat is the weather in Vienna?') && lastPrompt().indexOf('\n\nShow the first screen\n\n') > lastPrompt().indexOf('THE SCREEN'),
     lastPrompt().slice(0, 600),
   );
 
@@ -184,6 +181,11 @@ try {
   runs.length = 0;
   await ask('Only one thing');
   check('a model that cannot be reached leaves the screen as it was, and the line says so', ids() === beforeWeather && said().includes('could not be reached'), said());
+  check(
+    'the model is shown the dock as the person saw it: the chip, and what it said back last under it',
+    lastPrompt().includes(`The first screen, "${FIRST.label}", `) &&lastPrompt().includes('The dock: the chip naming "Scripted", back and forward beside it; under it, what you said back last: "Nothing in this app shows the weather."; the line; the screens '),
+    lastPrompt().slice(-700),
+  );
   check('…and the reply to the message before it is no longer said', !drawn().includes('"tone":"reply"'), drawn().match(/"tone":"reply"[^\]]*\]/)?.[0] ?? '');
   check('and its run is recorded as failed: one step, nothing spent', runs[1]?.agentId === 'mira.compose' && runs[1]?.outcome === 'failed' && runs[1]?.steps === 1 && runs[1]?.totalTokens === 0, JSON.stringify(runs[1]));
   scripted.unreachable(false);

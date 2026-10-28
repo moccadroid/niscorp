@@ -20,29 +20,6 @@ export const areasInLayout = (layout: unknown): AreaId[] => {
   return [...(layout['component'] === 'Area' && name.success ? [name.data] : []), ...areasInLayout(layout['children'])];
 };
 
-// "a (the whole width); b c; d e"
-export const areaRows = (layout: unknown): string => {
-  const node = recordOf(layout);
-  const columnsProp = recordOf(node['props'])['columns'];
-  const columns = typeof columnsProp === 'number' ? columnsProp : 1;
-  const rows: string[][] = [[]];
-  let used = 0;
-  for (const area of Array.isArray(node['children']) ? node['children'] : []) {
-    const props = recordOf(recordOf(area)['props']);
-    const span = Math.min(typeof props['span'] === 'number' ? props['span'] : 1, columns);
-    if (used + span > columns) {
-      rows.push([]);
-      used = 0;
-    }
-    rows[rows.length - 1]?.push(`${String(props['name'])}${span === columns && columns > 1 ? ' (the whole width)' : span > 1 ? ` (${span} columns)` : ''}`);
-    used += span;
-  }
-  return rows.map((row) => row.join(' ')).join('; ');
-};
-
-export const areasOfArrangement = (arrangement: string | WrittenLayout, arrangements: readonly Arrangement[]): AreaId[] =>
-  typeof arrangement === 'object' ? arrangement.areas : AREAS.slice(0, arrangements.find((candidate) => candidate.id === arrangement)?.areaCount ?? 0);
-
 export const arrangementFor = (asked: string | WrittenLayout, arrangements: readonly Arrangement[]): { arrangement: string; layout: LayoutNode } => {
   if (typeof asked === 'object') return { arrangement: 'written', layout: asked.layout };
   const named = arrangements.find((arrangement) => arrangement.id === asked) ?? arrangements[0];

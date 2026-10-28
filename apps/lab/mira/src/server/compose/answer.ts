@@ -1,145 +1,141 @@
-import type { Arrangement } from '../../app/arrangements';
+import type { Canvas } from '../../app/screens';
 import { AREAS } from '../../app/shell/areas';
-import type { AreaId } from '../../app/shell/areas';
 import { opened } from './catalog';
 import type { Catalog } from './catalog';
 import type { ComposerDeps } from './knowledge';
-import { areasOfArrangement, gridLayout } from './layout';
+import { gridLayout } from './layout';
 import type { WrittenLayout } from './layout';
 import { wordsCanvas } from './plan';
 import type { AreaCanvases } from './plan';
-import { isRecord, recordOf } from './record';
-import { entriesOf, EntrySchema, entryOf } from './reply.schema';
-import type { Entry, Reply } from './reply.schema';
+import { recordOf } from './record';
+import { CardSchema, cardOf, cardsOf } from './reply.schema';
+import type { Card, Reply } from './reply.schema';
+import type { OpenCard } from './screen';
 
-// No arrangement keeps the one on screen.
-export type Answer = { title: string; screen?: string; canvases: AreaCanvases; arrangement?: string | WrittenLayout };
+// No layout keeps the one on screen.
+export type Answer = { title: string; screen?: string; canvases: AreaCanvases; layout?: WrittenLayout };
 
-export type AnswerContext = ComposerDeps & { open: AreaCanvases; current: string | WrittenLayout };
+// `open`: the cards on the screen now an answer may keep, in reading order; `columns`: how many it is laid out in.
+export type AnswerContext = ComposerDeps & { open: readonly OpenCard[]; columns: number };
 
-const arrangementOfReply = (reply: Reply, arrangements: readonly Arrangement[]): string | WrittenLayout | undefined => {
-  if (reply.grid) return gridLayout(reply.grid);
-  return arrangements.find((arrangement) => arrangement.id === reply.arrangement)?.id;
+const canvasRefusals = (card: Card, where: string, catalog: Catalog): string[] => {
+  const action = catalog.actions.find((candidate) => candidate.id === card.action);
+  if (action === undefined) return [`${where}: there is no action "${String(card.action)}".`];
+  const parsed = action.check.safeParse(card.input ?? {});
+  return parsed.success ? [] : parsed.error.issues.map((issue) => `${where}: input.${issue.path.join('.')}: ${issue.message}`);
 };
 
-const canvasRefusals = (entry: Entry, where: string, catalog: Catalog): string[] => {
-  const action = catalog.actions.find((candidate) => candidate.id === entry.action);
-  if (action === undefined) return [`${where}: there is no action "${String(entry.action)}".`];
-  const input = entry.input ?? {};
-  const parsed = action.check.safeParse(input);
-  if (!parsed.success) return parsed.error.issues.map((issue) => `${where}: input.${issue.path.join('.')}: ${issue.message}`);
-  const refusals: string[] = [];
-  const read = input['read'];
-  if (typeof read === 'string') {
-    const known = catalog.reads.find((candidate) => candidate.fingerprint === read);
-    const params = isRecord(input['params']) ? input['params'] : {};
-    if (known === undefined) refusals.push(`${where}: there is no read "${read}".`);
-    else {
-      for (const key of known.contextKeys) if (params[key] === undefined || params[key] === '') refusals.push(`${where}: the read "${read}" is asked with params.${key}, and it is missing.`);
-      for (const key of Object.keys(params)) if (!known.contextKeys.includes(key)) refusals.push(`${where}: the read "${read}" takes no params.${key}; it takes ${known.contextKeys.length > 0 ? known.contextKeys.join(', ') : 'none'}.`);
-    }
-  }
-  const write = input['write'];
-  if (typeof write === 'string') {
-    const known = catalog.writes.find((candidate) => candidate.fingerprint === write);
-    const keys = (Array.isArray(input['fields']) ? input['fields'] : []).map((field: unknown) => (isRecord(field) ? field['key'] : undefined));
-    if (known === undefined) refusals.push(`${where}: there is no write "${write}".`);
-    else for (const key of known.contextKeys) if (!keys.includes(key)) refusals.push(`${where}: the write "${write}" saves a field "${key}", and the form has none.`);
-  }
-  return refusals;
+const cardRefusals = (card: Card, where: string, catalog: Catalog): string[] => {
+  const kinds = [card.keep !== undefined, card.action !== undefined || card.input !== undefined, card.say !== undefined].filter(Boolean).length;
+  if (kinds !== 1) return [`${where}: give exactly one of "keep", "action" with "input", or "say".`];
+  return card.keep === undefined && card.say === undefined ? canvasRefusals(card, where, catalog) : [];
 };
 
-const entryRefusals = (entry: Entry, where: string, room: readonly AreaId[], named: string, open: AreaCanvases, catalog: Catalog): string[] => {
-  const refusals = room.includes(entry.area) ? [] : [`${where}: the arrangement ${named} has no area ${entry.area}; its areas are ${room.join(', ')}.`];
-  const kinds = [entry.keep !== undefined, entry.action !== undefined || entry.input !== undefined, entry.say !== undefined, entry.drop].filter(Boolean).length;
-  if (kinds !== 1) return [...refusals, `${where}: give exactly one of "keep", "action" with "input", "say", or "drop".`];
-  if (entry.keep !== undefined) return open[entry.keep] === undefined ? [...refusals, `${where}: there is nothing in area ${entry.keep} to keep.`] : refusals;
-  if (entry.action !== undefined || entry.input !== undefined) return [...refusals, ...canvasRefusals(entry, where, catalog)];
-  return refusals;
+// A card kept is the first card on the screen with its title that no card before it kept.
+const keptFrom = (cards: readonly Card[], open: readonly OpenCard[]): (OpenCard | undefined)[] => {
+  const taken = new Set<number>();
+  return cards.map((card) => {
+    const at = card.keep === undefined ? -1 : open.findIndex((candidate, index) => candidate.title === card.keep && !taken.has(index));
+    if (at < 0) return undefined;
+    taken.add(at);
+    return open[at];
+  });
 };
 
-const nameOf = (arrangement: string | WrittenLayout): string => (typeof arrangement === 'object' ? 'you wrote' : `"${arrangement}"`);
-
-// What was there stays, in the areas the arrangement has, unless an entry drops it, moves it (an area another entry
-// keeps from is empty unless it is given something), or puts another canvas or words there.
-const applyEntries = (entries: readonly Entry[], open: AreaCanvases, room: readonly AreaId[], catalog: Catalog): AreaCanvases => {
-  const canvases: AreaCanvases = Object.fromEntries(room.flatMap((area) => (open[area] !== undefined ? [[area, open[area]]] : [])));
-  for (const entry of entries) if (entry.keep !== undefined && entry.keep !== entry.area && !entries.some((other) => other.area === entry.keep)) delete canvases[entry.keep];
-  for (const entry of entries) {
-    delete canvases[entry.area];
-    if (entry.keep !== undefined) {
-      const kept = open[entry.keep];
-      if (kept !== undefined) canvases[entry.area] = kept;
-    } else if (entry.say !== undefined) canvases[entry.area] = wordsCanvas(entry.say);
-    else if (entry.action !== undefined) {
-      const intent = entry.intent?.trim() ?? '';
-      canvases[entry.area] = opened({ action: entry.action, input: entry.input ?? {}, intent: intent !== '' ? intent : (catalog.actions.find((action) => action.id === entry.action)?.description ?? '') }, catalog);
-    }
-  }
-  return canvases;
+const keepRefusal = (title: string, where: string, open: readonly OpenCard[]): string => {
+  if (open.length === 0) return `${where}: an answer asked on the first screen starts from an empty screen; nothing on it can be kept.`;
+  if (open.some((card) => card.title === title)) return `${where}: the card "${title}" is kept already; a card is kept once.`;
+  return `${where}: there is no card "${title}" on the screen; its cards are ${open.map((card) => `"${card.title}"`).join(', ')}.`;
 };
 
-// A read shown again with the same values is the same thing under another heading; so is a second form for one write.
-const sameThingKey = (canvas: { action: string; input: Record<string, unknown> }): string => {
-  const { read, params, write } = canvas.input;
-  return JSON.stringify(read !== undefined ? [canvas.action, read, params] : write !== undefined ? [canvas.action, write] : [canvas.action, canvas.input]);
+const canvasOf = (card: Card, kept: OpenCard | undefined, catalog: Catalog): Canvas | undefined => {
+  if (kept !== undefined) return { action: kept.action, input: kept.input, intent: kept.intent };
+  if (card.say !== undefined) return wordsCanvas(card.say);
+  if (card.action === undefined) return undefined;
+  const intent = card.intent?.trim() ?? '';
+  return opened({ action: card.action, input: card.input ?? {}, intent: intent !== '' ? intent : (catalog.actions.find((action) => action.id === card.action)?.description ?? '') }, catalog);
 };
+
+// The cards in reading order, each in the area of its place: the first in `a`, the next in `b`.
+const placed = (cards: readonly Card[], open: readonly OpenCard[], catalog: Catalog): AreaCanvases => {
+  const kept = keptFrom(cards, open);
+  return Object.fromEntries(
+    cards.flatMap((card, at) => {
+      const area = AREAS[at];
+      const canvas = canvasOf(card, kept[at], catalog);
+      return area === undefined || canvas === undefined ? [] : [[area, canvas]];
+    }),
+  );
+};
+
+const standing = (open: readonly OpenCard[]): AreaCanvases => Object.fromEntries(open.map(({ area, action, input, intent }) => [area, { action, input, intent }]));
+
+const layoutOf = (spans: readonly { at: number; span?: number }[], columns: number): WrittenLayout =>
+  gridLayout({
+    columns,
+    areas: spans.flatMap(({ at, span }) => {
+      const name = AREAS[at];
+      return name === undefined ? [] : [{ name, span }];
+    }),
+  });
 
 export const refusalsOf = (reply: Reply, context: AnswerContext): string[] => {
-  const { open, current, catalog, screens, arrangements } = context;
+  const { open, catalog, screens } = context;
   if (reply.screen) return screens.some((screen) => screen.id === reply.screen) ? [] : [`"${reply.screen}" is not one of the app's screens.`];
-  const refusals: string[] = [];
-  if (reply.arrangement && !reply.grid && !arrangements.some((arrangement) => arrangement.id === reply.arrangement)) refusals.push(`there is no arrangement "${reply.arrangement}".`);
-  if (reply.grid && new Set(reply.grid.areas.map(({ name }) => name)).size !== reply.grid.areas.length) refusals.push('the grid names an area twice.');
-  const arrangement = arrangementOfReply(reply, arrangements) ?? current;
-  const room = areasOfArrangement(arrangement, arrangements);
-  const entries = entriesOf(reply);
-  const seen = new Set<AreaId>();
-  entries.forEach((entry, at) => {
-    const where = `areas[${at}] (area ${entry.area})`;
-    if (seen.has(entry.area)) refusals.push(`${where}: area ${entry.area} is given twice.`);
-    seen.add(entry.area);
-    refusals.push(...entryRefusals(entry, where, room, nameOf(arrangement), open, catalog));
+  const cards = cardsOf(reply);
+  const kept = keptFrom(cards, open);
+  const refusals = cards.flatMap((card, at) => {
+    const own = cardRefusals(card, `cards[${at}]`, catalog);
+    return own.length === 0 && card.keep !== undefined && kept[at] === undefined ? [keepRefusal(card.keep, `cards[${at}]`, open)] : own;
   });
-  const shown = new Map<string, AreaId>();
-  const canvases = applyEntries(entries, open, room, catalog);
-  for (const area of AREAS) {
-    const canvas = canvases[area];
-    if (canvas === undefined) continue;
-    const there = shown.get(sameThingKey(canvas));
-    if (there !== undefined) refusals.push(`areas ${there} and ${area} would show the same thing; show it once.`);
-    else shown.set(sameThingKey(canvas), area);
-  }
+  const shown = new Map<string, number>();
+  cards.forEach((card, at) => {
+    const canvas = canvasOf(card, kept[at], catalog);
+    if (canvas === undefined) return;
+    const key = JSON.stringify([canvas.action, canvas.input]);
+    const there = shown.get(key);
+    if (there !== undefined) refusals.push(`cards[${there}] and cards[${at}] would show the same thing; show it once.`);
+    else shown.set(key, at);
+  });
   return refusals;
 };
 
 export const answerOf = (reply: Reply, context: AnswerContext): Answer => {
   const title = reply.title.trim();
   if (reply.screen) return { title, screen: reply.screen, canvases: {} };
-  const arrangement = arrangementOfReply(reply, context.arrangements);
-  const canvases = applyEntries(entriesOf(reply), context.open, areasOfArrangement(arrangement ?? context.current, context.arrangements), context.catalog);
-  return { title, canvases, ...(arrangement !== undefined ? { arrangement } : {}) };
+  const cards = cardsOf(reply);
+  if (cards.length === 0) return { title, canvases: standing(context.open) };
+  return { title, canvases: placed(cards, context.open, context.catalog), layout: layoutOf(cards.map((card, at) => ({ at, ...(card.span === undefined ? {} : { span: card.span }) })), reply.columns ?? context.columns) };
 };
 
-// While the reply streams, solid writes it left to right: an entry is finished once the next one has begun, or once the
-// reply has gone past the areas to its room (solid holds every key from the start; a key the model has reached has a
-// value, null included). A finished entry is placed in the room on screen if its own checks pass;
-// another room, or a screen, comes with the whole reply, which is the run's to check when it ends.
+// While the reply streams, solid writes it left to right: a card is finished once the next one has begun, or once the
+// reply has gone past the cards to `screen` (solid holds every key from the start; a key the model has reached has a
+// value, null included). The cards finished take their places, and a place after them holds what it held, unless that
+// card was kept into an earlier place; a card that does not hold stops what is placed. The whole reply is the run's to
+// check when it ends.
 export const answerSoFar = (output: unknown, context: AnswerContext): Answer | undefined => {
   const data = recordOf(recordOf(output)['data']);
-  const written = data['areas'];
+  const written = data['cards'];
   if (!Array.isArray(written) || typeof data['screen'] === 'string') return undefined;
-  const pastTheAreas = ['arrangement', 'grid', 'screen'].some((key) => data[key] !== undefined);
-  const room = areasOfArrangement(context.current, context.arrangements);
-  const seen = new Set<AreaId>();
-  const entries = (pastTheAreas ? written : written.slice(0, -1)).flatMap((raw: unknown) => {
-    const parsed = EntrySchema.safeParse(raw);
-    if (!parsed.success) return [];
-    const entry = entryOf(parsed.data);
-    if (seen.has(entry.area) || entryRefusals(entry, '', room, nameOf(context.current), context.open, context.catalog).length > 0) return [];
-    seen.add(entry.area);
-    return [entry];
-  });
+  const cards: Card[] = [];
+  for (const raw of data['screen'] === undefined ? written.slice(0, -1) : written) {
+    const parsed = CardSchema.safeParse(raw);
+    if (!parsed.success) break;
+    const card = cardOf(parsed.data);
+    if (cardRefusals(card, '', context.catalog).length > 0 || (card.keep !== undefined && keptFrom([...cards, card], context.open).at(-1) === undefined)) break;
+    cards.push(card);
+  }
+  if (cards.length === 0) return undefined;
+  const kept = new Set(keptFrom(cards, context.open));
+  const rest = context.open.flatMap((card, at) => (at >= cards.length && !kept.has(card) ? [{ at, card }] : []));
+  const asked = data['columns'];
+  const columns = typeof asked === 'number' && Number.isInteger(asked) && asked >= 1 && asked <= 3 ? asked : context.columns;
+  const canvases: AreaCanvases = { ...placed(cards, context.open, context.catalog) };
+  for (const { at, card } of rest) {
+    const area = AREAS[at];
+    if (area !== undefined) canvases[area] = { action: card.action, input: card.input, intent: card.intent };
+  }
+  const spans = [...cards.map((card, at) => ({ at, ...(card.span === undefined ? {} : { span: card.span }) })), ...rest.map(({ at, card }) => ({ at, span: card.span }))];
   const title = typeof data['title'] === 'string' ? data['title'].trim() : '';
-  return { title, canvases: applyEntries(entries, context.open, room, context.catalog) };
+  return { title, canvases, layout: layoutOf(spans, columns) };
 };
