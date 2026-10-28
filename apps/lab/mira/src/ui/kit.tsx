@@ -550,21 +550,56 @@ export const Deck: NovaComponent = ({ children, novaModel, novaRef: _ref, ...pro
     steering.current = glides;
     scroller.scrollTo({ left, behavior: glides ? 'smooth' : 'instant' });
   };
-  // A picture closed leaves a gap the others slide over to close.
-  const places = useRef(new Map<Element, number>());
+  // A picture closed leaves a gap the others close. The one picked stays where it is on screen — when it is the one
+  // closed, the one after it takes the middle, or the one before it at the end — and every other slides from where it
+  // was on screen, growing or shrinking as it goes where the row sizes a picture by its place.
+  const seen = useRef<{ places: Map<HTMLElement, { left: number; scale: number }>; scrolled: number; centre?: Element }>({ places: new Map(), scrolled: 0 });
+  const remember = useRef<() => void>(() => undefined);
+  remember.current = () => {
+    const scroller = row.current;
+    if (scroller === null) return;
+    const all = pictures().filter((picture): picture is HTMLElement => picture instanceof HTMLElement);
+    const centre = all.find((picture) => valueOf(picture) === picked.current);
+    seen.current = {
+      places: new Map(all.map((picture) => [picture, { left: picture.offsetLeft, scale: Number(getComputedStyle(picture).scale) || 1 }])),
+      scrolled: scroller.scrollLeft,
+      ...(centre === undefined ? {} : { centre }),
+    };
+  };
   useBeforePaint(() => {
     const scroller = row.current;
     if (scroller === null) return;
-    const now = new Map<Element, number>();
-    for (const picture of pictures()) {
-      if (!(picture instanceof HTMLElement)) continue;
-      const was = places.current.get(picture);
-      now.set(picture, picture.offsetLeft);
-      if (was !== undefined && Math.abs(was - picture.offsetLeft) > 1 && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
-        picture.animate([{ translate: `${was - picture.offsetLeft}px 0` }, { translate: '0 0' }], { duration: 380, easing: 'cubic-bezier(0.25, 1, 0.5, 1)' });
+    const all = pictures().filter((picture): picture is HTMLElement => picture instanceof HTMLElement);
+    const { places, scrolled, centre } = seen.current;
+    const before = [...places.keys()];
+    if (before.some((picture) => !all.includes(picture))) {
+      const at = centre instanceof HTMLElement ? before.indexOf(centre) : -1;
+      const stays = at < 0 ? undefined : [...before.slice(at), ...before.slice(0, at).reverse()].find((picture) => all.includes(picture));
+      // Snapping is off while the row is set and the others slide: the browser would snap it again, to a place of its
+      // own when the picture it was snapped to is the one closed.
+      scroller.style.scrollSnapType = 'none';
+      if (stays !== undefined) {
+        scroller.scrollLeft = stays.offsetLeft + stays.offsetWidth / 2 - scroller.clientWidth / 2;
+        picked.current = valueOf(stays);
       }
+      const slides: Animation[] = [];
+      if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        const sized = CSS.supports('animation-timeline: view()');
+        for (const picture of all) {
+          const was = places.get(picture);
+          if (was === undefined) continue;
+          const dx = was.left - scrolled - (picture.offsetLeft - scroller.scrollLeft);
+          if (Math.abs(dx) <= 1) continue;
+          slides.push(picture.animate([{ translate: `${dx}px 0`, ...(sized ? { scale: String(was.scale) } : {}) }, { translate: '0 0' }], { duration: 380, easing: 'cubic-bezier(0.25, 1, 0.5, 1)' }));
+        }
+      }
+      const snap = (): void => {
+        scroller.style.removeProperty('scroll-snap-type');
+      };
+      if (slides.length === 0) requestAnimationFrame(snap);
+      else void Promise.allSettled(slides.map((slide) => slide.finished)).then(snap);
     }
-    places.current = now;
+    remember.current();
   });
   // Placed at the picture picked as soon as there are pictures; after that, it scrolls only to a pick made elsewhere.
   const placed = useRef(false);
@@ -593,6 +628,7 @@ export const Deck: NovaComponent = ({ children, novaModel, novaRef: _ref, ...pro
     };
     let looking = false;
     const onScroll = (): void => {
+      remember.current();
       if (looking || steering.current || drag !== undefined) return;
       looking = true;
       requestAnimationFrame(() => {
