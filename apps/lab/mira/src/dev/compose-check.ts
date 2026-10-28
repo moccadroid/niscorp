@@ -31,6 +31,13 @@ const SCRIPT: Script = {
   'Only one thing': [{ columns: 1, cards: [say('One')] }],
   'Call me Max': [{ response: 'Max it is.', title: 'You', columns: 1, cards: [{ action: 'people.me', input: { name: 'Max' } }] }],
   'Hello again': [{ response: 'Hello, Max.', cards: [] }],
+  'Plan two days, showing them as you go': [
+    { $call: 'place', args: { columns: 2, cards: [say('Day one'), say('Day two')] } },
+    { response: 'Two days, and what to pack.', title: 'Two days', cards: [keep('Day one'), keep('Day two'), { ...say('Packing'), span: 2 }] },
+  ],
+  'Put something up, then stop': [{ $call: 'place', args: { columns: 1, cards: [say('Placed')] } }, { response: 'There it is.', title: 'Placed', cards: [] }],
+  'Place what is not there': [{ $call: 'place', args: { cards: [{ action: 'weather.card', input: {} }] } }, { title: 'One', cards: [say('One')] }],
+  'How is the People card drawn?': [{ $call: 'read_action', args: { action: 'people.list' } }, { response: 'As a list, with a form under it.', cards: [] }],
 };
 
 const { check, finish } = checks('compose');
@@ -302,6 +309,19 @@ try {
   check('…which keeps it when they press Save', await until(() => recordOf(card(1).data['me'])['name'] === 'Max'), JSON.stringify(card(1).data));
   await ask('Hello again');
   check('and from then on the model knows their name', lastPrompt().includes('YOUR PERSON\n- Their name: "Max".'), lastPrompt().slice(lastPrompt().indexOf('YOUR PERSON'), lastPrompt().indexOf('YOUR PERSON') + 200));
+
+  prompts.length = 0;
+  await ask('Plan two days, showing them as you go');
+  check('cards the model places while at work are told back to it, and go up before it replies', (prompts[1] ?? '').includes('Placed: "Day one", "Day two".') && app.streamed() > 0, prompts[1]?.slice(-300) ?? '');
+  check('…and its reply keeps them from the screen as placed, with what it adds', titles() === 'Day one Day two Packing' && grid() === '2: 1 2 3×2' && marked() === '1:new 2:new 3:new', `${titles()} — ${grid()} — ${marked()}`);
+  await ask('Put something up, then stop');
+  check('a reply with no cards after the model placed some leaves the screen as it placed it, an answer of its own', titles() === 'Placed' && current().question === 'Put something up, then stop', `${titles()} — ${String(current().question)}`);
+  prompts.length = 0;
+  await ask('Place what is not there');
+  check('cards that would not hold are not placed, and the model is told why', (prompts[1] ?? '').includes('Nothing was placed:\n') && (prompts[1] ?? '').includes('there is no action "weather.card"') && titles() === 'One', `${titles()} — ${prompts[1]?.slice(-300) ?? ''}`);
+  prompts.length = 0;
+  await ask('How is the People card drawn?');
+  check('the model may read one of its actions whole: its data and its layout', (prompts[1] ?? '').includes('"id":"people.list"') && (prompts[1] ?? '').includes('"layout":{"component":"Card"'), prompts[1]?.slice(-400) ?? '');
 } finally {
   app.server.close();
 }

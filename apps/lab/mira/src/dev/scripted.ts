@@ -9,7 +9,8 @@ import type { Models } from '../server/compose';
 import { recordOf } from '../server/compose/record';
 import type { SendMail } from '../server/identity';
 
-// Each message, and the replies the chat model gives it, one a call: the last one again and again.
+// Each message, and the replies the chat model gives it, one a call: the last one again and again. A reply with
+// `$call` calls that tool with `args` instead.
 export type Script = Record<string, Record<string, unknown>[]>;
 
 export const until = async (condition: () => boolean, ms = 5000): Promise<boolean> => {
@@ -45,7 +46,16 @@ export const scriptedModels = (script: Script, options: { keyless?: boolean } = 
     const turn = turns.get(message) ?? 0;
     turns.set(message, turn + 1);
     const replies = script[message] ?? [{ cards: [] }];
-    const { response = 'Scripted.', ...data } = replies[Math.min(turn, replies.length - 1)] ?? {};
+    const reply = replies[Math.min(turn, replies.length - 1)] ?? {};
+    const call = reply['$call'];
+    if (typeof call === 'string') {
+      const toolCalls = [{ id: `call-${String(prompts.length)}`, name: call, args: reply['args'] ?? {} }];
+      const asked: StepResult = { content: '', toolCalls, usage: SPENT, finishReason: 'tool_calls', raw: null };
+      if (request.output === undefined) return asked;
+      const routed = routeResponse({ content: '', toolCalls, declared: new Set((request.tools ?? []).map((tool) => tool.name)), accept: request.output.accept, responseStrategies: [] });
+      return { ...asked, outcome: routed.outcome, wire: routed.wire };
+    }
+    const { response = 'Scripted.', ...data } = reply;
     const content = JSON.stringify({ response, data: { title: 'Scripted', ...data } });
     const base: StepResult = { content, toolCalls: [], usage: SPENT, finishReason: 'stop', raw: null };
     if (request.output === undefined) return base;

@@ -14,10 +14,12 @@ export const CardSchema = z
   .strict()
   .describe('One card of the screen after the answer: a card on the screen now, kept as it is or written into, or an action opened with its input.');
 
+const ColumnsSchema = z.number().int().min(1).max(3).nullish().describe('How many columns the cards are laid out in; as on the screen now when left out.');
+
 export const ReplySchema = z
   .object({
     title: z.string().max(40).describe('What the answer is, in at most four words ("The charter", "How reads work"), never the message repeated. It names the answer among the others.'),
-    columns: z.number().int().min(1).max(3).nullish().describe('How many columns the cards are laid out in; as on the screen now when left out.'),
+    columns: ColumnsSchema,
     cards: z
       .array(CardSchema)
       .max(CARDS_ON_A_SCREEN)
@@ -28,6 +30,16 @@ export const ReplySchema = z
   .strict();
 
 export type Reply = z.infer<typeof ReplySchema>;
+
+// What `place` puts on the screen: the screen after it, as a reply's cards are.
+export const ScreenSchema = z
+  .object({
+    columns: ColumnsSchema,
+    cards: z.array(CardSchema).min(1).max(CARDS_ON_A_SCREEN).describe('Every card on the screen after it, kept or new, in reading order, row by row.'),
+  })
+  .strict();
+
+export type Screen = z.infer<typeof ScreenSchema>;
 
 export type Card = { keep?: string; action?: string; input?: Record<string, unknown>; span?: number };
 
