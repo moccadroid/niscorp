@@ -51,6 +51,16 @@
         "default": "./dist/postgres.cjs"
       }
     },
+    "./migrations": {
+      "import": {
+        "types": "./dist/migrations/index.d.ts",
+        "default": "./dist/migrations/index.js"
+      },
+      "require": {
+        "types": "./dist/migrations/index.d.cts",
+        "default": "./dist/migrations/index.cjs"
+      }
+    },
     "./package.json": "./package.json"
   },
   "files": [

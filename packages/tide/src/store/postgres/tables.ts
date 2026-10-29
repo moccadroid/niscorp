@@ -144,5 +144,9 @@ export const TIDE_SEQUENCE: Sequence = {
         { kind: 'sql', sql: 'ALTER TABLE tide_fact ADD COLUMN IF NOT EXISTS descendants integer' },
       ],
     },
+    {
+      description: 'A run is found by whose it was: a host scopes its reads of the ledger on as_who',
+      steps: [{ kind: 'sql', sql: 'CREATE INDEX IF NOT EXISTS tide_run_as_who ON tide_run (as_who)' }],
+    },
   ],
 };

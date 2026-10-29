@@ -216,7 +216,8 @@ rows, and does nothing — the ordinary outcome, again.
 **The ledger is scopeable for the same reason, and it needs one column to be.** A run
 records the `as` its reflex declared. Tide does not know what it means; a host scopes
 on it — under moss, an ordinary scope rule matching `tide_run.as_who` to a value
-derived from the principal. **⟲** Before that column existed, the host's alternative
+derived from the principal — and the column is indexed, because every scoped read of
+the ledger filters on it. **⟲** Before that column existed, the host's alternative
 was to read the whole ledger and filter it in application code on a prefix convention
 in the reflex id: the one tenant boundary in the reference app *not* enforced by the
 engine, and one rename away from being silently wrong.
@@ -237,7 +238,7 @@ Three kinds (and two more fact flavours). Structured on purpose — a reflex is 
 `0 3 1 * *` is a shibboleth.
 
 ```jsonc
-{ "clock": { "every": "day" | "week" | "month" | "year", "on"?: 1..31 | "mon".."sun" | "MM-DD",
+{ "clock": { "every": "day" | "week" | "month" | "year", "on"?: 1..31 | "mon".."sun" | ["mon", …] | "MM-DD",
              "at": "HH:MM", "tz": "IANA name" } }                   // the owning tenant's tz — the row is theirs
 { "clock": { "at": "2026-09-14T09:00", "tz": "IANA name" } }        // one-shot
 { "fact":  { "entity": "charge_attempts", "op"?: "insert" } }       // pushed changes, optionally one op

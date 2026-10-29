@@ -100,7 +100,7 @@ const pad2 = (value: number): string => String(value).padStart(2, '0');
 // rule never means "skip February".
 const isDueOn = (clock: ClockRecurring, day: LocalDay): boolean => {
   if (clock.every === 'day') return true;
-  if (clock.every === 'week') return weekdayOf(day) === clock.on;
+  if (clock.every === 'week') return Array.isArray(clock.on) ? clock.on.some((one) => one === weekdayOf(day)) : weekdayOf(day) === clock.on;
   if (clock.every === 'month')
     return typeof clock.on === 'number' && day.day === Math.min(clock.on, daysInMonth(day.year, day.month));
   if (typeof clock.on !== 'string') return false;

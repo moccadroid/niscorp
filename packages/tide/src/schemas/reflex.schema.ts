@@ -71,7 +71,7 @@ export type DraftField = 'params' | 'select' | 'when';
 export type DraftChoice = { triggers?: readonly DraftTrigger[]; fields?: readonly DraftField[] };
 
 const draftCore = {
-  id: z.string().min(1).describe('A short name for this automation.'),
+  id: z.string().min(1).describe('A short name you make up from the request, like "call-mum". Never ask the person for it.'),
   intent: reflexFields.intent,
   effect: EffectRefSchema,
 };

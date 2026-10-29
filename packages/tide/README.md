@@ -116,6 +116,10 @@ const driver = createTideDriver({ tide });   // wakes on ingest, sleeps until ne
 await driver.ingest({ kind: 'signal', name: 'stripe', at: Date.now() });
 ```
 
+## The grammar — `@niscorp/tide/migrations`
+
+A host that keeps reflexes or drafts as documents keeps each with the grammar it was written at, and upgrades it where it reads it, through strata: `TIDE_GRAMMAR` is that grammar (`nisc.tide`, documents `reflex` and `draft`), and `TIDE_SCHEMAS` names each document's schema. An addition — a weekly clock on several weekdays — rewrites no stored document, but a reader at an older version refuses one that uses it.
+
 ## The reflex agent — `@niscorp/tide/agent`
 
 A model can WRITE a reflex; it never runs one. `createReflexAgent({ effects, triggers, fields })` is a cortex agent handed what somebody wants automated, the local `now` and timezone, and what the host offers:
@@ -124,7 +128,7 @@ A model can WRITE a reflex; it never runs one. `createReflexAgent({ effects, tri
 - **triggers** — which trigger kinds a draft may use (`clock`, `timer`, `write`, `signal`, `run`, `manual`; every kind if the option is left out — an empty list is an error), so a draft only ever uses what the host can run;
 - **fields** — the extra fields a draft may carry (`params`, `select`, `when`; none if none are named).
 
-The draft's shape is built from that choice (`draftSchemaOf`, from tide's own schemas, each with its description) — it is what the model is shown and what it is held to. A draft never carries who it runs as, its policy or whether it is enabled: those are the host's, and `anchorDraft` completes them. Its `id` is only a short name — the host may give the stored reflex its own id when it is saved; and a `run` trigger names another reflex's id, so a host that offers it must tell the model which reflexes exist.
+The draft's shape is built from that choice (`draftSchemaOf`, from tide's own schemas, each with its description) — it is what the model is shown and what it is held to. A draft never carries who it runs as, its policy or whether it is enabled: those are the host's, and `anchorDraft` completes them. Its `id` is only a short name the model makes up, and never asks for — the host may give the stored reflex its own id when it is saved; and a `run` trigger names another reflex's id, so a host that offers it must tell the model which reflexes exist.
 
 It answers with ONE of three things (`answerSchemaOf`): a reflex draft; a `{ question }` back, when the request can be read as different automations and nothing in the conversation decides which; or a `{ refused }`, when no offered effect does what was asked. A question ends the run like any answer — nothing waits. When the person answers it, or corrects a draft they have not saved, the host runs the agent again over the conversation: `reflexConversation({ now, tz, earlier, latest })` turns the earlier requests and the agent's answers to them — as it gave them, reasoning first — and the latest words into the turns of a chat. A draft naming an effect that is not offered, or an input that effect's schema refuses, goes back to the model to correct in the same run (`effectProblem`). The host shows it, and when somebody saves it, anchors it (`anchorDraft`) and decides who it runs as (`as`); from then on it runs with no model at all. Cortex is an optional peer, used only by this subpath.
 
