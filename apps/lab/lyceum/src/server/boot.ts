@@ -86,7 +86,7 @@ export const bootOn = async <R extends LyceumRuntime>(runtime: R, options: BootO
   const app = buildLyceum({
     features: [integrations],
     identity: lyceumIdentity,
-    functions: (session) => [...doorFunctions(session, server, runtime.pool, moderation), ...roomFunctions(session, publicUrl, options.sshAddress ?? '', census), ...assistantFunctions(session, { querier, writer: timerWriter, orchestrator, tz, timing }), ...lecternFunctions(server, speakerMail), ...xrayFunctions(session), ...buttonFunctions(session, server), ...mirror.functions(session), ...resetFunctions(session, server, operatorKey, timing), ...integrationFunctions(session, server, operatorKey, vendor), ...generationFunctions(session, tracer), ...queryFunctions(session, querier, () => compilerFor(runtime.pool))],
+    functions: (session) => [...doorFunctions(session, server, runtime.pool, moderation), ...roomFunctions(session, publicUrl, options.sshAddress ?? process.env['LYCEUM_SSH_ADDRESS'] ?? '', census), ...assistantFunctions(session, { querier, writer: timerWriter, orchestrator, tz, timing }), ...lecternFunctions(server, speakerMail), ...xrayFunctions(session), ...buttonFunctions(session, server), ...mirror.functions(session), ...resetFunctions(session, server, operatorKey, timing), ...integrationFunctions(session, server, operatorKey, vendor), ...generationFunctions(session, tracer), ...queryFunctions(session, querier, () => compilerFor(runtime.pool))],
     reactions: [...lyceumReactions(server, moderation), renderers.reaction],
     inputs: phoneInputs(integrations),
     seeds: attachedSeeds(integrations),

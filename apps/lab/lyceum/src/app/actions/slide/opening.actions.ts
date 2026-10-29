@@ -124,9 +124,11 @@ export const looksSlide: ActionDefinition = {
   triggers: [],
 };
 
-export const terminalSlide = still('slide.terminal', 'SSH into it.', terminalLayout, {
-  ssh: 'ssh -p 26466 sakura.proxy.rlwy.net',
-});
+export const terminalSlide: ActionDefinition = {
+  ...still('slide.terminal', 'SSH into it.', terminalLayout, { address: ADDRESS }),
+  endpoints: { address },
+  lifecycle: { mount: [{ call: 'address' }] },
+};
 
 export const questionSlide = still('slide.compare', 'Isn’t this json-render?', questionLayout, {});
 

@@ -171,7 +171,7 @@ export const terminalLayout: LayoutNode = {
   props: { size: 'fill', areas: ['head', 'ssh'], rows: ['auto', 1] },
   children: [
     cell('head', [headline('display', '{{$.title}}')]),
-    cell('ssh', [headline('title', '{{$.ssh}}')], { ink: 'ink', align: 'center' }),
+    cell('ssh', [headline('title', '{{$.address.ssh}}')], { ink: 'ink', align: 'center' }),
   ],
 };
 
