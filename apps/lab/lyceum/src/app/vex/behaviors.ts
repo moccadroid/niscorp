@@ -29,8 +29,12 @@ export const BEHAVIORS: ScopeBehaviors = {
   presses: {
     default: { insert: [{ set: 'member_id', to: 'userId' }] },
   },
+  // A member reads only the automations they saved; the speaker, the stage
+  // and the scheduler read every one.
   timers: {
-    default: { insert: [{ set: 'saved_by', to: 'userId' }] },
+    default: { insert: [{ set: 'saved_by', to: 'userId' }], read: [{ match: 'saved_by', to: 'userId' }] },
+    room: { insert: [{ set: 'saved_by', to: 'userId' }] },
+    stage: {},
   },
   assistant_turns: {
     default: {

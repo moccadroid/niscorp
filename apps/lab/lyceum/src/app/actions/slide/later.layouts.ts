@@ -115,7 +115,7 @@ export const tideLayout: LayoutNode = {
     cell(
       'doc',
       [
-        label('The row'),
+        label('The row · as, on, effect'),
         { if: '$.timer.code', then: code('$.timer.code', '$.timer.marked'), else: text('No timer saved yet.') },
       ],
       { ink: 'ink', align: 'middle' },

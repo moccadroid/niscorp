@@ -27,11 +27,12 @@ export const timerNext: SeedEntry = {
 
 export const timerDocument: SeedEntry = {
   fingerprint: 'timers/document',
-  intent: 'The newest saved timer as it is stored: its reflex document, and when it fires',
+  intent: 'The newest timer one person saved, as it is stored: its reflex document, and when it fires',
   shape: { timer_id: '', reflex: {}, due_at: '' },
   dsl: {
     from: ['timers'],
     fields: ['timers.timer_id', 'timers.reflex', 'timers.due_at'],
+    filter: { eq: ['timers.saved_by', { $context: 'savedBy' }] },
     sort: [{ field: 'timers.saved_at', dir: 'desc' }, { field: 'timers.timer_id', dir: 'desc' }],
     limit: 1,
   },
@@ -47,6 +48,19 @@ export const timersSaved: SeedEntry = {
     fields: ['timers.timer_id', 'timers.intent', 'timers.due_at'],
     sort: [{ field: 'timers.saved_at', dir: 'desc' }, { field: 'timers.timer_id', dir: 'desc' }],
     limit: 50,
+  },
+};
+
+export const timersEveryone: SeedEntry = {
+  fingerprint: 'timers/everyone',
+  refresh: 'reactive',
+  intent: 'Every saved timer as stored, and who saved it, newest first',
+  shape: [{ reflex: {}, saved_by: '' }],
+  dsl: {
+    from: ['timers'],
+    fields: ['timers.reflex', 'timers.saved_by'],
+    sort: [{ field: 'timers.saved_at', dir: 'desc' }, { field: 'timers.timer_id', dir: 'desc' }],
+    limit: 200,
   },
 };
 
@@ -75,4 +89,4 @@ export const timerSave: SeedMutation = {
   },
 };
 
-export const TIMER_ENTRIES: readonly (SeedEntry | SeedMutation)[] = [timersAll, timerNext, timerDocument, timersSaved, timerSave, timerDelete];
+export const TIMER_ENTRIES: readonly (SeedEntry | SeedMutation)[] = [timersAll, timerNext, timerDocument, timersSaved, timersEveryone, timerSave, timerDelete];

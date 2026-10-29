@@ -14,6 +14,7 @@ export const phoneAction: ActionDefinition = {
     mount: [{ call: 'me' }, { reconcile: { canvas: 'body', to: '$.stack', action: 'action', own: 'canvas' } }],
   },
   triggers: [
+    { message: 'notify', do: [{ push: { action: 'member.notification', canvas: 'overlay', with: ['sheet'], input: { text: '@event.payload.text', sheetTitle: 'Notification' } } }] },
     {
       message: 'xray-open',
       do: [{ push: { action: 'xray.document', canvas: 'overlay', with: ['sheet'], input: { instanceId: '@event.payload.instance', sheetTitle: '@event.payload.action' } } }],

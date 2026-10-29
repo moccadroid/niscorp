@@ -15,6 +15,8 @@ import { ENTRIES } from '@lyceum/app/vex';
 import { openingTitleLayout } from './opening.layouts';
 import { endSlide } from './later.actions';
 import { compactJson } from './compact';
+import { twiceSlide } from './moss.actions';
+import { copyOf, timerOf } from './frame.actions';
 import { documentLayout, lockedLayout, nameLayout, requestLayout, shownLayout, sqlLayout, toolsLayout, valueLayout, writerLayout } from './vex.layouts';
 
 // THE VEX TALK'S SLIDES (db/vex.deck.ts): twenty minutes on one package, told
@@ -228,4 +230,4 @@ export const lockedSlide: ActionDefinition = {
 
 export const vexEndSlide: ActionDefinition = { ...endSlide, id: 'slide.folder' };
 
-export const VEX_SLIDE_ACTIONS: readonly ActionDefinition[] = [vexTitleSlide, vexRegisterSlide, sqlSlide, requestSlide, documentSlide, shownSlide, toolsSlide, writerSlide, nameSlide, valueSlide, lockedSlide, vexEndSlide];
+export const VEX_SLIDE_ACTIONS: readonly ActionDefinition[] = [vexTitleSlide, vexRegisterSlide, timerOf('slide.vex-timer'), sqlSlide, requestSlide, documentSlide, shownSlide, toolsSlide, writerSlide, nameSlide, copyOf(twiceSlide, 'slide.vex-twice'), valueSlide, lockedSlide, vexEndSlide];

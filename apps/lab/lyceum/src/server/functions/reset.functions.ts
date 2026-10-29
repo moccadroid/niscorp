@@ -71,7 +71,7 @@ const resetWith =
     for (const each of [resetPresses, resetQuestions, resetQueries, resetTurns]) await vex(each.fingerprint, { people });
     await vex(resetGrants.fingerprint, { people: [...members, EVERYBODY] });
     await vex(resetMembers.fingerprint, { people: members });
-    await vex(resetTimers.fingerprint, { savedBy: 'speaker' });
+    for (const savedBy of people) await vex(resetTimers.fingerprint, { savedBy });
     await vex(resetRefused.fingerprint, { refused: RefusedSchema.parse(await vex(refusedAll.fingerprint)).map((row) => row.refused_id) });
     for (const surface of SURFACES) await vex(setRenderer.fingerprint, { surface, renderer: 'dom' });
     const talk = toTalk ?? z.object({ talk_id: z.string() }).parse(await vex(deckTalk.fingerprint)).talk_id;

@@ -2,6 +2,7 @@ import { serve } from '@hono/node-server';
 import { attachSocket } from '@niscorp/moss/node';
 import { mintSession } from '@niscorp/moss';
 import { SLIDES } from '@lyceum/db/seed';
+import { VEX_SLIDES } from '@lyceum/db/vex.deck';
 import { questionSend } from '@lyceum/app/vex/question.entries';
 import { setRenderer } from '@lyceum/app/vex/renderer.entries';
 import { boot } from '@lyceum/server/boot';
@@ -99,7 +100,7 @@ const main = async (): Promise<void> => {
   speaker.click('head', 'talks');
   await speaker.shows('overlay', 'All talks');
   speaker.click('overlay', 'pick', 'vex');
-  check('with nothing to lose, the other talk goes up without a question', (await waitUntil(() => !speaker.showsNow('overlay', 'All talks'))) && !speaker.showsNow('overlay', 'Yes, reset and switch') && (await speaker.shows('head', 'slide 1 of 12')));
+  check('with nothing to lose, the other talk goes up without a question', (await waitUntil(() => !speaker.showsNow('overlay', 'All talks'))) && !speaker.showsNow('overlay', 'Yes, reset and switch') && (await speaker.shows('head', `slide 1 of ${VEX_SLIDES.length}`)));
   const cy = await join();
   speaker.click('head', 'talks');
   await speaker.shows('overlay', 'All talks');

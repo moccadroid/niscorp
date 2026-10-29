@@ -8,8 +8,9 @@ import type { Slide } from './talks';
 // In order. Notes are terse cues; actions in [brackets]. A slide shown in
 // steps says how many parts it has.
 export const VEX_SLIDES: readonly Slide[] = [
-  { slideId: 'slide.sixtools', title: 'Vex', tools: [], notes: ['[join: scan the code or type the address]', 'twenty minutes, one package', 'a model fills in a form, not a statement', 'join: pick a name or type one'] },
+  { slideId: 'slide.sixtools', title: 'Vex', tools: ['tools.integrations'], notes: ['[before: Install the Q&A, then Approve]', '[join: scan the code or type the address]', 'thirty minutes, one package', 'a model fills in a form, not a statement', 'join: pick a name or type one'] },
   { slideId: 'slide.joined', title: 'Everyone who has joined', tools: [], notes: ['each name = a row in the database', 'the room is the database today', '[wait until most people are in]'] },
+  { slideId: 'slide.vex-timer', title: 'First, a timer.', tools: ['assistant.thread'], notes: ['[ask the assistant here on the controller — you watch it on the stage]', '[type: "Show the last slide in 30 minutes"]', 'a model writes it — once', '[read it out, press Save]'] },
   { slideId: 'slide.sql', title: 'I write SQL. Somebody has to read it.', tools: [], notes: ['a query is a program: read it or run it', 'read: you need SQL as well as the model', 'run: checks the cases you thought of', 'nobody hands the model the connection'] },
   {
     slideId: 'slide.request',
@@ -44,6 +45,7 @@ export const VEX_SLIDES: readonly Slide[] = [
     tools: ['tools.asker'],
     notes: ['the stage replays it: the stage’s rows', '[give everybody the ask]', 'ask it in your own words: replayed, no model', 'the tally: asked before / new / not allowed', 'the rule runs after the document is read, before the statement'],
   },
+  { slideId: 'slide.vex-twice', title: 'Enforced twice.', tools: [], notes: ['who may read what: the charter’s data lines', '1 · your screen: only what you’re given', '2 · every query: only your rows — inside the engine', 'the stage replayed the same document: the stage’s rows', 'no field for someone else’s id'] },
   {
     slideId: 'slide.value',
     title: 'A value in the request is a parameter.',
@@ -56,5 +58,5 @@ export const VEX_SLIDES: readonly Slide[] = [
     tools: [],
     notes: ['this app: every read and write an entry, written by hand', 'the endpoint is locked: intent + shape → refused, live', 'the model path is one endpoint, same rules, stored like everything else', 'writes: five operations, never generated — a person presses'],
   },
-  { slideId: 'slide.folder', title: 'It’s all in one folder.', tools: [], notes: ['everything you saw ran here', 'apps/lab/lyceum', 'nisc.dev'] },
+  { slideId: 'slide.folder', title: 'It’s all in one folder.', tools: [], notes: ['[if the timer put this up] that was the timer — no model ran', 'everything you saw ran here', 'apps/lab/lyceum', 'questions: in the Q&A, on your phone'] },
 ];

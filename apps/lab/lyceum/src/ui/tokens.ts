@@ -504,6 +504,8 @@ ${DIALOG} > .action:active { transform: translate(2px, 2px); box-shadow: 2px 2px
 .${ROOT_CLASS} .exhibit[data-tone="ink"] > pre .hljs-title, .${ROOT_CLASS} .exhibit[data-tone="ink"] > pre .hljs-built_in { color: var(--highlight); }
 .${ROOT_CLASS} .exhibit[data-tone="ink"] > pre .hljs-number, .${ROOT_CLASS} .exhibit[data-tone="ink"] > pre .hljs-literal { color: #ff9b70; }
 .${ROOT_CLASS} .exhibit[data-tone="ink"] > pre .hljs-attr, .${ROOT_CLASS} .exhibit[data-tone="ink"] > pre .hljs-property { color: #fff; }
+/* a marked line reads in its own ink, whatever the colouring under it */
+.${ROOT_CLASS} .exhibit[data-tone="ink"] > pre > span[data-marked] * { color: inherit; }
 
 /* ── pair: two things side by side; one under the other where there is no room ── */
 .${ROOT_CLASS} .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 1.4rem; align-items: start; min-width: 0; }

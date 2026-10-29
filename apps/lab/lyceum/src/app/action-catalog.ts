@@ -22,7 +22,9 @@ import { stripAction } from './actions/stage/strip.action';
 import { sinkAction } from './actions/kit/sink.action';
 import { signinAction } from './actions/lectern/signin.action';
 import { SLIDE_ACTIONS } from './actions/slide/slide.actions';
-import { askerTool, assistantTool, xrayTool } from './actions/tools/give.actions';
+import { askerTool, assistantTool, automatorTool, watcherTool, xrayTool } from './actions/tools/give.actions';
+import { memberNotificationAction, yoursAction } from './actions/automations/yours.action';
+import { streamTool, streamWatchAction } from './actions/tools/stream.action';
 import { askRecordsAction, askTool } from './actions/ask/ask.actions';
 import { searchTool } from './actions/tools/search.action';
 import { xrayDocumentAction } from './actions/xray/document.action';
@@ -52,6 +54,12 @@ export const ACTIONS: Record<string, ActionDefinition> = Object.fromEntries(
     xrayTool,
     assistantTool,
     askerTool,
+    automatorTool,
+    watcherTool,
+    yoursAction,
+    streamTool,
+    streamWatchAction,
+    memberNotificationAction,
     askTool,
     askRecordsAction,
     searchTool,

@@ -10,11 +10,13 @@ import { readFileSync } from 'node:fs';
 import { z } from 'zod';
 import { strataSlide } from '@lyceum/app/actions/slide/later.actions';
 import { boot } from '@lyceum/server/boot';
+import { ACTIONS } from '@lyceum/app/action-catalog';
+import { registerLayout } from '@lyceum/app/actions/stage/register.layout';
 import { check, connect, finish, waitUntil } from './harness';
 import type { Terminal } from './harness';
 
-// The slides that carry the code to scan: the register, in either talk.
-const REGISTERS = ['stage.register', 'slide.joined'];
+// The slides that carry the code to scan: every talk's register.
+const isRegister = (slideId: string): boolean => ACTIONS[slideId]?.layout === registerLayout;
 
 const main = async (): Promise<void> => {
   const { server, runtime, close } = await boot();
@@ -45,6 +47,9 @@ const main = async (): Promise<void> => {
     'tools.button': 'The button — an action only some people have',
     'tools.assistant': 'The assistant — on everybody’s phone',
     'tools.asker': 'The ask — on everybody’s phone',
+    'tools.automator': 'Automations — on everybody’s phone',
+    'tools.watcher': 'The stream — on everybody’s phone',
+    'tools.stream': 'Solid — a reply being written',
     'tools.ask': 'Ask the records — the room watches it answered',
     'tools.search': 'Search the room — a value in the request',
     'tools.step': 'This slide, in steps',
@@ -99,7 +104,7 @@ const main = async (): Promise<void> => {
         const counted = await createCensus()();
         check(`...and the census is counted from the source (${counted.data} lines of data, ${counted.code} of code, ${counted.share}%, ${counted.checks} checks)`, counted.data > 0 && counted.code > 0 && counted.checks === CHECKS.length && (await stage.shows('main', `"value":${counted.data}`)) && stage.showsNow('main', `"value":${counted.share}`));
       }
-      if (REGISTERS.includes(talk.slides[index]?.slideId ?? '')) check('...and the register carries the code to scan while the room arrives', await stage.shows('main', '"name":"Qr"') && stage.showsNow('main', '"value":"http://localhost:8796"'));
+      if (isRegister(talk.slides[index]?.slideId ?? '')) check('...and the register carries the code to scan while the room arrives', await stage.shows('main', '"name":"Qr"') && stage.showsNow('main', '"value":"http://localhost:8796"'));
       check(`...and exactly its tools, in order (${(talk.slides[index]?.tools ?? []).join(', ') || 'none'})`, await toolsAre(talk.slides[index]?.tools ?? []));
     }
     speaker.click('controls', 'next');
@@ -141,7 +146,7 @@ const main = async (): Promise<void> => {
 
   const last = TALKS.at(-1);
   if (last === undefined) throw new Error('no talks');
-  const live = last.slides.findIndex((slide) => REGISTERS.includes(slide.slideId));
+  const live = last.slides.findIndex((slide) => isRegister(slide.slideId));
   await pick(live);
   check('the register is on the stage', await stage.shows('main', last.slides[live]?.title ?? '\u0000'));
   check('the register counts an empty room', await stage.shows('main', '"label":"Joined","value":0'));

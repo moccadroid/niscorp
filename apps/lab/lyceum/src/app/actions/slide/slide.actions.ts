@@ -4,6 +4,11 @@ import { LATER_SLIDES } from './later.actions';
 import { SAFETY_SLIDES } from './safety.actions';
 import { MOSS_SLIDES } from './moss.actions';
 import { VEX_SLIDE_ACTIONS } from './vex.actions';
+import { NOVA_SLIDE_ACTIONS } from './nova.actions';
+import { CHARTER_SLIDE_ACTIONS } from './charter.actions';
+import { TIDE_SLIDE_ACTIONS } from './tide.actions';
+import { STRATA_SLIDE_ACTIONS } from './strata.actions';
+import { SOLID_SLIDE_ACTIONS } from './solid.actions';
 import { censusLayout } from './slide.layouts';
 
 export const censusSlide: ActionDefinition = {
@@ -20,4 +25,4 @@ export const censusSlide: ActionDefinition = {
   triggers: [],
 };
 
-export const SLIDE_ACTIONS: readonly ActionDefinition[] = [...OPENING_SLIDES, censusSlide, ...SAFETY_SLIDES, ...MOSS_SLIDES, ...LATER_SLIDES, ...VEX_SLIDE_ACTIONS];
+export const SLIDE_ACTIONS: readonly ActionDefinition[] = [...OPENING_SLIDES, censusSlide, ...SAFETY_SLIDES, ...MOSS_SLIDES, ...LATER_SLIDES, ...VEX_SLIDE_ACTIONS, ...NOVA_SLIDE_ACTIONS, ...CHARTER_SLIDE_ACTIONS, ...TIDE_SLIDE_ACTIONS, ...STRATA_SLIDE_ACTIONS, ...SOLID_SLIDE_ACTIONS];

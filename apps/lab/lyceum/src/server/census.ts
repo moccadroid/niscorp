@@ -6,7 +6,7 @@ import { CHECKS } from '@lyceum/dev/suite';
 
 export type Census = { data: number; renderers: number; otherRenderers: number; endpoints: number; setup: number; code: number; share: number; checks: number; checkLines: number };
 
-const DATA_FILES = ['db/deck.ts', 'db/vex.deck.ts', 'db/talks.ts', 'db/names.ts', 'ui/kit.props.ts'];
+const DATA_FILES = ['db/deck.ts', 'db/vex.deck.ts', 'db/nova.deck.ts', 'db/charter.deck.ts', 'db/tide.deck.ts', 'db/strata.deck.ts', 'db/solid.deck.ts', 'db/talks.ts', 'db/names.ts', 'ui/kit.props.ts'];
 
 const OTHER_KITS = ['react.kit.ts', 'vue.kit.ts', 'ink.kit.ts', 'text.kit.ts'];
 

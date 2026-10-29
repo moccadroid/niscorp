@@ -29,6 +29,7 @@ import type { Timing } from './timing';
 import { compilerFor, createQuerier } from './querying';
 import { createTracer, GENERATION_CHANNEL, generationFunctions } from './generation';
 import { queryFunctions } from './functions/query.functions';
+import { streaming } from './streaming';
 import { devRuntime } from './runtime';
 import { createModerator, startModeration } from './moderation';
 import type { DevRuntime, LyceumRuntime } from './runtime';
@@ -70,6 +71,7 @@ export const bootOn = async <R extends LyceumRuntime>(runtime: R, options: BootO
     send: options.send ?? createMailer(process.env, publicUrl),
   };
   const mirror = mirrorSpeaker(() => server());
+  const stream = streaming(() => server());
   let timingUp: Timing | undefined;
   const timing = (): Timing => {
     if (timingUp === undefined) throw new Error('lyceum: the timers are not up yet');
@@ -86,7 +88,7 @@ export const bootOn = async <R extends LyceumRuntime>(runtime: R, options: BootO
   const app = buildLyceum({
     features: [integrations],
     identity: lyceumIdentity,
-    functions: (session) => [...doorFunctions(session, server, runtime.pool, moderation), ...roomFunctions(session, publicUrl, options.sshAddress ?? process.env['LYCEUM_SSH_ADDRESS'] ?? '', census), ...assistantFunctions(session, { querier, writer: timerWriter, orchestrator, tz, timing }), ...lecternFunctions(server, speakerMail), ...xrayFunctions(session), ...buttonFunctions(session, server), ...mirror.functions(session), ...resetFunctions(session, server, operatorKey, timing), ...integrationFunctions(session, server, operatorKey, vendor), ...generationFunctions(session, tracer), ...queryFunctions(session, querier, () => compilerFor(runtime.pool))],
+    functions: (session) => [...doorFunctions(session, server, runtime.pool, moderation), ...roomFunctions(session, publicUrl, options.sshAddress ?? process.env['LYCEUM_SSH_ADDRESS'] ?? '', census), ...assistantFunctions(session, { querier, writer: timerWriter, orchestrator, tz, timing }), ...lecternFunctions(server, speakerMail), ...xrayFunctions(session), ...buttonFunctions(session, server), ...mirror.functions(session), ...resetFunctions(session, server, operatorKey, timing), ...integrationFunctions(session, server, operatorKey, vendor), ...generationFunctions(session, tracer), ...queryFunctions(session, querier, () => compilerFor(runtime.pool)), ...stream.functions(session)],
     reactions: [...lyceumReactions(server, moderation), renderers.reaction],
     inputs: phoneInputs(integrations),
     seeds: attachedSeeds(integrations),

@@ -1,6 +1,6 @@
 import type { ActionDefinition } from '@niscorp/nova';
 import type { SeedEntry, SeedMutation } from '@niscorp/vex';
-import { askerGive, askerGiven, askerTake, assistantGive, assistantGiven, assistantTake, EVERYBODY, xrayGive, xrayGiven, xrayTake } from '@lyceum/app/vex/grant.entries';
+import { askerGive, askerGiven, askerTake, assistantGive, assistantGiven, assistantTake, automatorGive, automatorGiven, automatorTake, EVERYBODY, watcherGive, watcherGiven, watcherTake, xrayGive, xrayGiven, xrayTake } from '@lyceum/app/vex/grant.entries';
 
 const giveTool = (tool: { id: string; title: string; kicker: string; give: string; entries: { given: SeedEntry; give: SeedMutation; take: SeedMutation } }): ActionDefinition => ({
   id: tool.id,
@@ -52,4 +52,22 @@ export const askerTool = giveTool({
   kicker: 'The ask — on everybody’s phone',
   give: 'Give everybody the ask',
   entries: { given: askerGiven, give: askerGive, take: askerTake },
+});
+
+// Automations on every phone: each one runs as whoever saved it.
+export const automatorTool = giveTool({
+  id: 'tools.automator',
+  title: 'Automations',
+  kicker: 'Automations — on everybody’s phone',
+  give: 'Give everybody automations',
+  entries: { given: automatorGiven, give: automatorGive, take: automatorTake },
+});
+
+// The stream on every phone: the screen being written, drawn as it arrives.
+export const watcherTool = giveTool({
+  id: 'tools.watcher',
+  title: 'The stream',
+  kicker: 'The stream — on everybody’s phone',
+  give: 'Give everybody the stream',
+  entries: { given: watcherGiven, give: watcherGive, take: watcherTake },
 });

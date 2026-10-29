@@ -12,7 +12,7 @@ import type { Orchestrator } from '../assistant/orchestrator';
 import type { Querier } from '../querying';
 import type { TimerRequest, TimerWriter, Timing, Written } from '../timing';
 import { answerSchemaOf, isDraft } from '@niscorp/tide/agent';
-import { anchorTimer, DRAFT_HERE, dueOf, localNow, proposable, slideIdsOf } from '../timing';
+import { anchorTimer, DRAFT_HERE, dueOf, localNow, proposable, runsAs, slideIdsOf } from '../timing';
 import { slidesDeck } from '@lyceum/app/vex/deck.entries';
 import { timerDelete, timerSave } from '@lyceum/app/vex/timer.entries';
 import { vexOver } from '../vex-over';
@@ -121,8 +121,9 @@ export const assistantFunctions = (
     description: 'Saves a timer the assistant drafted. Send { chosen: { timerId, draft } }; answers { dueLocal }, the local time it is next due, or empty.',
     execute: async (data) => {
       const { chosen } = ChosenSchema.parse(data);
-      const slideIds = slideIdsOf(await vexOver(session.wire)(slidesDeck.fingerprint));
-      const reflex = anchorTimer(proposable(chosen.draft, slideIds), chosen.timerId, Date.now(), deps.tz, slideIds);
+      const as = runsAs(session.principal ?? '');
+      const slideIds = as === 'clock' ? slideIdsOf(await vexOver(session.wire)(slidesDeck.fingerprint)) : [];
+      const reflex = anchorTimer(proposable(chosen.draft, slideIds), chosen.timerId, Date.now(), deps.tz, slideIds, as);
       const due = dueOf(reflex, Date.now());
       await vexOver(session.wire)(timerSave.fingerprint, {
         timerId: chosen.timerId,
