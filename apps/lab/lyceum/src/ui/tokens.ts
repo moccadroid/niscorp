@@ -39,8 +39,8 @@ html:has(.page > [data-canvas="strip"]:not(:empty)) { font-size: clamp(14px, min
 .${ROOT_CLASS} .page { display: flex; flex-direction: column; height: 100dvh; }
 /* a phone's notch and home bar are not the page: nothing to press sits under
    them (the page keeps viewport-fit=cover, so these are real on a phone and
-   zero everywhere else). The edge they leave is ink, like the rules. */
-.${ROOT_CLASS} .page { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); background: var(--ink); }
+   zero everywhere else). */
+.${ROOT_CLASS} .page { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); background: var(--paper); }
 /* the projector has no controls: no pointer on it either */
 .${ROOT_CLASS} .page:has(> [data-canvas="strip"]:not(:empty)) { cursor: none; }
 .${ROOT_CLASS} .page > [data-canvas] { display: flex; flex-direction: column; min-height: 0; }
@@ -66,6 +66,27 @@ html:has(.page > [data-canvas="strip"]:not(:empty)) { font-size: clamp(14px, min
 /* stacked canvases share one rule where they meet, not two */
 .${ROOT_CLASS} .page > [data-canvas]:not(:empty):not([data-canvas="overlay"]) ~ [data-canvas] > * > .sheet { border-top: 0; }
 
+/* THE STAGE, as nisc.dev sets a demo: the slide stands on paper, set in from
+   the screen's edge, casting the hard shadow; the strip runs edge to edge
+   above it, paper with a rule under it, and only the count is in colour. */
+.${ROOT_CLASS} .page:has(> [data-canvas="strip"]:not(:empty)) > [data-canvas="main"] { padding: .8rem 1.3rem 1.3rem 1rem; }
+.${ROOT_CLASS} .page:has(> [data-canvas="strip"]:not(:empty)) > [data-canvas="main"]:not(:empty) > * > .sheet { border-top: var(--rule) solid var(--ink); box-shadow: .45rem .45rem 0 var(--ink); }
+.${ROOT_CLASS} .page > [data-canvas="strip"] > * > .sheet { border-width: 0 0 var(--rule); }
+.${ROOT_CLASS} .page > [data-canvas="strip"] .cell[data-ink="highlight"] { --bg: var(--paper); }
+
+/* A SCREEN MADE OF REGIONS (the controller), wider than a phone and not the
+   stage: each region
+   is a panel on paper, framed and casting the shadow, with room between —
+   not a cell of one grid. A region with nothing in it leaves its place. */
+@media (min-width: 641px) {
+  .${ROOT_CLASS} .page:not(:has(> [data-canvas="strip"]:not(:empty))) > [data-canvas="main"] > * > .sheet:has(> .cell > [data-canvas]) { gap: 1.1rem; background: var(--paper); border: 0; padding: 1rem 1.4rem 1.4rem 1rem; }
+  .${ROOT_CLASS} .page:not(:has(> [data-canvas="strip"]:not(:empty))) > [data-canvas="main"] > * > .sheet:has(> .cell > [data-canvas]) > .cell { border: var(--rule) solid var(--ink); box-shadow: 6px 6px 0 var(--ink); }
+  .${ROOT_CLASS} .page:not(:has(> [data-canvas="strip"]:not(:empty))) > [data-canvas="main"] > * > .sheet:has(> .cell > [data-canvas]) > .cell:has(> [data-canvas]:empty) { visibility: hidden; }
+  .${ROOT_CLASS} [data-canvas="notes"] .text { font-size: 1.3rem; line-height: 1.45; }
+  .${ROOT_CLASS} [data-canvas="head"] .headline[data-level="name"] { font-size: 1.6rem; }
+  .${ROOT_CLASS} [data-canvas="controls"] .action { min-height: 4.5rem; font-size: 1.05rem; }
+}
+
 /* ── sheet: the ruled grid ── */
 .${ROOT_CLASS} .sheet {
   display: grid; gap: var(--rule); background: var(--ink); border: var(--rule) solid var(--ink);
@@ -87,7 +108,9 @@ html:has(.page > [data-canvas="strip"]:not(:empty)) { font-size: clamp(14px, min
    its cell, and its sheet is part of the outer grid — its rules, not a frame */
 .${ROOT_CLASS} .cell > [data-canvas] { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; overflow-y: auto; }
 /* several actions in one region (a list canvas) stack; the last takes what is left */
-.${ROOT_CLASS} .cell > [data-canvas] > * { display: flex; flex-direction: column; flex: 0 0 auto; }
+/* an empty list canvas holds its sheet directly: that one stays a grid */
+.${ROOT_CLASS} .cell > [data-canvas] > * { flex: 0 0 auto; }
+.${ROOT_CLASS} .cell > [data-canvas] > :not(.sheet) { display: flex; flex-direction: column; }
 .${ROOT_CLASS} .cell > [data-canvas] > *:last-child { flex: 1 1 auto; min-height: 0; }
 /* a sheet that fills takes the region; any other is as tall as it is, with its
    own rule under it and the region's paper below */
@@ -152,19 +175,21 @@ html:has(.page > [data-canvas="strip"]:not(:empty)) { font-size: clamp(14px, min
 .${ROOT_CLASS} .label {
   font: 700 clamp(.78rem, calc(1.15 * var(--cq)), 1.2rem)/1.2 var(--display); letter-spacing: .08em; text-transform: uppercase;
 }
+/* off the stage a label is a caption, in nisc.dev's voice */
+.${ROOT_CLASS} .page:not(:has(> [data-canvas="strip"]:not(:empty))) .label { font: 400 .8rem/1.3 var(--mono); letter-spacing: .06em; }
 .${ROOT_CLASS} .headline { font-family: var(--display); font-weight: 900; text-transform: uppercase; line-height: .92; overflow-wrap: normal; word-break: normal; hyphens: none; }
-.${ROOT_CLASS} .headline[data-level="display"] { font-size: clamp(2.2rem, calc(7 * var(--cq)), 170px); }
-.${ROOT_CLASS} .headline[data-level="title"]   { font-size: clamp(1.6rem, calc(3.8 * var(--cq)), 96px); }
+.${ROOT_CLASS} .headline[data-level="display"] { font-size: clamp(2.2rem, calc(5.4 * var(--cq)), 4.8rem); }
+.${ROOT_CLASS} .headline[data-level="title"]   { font-size: clamp(1.6rem, calc(3 * var(--cq)), 3.2rem); }
 .${ROOT_CLASS} .headline[data-level="name"]    { font-size: clamp(1.25rem, calc(1.9 * var(--cq)), 44px); line-height: 1.05; }
 .${ROOT_CLASS} .text { font-size: clamp(1.06rem, calc(1.75 * var(--cq)), 2.2rem); line-height: 1.35; }
 .${ROOT_CLASS} .text[data-tone="muted"] { opacity: 1; color: color-mix(in srgb, var(--fg) 55%, var(--bg)); }
 .${ROOT_CLASS} .figure { display: flex; flex-direction: column; gap: .3em; }
-.${ROOT_CLASS} .figure > .value { font: 900 clamp(2rem, calc(6 * var(--cq)), 150px)/.85 var(--display); }
+.${ROOT_CLASS} .figure > .value { font: 900 clamp(2rem, calc(5 * var(--cq)), 4.4rem)/.85 var(--display); }
 /* a countdown reads as a clock: figures that do not jump as they change */
 .${ROOT_CLASS} .countdown > .value { font-variant-numeric: tabular-nums; }
 
 /* ── code: a cell of mono, the lines that matter highlighted ── */
-.${ROOT_CLASS} .code { font: 400 clamp(.8rem, calc(1.6 * var(--cq)), 1.5rem)/1.5 var(--mono); white-space: pre; overflow: hidden; }
+.${ROOT_CLASS} .code { font: 400 clamp(.8rem, calc(1.6 * var(--cq)), 1.5rem)/1.35 var(--mono); white-space: pre; overflow: hidden; }
 .${ROOT_CLASS} .code > span { display: block; }
 /* code in a cell that scrolls (a phone reading a document, not a slide showing
    one) wraps its long lines instead of cutting them off */
@@ -315,6 +340,9 @@ html:has(.page > [data-canvas="strip"]:not(:empty)) { font-size: clamp(14px, min
 }
 /* the one thing a screen is for — the door's Step in */
 .${ROOT_CLASS} .action[data-size="large"] { min-height: max(5.5rem, 72px); font-size: clamp(1.4rem, calc(3 * var(--cq)), 3rem); }
+/* a button that stands in a cell rather than being one: nisc.dev's press */
+.${ROOT_CLASS} .cell > .action { border: var(--rule) solid var(--ink); box-shadow: .3rem .3rem 0 var(--ink); }
+.${ROOT_CLASS} .cell > .action:active { transform: translate(3px, 3px); box-shadow: 2px 2px 0 var(--ink); }
 .${ROOT_CLASS} .action[data-lines="two"] > span { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; height: 2em; }
 
 /* ── anything you can press ──
