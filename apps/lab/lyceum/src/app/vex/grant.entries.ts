@@ -99,6 +99,11 @@ export const assistantGiven = assistant.given;
 export const assistantGive = assistant.give;
 export const assistantTake = assistant.take;
 
+const asker = givingAll('asker', 'the ask');
+export const askerGiven = asker.given;
+export const askerGive = asker.give;
+export const askerTake = asker.take;
+
 const button = giving('button', 'the button');
 export const buttonGiven = button.given;
 export const buttonGive = button.give;
@@ -118,6 +123,6 @@ export const buttonHolders: SeedEntry = {
   },
 };
 
-export const GRANT_CHANGES: readonly string[] = [xray, assistant, button].flatMap((each) => [each.give.fingerprint, each.take.fingerprint]);
+export const GRANT_CHANGES: readonly string[] = [xray, assistant, asker, button].flatMap((each) => [each.give.fingerprint, each.take.fingerprint]);
 
-export const GRANT_ENTRIES: readonly (SeedEntry | SeedMutation)[] = [...[xray, assistant, button].flatMap((each) => [each.given, each.give, each.take]), buttonHolders];
+export const GRANT_ENTRIES: readonly (SeedEntry | SeedMutation)[] = [...[xray, assistant, asker, button].flatMap((each) => [each.given, each.give, each.take]), buttonHolders];

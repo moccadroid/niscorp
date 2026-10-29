@@ -7,6 +7,7 @@ export const phoneInputs = (integrations: Integrations<Seats>): NonNullable<Shel
   if (!actions.includes('member.phone')) return {};
   const onThePhone = [
     ...actions.filter((action) => action === 'assistant.thread'),
+    ...actions.filter((action) => action === 'ask.records'),
     ...(await attachedTo(integrations, 'member.phone', actions)),
     ...actions.filter((action) => action === 'button.press'),
     ...actions.filter((action) => action === 'xray.switch'),

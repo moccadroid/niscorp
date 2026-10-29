@@ -1,5 +1,7 @@
-// Every shape is flat: a flat shape whose keys are single columns comes back
-// from the query already in shape, and vex skips the mapping model for it.
+// Every shape Jev picks from is flat: a flat shape whose keys are single
+// columns comes back from the query already in shape, and vex skips the
+// mapping agent for it. The nested shape is only ever given with a request: no
+// query returns it, so the mapping agent writes a mapping, once.
 export type QueryShape = {
   kind: string;
   description: string;
@@ -28,3 +30,12 @@ export const QUERY_SHAPES: readonly QueryShape[] = [
     shape: [{ name: '' }],
   },
 ];
+
+export const GIVEN_SHAPE: QueryShape = {
+  kind: 'timeline',
+  description: 'A name and a time a row, the name nested.',
+  shape: [{ who: { name: '' }, at: '' }],
+};
+
+export const ALL_SHAPES: readonly QueryShape[] = [...QUERY_SHAPES, GIVEN_SHAPE];
+export const shapeOfKind = (kind: string): QueryShape | undefined => ALL_SHAPES.find((entry) => entry.kind === kind);

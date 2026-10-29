@@ -4,7 +4,7 @@ import { defineTool } from '@niscorp/cortex';
 import type { ToolDefinition } from '@niscorp/cortex';
 import type { FunctionSession } from '@niscorp/moss';
 import { ACTIONS } from '@lyceum/app/action-catalog';
-import { QUERY_SHAPES } from '@lyceum/app/vex/query.shapes';
+import { shapeOfKind } from '@lyceum/app/vex/query.shapes';
 import { routeQuery } from './vex-query';
 import type { Querier } from '../querying';
 import { slidesDeck } from '@lyceum/app/vex/deck.entries';
@@ -89,7 +89,7 @@ export const hostTools = (deps: ToolDeps, offered: ReadonlySet<ToolName>): ToolD
           try {
             const routed = await routeQuery(deps.session, deps.querier, intent);
             const rows = await vexOver(deps.session.wire)(routed.fingerprint);
-            const shape = QUERY_SHAPES.find((entry) => entry.kind === routed.kind)?.shape ?? null;
+            const shape = shapeOfKind(routed.kind)?.shape ?? null;
             deps.opened.push({ action: 'query.result', label: `Query · ${intent}`, ink: 'live', input: { intent, shape: JSON.stringify(shape), routed, sheetTitle: 'Query' } });
             return { query: { intent, shape: routed.kind, fingerprint: routed.fingerprint, how: routed.how }, rows };
           } catch (error) {

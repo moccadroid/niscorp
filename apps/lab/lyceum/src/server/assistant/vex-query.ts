@@ -1,6 +1,9 @@
 import { z } from 'zod';
 import type { FunctionSession } from '@niscorp/moss';
+import type { QueryResponse } from '@niscorp/vex';
 import { queryRecord, queriesKnown } from '@lyceum/app/vex/query.entries';
+import { shapeOfKind } from '@lyceum/app/vex/query.shapes';
+import type { QueryShape } from '@lyceum/app/vex/query.shapes';
 import type { Querier, Known } from '../querying';
 import { vexOver } from '../vex-over';
 
@@ -20,30 +23,44 @@ const refusalOf = (error: unknown): string => {
 
 export type Routed = { fingerprint: string; kind: string; how: 'replayed' | 'generated' };
 
-export const routeQuery = async (session: FunctionSession, querier: Querier, stated: string): Promise<Routed> => {
+export const routeQuery = async (session: FunctionSession, querier: Querier, stated: string, given?: QueryShape): Promise<Routed> => {
   const request = stated.trim().slice(0, MAX_INTENT);
   if (request === '') throw new Error('A query needs an intent.');
   const vex = vexOver(session.wire);
   const record = (shape: string, how: 'replayed' | 'generated' | 'refused', fingerprint: string | null): Promise<unknown> =>
     vex(queryRecord.fingerprint, { request, shape, how, fingerprint });
 
+  const principal = session.principal ?? '';
+  querier.trace.expect(request, principal);
   const known: Known[] = KnownSchema.parse(await vex(queriesKnown.fingerprint));
-  const route = await querier.route(request, known);
+  const asked = Date.now();
+  const route = await querier.route(request, known, given);
+  querier.trace.routed(principal, request, route.decided, shapeOfKind(route.decided.shape)?.shape ?? null, Date.now() - asked);
+
+  const show = (fingerprint: string, answered: QueryResponse): Promise<void> =>
+    querier.trace.answered(principal, request, { fingerprint, rows: answered.result, engineMs: answered.meta.timing?.executionMs });
 
   if ('replay' in route) {
     await record(route.replay.shape, 'replayed', route.replay.fingerprint);
+    querier.trace.replayed(request, principal, route.replay.fingerprint, route.replay.shape);
+    await show(route.replay.fingerprint, await session.answerIntent(querier, { fingerprint: route.replay.fingerprint }));
     return { fingerprint: route.replay.fingerprint, kind: route.replay.shape, how: 'replayed' };
   }
 
   const shape = route.generate;
   try {
-    const answered = await session.answerIntent(querier, { intent: request, shape: shape.shape });
+    // Inside `during`, so what the writers record is this request's.
+    const answered = await querier.trace.during(request, () => session.answerIntent(querier, { intent: request, shape: shape.shape }));
     const fingerprint = answered.meta.cache.fingerprint;
     if (fingerprint === undefined) throw new Error('the query was answered but not stored');
     await record(shape.kind, 'generated', fingerprint);
+    querier.trace.completed(request, fingerprint, shape.kind);
+    await show(fingerprint, answered);
     return { fingerprint, kind: shape.kind, how: 'generated' };
   } catch (error) {
     await record(shape.kind, 'refused', null);
-    throw new Error(refusalOf(error));
+    const why = refusalOf(error);
+    querier.trace.refused(request, why);
+    throw new Error(why);
   }
 };

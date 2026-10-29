@@ -1,4 +1,6 @@
-export const SLIDES: readonly { slideId: string; title: string; tools: readonly string[]; notes: readonly string[]; parts?: number }[] = [
+import type { Slide } from './talks';
+
+export const SLIDES: readonly Slide[] = [
   { slideId: 'slide.title', title: 'nisc', tools: [], notes: ['[join: scan the code or type the address]', 'this talk is an app, running now, on one server', 'stage + my controller + your phones = one app', 'laptops: open the address, devtools open', 'terminal: the SSH command works too', 'join: pick a name or type one'] },
   { slideId: 'stage.register', title: 'Everyone who has joined', tools: [], notes: ['each name = a row in the database', 'names you typed: a model checked them first', '[wait until most people are in]'] },
   { slideId: 'slide.timer', title: 'First, a timer.', tools: ['assistant.thread'], notes: ['[ask the assistant here on the controller — the room watches it on the stage]', '[type: "Show the last slide in 30 minutes"]', 'the answer is a document: when it fires, what it does', '[read it out, press Save]', 'back to this at the end'] },

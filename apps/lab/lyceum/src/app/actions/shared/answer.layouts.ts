@@ -7,6 +7,18 @@ const rows = (at: AnswerAt, columns: { label: string; key: string; w: number; ki
   props: { rows: at.rows, columns, empty: 'No results.' },
 });
 
+// A timeline's rows are nested ({ who: { name }, at }); the columns read flat
+// keys, so the layout flattens them.
+const flattened = (at: AnswerAt): unknown => ({
+  $prism: {
+    $map: {
+      over: { $coalesce: [{ $ref: at.rows }, { $const: [] }] },
+      as: 'row',
+      body: { name: { $get: { from: { $var: 'row' }, path: ['who', 'name'] } }, at: { $get: { from: { $var: 'row' }, path: ['at'] } } },
+    },
+  },
+});
+
 const LIST_COLUMNS = [
   { label: 'Answer', key: 'label', w: 1 },
   { label: '', key: 'detail', w: 2 },
@@ -28,10 +40,24 @@ export const answerLayout = (at: AnswerAt): LayoutNode[] => [
           { label: 'Name', key: 'name', w: 1 },
         ]),
         else: {
-          if: { $eq: [at.kind, 'list'] },
-          then: rows(at, LIST_COLUMNS),
-          // A kind nobody wrote a branch for: its rows, as a list shows them.
-          else: rows(at, LIST_COLUMNS),
+          if: { $eq: [at.kind, 'timeline'] },
+          then: {
+            component: 'Rows',
+            props: {
+              rows: flattened(at),
+              columns: [
+                { label: 'Name', key: 'name', w: 1 },
+                { label: 'When', key: 'at', w: 2, kind: 'mono' },
+              ],
+              empty: 'No results.',
+            },
+          },
+          else: {
+            if: { $eq: [at.kind, 'list'] },
+            then: rows(at, LIST_COLUMNS),
+            // A kind nobody wrote a branch for: its rows, as a list shows them.
+            else: rows(at, LIST_COLUMNS),
+          },
         },
       },
     },

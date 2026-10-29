@@ -46,7 +46,7 @@ export const timerSlide: ActionDefinition = {
   layout: mirrorLayout,
   endpoints: { mirror: { fn: 'assistant.mirror', target: 'mirror' } },
   lifecycle: { mount: followAssistant },
-  triggers: [{ message: 'assistant-mirror', do: followAssistant }],
+  triggers: [{ message: 'speaker-mirror', do: followAssistant }],
 };
 
 export const originSlide = still('slide.origin', 'GPT-3 could not write a React app.', originLayout, {

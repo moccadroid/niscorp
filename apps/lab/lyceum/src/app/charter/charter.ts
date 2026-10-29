@@ -1,7 +1,7 @@
 import type { Charter } from '@niscorp/charter';
 
 const MEMBERS_READ = ['members.read'];
-const DECK_READS = ['deck.read', 'slides.read'];
+const DECK_READS = ['deck.read', 'slides.read', 'talks.read'];
 const LOOK = ['renderers.read'];
 const QUERYING = ['queries.read', 'queries.write.insert'];
 // Not edited, not taken back: a question is judged once, as it was sent.
@@ -17,15 +17,17 @@ export const CHARTER: Charter = {
 
   member: { actions: ['member.*', 'query.*', 'ext.member.*'], data: [...MEMBERS_READ, ...QUERYING, ...QUESTIONING, ...CONVERSING, ...LOOK] },
 
-  speaker: { functions: ['assistant.intro', 'assistant.turn', 'button.pick', 'integrations.approve', 'integrations.install', 'integrations.remove', 'integrations.state', 'talk.reset', 'timers.delete', 'timers.save'], scoping: 'room', actions: ['speaker.*', 'tools.*', 'assistant.*', 'ext.speaker.*'], data: [...MEMBERS_READ, ...DECK_READS, ...LOOK, 'renderers.write.update', 'grants.read', 'grants.write.insert', 'grants.write.delete', 'slide_notes.read', 'slide_tools.read', 'deck.write.update', 'timers.read', 'timers.write.insert', 'questions.read', 'question_verdicts.read', ...CONVERSING, ...RESETTING] },
+  speaker: { functions: ['assistant.intro', 'assistant.turn', 'button.pick', 'integrations.approve', 'integrations.install', 'integrations.remove', 'integrations.state', 'query.ask', 'room.search', 'talk.reset', 'talk.switch', 'timers.delete', 'timers.save'], scoping: 'room', actions: ['speaker.*', 'tools.*', 'assistant.*', 'query.*', 'ext.speaker.*'], data: [...MEMBERS_READ, ...DECK_READS, ...LOOK, ...QUERYING, 'renderers.write.update', 'grants.read', 'grants.write.insert', 'grants.write.delete', 'slide_notes.read', 'slide_tools.read', 'deck.write.update', 'timers.read', 'timers.write.insert', 'questions.read', 'question_verdicts.read', ...CONVERSING, ...RESETTING] },
   // The stage reads the moderator's verdicts at the `stage` reach, only those
   // that say fit to show, and no question itself: nothing unjudged or unfit
   // can reach the projector.
-  stage: { functions: ['assistant.mirror', 'integrations.state', 'room.address', 'room.census', 'room.checks', 'room.timer'], scoping: 'stage', actions: ['stage.*', 'slide.*', 'ext.stage.*'], data: [...MEMBERS_READ, ...DECK_READS, 'queries.read', 'timers.read', 'question_verdicts.read', 'presses.read', ...LOOK] },
+  stage: { functions: ['assistant.mirror', 'integrations.state', 'room.address', 'room.census', 'room.checks', 'room.compile', 'room.generation', 'room.grammar', 'room.timer', 'speaker.mirror'], scoping: 'stage', actions: ['stage.*', 'slide.*', 'ext.stage.*'], data: [...MEMBERS_READ, ...DECK_READS, 'queries.read', 'timers.read', 'question_verdicts.read', 'presses.read', ...LOOK] },
 
   xray: { functions: ['xray.document', 'xray.set'], actions: ['xray.*'] },
 
   assistant: { functions: ['assistant.intro', 'assistant.turn', 'timers.save'], actions: ['assistant.*'] },
+
+  asker: { functions: ['query.ask'], actions: ['ask.*'] },
 
   button: { actions: ['button.*'], data: ['presses.write.insert'] },
 
@@ -36,25 +38,22 @@ export const CHARTER: Charter = {
   moderator: { scoping: 'room', data: ['members.read', 'refused_names.write.insert', 'questions.read', 'question_verdicts.read', 'question_verdicts.write.insert'] },
 
   // A saved timer runs as `clock`: whatever a model wrote into a timer, this
-  // is all it can reach.
-  clock: { data: ['deck.write.update'] },
+  // is all it can reach. It reads slides to find which talk a slide is in.
+  clock: { data: ['deck.write.update', 'slides.read'] },
 
   // Roles nobody wears, each granted exactly its job.
   identity: { data: ['members.read', 'grants.read'] },
   gatekeeper: { data: ['login_links.write.insert', 'login_links.write.delete', 'grants.write.insert'] },
-  scheduler: { data: ['timers.read', 'slides.read'] },
+  scheduler: { data: ['timers.read', 'slides.read', 'deck.read'] },
 };
+
+const GIVEN = ['xray', 'assistant', 'asker', 'button'];
+const combinations = (roles: readonly string[]): string[][] => roles.reduce<string[][]>((sets, role) => [...sets, ...sets.map((set) => [...set, role])], [[]]);
 
 export const WEARABLE: readonly (readonly string[])[] = [
   ['public'],
-  ['member'],
-  ['member', 'xray'],
-  ['member', 'assistant'],
-  ['member', 'button'],
-  ['member', 'xray', 'assistant'],
-  ['member', 'xray', 'button'],
-  ['member', 'assistant', 'button'],
-  ['member', 'xray', 'assistant', 'button'],
+  // A member, with any of what can be given.
+  ...combinations(GIVEN).map((given) => ['member', ...given]),
   ['speaker'],
   ['stage'],
   ['kit'],

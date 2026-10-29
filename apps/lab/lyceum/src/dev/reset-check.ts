@@ -63,6 +63,14 @@ const main = async (): Promise<void> => {
   await waitUntil(() => !speaker.showsNow('overlay', 'Yes, reset'));
   check('No changes nothing', (await count('SELECT 1 FROM members')) === 2 && (await count('SELECT 1 FROM questions')) === 1 && speaker.showsNow('head', 'slide 3 of'));
 
+  speaker.click('head', 'talks');
+  await speaker.shows('overlay', 'All talks');
+  speaker.click('overlay', 'pick', 'vex');
+  check('switching talks with people in the room asks first, and says what would go', (await speaker.shows('overlay', 'Yes, reset and switch')) && speaker.showsNow('overlay', '2 people have joined') && speaker.showsNow('overlay', '1 question was sent'));
+  speaker.click('overlay', 'no');
+  await waitUntil(() => !speaker.showsNow('overlay', 'Yes, reset and switch'));
+  check('No changes nothing: the people, the question, the talk and the slide', (await count('SELECT 1 FROM members')) === 2 && (await count('SELECT 1 FROM questions')) === 1 && (await count("SELECT 1 FROM deck WHERE talk_id = 'nisc'")) === 1 && speaker.showsNow('head', 'slide 3 of'));
+
   speaker.click('head', 'reset');
   await speaker.shows('overlay', 'Yes, reset');
   speaker.click('overlay', 'yes');
@@ -86,6 +94,26 @@ const main = async (): Promise<void> => {
   check('...as nobody: what they could write, they cannot', (await replay(ada.token, questionSend.fingerprint, { text: 'after the reset' })) >= 400);
 
   check('the speaker still has the controller', speaker.showsNow('controls', '"ref":"next"'));
+
+  // ── 6: an empty room switches without asking; a room with somebody in it, on Yes, is reset and switched ──
+  speaker.click('head', 'talks');
+  await speaker.shows('overlay', 'All talks');
+  speaker.click('overlay', 'pick', 'vex');
+  check('with nothing to lose, the other talk goes up without a question', (await waitUntil(() => !speaker.showsNow('overlay', 'All talks'))) && !speaker.showsNow('overlay', 'Yes, reset and switch') && (await speaker.shows('head', 'slide 1 of 12')));
+  const cy = await join();
+  speaker.click('head', 'talks');
+  await speaker.shows('overlay', 'All talks');
+  speaker.click('overlay', 'pick', 'nisc');
+  check('somebody has joined: it asks', (await speaker.shows('overlay', 'Yes, reset and switch')) && speaker.showsNow('overlay', '1 person has joined'));
+  speaker.click('overlay', 'yes');
+  let left = await count('SELECT 1 FROM members');
+  for (let i = 0; i < 200 && left > 0; i += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    left = await count('SELECT 1 FROM members');
+  }
+  check('Yes: the room is reset', left === 0 && (await cy.phone.shows('main', '"ref":"pick"')));
+  check('...and the other talk is on, at its first slide', (await waitUntil(() => !speaker.showsNow('overlay', 'Yes, reset and switch'))) && (await speaker.shows('head', `slide 1 of ${SLIDES.length}`)) && (await count("SELECT 1 FROM deck WHERE talk_id = 'nisc'")) === 1);
+  cy.phone.close();
 
   ada.phone.close();
   ben.phone.close();

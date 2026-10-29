@@ -17,11 +17,13 @@ import type { NovaComponent, NovaDispatch } from '@niscorp/nova/adapters/vue';
 import type { Target } from '@niscorp/moss/terminal';
 import { vueTarget } from '@niscorp/moss/terminal/vue';
 import type { KitOf } from './kit.props';
-import { ALIGNS, INKS, LEVELS, MARKS, SIGILS, oneOf, records } from './kit';
+import { ALIGNS, GAPS, INKS, LANGS, LEVELS, MARKS, PANES, SCALES, SIGILS, SIZES, SPLITS, oneOf, records } from './kit';
 import {
   SIGIL_SHAPES,
   areaOf,
+  codeLines,
   flowDelays,
+  numbers,
   instantOf,
   narrowOf,
   qrOf,
@@ -30,7 +32,10 @@ import {
   templateOf,
   text,
   weight,
+  pipelineColumns,
+  pipelineOf,
 } from './kit.shape';
+import type { PipelineStep } from './kit.shape';
 
 // Like React's, Vue's adapter leaves a node's `ref` and `model` to the kit.
 
@@ -131,6 +136,7 @@ const Sheet: NovaComponent = stateful((props, slots) => {
         ),
         class: 'sheet',
         'data-size': size,
+        ...data('scale', oneOf(props['scale'], SCALES)),
         ...(narrow === undefined ? {} : { 'data-narrow': '' }),
       },
       slots['default']?.(),
@@ -170,10 +176,65 @@ const Headline = functional((props, children, place) => {
 const Text = functional((props, children, place) =>
   h(
     'p',
-    { ...place(), class: 'text', ...data('tone', oneOf(props['tone'], ['muted'] as const)) },
+    { ...place(), class: 'text', ...data('tone', oneOf(props['tone'], ['muted'] as const)), ...data('size', oneOf(props['size'], SIZES)) },
     children,
   ),
 );
+
+// The reading grammar, as the DOM kit draws it (./kit.ts).
+const Exhibit = functional((props, _children, place) =>
+  h('figure', { ...place(), class: 'exhibit', ...data('lang', oneOf(props['lang'], LANGS)), ...data('tone', oneOf(props['tone'], PANES)), ...data('flag', oneOf(props['flag'], INKS)) }, [
+    h('figcaption', text(props['label']) ?? ''),
+    h(
+      'pre',
+      codeLines(text(props['text']) ?? '', oneOf(props['lang'], LANGS), numbers(props['marked'])).map((line, i) =>
+        h('span', { key: i, ...(line.marked ? { 'data-marked': '' } : {}), innerHTML: line.html }),
+      ),
+    ),
+  ]),
+);
+
+const Pair = functional((props, children, place) => h('div', { ...place(), class: 'pair', ...data('split', oneOf(props['split'], SPLITS)) }, children));
+
+const Stack = functional((props, children, place) =>
+  h('div', { ...place(), class: 'stack', ...data('gap', oneOf(props['gap'], GAPS)), ...data('scroll', oneOf(props['scroll'], ['y'] as const)) }, children),
+);
+
+const Stats = functional((props, _children, place) =>
+  h(
+    'div',
+    { ...place(), class: 'stats' },
+    records(props['items']).map((item, i) => h('div', { key: i, ...data('ink', oneOf(item['ink'], INKS)) }, [h('b', text(item['value']) ?? '—'), h('span', text(item['label']) ?? '')])),
+  ),
+);
+
+// A line of steps and one detour under it, as in the DOM kit.
+const Pipeline = functional((props, _children, place) => {
+  const shape = pipelineOf(props);
+  const off = (is: boolean): Record<string, string> => (is ? { 'data-off': '' } : {});
+  const at = (column: string, row: number): { style: Record<string, string> } => ({ style: { gridColumn: column, gridRow: String(row) } });
+  const step = (item: PipelineStep, key: string, placing: Record<string, unknown> = {}): VNode =>
+    h('div', { key, ...placing, class: 'pipeline-step', ...data('ink', oneOf(item.ink, INKS)), ...off(item.off) }, [h('b', item.label), h('i', item.note), h('span', item.value)]);
+  const link = (name: string, said: string, isOff: boolean, key: string, placing: Record<string, unknown> = {}): VNode => h('div', { key, ...placing, class: name, ...off(isOff) }, [h('span', said)]);
+  const detour = shape.detour;
+  return h('div', { ...place({ gridTemplateColumns: pipelineColumns(shape.steps.length) }), class: 'pipeline' }, [
+    ...shape.steps.flatMap((item, index) => {
+      const next = shape.links[index];
+      return [step(item, `s${index}`, at(String(index * 2 + 1), 1)), ...(next === undefined ? [] : [link('pipeline-link', next.label, next.off, `l${index}`, at(String(index * 2 + 2), 1))])];
+    }),
+    ...(detour === undefined
+      ? []
+      : [
+          link('pipeline-enter', detour.enter, detour.off, 'enter', at(String(detour.from * 2 + 1), 2)),
+          link('pipeline-leave', detour.leave, !detour.back, 'leave', at(String(detour.to * 2 + 1), 2)),
+          h('div', { key: 'detour', ...at(`${detour.from * 2 + 1} / ${detour.to * 2 + 2}`, 3), class: 'pipeline-detour', ...off(detour.off) }, [
+            h('span', { class: 'pipeline-said' }, detour.label),
+            h('div', { class: 'pipeline-inner' }, detour.steps.flatMap((item, index) => [...(index === 0 ? [] : [link('pipeline-link', '', item.off, `dl${index}`)]), step(item, `ds${index}`)])),
+          ]),
+        ]),
+    ...(shape.legend.length === 0 ? [] : [h('div', { key: 'legend', ...at(`${(detour?.to ?? 0) * 2 + 3} / -1`, 3), class: 'pipeline-legend' }, shape.legend.map((item, index) => h('span', { key: index, ...data('ink', oneOf(item.ink, INKS)) }, item.label)))]),
+  ]);
+});
 
 const Figure = functional((props, _children, place) =>
   h('div', { ...place(), class: 'figure' }, [
@@ -494,6 +555,11 @@ export const VUE_KIT: KitOf<NovaComponent> = {
   Look,
   Xray,
   Menu,
+  Exhibit,
+  Pair,
+  Stack,
+  Stats,
+  Pipeline,
 };
 
 // As with React, the DOM adapter's canvas and instance boxes are drawn here,

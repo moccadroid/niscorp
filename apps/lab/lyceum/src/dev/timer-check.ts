@@ -147,7 +147,7 @@ const main = async (): Promise<void> => {
   const after = 'clock' in stored.on ? occurrencesBetween(stored.on.clock, pressed, pressed + 3_600_000, 1)[0]?.at : undefined;
   check('…and what it loads names the instant the press fixed', after === due);
 
-  await db.query("UPDATE deck SET slide_id = (SELECT slide_id FROM slides ORDER BY position LIMIT 1) WHERE deck_id = 'talk'");
+  await db.query("UPDATE deck SET slide_id = (SELECT slide_id FROM slides WHERE talk_id = deck.talk_id ORDER BY position LIMIT 1) WHERE deck_id = 'talk'");
   await db.query('DELETE FROM slide_notes WHERE slide_id = $1', [closing?.slideId ?? '']);
   await db.query('DELETE FROM slide_tools WHERE slide_id = $1', [closing?.slideId ?? '']);
   await db.query('DELETE FROM slides WHERE slide_id = $1', [closing?.slideId ?? '']);

@@ -8,7 +8,7 @@ import { lyceumIdentity } from './identity';
 import { lyceumReactions } from './reactions';
 import { doorFunctions } from './functions/door.functions';
 import { roomFunctions } from './functions/room.functions';
-import { mirrorAssistant } from './mirroring';
+import { mirrorSpeaker } from './mirroring';
 import { createCensus } from './census';
 import { assistantFunctions } from './functions/assistant.functions';
 import { lecternFunctions } from './functions/lectern.functions';
@@ -26,7 +26,9 @@ import type { SendMail } from './mail';
 import { createTimerWriter, startTiming, talkZone } from './timing';
 import { createOrchestrator } from './assistant/orchestrator';
 import type { Timing } from './timing';
-import { createQuerier } from './querying';
+import { compilerFor, createQuerier } from './querying';
+import { createTracer, GENERATION_CHANNEL, generationFunctions } from './generation';
+import { queryFunctions } from './functions/query.functions';
 import { devRuntime } from './runtime';
 import { createModerator, startModeration } from './moderation';
 import type { DevRuntime, LyceumRuntime } from './runtime';
@@ -53,7 +55,11 @@ export const bootOn = async <R extends LyceumRuntime>(runtime: R, options: BootO
   };
 
   const moderation = startModeration(server, runtime.pool, createModerator(process.env));
-  const querier = createQuerier(process.env);
+  const tracer = createTracer(async (fingerprint) => runtime.cache?.get(fingerprint));
+  const querier = createQuerier(process.env, tracer);
+  tracer.onChange(() => {
+    server().shells?.deliver('stage', GENERATION_CHANNEL);
+  });
   const timerWriter = createTimerWriter(process.env);
   const orchestrator = createOrchestrator(process.env);
   const tz = talkZone(process.env);
@@ -63,7 +69,7 @@ export const bootOn = async <R extends LyceumRuntime>(runtime: R, options: BootO
     speakerEmail: options.speakerEmail ?? process.env['LYCEUM_SPEAKER_EMAIL'] ?? '',
     send: options.send ?? createMailer(process.env, publicUrl),
   };
-  const mirror = mirrorAssistant(() => server());
+  const mirror = mirrorSpeaker(() => server());
   let timingUp: Timing | undefined;
   const timing = (): Timing => {
     if (timingUp === undefined) throw new Error('lyceum: the timers are not up yet');
@@ -80,7 +86,7 @@ export const bootOn = async <R extends LyceumRuntime>(runtime: R, options: BootO
   const app = buildLyceum({
     features: [integrations],
     identity: lyceumIdentity,
-    functions: (session) => [...doorFunctions(session, server, runtime.pool, moderation), ...roomFunctions(session, publicUrl, options.sshAddress ?? '', census), ...assistantFunctions(session, { querier, writer: timerWriter, orchestrator, tz, timing }), ...lecternFunctions(server, speakerMail), ...xrayFunctions(session), ...buttonFunctions(session, server), ...mirror.functions(session), ...resetFunctions(session, server, operatorKey, timing), ...integrationFunctions(session, server, operatorKey, vendor)],
+    functions: (session) => [...doorFunctions(session, server, runtime.pool, moderation), ...roomFunctions(session, publicUrl, options.sshAddress ?? '', census), ...assistantFunctions(session, { querier, writer: timerWriter, orchestrator, tz, timing }), ...lecternFunctions(server, speakerMail), ...xrayFunctions(session), ...buttonFunctions(session, server), ...mirror.functions(session), ...resetFunctions(session, server, operatorKey, timing), ...integrationFunctions(session, server, operatorKey, vendor), ...generationFunctions(session, tracer), ...queryFunctions(session, querier, () => compilerFor(runtime.pool))],
     reactions: [...lyceumReactions(server, moderation), renderers.reaction],
     inputs: phoneInputs(integrations),
     seeds: attachedSeeds(integrations),

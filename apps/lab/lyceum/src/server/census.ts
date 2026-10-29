@@ -6,7 +6,7 @@ import { CHECKS } from '@lyceum/dev/suite';
 
 export type Census = { data: number; renderers: number; otherRenderers: number; endpoints: number; setup: number; code: number; share: number; checks: number; checkLines: number };
 
-const DATA_FILES = ['db/deck.ts', 'db/names.ts', 'ui/kit.props.ts'];
+const DATA_FILES = ['db/deck.ts', 'db/vex.deck.ts', 'db/talks.ts', 'db/names.ts', 'ui/kit.props.ts'];
 
 const OTHER_KITS = ['react.kit.ts', 'vue.kit.ts', 'ink.kit.ts', 'text.kit.ts'];
 
@@ -41,7 +41,7 @@ const filesUnder = async (folder: string): Promise<string[]> => {
 const count = async (): Promise<Census> => {
   const [app, ui, server, db, dev] = await Promise.all(['app', 'ui', 'server', 'db', 'dev'].map(filesUnder));
   const inServer = (file: string): string => file.slice(join(SRC, 'server').length + 1).replaceAll('\\', '/');
-  const isEndpoint = (file: string): boolean => /^(functions|assistant)\//.test(inServer(file)) || ENDPOINT_FILES.includes(inServer(file));
+  const isEndpoint = (file: string): boolean => /^(functions|assistant|generation)\//.test(inServer(file)) || ENDPOINT_FILES.includes(inServer(file));
   const isData = (file: string): boolean => DATA_FILES.some((data) => file.replaceAll('\\', '/').endsWith(`/${data}`));
   const isOtherKit = (file: string): boolean => OTHER_KITS.some((kit) => file.replaceAll('\\', '/').endsWith(`/ui/${kit}`));
   const isSetup = (file: string): boolean => SETUP_FILES.some((setup) => file.replaceAll('\\', '/').endsWith(`/${setup}`));

@@ -5,6 +5,7 @@ import { createQueryDsl, createShapeMapper } from '@niscorp/vex/agent';
 import { createSignal } from '@niscorp/signal';
 import { devRuntime } from '@lyceum/server/runtime';
 import { createQuerier } from '@lyceum/server/querying';
+import { createTracer } from '@lyceum/server/generation';
 import { BEHAVIORS } from '@lyceum/app/vex/behaviors';
 import { SLIDES } from '@lyceum/db/seed';
 import { anchorTimer, createTimerWriter, proposable } from '@lyceum/server/timing';
@@ -54,6 +55,12 @@ const ALL_QUESTIONS: readonly { intent: string; shape: ShapeName; refuse?: true;
   { intent: 'How many people arrived after me?', shape: 'number', answer: mentions('39') },
   { intent: 'Show me the login links', shape: 'list', refuse: true },
   { intent: 'Who can sign in as the speaker?', shape: 'list', refuse: true },
+  // The vex talk's questions (db/vex.deck.ts): the one the speaker asks on the
+  // writer slide, and the kind a room asks on the fingerprint slide.
+  { intent: 'Who has asked the most questions?', shape: 'counts' },
+  { intent: 'How many questions have been asked?', shape: 'number' },
+  { intent: 'Who joined last?', shape: 'people' },
+  { intent: 'Who were the last three to join?', shape: 'people' },
 ];
 const only = process.env['LYCEUM_ONLY'];
 const QUESTIONS = only === undefined ? ALL_QUESTIONS : ALL_QUESTIONS.filter((_, i) => String(i) === only);
@@ -195,7 +202,7 @@ const ROUTES: readonly { question: string; replays?: string; shape?: string }[] 
 ];
 
 const measureRoutes = async (): Promise<void> => {
-  const querier = createQuerier({ ...process.env, LYCEUM_QUERY: 'live' });
+  const querier = createQuerier({ ...process.env, LYCEUM_QUERY: 'live' }, createTracer(async () => undefined));
   const decider = (process.env['TYPESAFE_API_KEY'] ?? '') !== '' ? 'Jev (typesafe)' : `${MODEL}, emulating decide()`;
   let passed = 0;
   let total = 0;

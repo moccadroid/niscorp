@@ -1,9 +1,42 @@
 import { encode } from 'uqr';
+import hljs from 'highlight.js/lib/core';
+import json from 'highlight.js/lib/languages/json';
+import sql from 'highlight.js/lib/languages/sql';
+import typescript from 'highlight.js/lib/languages/typescript';
 
 export const AREA = /^[a-z][a-z0-9-]*$/;
 
 export const text = (value: unknown): string | undefined =>
   typeof value === 'string' ? value : typeof value === 'number' ? String(value) : undefined;
+
+export const numbers = (value: unknown): number[] =>
+  Array.isArray(value) ? value.filter((n): n is number => typeof n === 'number') : [];
+
+// ── code, set in colour ──
+// The languages a document on a slide is written in. A line of one is set in
+// colour by highlight.js — keywords, strings, numbers, comments, nothing else
+// — and the kits put its markup where the line goes. Line by line, so a
+// layout can mark the lines that matter (a token across lines loses its
+// colour at the break, which a document on a slide does not have). Without a
+// language the text is set as it is.
+hljs.registerLanguage('json', json);
+hljs.registerLanguage('sql', sql);
+hljs.registerLanguage('ts', typescript);
+export const LANGS = ['json', 'sql', 'ts'] as const;
+export type Lang = (typeof LANGS)[number];
+
+const escaped = (line: string): string => line.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+export type CodeLine = { text: string; html: string; marked: boolean };
+export const codeLines = (source: string, lang: Lang | undefined, marked: readonly number[]): CodeLine[] =>
+  source.split('\n').map((raw, i) => {
+    const line = raw === '' ? ' ' : raw;
+    return {
+      text: line,
+      html: lang === undefined ? escaped(line) : hljs.highlight(line, { language: lang, ignoreIllegals: true }).value,
+      marked: marked.includes(i + 1),
+    };
+  });
 
 export const weight = (value: unknown): number | undefined =>
   typeof value === 'number' && value > 0 && value <= 100 ? value : undefined;
@@ -35,9 +68,12 @@ export const templateOf = (
       .map((_, i) => {
         const row = declared[i];
         if (row === 'auto') return 'auto';
+        // A weighted row takes its share and no more: content taller than the
+        // share clips inside its cell, and the sheet keeps the height it was
+        // given — a slide never grows past the screen and pushes the strip off.
         const w = weight(row);
-        if (w !== undefined) return `${w}fr`;
-        return size === 'fill' && i === rows.length - 1 ? '1fr' : 'auto';
+        if (w !== undefined) return `minmax(0, ${w}fr)`;
+        return size === 'fill' && i === rows.length - 1 ? 'minmax(0, 1fr)' : 'auto';
       })
       .join(' '),
     names: new Set(rows.flat()),
@@ -122,4 +158,47 @@ export const FLOW_PERIOD_MS = 2400;
 export const flowDelays = (now: number): string[] => {
   const phase = -(now % FLOW_PERIOD_MS);
   return [0, 1, 2].map((i) => `${phase - (i * FLOW_PERIOD_MS) / 3}ms`);
+};
+
+// ── Pipeline ────────────────────────────────────────────────────
+// A line of steps that always run, and one detour under it that runs only
+// sometimes. What every kit draws from: each step with its place, each link
+// with whether it was walked, the detour with where it leaves the line and
+// where it comes back. The link the detour stands in for is walked only when
+// the detour was not.
+export type PipelineStep = { label: string; value: string; note: string; ink: string | undefined; off: boolean };
+export type PipelineShape = {
+  steps: PipelineStep[];
+  links: { off: boolean; label: string }[];
+  detour: { from: number; to: number; off: boolean; back: boolean; label: string; enter: string; leave: string; steps: PipelineStep[] } | undefined;
+  legend: { label: string; ink: string | undefined }[];
+};
+const rowsOf = (value: unknown): Record<string, unknown>[] =>
+  Array.isArray(value) ? value.filter((item): item is Record<string, unknown> => typeof item === 'object' && item !== null && !Array.isArray(item)) : [];
+const stepOf = (item: Record<string, unknown>): PipelineStep => ({ label: text(item['label']) ?? '', value: text(item['value']) ?? '', note: text(item['note']) ?? '', ink: text(item['ink']), off: item['off'] === true });
+export const pipelineOf = (props: Record<string, unknown>): PipelineShape => {
+  const steps = rowsOf(props['steps']).map(stepOf);
+  const raw = props['detour'];
+  const given = typeof raw === 'object' && raw !== null && !Array.isArray(raw) ? (raw as Record<string, unknown>) : undefined;
+  // A place in the line, counted from 0 — the first step is one.
+  const place = (value: unknown): number | undefined => (typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : undefined);
+  const from = place(given?.['from']);
+  const to = place(given?.['to']);
+  const inner = rowsOf(given?.['steps']).map(stepOf);
+  const off = given?.['off'] === true;
+  const detour =
+    given === undefined || from === undefined || to === undefined || from < 0 || to <= from || to >= steps.length
+      ? undefined
+      : { from, to, off, back: !off && inner.length > 0 && inner.every((step) => !step.off), label: text(given['label']) ?? '', enter: text(given['enter']) ?? '', leave: text(given['leave']) ?? '', steps: inner };
+  const links = steps.slice(1).map((step, index) => {
+    const replaced = detour !== undefined && index === detour.from && detour.to === detour.from + 1;
+    return { off: step.off || (steps[index]?.off ?? true) || (replaced && !detour.off), label: replaced ? (text(given?.['direct']) ?? '') : '' };
+  });
+  return { steps, links, detour, legend: rowsOf(props['legend']).map((item) => ({ label: text(item['label']) ?? '', ink: text(item['ink']) })) };
+};
+// The grid a pipeline is drawn on: a column a step, a narrow one a link.
+export const pipelineColumns = (count: number): string => Array.from({ length: Math.max(count, 1) }, () => 'minmax(0, 1fr)').join(' 3rem ');
+export const pipelineText = (shape: PipelineShape): string[] => {
+  const said = (step: PipelineStep): string => `${step.label}: ${step.off ? 'not run' : [step.value, step.note].filter((part) => part !== '').join(', ')}`;
+  return [shape.steps.map(said).join(' → '), ...(shape.detour === undefined || shape.detour.off ? [] : [`${shape.detour.label} — ${shape.detour.steps.map(said).join(' → ')}`])];
 };

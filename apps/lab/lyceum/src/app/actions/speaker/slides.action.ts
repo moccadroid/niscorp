@@ -9,7 +9,7 @@ export const slidesAction: ActionDefinition = {
   data: {
     sheetTitle: 'All slides',
     slides: [],
-    current: { slide_id: '', title: '', position: 0, number: 0, count: 0, prev_number: 0, prev_title: '', next_number: 0, next_title: '' },
+    current: { slide_id: '', talk_id: '', title: '', position: 0, number: 0, count: 0, prev_number: 0, prev_title: '', next_number: 0, next_title: '' },
     picked: 0,
     error: '',
   },
@@ -20,5 +20,8 @@ export const slidesAction: ActionDefinition = {
     pick: { url: '/api/vex', method: 'POST', request: deckPickPrism, errorTarget: 'error' },
   },
   lifecycle: { mount: [{ call: 'all' }, { call: 'current' }] },
-  triggers: [{ event: 'ui:click', ref: 'pick', do: [{ set: 'picked', value: '@event.payload' }, { call: 'pick', onSuccess: [{ pop: true }] }] }],
+  // A pick names a place in the talk the deck is on NOW: the deck is read
+  // again before the write, so a press the moment the list opens — before its
+  // first read has answered — still names the right talk.
+  triggers: [{ event: 'ui:click', ref: 'pick', do: [{ set: 'picked', value: '@event.payload' }, { call: 'current', onSuccess: [{ call: 'pick', onSuccess: [{ pop: true }] }] }] }],
 };

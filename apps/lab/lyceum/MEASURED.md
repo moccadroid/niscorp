@@ -345,3 +345,32 @@ policy, one generation per question (`src/dev/model-check.ts`).
   that already are a flat shape. Both struggle with "which department is the biggest"
   (aggregate + sort + limit into an array shape). Qwen spends more calls (it re-fetches
   the schema it already has) and pays each in full.
+
+## The mapping agent on the writer slide (2026-10-08, gpt-oss-120b `low`)
+
+Which shape makes the mapping agent run, reliably, through the whole engine (the query
+agent, then the mapper), asked as a member with twelve people in the room, "Who were the
+last three to join?":
+
+- **Nested, no derivation** (`[{ who: { name: '' }, joined: '' }]`): 7/8 right, the
+  mapping agent ran every time (0.5–1.2 s); one mapping failed to run (`Variable not
+  found: item`). The shape lyceum now has, `timeline`, is this one.
+- **A derived line** (`[{ line: 'Welcome, Witty Crane' }]`): 4/10 — in five the query
+  agent aliased a column to `line`, the rows fitted and nothing was mapped.
+- **A derived column** (`[{ name, shout: 'WITTY CRANE' }]`): 2/10 — the query agent
+  refuses a field the schema does not have.
+- **A formatted time** (`'… joined at 14:02'`): 6/13; the mapping agent's `$date`
+  fails validation three times running in about half its runs (alone, on the same rows:
+  5/10 failed, 0/10 exact).
+- **An object shape** (`{ newest: '', earlier: [''] }`): the mapper is handed the first
+  row only, so no mapping can be right.
+
+The mapping agent alone, on three rows, ten runs each: a welcome line 9/10, an uppercase
+column 9/10, under 1.2 s.
+
+Jev with five shapes (`LYCEUM_PART=route`, 3 runs of 20 probes, four of them about the
+new shape): 54/60 — five provider errors (HTTP 5xx, the provider was overloaded) and one
+missed replay; no wrong shape. The four timeline/people probes: 12/12. **Not what
+shipped:** the same day the nested shape was taken out of Jev's options and is only ever
+given with the request (the speaker's ask), so Jev picks from four shapes, as measured
+before, and the four extra probes were removed again.

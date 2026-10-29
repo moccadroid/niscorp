@@ -15,7 +15,13 @@ html, body { margin: 0; padding: 0; }
    unregistered custom property is substituted where it is used, so its cqw is
    the using element's own container.) */
 html { font-size: 16px; }
-html:has(.page > [data-canvas="strip"]:not(:empty)) { font-size: clamp(16px, calc(0.72vw + 13.3px), 28px); }
+/* the stage: a slide is designed for a 16:9 screen, and the rem is that
+   screen's — 2.5vh and 1.4vw are the same 27px on 1920×1080, and the two
+   agree on every 16:9 screen, so a slide holds the same lines and the same
+   characters a line on all of them. A screen of another ratio takes the
+   smaller: the slide is drawn as on the wide screen, only scaled, and the
+   rest of the screen goes to the slide's last row — it never re-wraps. */
+html:has(.page > [data-canvas="strip"]:not(:empty)) { font-size: clamp(14px, min(2.5vh, 1.4vw), 28px); }
 .${ROOT_CLASS} {
   --paper: #ffffff; --ink: #000000; --signal: #1400ff; --alert: #ff3b00; --live: #00c853; --highlight: #ffe600;
   --rule: 3px;
@@ -38,6 +44,9 @@ html:has(.page > [data-canvas="strip"]:not(:empty)) { font-size: clamp(16px, cal
 /* the projector has no controls: no pointer on it either */
 .${ROOT_CLASS} .page:has(> [data-canvas="strip"]:not(:empty)) { cursor: none; }
 .${ROOT_CLASS} .page > [data-canvas] { display: flex; flex-direction: column; min-height: 0; }
+/* the strip keeps its height: a slide whose content wants more than the screen
+   clips inside its cells, and never shortens the line above it */
+.${ROOT_CLASS} .page > [data-canvas="strip"] { flex-shrink: 0; }
 .${ROOT_CLASS} .page > [data-canvas]:not(:empty):not(:has(~ [data-canvas]:not(:empty))) { flex: 1 1 auto; }
 .${ROOT_CLASS} .page > [data-canvas] > * { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
 /* the look marker takes no room: the terminal reads it (target.ts) */
@@ -103,7 +112,7 @@ html:has(.page > [data-canvas="strip"]:not(:empty)) { font-size: clamp(16px, cal
 
 /* ── cell: a place in the grid, and its ink ── */
 /* defaults first, so an ink always out-ranks them */
-.${ROOT_CLASS} :where(.cell, .bar > span, .action, .flow-lane) { --bg: var(--paper); --fg: var(--ink); }
+.${ROOT_CLASS} :where(.cell, .bar > span, .action, .flow-lane, .stats > div, .pipeline-step, .pipeline-legend > span) { --bg: var(--paper); --fg: var(--ink); }
 .${ROOT_CLASS} :where(.columns-fill) { --bg: var(--ink); --fg: var(--paper); }
 .${ROOT_CLASS} [data-ink="ink"] { --bg: var(--ink); --fg: var(--paper); }
 .${ROOT_CLASS} [data-ink="signal"] { --bg: var(--signal); --fg: var(--paper); }
@@ -285,6 +294,12 @@ html:has(.page > [data-canvas="strip"]:not(:empty)) { font-size: clamp(16px, cal
 }
 .${ROOT_CLASS} .menu-icon::-webkit-details-marker { display: none; }
 .${ROOT_CLASS} .menu[open] > .menu-icon { background-color: var(--highlight); }
+/* an open menu hangs below its own cell, over what is under it: the cell and the
+   canvas that hold it stop clipping while it is open — the wipe a cell arrives
+   with too, which leaves its clip on the cell (above, "a slide arriving") —
+   and the cell stands over its neighbours */
+.${ROOT_CLASS} .cell:has(.menu[open]), .${ROOT_CLASS} .cell:has(.menu[open]) > [data-canvas] { overflow: visible; }
+.${ROOT_CLASS} .cell:has(.menu[open]) { position: relative; z-index: 20; animation: none !important; }
 .${ROOT_CLASS} .menu-items {
   position: absolute; top: 100%; right: 0; z-index: 20; min-width: 14rem;
   display: flex; flex-direction: column; gap: var(--rule); background: var(--ink); border: var(--rule) solid var(--ink);
@@ -344,4 +359,124 @@ html:has(.page > [data-canvas="strip"]:not(:empty)) { font-size: clamp(16px, cal
 .${ROOT_CLASS}[data-xray] [data-action] [data-action] [data-action] [data-action] > .xray-tag { right: auto; left: 0; }
 /* over the screen, the corner at the top is the sheet's Close: the tag goes to the bottom */
 .${ROOT_CLASS}[data-xray] [data-canvas="overlay"] [data-action] > .xray-tag { top: auto; bottom: 0; }
+
+/* ═══ THE READING GRAMMAR — nisc.dev's, on the stage ═══
+   A sheet at the page scale is a slide that is READ, not glanced at: every
+   size inside is fixed in rem (the rem follows the screen, above) and every
+   run of words has a measure, so nothing grows with its neighbour and a
+   headline never takes the sheet. Code lives in an EXHIBIT — a captioned pane,
+   set in colour — and never in a cell beside prose. */
+/* the dense scale is the reading scale drawn a size down: everything on the
+   sheet together, so it keeps its proportions and holds a third more */
+.${ROOT_CLASS} .sheet[data-scale="dense"] { zoom: .76; }
+.${ROOT_CLASS} .sheet[data-scale] .cell { padding: 1.2rem 1.5rem; gap: .8rem; }
+.${ROOT_CLASS} .sheet[data-scale] .label { font-size: .78rem; }
+.${ROOT_CLASS} .sheet[data-scale] .headline { letter-spacing: -.015em; }
+/* a slide's claim is a sentence, set at nisc.dev's heading size, not its
+   hero's; it runs the width of its cell — two lines at most on a 16:9 screen */
+.${ROOT_CLASS} .sheet[data-scale] .headline[data-level="display"] { font-size: 2.4rem; line-height: .98; }
+.${ROOT_CLASS} .sheet[data-scale] .headline[data-level="title"] { font-size: 1.8rem; line-height: 1.02; max-width: 20em; }
+.${ROOT_CLASS} .sheet[data-scale] .headline[data-level="name"] { font-size: 1.25rem; line-height: 1.15; }
+.${ROOT_CLASS} .sheet[data-scale] .text { font-size: 1.1rem; line-height: 1.4; max-width: 32em; }
+.${ROOT_CLASS} .sheet[data-scale] .text[data-size="lede"] { font-size: 1.3rem; line-height: 1.4; max-width: 29em; }
+.${ROOT_CLASS} .sheet[data-scale] .text[data-size="small"] { font-size: .95rem; line-height: 1.4; }
+.${ROOT_CLASS} .sheet[data-scale] .text[data-size="fine"] { font: 400 .78rem/1.4 var(--mono); max-width: none; }
+.${ROOT_CLASS} .sheet[data-scale] .figure > .value { font-size: 3rem; }
+.${ROOT_CLASS} .sheet[data-scale] .code { font-size: .85rem; }
+.${ROOT_CLASS} .sheet[data-scale] .rows > div > span { font-size: 1rem; }
+.${ROOT_CLASS} .sheet[data-scale] .rows[data-head] > div:first-child > span { font-size: .72rem; }
+/* a stack or a pair inside a cell takes what the cell leaves it */
+.${ROOT_CLASS} .cell > .stack, .${ROOT_CLASS} .cell > .pair { flex: 1 1 auto; min-height: 0; }
+
+/* ── exhibit: one document, set out to be read — nisc.dev's, to the letter ──
+   On paper: black on white behind a 3px rule, no shadow, no colour; the lines
+   wrap. In ink: the pane is near-black, the caption is a tab sitting on it,
+   and the document is set in colour — keywords, strings, numbers, comments,
+   nothing else. */
+.${ROOT_CLASS} .exhibit { margin: 0; display: grid; gap: .45rem; align-content: start; min-width: 0; max-width: 100%; }
+.${ROOT_CLASS} .exhibit > figcaption { font: 400 .76rem/1.4 var(--mono); letter-spacing: .06em; text-transform: uppercase; }
+.${ROOT_CLASS} .exhibit > pre {
+  margin: 0; min-width: 0; padding: .95rem 1.1rem; border: var(--rule) solid var(--ink); background: var(--paper); color: var(--ink);
+  font: 400 .9rem/1.6 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.${ROOT_CLASS} .exhibit > pre > span { display: block; }
+.${ROOT_CLASS} [data-ink="ink"] .exhibit > pre, .${ROOT_CLASS} [data-ink="signal"] .exhibit > pre { border-color: var(--paper); }
+.${ROOT_CLASS} .exhibit[data-tone="ink"] { gap: 0; }
+.${ROOT_CLASS} .exhibit[data-tone="ink"] > figcaption { justify-self: start; background: #111; color: #e9e6dc; border: var(--rule) solid var(--ink); border-bottom: 0; padding: .45rem .7rem .35rem; }
+.${ROOT_CLASS} .exhibit[data-tone="ink"] > pre { background: #111; color: #e9e6dc; }
+/* a document set in colour: its names are white, as on nisc.dev (its exhibit-ink pre code rule) */
+.${ROOT_CLASS} .exhibit[data-tone="ink"][data-lang] > pre { color: #fff; }
+.${ROOT_CLASS} [data-ink="ink"] .exhibit[data-tone="ink"] > figcaption, .${ROOT_CLASS} [data-ink="signal"] .exhibit[data-tone="ink"] > figcaption { border-color: var(--paper); }
+/* the lines that matter */
+.${ROOT_CLASS} .exhibit > pre > span[data-marked] { background: var(--highlight); color: var(--ink); margin: 0 -.5em; padding: 0 .5em; }
+.${ROOT_CLASS} .exhibit > pre > span[data-marked] * { color: inherit; }
+/* a flagged exhibit: its caption is a tab wearing the ink — orange a draft that failed, green one that ran */
+.${ROOT_CLASS} .exhibit[data-flag] { gap: 0; }
+.${ROOT_CLASS} .exhibit[data-flag] > figcaption { justify-self: start; padding: .45rem .7rem .35rem; border: var(--rule) solid var(--ink); border-bottom: 0; background: var(--flag-bg); color: var(--flag-fg); }
+.${ROOT_CLASS} .exhibit[data-flag="alert"] { --flag-bg: var(--alert); --flag-fg: var(--ink); }
+.${ROOT_CLASS} .exhibit[data-flag="live"] { --flag-bg: var(--live); --flag-fg: var(--ink); }
+.${ROOT_CLASS} .exhibit[data-flag="signal"] { --flag-bg: var(--signal); --flag-fg: var(--paper); }
+.${ROOT_CLASS} .exhibit[data-flag="highlight"] { --flag-bg: var(--highlight); --flag-fg: var(--ink); }
+.${ROOT_CLASS} .exhibit[data-flag="ink"] { --flag-bg: var(--ink); --flag-fg: var(--paper); }
+.${ROOT_CLASS} .exhibit[data-flag="paper"] { --flag-bg: var(--paper); --flag-fg: var(--ink); }
+/* code in colour, in ink only (nisc.dev's palette) */
+.${ROOT_CLASS} .exhibit[data-tone="ink"] > pre .hljs-comment { color: #8a8780; }
+.${ROOT_CLASS} .exhibit[data-tone="ink"] > pre .hljs-keyword { color: #8fa8ff; }
+.${ROOT_CLASS} .exhibit[data-tone="ink"] > pre .hljs-string { color: #5fe08a; }
+.${ROOT_CLASS} .exhibit[data-tone="ink"] > pre .hljs-title, .${ROOT_CLASS} .exhibit[data-tone="ink"] > pre .hljs-built_in { color: var(--highlight); }
+.${ROOT_CLASS} .exhibit[data-tone="ink"] > pre .hljs-number, .${ROOT_CLASS} .exhibit[data-tone="ink"] > pre .hljs-literal { color: #ff9b70; }
+.${ROOT_CLASS} .exhibit[data-tone="ink"] > pre .hljs-attr, .${ROOT_CLASS} .exhibit[data-tone="ink"] > pre .hljs-property { color: #fff; }
+
+/* ── pair: two things side by side; one under the other where there is no room ── */
+.${ROOT_CLASS} .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 1.4rem; align-items: start; min-width: 0; }
+.${ROOT_CLASS} .pair[data-split="narrow-wide"] { grid-template-columns: 1fr 1.25fr; }
+.${ROOT_CLASS} .pair[data-split="wide-narrow"] { grid-template-columns: 1.25fr 1fr; }
+.${ROOT_CLASS} .pair > * { min-width: 0; }
+@media (max-width: 760px) { .${ROOT_CLASS} .pair { grid-template-columns: 1fr; } }
+
+/* ── stack: things one under another ── */
+.${ROOT_CLASS} .stack { display: grid; gap: 1.2rem; align-content: start; min-width: 0; }
+.${ROOT_CLASS} .stack[data-gap="tight"] { gap: .6rem; }
+.${ROOT_CLASS} .stack[data-scroll="y"] { overflow-y: auto; min-height: 0; overscroll-behavior: contain; padding: 1.3rem 1.5rem; }
+.${ROOT_CLASS} .stack > * { min-width: 0; }
+
+/* ── stats: a row of figures, each with what it counts ── */
+.${ROOT_CLASS} .stats { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: var(--rule); background: var(--ink); border: var(--rule) solid var(--ink); }
+.${ROOT_CLASS} .stats > div { background: var(--bg); color: var(--fg); padding: .9rem 1rem; display: grid; gap: .35rem; align-content: start; }
+.${ROOT_CLASS} .stats b { font: 900 2.4rem/1 var(--display); font-variant-numeric: tabular-nums; }
+.${ROOT_CLASS} .stats span { font: 700 .7rem/1.2 var(--display); letter-spacing: .06em; text-transform: uppercase; }
+
+/* ── pipeline: a line of steps that always run, and one detour under it ──
+   A step is a box wearing its ink; a link is a rule with a head; what did not
+   happen stays where it is, faded — the picture is the same every time and
+   only what is lit changes. */
+.${ROOT_CLASS} .pipeline { display: grid; grid-template-rows: auto 1.6rem auto; align-items: stretch; min-width: 0; }
+.${ROOT_CLASS} .pipeline-step { background: var(--bg); color: var(--fg); border: var(--rule) solid var(--ink); padding: .5rem .8rem .6rem; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .25rem .6rem; align-content: start; min-width: 0; }
+.${ROOT_CLASS} .pipeline-step > b { font: 900 .82rem/1.1 var(--display); letter-spacing: .04em; text-transform: uppercase; }
+/* a value is a line; a longer one — somebody's question — takes a second and stops there */
+/* how long the step took: in its corner, in figures that do not jump as they change */
+.${ROOT_CLASS} .pipeline-step > i { font: 700 .8rem/1.1 var(--mono); font-style: normal; font-variant-numeric: tabular-nums; white-space: nowrap; align-self: center; }
+.${ROOT_CLASS} .pipeline-step > span { grid-column: 1 / -1; font: 400 .8rem/1.3 var(--mono); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
+.${ROOT_CLASS} .pipeline [data-off] { opacity: .22; }
+.${ROOT_CLASS} .pipeline-step[data-off] { background: var(--paper); color: var(--ink); }
+/* a link: a rule from one step to the next, its head at the far end */
+.${ROOT_CLASS} .pipeline-link { align-self: center; position: relative; height: var(--rule); background: var(--ink); min-width: 1.6rem; margin-right: .5rem; }
+.${ROOT_CLASS} .pipeline-link::after { content: ''; position: absolute; right: -.5rem; top: 50%; translate: 0 -50%; border: .38rem solid transparent; border-left-color: var(--ink); border-right: 0; }
+.${ROOT_CLASS} .pipeline-link > span { position: absolute; left: 0; right: 0; bottom: .35rem; text-align: center; font: 400 .7rem/1 var(--mono); letter-spacing: .04em; text-transform: uppercase; white-space: nowrap; }
+/* the way down into the detour and the way back up: rules with heads, each said beside it */
+.${ROOT_CLASS} .pipeline-enter, .${ROOT_CLASS} .pipeline-leave { position: relative; align-self: stretch; margin-left: 1.6rem; border-left: var(--rule) solid var(--ink); }
+.${ROOT_CLASS} .pipeline-enter { margin-bottom: .5rem; }
+.${ROOT_CLASS} .pipeline-leave { margin-top: .5rem; }
+.${ROOT_CLASS} .pipeline-enter::after { content: ''; position: absolute; left: calc(var(--rule) / -2); bottom: -.5rem; translate: -50% 0; border: .38rem solid transparent; border-top-color: var(--ink); border-bottom: 0; }
+.${ROOT_CLASS} .pipeline-leave::after { content: ''; position: absolute; left: calc(var(--rule) / -2); top: -.5rem; translate: -50% 0; border: .38rem solid transparent; border-bottom-color: var(--ink); border-top: 0; }
+.${ROOT_CLASS} .pipeline-enter > span, .${ROOT_CLASS} .pipeline-leave > span { position: absolute; left: .6rem; top: 50%; translate: 0 -50%; font: 400 .7rem/1 var(--mono); letter-spacing: .04em; text-transform: uppercase; white-space: nowrap; }
+/* the detour: its steps in a dashed box, said along its top */
+.${ROOT_CLASS} .pipeline-detour { border: 2px dashed var(--ink); padding: .45rem .7rem .7rem; display: grid; gap: .4rem; min-width: 0; }
+.${ROOT_CLASS} .pipeline-detour[data-off] { opacity: 1; border-color: color-mix(in srgb, var(--ink) 22%, transparent); }
+.${ROOT_CLASS} .pipeline-detour[data-off] > .pipeline-said { opacity: .22; }
+.${ROOT_CLASS} .pipeline-said { font: 400 .7rem/1.2 var(--mono); letter-spacing: .04em; text-transform: uppercase; }
+.${ROOT_CLASS} .pipeline-inner { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); grid-template-columns: minmax(0, 1fr) 3rem minmax(0, 1fr); align-items: center; }
+.${ROOT_CLASS} .pipeline-legend { align-self: center; justify-self: end; display: grid; gap: .45rem; padding-left: 1rem; }
+.${ROOT_CLASS} .pipeline-legend > span { display: flex; align-items: center; gap: .5rem; font: 400 .7rem/1 var(--mono); letter-spacing: .04em; text-transform: uppercase; white-space: nowrap; }
+.${ROOT_CLASS} .pipeline-legend > span::before { content: ''; width: .9rem; height: .9rem; flex: none; background: var(--bg); border: 2px solid var(--ink); }
 `;

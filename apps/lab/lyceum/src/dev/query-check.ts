@@ -2,7 +2,7 @@ import { serve } from '@hono/node-server';
 import { attachSocket } from '@niscorp/moss/node';
 import { mintSession } from '@niscorp/moss';
 import { queriesTally } from '@lyceum/app/vex/query.entries';
-import { QUERY_SHAPES } from '@lyceum/app/vex/query.shapes';
+import { ALL_SHAPES } from '@lyceum/app/vex/query.shapes';
 import { answerLayout } from '@lyceum/app/actions/shared/answer.layouts';
 import { boot } from '@lyceum/server/boot';
 import { vexOver, wireAs } from '@lyceum/server/vex-over';
@@ -88,7 +88,7 @@ const main = async (): Promise<void> => {
   check(`the projector counts them — ${counted}`, counted === JSON.stringify({ replayed: 1, generated: 1, refused: 1 }));
 
   const branches = JSON.stringify(answerLayout({ kind: '$k', how: '$h', rows: '$r' }));
-  for (const { kind } of QUERY_SHAPES) check(`the answer layout has a branch for "${kind}"`, branches.includes(JSON.stringify({ $eq: ['$k', kind] })));
+  for (const { kind } of ALL_SHAPES) check(`the answer layout has a branch for "${kind}"`, branches.includes(JSON.stringify({ $eq: ['$k', kind] })));
   await say(ada.phone, 'How many questions has each person sent?');
   check('a count per group is shown with its own columns', await ada.phone.shows('overlay', '"label":"Group"'));
 

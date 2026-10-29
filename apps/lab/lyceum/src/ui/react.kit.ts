@@ -9,11 +9,13 @@ import {
 import { useNovaDispatch } from '@niscorp/nova/adapters/react';
 import type { NovaComponent, NovaComponentProps } from '@niscorp/nova/adapters/react';
 import type { KitOf } from './kit.props';
-import { ALIGNS, INKS, LEVELS, MARKS, SIGILS, oneOf, records } from './kit';
+import { ALIGNS, GAPS, INKS, LANGS, LEVELS, MARKS, PANES, SCALES, SIGILS, SIZES, SPLITS, oneOf, records } from './kit';
 import {
   SIGIL_SHAPES,
   areaOf,
+  codeLines,
   flowDelays,
+  numbers,
   instantOf,
   narrowOf,
   qrOf,
@@ -22,7 +24,10 @@ import {
   templateOf,
   text,
   weight,
+  pipelineColumns,
+  pipelineOf,
 } from './kit.shape';
+import type { PipelineStep } from './kit.shape';
 
 // nova's DOM adapter wires a node's `ref` and `model` by convention; React's
 // does not, so these components do it themselves.
@@ -81,6 +86,7 @@ const Sheet: NovaComponent = (props: Props) => {
         ...placed,
         className: 'sheet',
         'data-size': size,
+        ...data('scale', oneOf(props['scale'], SCALES)),
         ...(narrow === undefined ? {} : { 'data-narrow': '' }),
       },
       props.children,
@@ -122,9 +128,72 @@ const Text: NovaComponent = (props: Props) =>
       ...usePlaced(props),
       className: 'text',
       ...data('tone', oneOf(props['tone'], ['muted'] as const)),
+      ...data('size', oneOf(props['size'], SIZES)),
     },
     props.children,
   );
+
+// The reading grammar, as the DOM kit draws it (./kit.ts).
+const Exhibit: NovaComponent = (props: Props) =>
+  h(
+    'figure',
+    { ...usePlaced(props), className: 'exhibit', ...data('lang', oneOf(props['lang'], LANGS)), ...data('tone', oneOf(props['tone'], PANES)), ...data('flag', oneOf(props['flag'], INKS)) },
+    h('figcaption', null, text(props['label']) ?? ''),
+    h(
+      'pre',
+      null,
+      codeLines(text(props['text']) ?? '', oneOf(props['lang'], LANGS), numbers(props['marked'])).map((line, i) =>
+        h('span', { key: i, ...(line.marked ? { 'data-marked': '' } : {}), dangerouslySetInnerHTML: { __html: line.html } }),
+      ),
+    ),
+  );
+
+const Pair: NovaComponent = (props: Props) => h('div', { ...usePlaced(props), className: 'pair', ...data('split', oneOf(props['split'], SPLITS)) }, props.children);
+
+const Stack: NovaComponent = (props: Props) =>
+  h('div', { ...usePlaced(props), className: 'stack', ...data('gap', oneOf(props['gap'], GAPS)), ...data('scroll', oneOf(props['scroll'], ['y'] as const)) }, props.children);
+
+const Stats: NovaComponent = (props: Props) =>
+  h(
+    'div',
+    { ...usePlaced(props), className: 'stats' },
+    records(props['items']).map((item, i) => h('div', { key: i, ...data('ink', oneOf(item['ink'], INKS)) }, h('b', null, text(item['value']) ?? '—'), h('span', null, text(item['label']) ?? ''))),
+  );
+
+// A line of steps and one detour under it, as in the DOM kit.
+const Pipeline: NovaComponent = (props: Props) => {
+  const placed = usePlaced(props, { gridTemplateColumns: pipelineColumns(pipelineOf(props).steps.length) });
+  const shape = pipelineOf(props);
+  const off = (is: boolean): Record<string, string> => (is ? { 'data-off': '' } : {});
+  const at = (column: string, row: number): { style: Record<string, string> } => ({ style: { gridColumn: column, gridRow: String(row) } });
+  const step = (item: PipelineStep, key: string, place: Record<string, unknown> = {}): ReturnType<typeof h> =>
+    h('div', { key, ...place, className: 'pipeline-step', ...data('ink', oneOf(item.ink, INKS)), ...off(item.off) }, h('b', null, item.label), h('i', null, item.note), h('span', null, item.value));
+  const link = (className: string, said: string, isOff: boolean, key: string, place: Record<string, unknown> = {}): ReturnType<typeof h> => h('div', { key, ...place, className, ...off(isOff) }, h('span', null, said));
+  const detour = shape.detour;
+  return h(
+    'div',
+    { ...placed, className: 'pipeline' },
+    shape.steps.flatMap((item, index) => {
+      const next = shape.links[index];
+      return [step(item, `s${index}`, at(String(index * 2 + 1), 1)), ...(next === undefined ? [] : [link('pipeline-link', next.label, next.off, `l${index}`, at(String(index * 2 + 2), 1))])];
+    }),
+    detour === undefined
+      ? null
+      : [
+          link('pipeline-enter', detour.enter, detour.off, 'enter', at(String(detour.from * 2 + 1), 2)),
+          link('pipeline-leave', detour.leave, !detour.back, 'leave', at(String(detour.to * 2 + 1), 2)),
+          h(
+            'div',
+            { key: 'detour', ...at(`${detour.from * 2 + 1} / ${detour.to * 2 + 2}`, 3), className: 'pipeline-detour', ...off(detour.off) },
+            h('span', { className: 'pipeline-said' }, detour.label),
+            h('div', { className: 'pipeline-inner' }, detour.steps.flatMap((item, index) => [...(index === 0 ? [] : [link('pipeline-link', '', item.off, `dl${index}`)]), step(item, `ds${index}`)])),
+          ),
+        ],
+    shape.legend.length === 0
+      ? null
+      : h('div', { ...at(`${(detour?.to ?? 0) * 2 + 3} / -1`, 3), className: 'pipeline-legend' }, shape.legend.map((item, index) => h('span', { key: index, ...data('ink', oneOf(item.ink, INKS)) }, item.label))),
+  );
+};
 
 const Figure: NovaComponent = (props: Props) =>
   h(
@@ -430,4 +499,9 @@ export const REACT_KIT: KitOf<NovaComponent> = {
   Look,
   Xray,
   Menu,
+  Exhibit,
+  Pair,
+  Stack,
+  Stats,
+  Pipeline,
 };

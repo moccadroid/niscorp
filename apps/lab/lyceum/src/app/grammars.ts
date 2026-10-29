@@ -76,5 +76,26 @@ export const LYCEUM_KIT: Sequence = {
       description: 'Menu: an icon that opens a list of things to press',
       steps: [],
     },
+    {
+      // A MARKER: the reading grammar — a scale, a prop and four components
+      // added, for the slides that are read rather than glanced at.
+      description: 'The reading scale: Sheet scale page, Text size; Exhibit (a document set out to be read), Pair, Stack, Stats',
+      steps: [],
+    },
+    {
+      // A MARKER: a component added.
+      description: 'Pipeline: a line of steps that always run, and one detour under it that runs only sometimes',
+      steps: [],
+    },
+    {
+      // A MARKER: a prop added.
+      description: 'Pipeline: a step’s note — set apart in its corner, how long it took',
+      steps: [],
+    },
+    {
+      // A MARKER: a value added to a closed set.
+      description: 'Sheet: scale dense — the reading scale a size down, for a slide that holds more',
+      steps: [],
+    },
   ],
 };

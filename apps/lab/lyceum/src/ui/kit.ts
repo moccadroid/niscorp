@@ -1,8 +1,8 @@
 import type { DomComponent } from '@niscorp/nova/adapters/dom';
 import type { Kit } from './kit.props';
-import { areaOf, SIGIL_SHAPES, flowDelays, instantOf, narrowOf, qrOf, remaining, sheetStyle, templateOf, text, weight } from './kit.shape';
+import { areaOf, codeLines, LANGS, numbers, pipelineColumns, pipelineOf, SIGIL_SHAPES, flowDelays, instantOf, narrowOf, qrOf, remaining, sheetStyle, templateOf, text, weight } from './kit.shape';
 
-export { text } from './kit.shape';
+export { codeLines, LANGS, numbers, text } from './kit.shape';
 
 export const INKS = ['paper', 'ink', 'signal', 'alert', 'live', 'highlight'] as const;
 export const MARKS = ['stripes', 'dots', 'bars', 'checks', 'hatch'] as const;
@@ -10,6 +10,17 @@ export const SIGILS = ['triangle', 'circle', 'square', 'cross', 'check', 'x'] as
 export const ALIGNS = ['start', 'end', 'center', 'between', 'middle'] as const;
 export const LEVELS = ['display', 'title', 'name'] as const;
 export const LOOKS = ['dom', 'react', 'vue'] as const;
+// THE READING GRAMMAR (nisc.dev's, on the stage): what a slide that is read
+// rather than glanced at is set in — a sheet at the page scale, text in sizes,
+// a document in an exhibit, two things side by side, things one under another,
+// a row of figures.
+// page: the reading scale; dense: the same, a size down — a slide with a
+// picture, two documents and an answer on it.
+export const SCALES = ['page', 'dense'] as const;
+export const SIZES = ['body', 'lede', 'small', 'fine'] as const;
+export const PANES = ['paper', 'ink'] as const;
+export const SPLITS = ['even', 'narrow-wide', 'wide-narrow'] as const;
+export const GAPS = ['normal', 'tight'] as const;
 
 export const oneOf = <T extends string>(value: unknown, options: readonly T[]): T | undefined =>
   options.find((option) => option === value);
@@ -39,6 +50,7 @@ export const Sheet: DomComponent = ({ props, children, dependsOnChildren }) => {
   const node = el('div', 'sheet', children);
   const size = oneOf(props['size'], ['fill', 'auto'] as const) ?? 'auto';
   setData(node, 'size', size);
+  setData(node, 'scale', oneOf(props['scale'], SCALES));
   const narrow = narrowOf(props['narrow'], size);
   for (const [key, value] of Object.entries(sheetStyle(templateOf(props['areas'], props['rows'], props['cols'], size), narrow, size))) {
     if (key.startsWith('--')) node.style.setProperty(key, value);
@@ -82,6 +94,133 @@ export const Headline: DomComponent = ({ props, children }) => {
 export const Text: DomComponent = ({ props, children }) => {
   const node = el('p', 'text', children);
   setData(node, 'tone', oneOf(props['tone'], ['muted'] as const));
+  setData(node, 'size', oneOf(props['size'], SIZES));
+  return node;
+};
+
+// ── Exhibit — one document, set out to be read ──────────────────
+// label: what it is (a file, "the statement", "sent"); text: the document;
+// lang (json | sql | ts): set in colour; tone (paper | ink): the pane; flag
+// (an ink): the caption wears it — orange for a draft that failed, green for
+// one that ran; marked: 1-based lines to mark. Code lives here and nowhere
+// beside prose.
+export const Exhibit: DomComponent = ({ props }) => {
+  const caption = el('figcaption', '');
+  caption.textContent = text(props['label']) ?? '';
+  const lines = codeLines(text(props['text']) ?? '', oneOf(props['lang'], LANGS), numbers(props['marked'])).map((line) => {
+    const node = el('span', '');
+    node.innerHTML = line.html;
+    if (line.marked) node.setAttribute('data-marked', '');
+    return node;
+  });
+  const node = el('figure', 'exhibit', [caption, el('pre', '', lines)]);
+  placeIn(node, props['area']);
+  // Said, so the look can wrap a document that is words rather than code.
+  setData(node, 'lang', oneOf(props['lang'], LANGS));
+  setData(node, 'tone', oneOf(props['tone'], PANES));
+  setData(node, 'flag', oneOf(props['flag'], INKS));
+  return node;
+};
+
+// ── Pair — two things side by side ──────────────────────────────
+// split: even | narrow-wide | wide-narrow. One under the other where there is no room.
+export const Pair: DomComponent = ({ props, children }) => {
+  const node = el('div', 'pair', children);
+  placeIn(node, props['area']);
+  setData(node, 'split', oneOf(props['split'], SPLITS));
+  return node;
+};
+
+// ── Stack — things one under another ────────────────────────────
+// gap: normal | tight; scroll: 'y' — a stack that may outgrow its place scrolls inside it.
+export const Stack: DomComponent = ({ props, children }) => {
+  const node = el('div', 'stack', children);
+  placeIn(node, props['area']);
+  setData(node, 'gap', oneOf(props['gap'], GAPS));
+  setData(node, 'scroll', oneOf(props['scroll'], ['y'] as const));
+  return node;
+};
+
+// ── Stats — a row of figures, each with what it counts ──────────
+// items: [{ label, value, ink? }].
+export const Stats: DomComponent = ({ props }) => {
+  const items = records(props['items']).map((item) => {
+    const value = el('b', '');
+    value.textContent = text(item['value']) ?? '—';
+    const label = el('span', '');
+    label.textContent = text(item['label']) ?? '';
+    const node = el('div', '', [value, label]);
+    setData(node, 'ink', oneOf(item['ink'], INKS));
+    return node;
+  });
+  const node = el('div', 'stats', items);
+  placeIn(node, props['area']);
+  return node;
+};
+
+// ── Pipeline — a line of steps, and one detour under it ─────────
+// steps: [{ label, value, note?, ink?, off? }] — what always runs, in order; a
+// step that did not happen is `off`; `note` is set apart in its corner (how
+// long it took). detour: { from, to, label, enter, leave,
+// direct, off, steps } — what runs only sometimes, leaving the line at step
+// `from` and coming back at step `to`; `direct` names the link it stands in
+// for. legend: [{ label, ink? }] — what the inks mean.
+const pipelineStep = (step: { label: string; value: string; note: string; ink: string | undefined; off: boolean }): HTMLElement => {
+  const label = el('b', '');
+  label.textContent = step.label;
+  const note = el('i', '');
+  note.textContent = step.note;
+  const value = el('span', '');
+  value.textContent = step.value;
+  const node = el('div', 'pipeline-step', [label, note, value]);
+  setData(node, 'ink', oneOf(step.ink, INKS));
+  if (step.off) node.setAttribute('data-off', '');
+  return node;
+};
+const pipelineLink = (className: string, said: string, off: boolean): HTMLElement => {
+  const label = el('span', '');
+  label.textContent = said;
+  const node = el('div', className, [label]);
+  if (off) node.setAttribute('data-off', '');
+  return node;
+};
+export const Pipeline: DomComponent = ({ props }) => {
+  const shape = pipelineOf(props);
+  const at = (node: HTMLElement, column: string, row: number): HTMLElement => {
+    node.style.gridColumn = column;
+    node.style.gridRow = String(row);
+    return node;
+  };
+  const line = shape.steps.flatMap((step, index) => {
+    const link = shape.links[index];
+    return [at(pipelineStep(step), String(index * 2 + 1), 1), ...(link === undefined ? [] : [at(pipelineLink('pipeline-link', link.label, link.off), String(index * 2 + 2), 1)])];
+  });
+  const detour = shape.detour;
+  const under =
+    detour === undefined
+      ? []
+      : [
+          at(pipelineLink('pipeline-enter', detour.enter, detour.off), String(detour.from * 2 + 1), 2),
+          at(pipelineLink('pipeline-leave', detour.leave, !detour.back), String(detour.to * 2 + 1), 2),
+          (() => {
+            const label = el('span', 'pipeline-said');
+            label.textContent = detour.label;
+            const inner = el('div', 'pipeline-inner', detour.steps.flatMap((step, index) => [...(index === 0 ? [] : [pipelineLink('pipeline-link', '', step.off)]), pipelineStep(step)]));
+            const box = at(el('div', 'pipeline-detour', [label, inner]), `${detour.from * 2 + 1} / ${detour.to * 2 + 2}`, 3);
+            if (detour.off) box.setAttribute('data-off', '');
+            return box;
+          })(),
+        ];
+  const legend = shape.legend.map((item) => {
+    const node = el('span', '');
+    node.textContent = item.label;
+    setData(node, 'ink', oneOf(item.ink, INKS));
+    return node;
+  });
+  const key = at(el('div', 'pipeline-legend', legend), `${(detour?.to ?? 0) * 2 + 3} / -1`, 3);
+  const node = el('div', 'pipeline', [...line, ...under, ...(legend.length === 0 ? [] : [key])]);
+  node.style.gridTemplateColumns = pipelineColumns(shape.steps.length);
+  placeIn(node, props['area']);
   return node;
 };
 
@@ -353,4 +492,4 @@ export const Menu: DomComponent = ({ props, children }) => {
 // Shows nothing, like Look: the render target reads it off the frame.
 export const Xray: DomComponent = () => el('span', 'look');
 
-export const POSTER_KIT: Kit = { Page, Sheet, Cell, Label, Headline, Text, Figure, Countdown, Code, Sigil, Qr, Rows, Bar, Flow, Columns, Action, Field, Look, Xray, Menu };
+export const POSTER_KIT: Kit = { Page, Sheet, Cell, Label, Headline, Text, Figure, Countdown, Code, Sigil, Qr, Rows, Bar, Flow, Columns, Action, Field, Look, Xray, Menu, Exhibit, Pair, Stack, Stats, Pipeline };
