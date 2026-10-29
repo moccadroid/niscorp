@@ -3,6 +3,13 @@ export const ROOT_CLASS = 'lyceum';
 export const FONTS_HREF =
   'https://fonts.googleapis.com/css2?family=Unbounded:wght@700;900&family=Space+Grotesk:wght@400;500&family=Space+Mono:wght@400;700&display=swap';
 
+// The stage is the page with a strip. A screen made of regions is any other
+// page whose main sheet's cells hold canvases (the controller); a panel is one
+// of those regions, the head bar left out.
+const STAGE = `.${ROOT_CLASS} .page:has(> [data-canvas="strip"]:not(:empty))`;
+const REGIONS = `.${ROOT_CLASS} .page:not(:has(> [data-canvas="strip"]:not(:empty))) > [data-canvas="main"] > * > .sheet:has(> .cell > [data-canvas])`;
+const PANEL = `${REGIONS} > .cell > [data-canvas]:not([data-canvas="head"])`;
+
 export const LYCEUM_CSS = `
 html, body { margin: 0; padding: 0; }
 /* THE READING SIZE. A size below is clamp(the reading floor, the poster
@@ -69,19 +76,32 @@ html:has(.page > [data-canvas="strip"]:not(:empty)) { font-size: clamp(14px, min
 /* THE STAGE, as nisc.dev sets a demo: the slide stands on paper, set in from
    the screen's edge, casting the hard shadow; the strip runs edge to edge
    above it, paper with a rule under it, and only the count is in colour. */
-.${ROOT_CLASS} .page:has(> [data-canvas="strip"]:not(:empty)) > [data-canvas="main"] { padding: .8rem 1.3rem 1.3rem 1rem; }
-.${ROOT_CLASS} .page:has(> [data-canvas="strip"]:not(:empty)) > [data-canvas="main"]:not(:empty) > * > .sheet { border-top: var(--rule) solid var(--ink); box-shadow: .45rem .45rem 0 var(--ink); }
+${STAGE} > [data-canvas="main"] { padding: .8rem 1.3rem 1.3rem 1rem; }
+${STAGE} > [data-canvas="main"]:not(:empty) > * > .sheet { border-top: var(--rule) solid var(--ink); box-shadow: .45rem .45rem 0 var(--ink); }
 .${ROOT_CLASS} .page > [data-canvas="strip"] > * > .sheet { border-width: 0 0 var(--rule); }
 .${ROOT_CLASS} .page > [data-canvas="strip"] .cell[data-ink="highlight"] { --bg: var(--paper); }
 
-/* A SCREEN MADE OF REGIONS (the controller), wider than a phone and not the
-   stage: each region
-   is a panel on paper, framed and casting the shadow, with room between —
-   not a cell of one grid. A region with nothing in it leaves its place. */
+/* A SCREEN MADE OF REGIONS, wider than a phone: each region is a panel on
+   paper, framed and casting the shadow, with room between — not a cell of one
+   grid. A region with nothing in it leaves its place; while nothing is
+   attached, the slide's tools take that place too.
+   Inside a panel, nisc.dev's dialog: its first label is a header bar across
+   it, below that things stand on paper with room between, and a button is a
+   chip, framed and casting the shadow. */
 @media (min-width: 641px) {
-  .${ROOT_CLASS} .page:not(:has(> [data-canvas="strip"]:not(:empty))) > [data-canvas="main"] > * > .sheet:has(> .cell > [data-canvas]) { gap: 1.1rem; background: var(--paper); border: 0; padding: 1rem 1.4rem 1.4rem 1rem; }
-  .${ROOT_CLASS} .page:not(:has(> [data-canvas="strip"]:not(:empty))) > [data-canvas="main"] > * > .sheet:has(> .cell > [data-canvas]) > .cell { border: var(--rule) solid var(--ink); box-shadow: 6px 6px 0 var(--ink); }
-  .${ROOT_CLASS} .page:not(:has(> [data-canvas="strip"]:not(:empty))) > [data-canvas="main"] > * > .sheet:has(> .cell > [data-canvas]) > .cell:has(> [data-canvas]:empty) { visibility: hidden; }
+  ${REGIONS} { gap: 1.1rem; background: var(--paper); border: 0; padding: 1rem 1.4rem 1.4rem 1rem; }
+  ${REGIONS} > .cell { border: var(--rule) solid var(--ink); box-shadow: 6px 6px 0 var(--ink); }
+  ${REGIONS} > .cell:has(> [data-canvas]:empty) { display: none; }
+  ${REGIONS}:has(> .cell > [data-canvas="attached"]:empty) > .cell:has(> [data-canvas="tools"]) { grid-row: tools-start / attached-end !important; }
+  ${PANEL} > * > .sheet, ${PANEL} > .sheet { background: var(--paper); gap: .75rem; padding: .9rem; border: 0; }
+  ${PANEL} > * + * > .sheet { border-top: var(--rule) solid var(--ink); }
+  ${PANEL} > *:last-child { min-height: auto; }
+  ${PANEL} > * > .sheet:has(> .cell:first-child > .label:only-child) { padding-top: 0; }
+  ${PANEL} > * > .sheet > .cell:first-child:has(> .label:only-child) { margin: 0 -.9rem; padding: .6rem .9rem; }
+  ${PANEL} > * > .sheet > .cell:first-child:not([data-ink]):has(> .label:only-child) { --bg: var(--ink); --fg: var(--paper); }
+  ${PANEL} > * > .sheet > .cell:not([data-ink]):not([data-mark]):not(:first-child) { padding: 0; }
+  ${PANEL} > * > .sheet > .action { border: var(--rule) solid var(--ink); box-shadow: 4px 4px 0 var(--ink); }
+  ${PANEL} > * > .sheet > .action:active { transform: translate(2px, 2px); box-shadow: 2px 2px 0 var(--ink); }
   .${ROOT_CLASS} [data-canvas="notes"] .text { font-size: 1.3rem; line-height: 1.45; }
   .${ROOT_CLASS} [data-canvas="head"] .headline[data-level="name"] { font-size: 1.6rem; }
   .${ROOT_CLASS} [data-canvas="controls"] .action { min-height: 4.5rem; font-size: 1.05rem; }
@@ -194,6 +214,9 @@ html:has(.page > [data-canvas="strip"]:not(:empty)) { font-size: clamp(14px, min
 /* code in a cell that scrolls (a phone reading a document, not a slide showing
    one) wraps its long lines instead of cutting them off */
 .${ROOT_CLASS} .cell[data-scroll] .code { white-space: pre-wrap; overflow-wrap: anywhere; }
+/* code in ink is nisc.dev's pane: near-black, warm white, captioned in mono */
+.${ROOT_CLASS} .cell[data-ink="ink"]:has(> .code) { --bg: #111; --fg: #e9e6dc; }
+.${ROOT_CLASS} .cell:has(> .code) > .label { font-family: var(--mono); font-weight: 400; letter-spacing: .06em; }
 .${ROOT_CLASS} .code > span[data-marked] { background: var(--highlight); color: var(--ink); margin: 0 -.4em; padding: 0 .4em; }
 
 /* ── rows: a ruled table, headers in the label voice ── */
