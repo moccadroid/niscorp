@@ -10,8 +10,12 @@ export const FONTS_HREF =
 const STAGE = `.${ROOT_CLASS} .page:has(> [data-canvas="strip"]:not(:empty))`;
 const REGIONS = `.${ROOT_CLASS} .page:not(:has(> [data-canvas="strip"]:not(:empty))) > [data-canvas="main"] > * > .sheet:has(> .cell > [data-canvas]):not(:has(> .cell > [data-canvas="body"]))`;
 const PANEL = `${REGIONS} > .cell > [data-canvas]:not([data-canvas="head"])`;
-// An action standing alone: in a panel, or on the phone's list.
-const DIALOG = `:is(${PANEL} > *, .${ROOT_CLASS} .cell > [data-canvas="body"] > *) > .sheet`;
+// A form: a screen off the stage whose sheet holds a field (the door, the
+// speaker's sign-in).
+const FORM = `.${ROOT_CLASS} .page:not(:has(> [data-canvas="strip"]:not(:empty))) > [data-canvas="main"] > * > .sheet:has(> .field)`;
+// An action standing alone: in a panel, on the phone's list, a form, or what
+// is opened over the screen.
+const DIALOG = `:is(${PANEL} > * > .sheet, .${ROOT_CLASS} .cell > [data-canvas="body"] > * > .sheet, ${FORM}, .${ROOT_CLASS} .page > [data-canvas="overlay"] > * > .sheet > .cell > .sheet)`;
 
 export const LYCEUM_CSS = `
 html, body { margin: 0; padding: 0; }
@@ -92,8 +96,14 @@ ${DIALOG}:has(> .cell:first-child > .label:only-child) { padding-top: 0; }
 ${DIALOG} > .cell:first-child:has(> .label:only-child) { margin: 0 -.9rem; padding: .6rem .9rem; }
 ${DIALOG} > .cell:first-child:not([data-ink]):has(> .label:only-child) { --bg: var(--ink); --fg: var(--paper); }
 ${DIALOG} > .cell:not([data-ink]):not([data-mark]):not(:first-child) { padding: 0; }
+${DIALOG} > .cell > .sheet:has(> *) { border: var(--rule) solid var(--ink); }
 ${DIALOG} > .action { border: var(--rule) solid var(--ink); box-shadow: 4px 4px 0 var(--ink); }
 ${DIALOG} > .action:active { transform: translate(2px, 2px); box-shadow: 2px 2px 0 var(--ink); }
+
+/* A FORM on a screen wider than a phone stands as a card in the middle of it. */
+@media (min-width: 641px) {
+  ${FORM} { flex: 0 1 auto; width: min(100% - 3rem, 34rem); margin: auto; border: var(--rule) solid var(--ink); box-shadow: 8px 8px 0 var(--ink); }
+}
 
 /* ON A PHONE the screen's edge is the frame: the top sheet draws none, and a
    label it opens with is the header bar. */
