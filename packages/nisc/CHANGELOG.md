@@ -1,5 +1,13 @@
 # @niscorp/nisc
 
+## 0.8.5
+
+### Patch Changes
+
+- Updated dependencies [718cb95]
+- Updated dependencies [718cb95]
+  - @niscorp/tide@0.1.8
+
 ## 0.8.4
 
 ### Patch Changes
