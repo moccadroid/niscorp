@@ -84,7 +84,7 @@ const LEDGER: Readonly<Record<string, Readonly<Record<string, Entry>>>> = {
   tide: {
     'store/postgres/store.ts': { doors: 4, statements: 4, tables: 0, why: 'store', note: "tide's Postgres store: the engine's own rows, behind the store contract: read, append, compare-and-set, remove" },
     'store/postgres/claim.ts': { doors: 3, statements: 3, tables: 0, why: 'store', note: "tide's Postgres store: the claim, the question whether a serial group is held, and the advisory lock the two run behind" },
-    'store/postgres/tables.ts': { doors: 0, statements: 0, tables: 3, why: 'tables', note: "tide's own table sequence (`nisc.moss.tide`): the DDL that is migration 1, and the two columns migration 2 adds" },
+    'store/postgres/tables.ts': { doors: 0, statements: 0, tables: 4, why: 'tables', note: "tide's own table sequence (`nisc.moss.tide`): the DDL that is migration 1, the two columns migration 2 adds, and the index on `tide_run.as_who` that migration 3 adds" },
   },
 };
 
