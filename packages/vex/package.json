@@ -117,6 +117,7 @@
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.1",
+    "@electric-sql/pglite-pgvector": "^0.0.2",
     "@hono/node-server": "^2.0.4",
     "@niscorp/cortex": "workspace:^",
     "@niscorp/prism": "workspace:^",
