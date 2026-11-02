@@ -1,5 +1,12 @@
 # @niscorp/nisc
 
+## 0.8.6
+
+### Patch Changes
+
+- Updated dependencies [c5f8e64]
+  - @niscorp/vex@0.4.3
+
 ## 0.8.5
 
 ### Patch Changes
