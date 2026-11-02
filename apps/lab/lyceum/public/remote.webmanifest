@@ -1,0 +1,17 @@
+{
+  "name": "Lyceum · Speaker",
+  "short_name": "Speaker",
+  "description": "The speaker's controller: next, back, and the slide's tools.",
+  "start_url": "/?seat=speaker",
+  "scope": "/",
+  "display": "fullscreen",
+  "display_override": ["fullscreen", "standalone"],
+  "orientation": "portrait",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "icons": [
+    { "src": "/remote-icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/remote-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/remote-icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}
