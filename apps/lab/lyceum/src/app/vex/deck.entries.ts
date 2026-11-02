@@ -148,6 +148,28 @@ export const deckGo: SeedMutation = {
   },
 };
 
+// The controller's Back and Next: a slide of a talk on screen, revealed up to a step.
+export const deckAdvance: SeedMutation = {
+  fingerprint: 'deck/advance',
+  intent: 'Put the slide at a position of a talk on screen, revealed up to a step',
+  mutation: {
+    op: 'update',
+    table: 'deck',
+    set: {
+      slide_id: {
+        $lookup: {
+          from: 'slides',
+          field: 'slide_id',
+          where: { and: [{ eq: ['slides.talk_id', { $context: 'talk' }] }, { eq: ['slides.position', { $context: 'position' }] }] },
+        },
+      },
+      talk_id: { $context: 'talk' },
+      step: { $context: 'step' },
+    },
+    where: { eq: ['deck.deck_id', { $context: 'deck' }] },
+  },
+};
+
 export const slidesDeck: SeedEntry = {
   fingerprint: 'slides/deck',
   intent: 'Every slide of the talk that is on, with its id, number and title, in order',
@@ -220,8 +242,8 @@ export const deckTalk: SeedEntry = {
 export const deckStep: SeedEntry = {
   fingerprint: 'deck/step',
   refresh: 'reactive',
-  intent: 'How far the slide on screen has been revealed: its step, from 0, how many parts it has, and which part is showing',
-  shape: { step: 0, parts: 1, part: 1 },
+  intent: 'How far the slide on screen has been revealed: its step, from 0, how many parts it has, which part is showing, and whether a part is still to come',
+  shape: { step: 0, parts: 1, part: 1, more: false, next_part: 2 },
   dsl: {
     from: ['deck', 'slides'],
     fields: ['deck.step', 'slides.parts'],
@@ -232,6 +254,8 @@ export const deckStep: SeedEntry = {
     step: { $ref: '$.result.step' },
     parts: { $ref: '$.result.parts' },
     part: { $add: [{ $ref: '$.result.step' }, 1] },
+    more: { $gt: [{ $sub: [{ $ref: '$.result.parts' }, 1] }, { $ref: '$.result.step' }] },
+    next_part: { $add: [{ $ref: '$.result.step' }, 2] },
   },
 };
 
@@ -246,4 +270,4 @@ export const deckStepSet: SeedMutation = {
   },
 };
 
-export const DECK_ENTRIES: readonly (SeedEntry | SeedMutation)[] = [deckCurrent, slidesAll, slidesDeck, slideNotes, slideTools, deckGo, deckShow, talksAll, deckTalk, deckStep, deckStepSet];
+export const DECK_ENTRIES: readonly (SeedEntry | SeedMutation)[] = [deckCurrent, slidesAll, slidesDeck, slideNotes, slideTools, deckGo, deckAdvance, deckShow, talksAll, deckTalk, deckStep, deckStepSet];

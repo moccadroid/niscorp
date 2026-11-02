@@ -17,6 +17,7 @@ import type { NovaComponent, NovaDispatch } from '@niscorp/nova/adapters/vue';
 import type { Target } from '@niscorp/moss/terminal';
 import { vueTarget } from '@niscorp/moss/terminal/vue';
 import type { KitOf } from './kit.props';
+import { foldOpen, rememberFold } from './fold';
 import { ALIGNS, GAPS, INKS, LANGS, LEVELS, MARKS, PANES, SCALES, SIGILS, SIZES, SPLITS, oneOf, records } from './kit';
 import {
   SIGIL_SHAPES,
@@ -565,6 +566,14 @@ const Menu = functional((props, children, place) =>
   h('details', { ...place(), class: 'menu' }, [h('summary', { class: 'menu-icon', 'aria-label': text(props['label']) ?? 'Menu' }), h('div', { class: 'menu-items' }, children)]),
 );
 
+const Fold = functional((props, children) => {
+  const name = text(props['name']) ?? '';
+  return h('details', { class: 'fold', open: foldOpen(name), onToggle: (event: Event) => rememberFold(name, (event.currentTarget as HTMLDetailsElement).open) }, [
+    h('summary', { class: 'fold-label' }, text(props['label']) ?? ''),
+    h('div', { class: 'fold-body' }, children),
+  ]);
+});
+
 export const VUE_KIT: KitOf<NovaComponent> = {
   Page,
   Sheet,
@@ -587,6 +596,7 @@ export const VUE_KIT: KitOf<NovaComponent> = {
   Look,
   Xray,
   Menu,
+  Fold,
   Exhibit,
   Pair,
   Stack,

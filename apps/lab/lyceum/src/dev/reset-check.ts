@@ -5,7 +5,7 @@ import { SLIDES } from '@lyceum/db/seed';
 import { questionSend } from '@lyceum/app/vex/question.entries';
 import { setRenderer } from '@lyceum/app/vex/renderer.entries';
 import { boot } from '@lyceum/server/boot';
-import { check, connect, finish, giveAssistant, waitUntil } from './harness';
+import { check, connect, finish, giveAssistant, waitUntil, nextTo } from './harness';
 import type { Terminal } from './harness';
 
 const main = async (): Promise<void> => {
@@ -42,10 +42,7 @@ const main = async (): Promise<void> => {
   await ada.phone.shows('body', 'Can: ');
   await replay(ada.token, questionSend.fingerprint, { text: 'Will this survive a reset?' });
   await replay(speakerToken, setRenderer.fingerprint, { surface: 'phones', renderer: 'react' });
-  for (const step of [2, 3]) {
-    speaker.click('controls', 'next');
-    await speaker.shows('head', `slide ${step} of`);
-  }
+  await nextTo(speaker, 3);
   const staffGrants = await count("SELECT 1 FROM grants WHERE principal IN ('speaker', 'stage', 'kit', 'moderator', 'clock')");
   check(
     'a talk leaves things behind: two people, a question, the assistant given to everybody, the phones on React, the deck on slide 3',

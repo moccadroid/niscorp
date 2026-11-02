@@ -3,7 +3,7 @@ import { attachSocket } from '@niscorp/moss/node';
 import { mintSession } from '@niscorp/moss';
 import { SLIDES } from '@lyceum/db/seed';
 import { boot } from '@lyceum/server/boot';
-import { check, connect, finish, giveAssistant, waitUntil } from './harness';
+import { check, connect, finish, giveAssistant, waitUntil, nextTo } from './harness';
 import type { Terminal } from './harness';
 
 const instanceOf = (screen: Terminal, canvas: string, action: string): string | undefined => {
@@ -45,10 +45,7 @@ const main = async (): Promise<void> => {
 
   const at = SLIDES.findIndex((slide) => slide.tools.includes('tools.xray'));
   check(`the X-ray tool is on a slide (${SLIDES[at]?.title ?? 'none'})`, at >= 0);
-  for (let step = 0; step < at; step += 1) {
-    speaker.click('controls', 'next');
-    await speaker.shows('head', `slide ${step + 2} of`);
-  }
+  await nextTo(speaker, at + 1);
   check('...and it is on the controller there', await speaker.shows('tools', 'Give everybody the X-ray'));
   await speaker.shows('tools', '"label":"Who has it, late joiners included","value":"Nobody"');
   const halfTyped = 'Remind me when the slide';

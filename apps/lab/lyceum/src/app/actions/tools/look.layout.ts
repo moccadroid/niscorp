@@ -3,11 +3,19 @@ import { RENDERERS, SURFACES } from '@lyceum/app/vex/renderer.entries';
 
 const rowOf = (surface: string): string => [surface, ...RENDERERS.map((renderer) => `${surface}-${renderer}`)].join(' ');
 
+// On a phone: each kind of screen on its own line, its renderers three to a row under it.
+const ACROSS = 3;
+const narrowRowsOf = (surface: string): string[] => [
+  Array.from({ length: ACROSS }, () => surface).join(' '),
+  ...Array.from({ length: Math.ceil(RENDERERS.length / ACROSS) }, (_, row) => RENDERERS.slice(row * ACROSS, row * ACROSS + ACROSS).map((renderer) => `${surface}-${renderer}`).join(' ')),
+];
+
 export const lookLayout: LayoutNode = {
   component: 'Sheet',
   props: {
     areas: [Array.from({ length: RENDERERS.length + 1 }, () => 'kick').join(' '), ...SURFACES.map(rowOf)],
     cols: [2, ...RENDERERS.map(() => 1)],
+    narrow: { areas: [Array.from({ length: ACROSS }, () => 'kick').join(' '), ...SURFACES.flatMap(narrowRowsOf)], cols: Array.from({ length: ACROSS }, () => 1) },
   },
   children: [
     { component: 'Cell', props: { area: 'kick', ink: 'ink' }, children: [{ component: 'Label', children: 'Which renderer draws each kind of screen' }] },

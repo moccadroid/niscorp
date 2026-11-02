@@ -15,6 +15,7 @@ import Headline from './kit/Headline.svelte';
 import Label from './kit/Label.svelte';
 import Look from './kit/Look.svelte';
 import Menu from './kit/Menu.svelte';
+import Fold from './kit/Fold.svelte';
 import Page from './kit/Page.svelte';
 import Pair from './kit/Pair.svelte';
 import Pipeline from './kit/Pipeline.svelte';
@@ -48,6 +49,7 @@ export const SVELTE_KIT: KitOf<SvelteKitComponent> = {
   Look,
   Xray: Look,
   Menu,
+  Fold,
   Exhibit,
   Pair,
   Stack,

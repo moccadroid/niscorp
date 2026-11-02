@@ -6,7 +6,7 @@ import { boot } from '@lyceum/server/boot';
 import { SLIDES } from '@lyceum/db/seed';
 import { OPENABLE_KEYS, offerableActions, prefillOf } from '@lyceum/server/assistant/tools';
 import { assembleFor } from '@lyceum/server/assistant/declarations';
-import { check, connect, finish, giveAssistant, waitUntil } from './harness';
+import { check, connect, finish, giveAssistant, waitUntil, nextTo } from './harness';
 import type { Terminal } from './harness';
 
 const main = async (): Promise<void> => {
@@ -83,10 +83,7 @@ const main = async (): Promise<void> => {
 
   const speaker = await connect(base, await mintSession(runtime.pool, 'speaker', 60_000));
   await speaker.hello();
-  for (let step = 0; step < SLIDES.findIndex((slide) => slide.slideId === 'slide.timer'); step += 1) {
-    speaker.click('controls', 'next');
-    await speaker.shows('head', `slide ${step + 2} of`);
-  }
+  await nextTo(speaker, SLIDES.findIndex((slide) => slide.slideId === 'slide.timer') + 1);
   check('the controller\'s assistant can automate', (await speaker.shows('tools', 'Can: ')) && speaker.showsNow('tools', 'automate'));
   await say(speaker, 'tools', 'Send the speaker a question: Will the slides be online?');
   check('the speaker, asking the same, gets no form — the question form is not theirs', !speaker.showsNow('overlay', 'Your question') && !speaker.showsNow('tools', 'Your question:') && /cannot open anything|not one of your actions/.test(speaker.textOf('tools')));

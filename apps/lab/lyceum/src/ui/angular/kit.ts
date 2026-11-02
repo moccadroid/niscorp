@@ -4,6 +4,7 @@ import type { OnChanges } from '@angular/core';
 import { NOVA_MODEL_PROP, NOVA_REF_PROP } from '@niscorp/nova';
 import type { NovaEvent, RenderNode } from '@niscorp/nova';
 import type { KitOf } from '../kit.props';
+import { foldOpen, rememberFold } from '../fold';
 import { ALIGNS, GAPS, INKS, LANGS, LEVELS, MARKS, PANES, SCALES, SIGILS, SIZES, SPLITS, oneOf, records } from '../kit';
 import {
   SIGIL_SHAPES,
@@ -640,6 +641,23 @@ class Menu extends Placed {
   }
 }
 
+// A heading that opens and shuts what is under it, on this screen alone (../fold.ts).
+@Component({
+  selector: 'details.fold',
+  imports: [Children],
+  host: { class: 'fold', '[open]': 'opened()', '(toggle)': 'toggled($event)' },
+  template: `<summary class="fold-label">{{ say('label') }}</summary><div class="fold-body">${CHILDREN}</div>`,
+})
+class Fold extends Part {
+  protected opened(): boolean {
+    return foldOpen(this.say('name'));
+  }
+
+  protected toggled(event: Event): void {
+    rememberFold(this.say('name'), (event.target as HTMLDetailsElement).open);
+  }
+}
+
 export const ANGULAR_KIT: KitOf<AngularComponent> = {
   Page,
   Sheet,
@@ -662,6 +680,7 @@ export const ANGULAR_KIT: KitOf<AngularComponent> = {
   Look,
   Xray: Look,
   Menu,
+  Fold,
   Exhibit,
   Pair,
   Stack,

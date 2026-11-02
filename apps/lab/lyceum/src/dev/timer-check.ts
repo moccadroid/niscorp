@@ -8,7 +8,7 @@ import { boot } from '@lyceum/server/boot';
 import type { Booted } from '@lyceum/server/boot';
 import { openDevDatabase } from '@lyceum/server/runtime';
 import { vexOver, wireAs } from '@lyceum/server/vex-over';
-import { check, connect, finish, waitUntil } from './harness';
+import { check, connect, finish, waitUntil, nextTo } from './harness';
 
 const listen = (booted: Booted): { base: string; close: () => void } => {
   const httpServer = serve({ fetch: booted.server.fetch, port: 0 });
@@ -37,10 +37,7 @@ const main = async (): Promise<void> => {
   await speaker.hello();
   await stage.hello();
   const timerAt = SLIDES.findIndex((slide) => slide.slideId === 'slide.timer');
-  for (let step = 0; step < timerAt; step += 1) {
-    speaker.click('controls', 'next');
-    await speaker.shows('head', `slide ${step + 2} of`);
-  }
+  await nextTo(speaker, timerAt + 1);
   check('the timer slide brings the assistant to the controller', await speaker.shows('tools', 'Can: '));
   check('…the speaker\'s assistant, able to automate', speaker.showsNow('tools', 'automate'));
   check('there is no timer yet', await speaker.shows('head', 'No timer'));

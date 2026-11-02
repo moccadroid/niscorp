@@ -117,5 +117,10 @@ export const LYCEUM_KIT: Sequence = {
       description: 'Cell: xray — every action inside it outlined, with its id',
       steps: [],
     },
+    {
+      // A MARKER: a component added.
+      description: 'Fold: a heading that opens and shuts what is under it, on each screen alone',
+      steps: [],
+    },
   ],
 };

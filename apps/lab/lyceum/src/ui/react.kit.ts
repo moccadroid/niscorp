@@ -9,6 +9,7 @@ import {
 import { useNovaDispatch } from '@niscorp/nova/adapters/react';
 import type { NovaComponent, NovaComponentProps } from '@niscorp/nova/adapters/react';
 import type { KitOf } from './kit.props';
+import { foldOpen, rememberFold } from './fold';
 import { ALIGNS, GAPS, INKS, LANGS, LEVELS, MARKS, PANES, SCALES, SIGILS, SIZES, SPLITS, oneOf, records } from './kit';
 import {
   SIGIL_SHAPES,
@@ -504,6 +505,16 @@ const Xray: NovaComponent = () => h('span', { className: 'look' });
 const Menu: NovaComponent = (props: Props) =>
   h('details', { ...usePlaced(props), className: 'menu' }, h('summary', { className: 'menu-icon', 'aria-label': text(props['label']) ?? 'Menu' }), h('div', { className: 'menu-items' }, props.children));
 
+const Fold: NovaComponent = (props: Props) => {
+  const name = text(props['name']) ?? '';
+  return h(
+    'details',
+    { className: 'fold', open: foldOpen(name), onToggle: (event: { currentTarget: HTMLDetailsElement }) => rememberFold(name, event.currentTarget.open) },
+    h('summary', { className: 'fold-label' }, text(props['label']) ?? ''),
+    h('div', { className: 'fold-body' }, props.children),
+  );
+};
+
 export const REACT_KIT: KitOf<NovaComponent> = {
   Page,
   Sheet,
@@ -526,6 +537,7 @@ export const REACT_KIT: KitOf<NovaComponent> = {
   Look,
   Xray,
   Menu,
+  Fold,
   Exhibit,
   Pair,
   Stack,

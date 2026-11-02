@@ -1,14 +1,8 @@
 import type { LayoutNode } from '@niscorp/nova';
 
+// Open on a laptop, shut on a phone until tapped, each screen its own.
 export const notesLayout: LayoutNode = {
-  component: 'Sheet',
-  props: { size: 'fill', areas: ['kick', 'notes'], rows: ['auto', 1] },
-  children: [
-    { component: 'Cell', props: { area: 'kick', ink: 'highlight' }, children: [{ component: 'Label', children: 'Notes' }] },
-    {
-      component: 'Cell',
-      props: { area: 'notes', scroll: 'y' },
-      children: [{ for: '$.notes', as: 'note', key: 'position', do: { component: 'Text', children: '•  {{$note.note}}' } }],
-    },
-  ],
+  component: 'Fold',
+  props: { label: 'Notes', name: 'notes' },
+  children: [{ for: '$.notes', as: 'note', key: 'position', do: { component: 'Text', children: '•  {{$note.note}}' } }],
 };

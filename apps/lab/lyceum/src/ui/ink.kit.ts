@@ -200,6 +200,7 @@ const Check: NovaComponent = (props) => h(Box, { flexShrink: 0 }, h(Checkbox, pr
 const Look: NovaComponent = () => null;
 const Xray: NovaComponent = () => null;
 const Menu: NovaComponent = ({ children }) => h(Box, { flexDirection: 'column' }, children);
+const Fold: NovaComponent = ({ children }) => h(Box, { flexDirection: 'column' }, children);
 
 // The reading grammar, in a terminal: a document is its caption and its lines
 // (the lines that matter inverse; no colour), two things side by side stand
@@ -219,7 +220,7 @@ const Stats: NovaComponent = ({ ...props }) =>
   h(Box, { gap: 2 }, ...records(props['items']).map((item, i) => h(InkText, { key: i }, `${text(item['value']) ?? '—'} ${text(item['label']) ?? ''}`)));
 const Pipeline: NovaComponent = ({ ...props }) => h(Box, { flexDirection: 'column' }, ...pipelineText(pipelineOf(props)).map((line, i) => h(InkText, { key: i }, line)));
 
-export const INK_KIT: KitOf<NovaComponent> = { Page, Sheet, Cell, Label, Headline, Text, Figure, Countdown, Code, Sigil, Qr, Rows, Bar, Flow, Columns, Action, Field, Check, Look, Xray, Menu, Exhibit, Pair, Stack, Stats, Pipeline };
+export const INK_KIT: KitOf<NovaComponent> = { Page, Sheet, Cell, Label, Headline, Text, Figure, Countdown, Code, Sigil, Qr, Rows, Bar, Flow, Columns, Action, Field, Check, Look, Xray, Menu, Fold, Exhibit, Pair, Stack, Stats, Pipeline };
 
 // moss's ink target adds the wire-backed slots (ActionSlot, CanvasSlot) itself.
 export const lyceumInkRegistry = (): ComponentRegistry<NovaComponent> => {

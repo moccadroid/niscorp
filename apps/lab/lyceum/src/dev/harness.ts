@@ -53,6 +53,18 @@ export const waitUntil = async (condition: () => boolean): Promise<boolean> => {
   return condition();
 };
 
+// The speaker presses Next until the slide at this number is on: a slide shown
+// in parts takes a press for each of its parts first. False if Next stops moving.
+export const nextTo = async (speaker: Terminal, slide: number): Promise<boolean> => {
+  const on = (): boolean => speaker.showsNow('head', `slide ${slide} of`);
+  while (!on()) {
+    const before = speaker.textOf('controls');
+    speaker.click('controls', 'next');
+    if (!(await waitUntil(() => speaker.textOf('controls') !== before))) return on();
+  }
+  return true;
+};
+
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
 const instanceAround = (nodes: unknown, ref: string, inside?: string): string | undefined => {
   if (!Array.isArray(nodes)) return undefined;

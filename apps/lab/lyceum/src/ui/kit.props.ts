@@ -79,6 +79,7 @@ export const KIT_PROPS = z
     Look: z.object({ look: z.enum(LOOKS) }).partial().strict(),
     Xray: z.object({ on: z.boolean() }).partial().strict(),
     Menu: z.object({ area, label }).partial().strict(),
+    Fold: z.object({ label, name: z.string().describe('Which fold this is: a screen remembers each one open or shut by its name') }).partial().strict(),
     Pipeline: z
       .object({
         area,

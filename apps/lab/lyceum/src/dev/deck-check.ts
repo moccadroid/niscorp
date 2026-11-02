@@ -100,6 +100,13 @@ const main = async (): Promise<void> => {
 
     // ── forward through the deck, and no way past its end ──
     for (let index = 1; index < total; index += 1) {
+      // A slide shown in parts: Next shows each part first, then moves on.
+      const parts = talk.slides[index - 1]?.parts ?? 1;
+      for (let part = 2; part <= parts; part += 1) {
+        check(`...Next shows its part ${part} of ${parts} first`, await speaker.shows('controls', `Part ${part} of ${parts} →`));
+        speaker.click('controls', 'next');
+      }
+      if (parts > 1) check(`...then Back hides part ${parts}, and Next names the next slide`, (await speaker.shows('controls', `← Part ${parts - 1} of ${parts}`)) && (await speaker.shows('controls', `${index + 1} · ${titleOf(index)} →`)));
       speaker.click('controls', 'next');
       check(`next shows slide ${index + 1} on the stage (${titleOf(index)})`, await onSlide(index));
       check(`...and its notes on the controller`, await speaker.shows('notes', talk.slides[index]?.notes[0] ?? '\u0000'));

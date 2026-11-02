@@ -4,7 +4,7 @@ import { mintSession } from '@niscorp/moss';
 import { SLIDES } from '@lyceum/db/seed';
 import { boot } from '@lyceum/server/boot';
 import { KIT_PROPS } from '@lyceum/ui/kit.props';
-import { check, connect, finish, waitUntil } from './harness';
+import { check, connect, finish, waitUntil, nextTo } from './harness';
 import type { Terminal } from './harness';
 
 const main = async (): Promise<void> => {
@@ -43,10 +43,7 @@ const main = async (): Promise<void> => {
 
   const at = SLIDES.findIndex((slide) => slide.tools.includes('tools.look'));
   check(`the switch is a tool on a slide (${SLIDES[at]?.title ?? 'none'})`, at >= 0);
-  for (let step = 0; step < at; step += 1) {
-    speaker.click('controls', 'next');
-    await speaker.shows('head', `slide ${step + 2} of`);
-  }
+  await nextTo(speaker, at + 1);
   check('...and it is on the controller there', await speaker.shows('tools', 'Which renderer draws'));
   const settled = async (screen: Terminal, canvas: string): Promise<string> => {
     for (let last = screen.textOf(canvas); ; ) {

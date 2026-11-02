@@ -6,7 +6,7 @@ import { SLIDES } from '@lyceum/db/seed';
 import { questionsShown } from '@lyceum/app/vex/question.entries';
 import { boot } from '@lyceum/server/boot';
 import { QA_BROKEN_BUNDLE, QA_BUNDLE } from '../../../lyceum-vendor-demo/src/bundle';
-import { check, connect, finish, waitUntil } from './harness';
+import { check, connect, finish, waitUntil, nextTo } from './harness';
 import type { Terminal } from './harness';
 
 const main = async (): Promise<void> => {
@@ -51,10 +51,7 @@ const main = async (): Promise<void> => {
 
   const at = SLIDES.findIndex((slide) => slide.tools.includes('tools.integrations'));
   check(`the Integrations tool is on a slide (${SLIDES[at]?.title ?? 'none'})`, at >= 0);
-  for (let step = 0; step < at; step += 1) {
-    speaker.click('controls', 'next');
-    await speaker.shows('head', `slide ${step + 2} of`);
-  }
+  await nextTo(speaker, at + 1);
   check('...and it is on the controller there, showing where the QA Company lives', await speaker.shows('tools', '/vendor'));
   speaker.click('tools', 'broken');
   check('installing the broken bundle is refused', await speaker.shows('tools', '"value":"refused"'));
@@ -104,10 +101,7 @@ const main = async (): Promise<void> => {
   check('a question not fit to show is on the controller too', await speaker.shows('attached', 'Is the speaker an idiot?'));
   check('...marked not fit to show', await speaker.shows('attached', '"shown":"x"'));
   const last = SLIDES.length;
-  for (let step = at + 1; step < last; step += 1) {
-    speaker.click('controls', 'next');
-    await speaker.shows('head', `slide ${step + 1} of`);
-  }
+  await nextTo(speaker, last);
   check('on the last slide, the projector shows the QA Company’s list', (await stage.shows('main', '"canvasId":"attached"')) && (await stage.shows('attached', 'Who wrote this screen?')));
   check('...and never the question not fit to show', !stage.showsNow('attached', 'idiot') && !stage.showsNow('main', 'idiot'));
 

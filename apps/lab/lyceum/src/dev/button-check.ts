@@ -4,7 +4,7 @@ import { mintSession } from '@niscorp/moss';
 import { SLIDES } from '@lyceum/db/seed';
 import { pressSend } from '@lyceum/app/vex/press.entries';
 import { boot } from '@lyceum/server/boot';
-import { check, connect, finish, waitUntil } from './harness';
+import { check, connect, finish, waitUntil, nextTo } from './harness';
 import type { Terminal } from './harness';
 
 const main = async (): Promise<void> => {
@@ -39,10 +39,7 @@ const main = async (): Promise<void> => {
 
   const at = SLIDES.findIndex((slide) => slide.tools.includes('tools.button'));
   check(`the button tool is on a slide (${SLIDES[at]?.title ?? 'none'})`, at >= 0);
-  for (let step = 0; step < at; step += 1) {
-    speaker.click('controls', 'next');
-    await speaker.shows('head', `slide ${step + 2} of`);
-  }
+  await nextTo(speaker, at + 1);
   check('...and it is on the controller there', await speaker.shows('tools', 'Give it to a quarter of the room'));
   await speaker.shows('tools', 'People who have it');
   await new Promise((resolve) => setTimeout(resolve, 300));

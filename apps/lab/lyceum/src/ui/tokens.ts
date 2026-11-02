@@ -447,6 +447,19 @@ ${DIALOG} > .action:active { transform: translate(2px, 2px); box-shadow: 2px 2px
    there at all. A cell marked xray shows what is inside it the same way. */
 .${ROOT_CLASS} .xray-tag { display: none; }
 
+/* A FOLD: a heading bar that opens and shuts what is under it, a tap away. */
+.${ROOT_CLASS} .fold { background: var(--paper); }
+.${ROOT_CLASS} .fold-label {
+  list-style: none; cursor: pointer; display: flex; justify-content: space-between; gap: 1rem;
+  padding: .6rem .9rem; background: var(--highlight); color: var(--ink);
+  font: 400 .8rem/1.3 var(--mono); letter-spacing: .06em; text-transform: uppercase;
+}
+.${ROOT_CLASS} .fold-label::-webkit-details-marker { display: none; }
+.${ROOT_CLASS} .fold-label::after { content: '▸'; font-size: 1.4em; line-height: .9; }
+.${ROOT_CLASS} .fold[open] > .fold-label::after { content: '▾'; }
+.${ROOT_CLASS} .fold-body { padding: .9rem; display: flex; flex-direction: column; gap: .5rem; }
+@media (max-width: 640px) { .${ROOT_CLASS} .fold-body { max-height: 40vh; overflow-y: auto; overscroll-behavior: contain; } }
+
 /* Work under way: stripes in a highlighted cell are a bar that moves. */
 .${ROOT_CLASS} .cell[data-ink="highlight"] .cell[data-mark="stripes"] { min-height: 18px; padding: 0; background-size: 19.8px 19.8px; animation: working 0.8s linear infinite; }
 @keyframes working { to { background-position: 19.8px 0; } }

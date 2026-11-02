@@ -1,6 +1,7 @@
 import type { DomComponent } from '@niscorp/nova/adapters/dom';
 import type { Kit } from './kit.props';
 import { areaOf, codeLines, fitOf, LANGS, numbers, pipelineColumns, pipelineOf, SIGIL_SHAPES, flowDelays, instantOf, narrowOf, qrOf, remaining, sheetStyle, templateOf, text, weight } from './kit.shape';
+import { foldOpen, rememberFold } from './fold';
 
 export { codeLines, LANGS, numbers, text } from './kit.shape';
 
@@ -509,4 +510,15 @@ export const Menu: DomComponent = ({ props, children }) => {
 // Shows nothing, like Look: the render target reads it off the frame.
 export const Xray: DomComponent = () => el('span', 'look');
 
-export const POSTER_KIT: Kit = { Page, Sheet, Cell, Label, Headline, Text, Figure, Countdown, Code, Sigil, Qr, Rows, Bar, Flow, Columns, Action, Field, Check, Look, Xray, Menu, Exhibit, Pair, Stack, Stats, Pipeline };
+// A heading that opens and shuts what is under it, on this screen alone (./fold.ts).
+export const Fold: DomComponent = ({ props, children }) => {
+  const name = text(props['name']) ?? '';
+  const heading = el('summary', 'fold-label');
+  heading.textContent = text(props['label']) ?? '';
+  const node = el('details', 'fold', [heading, el('div', 'fold-body', children)]) as HTMLDetailsElement;
+  node.open = foldOpen(name);
+  node.addEventListener('toggle', () => rememberFold(name, node.open));
+  return node;
+};
+
+export const POSTER_KIT: Kit = { Page, Sheet, Cell, Label, Headline, Text, Figure, Countdown, Code, Sigil, Qr, Rows, Bar, Flow, Columns, Action, Field, Check, Look, Xray, Menu, Fold, Exhibit, Pair, Stack, Stats, Pipeline };
