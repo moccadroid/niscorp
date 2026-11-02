@@ -22,10 +22,18 @@ Every symbol the package exports, and what it promises. See [DESIGN.md](./DESIGN
 - [The reflex agent](#the-reflex-agent)
 - [Errors](#errors)
 
-Four entry points: `@niscorp/tide` (everything below unless it says otherwise),
-`@niscorp/tide/agent`, `@niscorp/tide/testing` and `@niscorp/tide/postgres`.
-`zod` is the one required peer. Two peers are optional, each imported by one
-entry only: `@niscorp/cortex` by `/agent`, `@niscorp/strata` by `/postgres`.
+Five entry points: `@niscorp/tide` (everything below unless it says otherwise),
+`@niscorp/tide/agent`, `@niscorp/tide/testing`, `@niscorp/tide/postgres` and
+`@niscorp/tide/migrations`. `zod` is the one required peer. Two peers are
+optional: `@niscorp/cortex`, imported by `/agent`, and `@niscorp/strata`, by
+`/postgres` (and named, as a type, by `/migrations`).
+
+`@niscorp/tide/migrations` is tide's grammar for a host that keeps reflexes or
+drafts as documents: `TIDE_GRAMMAR`, the strata sequence `nisc.tide` with the
+documents `reflex` and `draft`, and `TIDE_SCHEMAS`, each document's schema. A
+document is kept with the grammar it was written at and upgraded where it is
+read. Version 1 adds a weekly clock on several weekdays; it rewrites no
+document, and a reader at 0 refuses one that uses it.
 
 ---
 
@@ -120,7 +128,7 @@ holds no copy. To pause an automation, write your own row and `load` again.
 ```jsonc
 // the clock — recurring
 { "clock": { "every": "day" | "week" | "month" | "year",
-             "on": 1..31 | "mon".."sun" | "MM-DD",   // omitted for `day`
+             "on": 1..31 | "mon".."sun" | ["mon", …] | "MM-DD",   // omitted for `day`
              "at": "HH:MM", "tz": "Europe/Vienna" } }
 
 // the clock — one shot; seconds optional
@@ -172,7 +180,9 @@ what was already pushed, one interval late — see `DESIGN.md`.
 
 A draft is a reflex as it is written, before it is saved: `id`, `intent`, `on`
 and `effect` — nothing that is the host's (`as`, `policy`, `enabled`). It is the
-shape the [reflex agent](#the-reflex-agent) answers with.
+shape the [reflex agent](#the-reflex-agent) answers with. Its `id` is a short name
+the agent makes up and never asks for; a host may store the reflex under an id of
+its own.
 
 ```typescript
 draftSchemaOf(choice?: DraftChoice): z.ZodType<ReflexDraft>

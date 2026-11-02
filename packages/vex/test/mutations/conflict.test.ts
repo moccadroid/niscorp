@@ -373,7 +373,7 @@ describe('insertEach', () => {
     },
   };
 
-  it('compiles to INSERT ... SELECT over jsonb_array_elements, casting per column type', async () => {
+  it("compiles to INSERT ... SELECT over jsonb_to_recordset, naming each item column's type from the schema", async () => {
     const { client, calls } = fakeClient();
     await executeMutation(client, slots, {
       context: { name: 'Yoga', days: [{ weekday: 1, startsAt: '18:00' }, { weekday: 3, startsAt: '19:00' }] },
@@ -382,18 +382,15 @@ describe('insertEach', () => {
       schema,
     });
     const sql = calls[0]!.sql;
-    expect(sql).toMatch(/INSERT INTO slots \(name, weekday, starts_at, studio_id\) SELECT/);
-    expect(sql).toContain(`(item.value->>'weekday')::numeric`);
-    expect(sql).toContain(`(item.value->>'startsAt')`);
-    expect(sql).toMatch(/FROM jsonb_array_elements\(\$\d+::jsonb\) AS item/);
+    expect(sql).toMatch(/INSERT INTO slots \(name, weekday, starts_at, studio_id\) SELECT \$\d+, item\.weekday, item\.starts_at, \$\d+ /);
+    expect(sql).toMatch(/FROM jsonb_to_recordset\(\$\d+::jsonb\) AS item\(weekday number, starts_at string\)/);
     expect(sql).toContain('RETURNING *');
   });
 
-  it('binds the items as a JSON string, not a driver array literal', async () => {
+  it('binds the items as a JSON string under their column names, not a driver array literal', async () => {
     const { client, calls } = fakeClient();
-    const days = [{ weekday: 1, startsAt: '18:00' }];
-    await executeMutation(client, slots, { context: { name: 'Yoga', days }, scope, policy, schema });
-    expect(calls[0]!.params).toContain(JSON.stringify(days));
+    await executeMutation(client, slots, { context: { name: 'Yoga', days: [{ weekday: 1, startsAt: '18:00', ignored: true }] }, scope, policy, schema });
+    expect(calls[0]!.params).toContain(JSON.stringify([{ weekday: 1, starts_at: '18:00' }]));
   });
 
   it('pins scope rules as constants across every row', async () => {

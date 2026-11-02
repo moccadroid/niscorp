@@ -1,4 +1,4 @@
-import { compileFilter, compileFieldOrValue, quoteLiteral } from '../adapters/postgres/operators.js';
+import { compileFilter, compileFieldOrValue } from '../adapters/postgres/operators.js';
 import type { CompilationContext } from '../adapters/postgres/operators.js';
 import type { ParamSlot, Row } from '../adapters/adapter.types.js';
 import type { Filter } from '../schemas/filter.schema.js';
@@ -273,7 +273,13 @@ const scopeMutation = (m: CoreMutation, policy: ScopePolicy): ResolvedMutation =
   return { op: 'delete', table: m.table, where };
 };
 
-type Compiled = { sql: string; slots: ParamSlot[]; returned: ReadonlyMap<number, string> };
+type Compiled = { sql: string; slots: ParamSlot[]; returned: ReadonlyMap<number, string>; itemKeys?: Record<string, string> };
+
+const itemRow = (element: unknown, itemKeys: Record<string, string>): Record<string, unknown> => {
+  const fields = element !== null && typeof element === 'object' && !Array.isArray(element) ? (element as Record<string, unknown>) : {};
+  return Object.fromEntries(Object.entries(itemKeys).map(([column, key]) => [column, fields[key]]));
+};
+
 type WriteContext = CompilationContext & { returned: Map<number, string> };
 
 const newCtx = (): WriteContext => ({
@@ -332,15 +338,6 @@ const compileConflict = (m: { table: string; onConflict?: ResolvedOnConflict }, 
   return ` ON CONFLICT (${c.target.join(', ')}) DO UPDATE SET ${sets.join(', ')}${where}`;
 };
 
-const ITEM_CAST: Record<string, string> = {
-  number: 'numeric',
-  boolean: 'boolean',
-  date: 'date',
-  timestamp: 'timestamptz',
-  uuid: 'uuid',
-};
-
-
 const compileMutation = (m: ResolvedMutation, schema: DatabaseSchema): Compiled => {
   const ctx = newCtx();
   if (m.op === 'insert') {
@@ -350,26 +347,28 @@ const compileMutation = (m: ResolvedMutation, schema: DatabaseSchema): Compiled 
     return { sql: `INSERT INTO ${m.table} (${cols.join(', ')}) VALUES (${vals.join(', ')})${compileConflict(m, ctx, schema)} RETURNING *`, slots: ctx.paramSlots, returned: ctx.returned };
   }
   if (m.op === 'insertEach') {
-    const entity = findEntity(m.table, schema);
+    const types = new Map(findEntity(m.table, schema)?.fields.map((f) => [f.name, f.type]));
     const entries = Object.entries(m.values);
     const cols = entries.map(([c]) => c);
+    const itemKeys: Record<string, string> = {};
+    const itemColumns: string[] = [];
     const exprs = entries.map(([col, v]) => {
       if (isItemRef(v)) {
-        const nt = entity?.fields.find((f) => f.name === col)?.normalizedType ?? 'string';
-        if (nt === 'json') return `(item.value->${quoteLiteral(v.$item)})`;
-        const cast = ITEM_CAST[nt];
-        const raw = `(item.value->>${quoteLiteral(v.$item)})`;
-        return cast === undefined ? raw : `${raw}::${cast}`;
+        itemKeys[col] = v.$item;
+        itemColumns.push(`${col} ${String(types.get(col))}`);
+        return `item.${col}`;
       }
       return isReturned(v) ? compileColumnValue(m.table, col, v, ctx, schema) : compileValue(v, ctx);
     });
     ctx.paramCounter.value += 1;
     ctx.paramSlots.push({ key: m.items.$context, kind: 'context', type: 'json' });
-    const source = `jsonb_array_elements($${ctx.paramCounter.value}::jsonb) AS item`;
+    const items = `$${ctx.paramCounter.value}::jsonb`;
+    const source = itemColumns.length === 0 ? `jsonb_array_elements(${items}) AS item` : `jsonb_to_recordset(${items}) AS item(${itemColumns.join(', ')})`;
     return {
       sql: `INSERT INTO ${m.table} (${cols.join(', ')}) SELECT ${exprs.join(', ')} FROM ${source}${compileConflict(m, ctx, schema)} RETURNING *`,
       slots: ctx.paramSlots,
       returned: ctx.returned,
+      itemKeys,
     };
   }
   if (m.op === 'update') {
@@ -484,7 +483,8 @@ export const executeWrites = async (client: MutationClient, def: MutationDefinit
         if (!Array.isArray(value)) {
           throw new VexError('invalid_request', `"${c.slots[i]?.key ?? ''}" must be an array of objects (one inserted row per element).`);
         }
-        return JSON.stringify(value);
+        const { itemKeys } = c;
+        return JSON.stringify(itemKeys === undefined ? value : value.map((element) => itemRow(element, itemKeys)));
       });
       const res = await q.query(c.sql, bound as unknown[]);
       results.push({ table: c.table, op: c.op, rows: res.rows as Row[] });

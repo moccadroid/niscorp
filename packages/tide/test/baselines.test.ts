@@ -8,6 +8,7 @@ import { TIDE_SEQUENCE } from '../src/store/postgres';
 const PINNED: ReadonlyArray<[number, number, string]> = [
   [1, 16, '41f565e0faf179237fb6b92ca50f6266677871a4965e61bc3494a1d59d9c541b'],
   [2, 2, '0d96ed434e28052b5530e4bacd810cd7a0a135671bf4ecd0b18d1eeffd692e7a'],
+  [3, 1, '794bbc840e55275422ed94c9ebb672a87a3b45d3cb8d7b27ebef5ec39deac138'],
 ];
 
 describe('baselines — applied migrations are history', () => {

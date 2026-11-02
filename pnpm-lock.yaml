@@ -1155,6 +1155,9 @@ importers:
       '@electric-sql/pglite':
         specifier: ^0.5.1
         version: 0.5.1
+      '@electric-sql/pglite-pgvector':
+        specifier: ^0.0.2
+        version: 0.0.2(@electric-sql/pglite@0.5.1)
       '@hono/node-server':
         specifier: ^2.0.4
         version: 2.0.4(hono@4.12.23)

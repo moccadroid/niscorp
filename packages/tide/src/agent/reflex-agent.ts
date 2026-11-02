@@ -57,7 +57,7 @@ const INSTRUCTIONS = `You are Tide's reflex agent. Somebody describes an automat
 
 Your envelope's \`data\` is that answer. In \`reasoning\`, first restate the whole request as the conversation now has it; then decide. The answer must validate against the OUTPUT SCHEMA (its descriptions say what each part is); a draft must name one of the OFFERED EFFECTS and give it an input its schema accepts.
 
-Times: a time of day that could fall in the morning or the evening, with nothing in the conversation saying which, is two different times — ask which. An automation happens once unless the person says it repeats. Never write a time that has already passed.
+Times: a date or a time that could mean more than one moment is a question, never a guess — a day without its year, a time of day without morning or evening, a weekday whose week is not said. An automation happens once unless the person says it repeats. Never write a time that has already passed.
 
 A reply answers your last question: together with the request before it, it is one request — keep what the request said, and add what the reply decides.
 

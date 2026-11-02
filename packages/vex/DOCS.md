@@ -1022,11 +1022,15 @@ Two things to know when using it:
 ### `insertEach` — one statement for a caller-sized list
 
 `items` names a context key holding an array of objects; `{ $item: "key" }`
-values read from the current element (cast to the column's type from the
-schema); every other value — literal, `$context`, `$lookup`, `$returned`,
-engine-injected `$scope` — is constant across rows. Compiles to a single
-`INSERT … SELECT … FROM jsonb_array_elements($items)`, so "one row per ticked
-weekday" is one authored statement, not a code loop:
+values read from the current element; every other value — literal,
+`$context`, `$lookup`, `$returned`, engine-injected `$scope` — is constant
+across rows. vex binds each element under the column names its `$item`s fill
+(a key no `$item` names is dropped) and compiles to a single
+`INSERT … SELECT … FROM jsonb_to_recordset($items) AS item(<column> <type>, …)`,
+each type the column's own from the introspected schema. Postgres converts
+every item as it converts an `insert`'s value, a column the statement does not
+write takes its default, and "one row per ticked weekday" is one authored
+statement, not a code loop:
 
 ```ts
 { op: 'insertEach', table: 'class_templates', items: { $context: 'slots' },
@@ -1039,6 +1043,10 @@ Scope-wise it is an insert that happens N times: the insert phase gates it,
 and `set`/`match` rules pin their columns identically on every row. A
 non-array `items` value is refused loudly before any SQL runs; an empty array
 inserts nothing and returns no rows.
+
+An array column's item is a JSON array, a `jsonb` column's any JSON value, and
+a pgvector `vector` column's a JSON array of numbers (`[0.1, 0.2]`) or the
+pgvector text form (`"[0.1,0.2]"`).
 
 ### Replay
 

@@ -12,9 +12,11 @@ export const ClockRecurringSchema = z
   .object({
     every: ClockUnitSchema.describe('The calendar period it repeats on. A repeating clock fires on every such period until the reflex is removed — only for a request that says it repeats.'),
     on: z
-      .union([z.number().int().min(1).max(31), z.enum(WEEKDAYS), z.string().regex(MMDD)])
+      .union([z.number().int().min(1).max(31), z.enum(WEEKDAYS), z.array(z.enum(WEEKDAYS)).min(1), z.string().regex(MMDD)])
       .optional()
-      .describe('week → a weekday; month → 1..31 (clamped to month end); year → "MM-DD". Omitted for day.'),
+      .describe(
+        'week → a weekday, or a list of them: ["mon","tue","wed","thu","fri"] is every weekday; month → 1..31, where 31 is the last day of every month (a shorter month clamps to its end); year → "MM-DD". Omitted for day.',
+      ),
     at: z.string().regex(HHMM).describe('Local wall-clock time, "HH:MM".'),
     tz: z.string().describe('IANA timezone name.'),
   })
@@ -22,8 +24,10 @@ export const ClockRecurringSchema = z
   .superRefine((clock, ctx) => {
     const fail = (message: string) => ctx.addIssue({ code: 'custom', message, path: ['on'] });
     if (clock.every === 'day' && clock.on !== undefined) fail('a daily clock takes no `on`');
-    if (clock.every === 'week' && !(typeof clock.on === 'string' && WEEKDAYS.some((d) => d === clock.on)))
-      fail('a weekly clock needs `on` as a weekday (mon..sun)');
+    const weekday = (value: unknown): boolean => typeof value === 'string' && WEEKDAYS.some((d) => d === value);
+    const weekdays = Array.isArray(clock.on) && clock.on.length > 0 && new Set(clock.on).size === clock.on.length;
+    if (clock.every === 'week' && !weekday(clock.on) && !weekdays) fail('a weekly clock needs `on` as a weekday (mon..sun), or a list of different weekdays');
+    if (clock.every !== 'week' && Array.isArray(clock.on)) fail('only a weekly clock takes a list of weekdays');
     if (clock.every === 'month' && typeof clock.on !== 'number') fail('a monthly clock needs `on` as a day number');
     if (clock.every === 'year' && !(typeof clock.on === 'string' && MMDD.test(clock.on)))
       fail('a yearly clock needs `on` as "MM-DD"');
