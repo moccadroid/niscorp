@@ -115,7 +115,7 @@ export const tideLayout: LayoutNode = {
     cell(
       'doc',
       [
-        label('The row · as, on, effect'),
+        label('The row'),
         { if: '$.timer.code', then: code('$.timer.code', '$.timer.marked'), else: text('No timer saved yet.') },
       ],
       { ink: 'ink', align: 'middle' },
@@ -148,7 +148,7 @@ export const endLayout: LayoutNode = {
   props: { size: 'fill', areas: ['head where', 'head ask'], cols: [1.4, 1], rows: [1, 1] },
   children: [
     cell('head', [headline('display', '{{$.title}}')], { align: 'middle' }),
-    cell('where', [label('Open source'), { component: 'Qr', props: { value: '$.repo' } }, code('$.repoWords'), code('$.folder')], { ink: 'ink' }),
-    cell('ask', [label('Questions'), headline('title', 'On your phone, in the Q&A.'), { component: 'CanvasSlot', props: { canvasId: 'attached' } }], { ink: 'signal', scroll: 'y' }),
+    cell('where', [{ component: 'Qr', props: { value: '$.docs' } }, code('$.docsWords')], { ink: 'ink' }),
+    cell('ask', [headline('title', 'Ask your questions in the Q&A on your phone.'), { component: 'CanvasSlot', props: { canvasId: 'attached' } }], { ink: 'signal', scroll: 'y' }),
   ],
 };

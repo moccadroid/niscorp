@@ -63,6 +63,7 @@ export const TEXT_KIT: KitOf<TtyComponent> = {
     const value = text(props['value']) ?? '';
     return block(value === '' ? `[text field: ${text(props['placeholder']) ?? ''}]` : `[text field, typed: ${value}]`);
   },
+  Check: ({ props }) => block(`[${props['value'] === true ? 'x' : ' '}] ${text(props['label']) ?? ''}`),
   Look: () => block(),
   Xray: () => block(),
   Menu: ({ children }) => block(...lines(children)),
@@ -75,8 +76,8 @@ export const TEXT_KIT: KitOf<TtyComponent> = {
   Stats: ({ props }) => block(records(props['items']).map((item) => `${text(item['label']) ?? ''}: ${text(item['value']) ?? '—'}`).join(' · ')),
 };
 
-const registry = createComponentRegistry<TtyComponent>();
-registry.registerAll({ ...TEXT_KIT, ActionSlot });
+export const textRegistry = createComponentRegistry<TtyComponent>();
+textRegistry.registerAll({ ...TEXT_KIT, ActionSlot });
 
 export type Leaving = (instanceId: string, definitionId: string) => boolean;
 
@@ -95,11 +96,18 @@ const without = (nodes: readonly RenderNode[], leaving: Leaving): RenderNode[] =
 
 export const screenText = (shell: Shell, leaving: Leaving): string => {
   const served = (tree: RenderNode[]): RenderNode[] => without(shell.flattenRenderTree(tree), leaving);
-  const view = createTtyView(registry, {
+  const view = createTtyView(textRegistry, {
     frame: () => served(shell.getShellRenderTree()),
     canvasTree: (canvasId) => served(shell.getCanvasRenderTree(canvasId)),
     dispatch: () => {},
     publish: () => {},
   });
   return view.render().text;
+};
+
+// One canvas of a shell as the line-at-a-time terminal renderer draws it, with
+// the numbers a terminal prints for what can be pressed.
+export const canvasText = (shell: Shell, canvasId: string): string => {
+  const tree = (): RenderNode[] => shell.flattenRenderTree(shell.getCanvasRenderTree(canvasId));
+  return createTtyView(textRegistry, { frame: tree, canvasTree: () => tree(), dispatch: () => {}, publish: () => {} }).render().text;
 };

@@ -224,7 +224,7 @@ ${DIALOG} > .action:active { transform: translate(2px, 2px); box-shadow: 2px 2px
 }
 /* off the stage a label is a caption, in nisc.dev's voice */
 .${ROOT_CLASS} .page:not(:has(> [data-canvas="strip"]:not(:empty))) .label { font: 400 .8rem/1.3 var(--mono); letter-spacing: .06em; }
-.${ROOT_CLASS} .headline { font-family: var(--display); font-weight: 900; text-transform: uppercase; line-height: .92; overflow-wrap: normal; word-break: normal; hyphens: none; }
+.${ROOT_CLASS} .headline { font-family: var(--display); font-weight: 900; text-transform: uppercase; line-height: 1.04; overflow-wrap: normal; word-break: normal; hyphens: none; }
 .${ROOT_CLASS} .headline[data-level="display"] { font-size: clamp(2.2rem, calc(5.4 * var(--cq)), 4.8rem); }
 .${ROOT_CLASS} .headline[data-level="title"]   { font-size: clamp(1.6rem, calc(3 * var(--cq)), 3.2rem); }
 .${ROOT_CLASS} .headline[data-level="name"]    { font-size: clamp(1.25rem, calc(1.9 * var(--cq)), 44px); line-height: 1.05; }
@@ -292,6 +292,21 @@ ${DIALOG} > .action:active { transform: translate(2px, 2px); box-shadow: 2px 2px
 }
 .${ROOT_CLASS} .field::placeholder { color: #666666; -webkit-text-fill-color: #666666; opacity: 1; }
 .${ROOT_CLASS} .field:focus { --well: var(--highlight); }
+
+/* ── check: a box that is ticked or not, its words beside it; a ticked one reads as done ── */
+.${ROOT_CLASS} .check {
+  display: flex; align-items: center; gap: .7em; cursor: pointer; color: var(--ink);
+  font: 500 clamp(1rem, calc(1.6 * var(--cq)), 1.8rem)/1.2 var(--prose);
+  padding-block: .1em;
+}
+.${ROOT_CLASS} .check > input {
+  -webkit-appearance: none; appearance: none; margin: 0; flex: none; cursor: pointer; font: inherit;
+  width: 1.1em; height: 1.1em; border: var(--rule) solid var(--ink); background: var(--bg);
+  display: grid; place-content: center;
+}
+.${ROOT_CLASS} .check > input:checked { background: var(--ink); }
+.${ROOT_CLASS} .check > input:checked::after { content: ''; width: .55em; height: .3em; border: solid var(--bg); border-width: 0 0 .14em .14em; transform: translateY(-.08em) rotate(-45deg); }
+.${ROOT_CLASS} .check:has(> input:checked) > span { text-decoration: line-through; color: #666666; }
 
 /* ── qr: ink on paper whatever the cell's ink, square, as large as its place ── */
 .${ROOT_CLASS} .qr { display: block; position: relative; flex: 1 1 auto; min-height: 0; }
@@ -419,24 +434,35 @@ ${DIALOG} > .action:active { transform: translate(2px, 2px); box-shadow: 2px 2px
   font: 700 clamp(.7rem, calc(.9 * var(--cq)), 1rem)/1.2 var(--mono); letter-spacing: .06em; text-transform: uppercase;
 }
 
+/* THE TERMINAL LOOK: the screen as Nova's line terminal draws it, and a line
+   to type a number into. */
+.${ROOT_CLASS} .terminal-page { min-height: 100%; display: flex; flex-direction: column; background: #111; color: #e9e6dc; padding: 1rem; gap: .8rem; }
+.${ROOT_CLASS} .terminal { flex: 1 1 auto; margin: 0; font: 400 clamp(.9rem, calc(1.6 * var(--cq)), 1.6rem)/1.45 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+.${ROOT_CLASS} .terminal-page[data-projector] .terminal { font-size: 1.5vw; }
+.${ROOT_CLASS} .terminal-line { font: 400 1rem/1.4 var(--mono); background: #000; color: #e9e6dc; border: 1px solid #e9e6dc; padding: .6em .8em; }
+
 /* THE X-RAY: the screen as it is, with every action on it outlined and its id
    in the corner — nested the way the screen is composed. The tag is the one
    thing to tap: it opens that action as its document. Off, the tag is not
-   there at all. */
+   there at all. A cell marked xray shows what is inside it the same way. */
 .${ROOT_CLASS} .xray-tag { display: none; }
-.${ROOT_CLASS}[data-xray] [data-action] { position: relative; outline: var(--rule) solid var(--signal); outline-offset: calc(var(--rule) * -1); }
-.${ROOT_CLASS}[data-xray] .xray-tag {
+
+/* Work under way: stripes in a highlighted cell are a bar that moves. */
+.${ROOT_CLASS} .cell[data-ink="highlight"] .cell[data-mark="stripes"] { min-height: 18px; padding: 0; background-size: 19.8px 19.8px; animation: working 0.8s linear infinite; }
+@keyframes working { to { background-position: 19.8px 0; } }
+:is(.${ROOT_CLASS}[data-xray], .${ROOT_CLASS} .cell[data-xray]) [data-action] { position: relative; outline: var(--rule) solid var(--signal); outline-offset: calc(var(--rule) * -1); }
+:is(.${ROOT_CLASS}[data-xray], .${ROOT_CLASS} .cell[data-xray]) .xray-tag {
   display: block; position: absolute; top: 0; right: 0; z-index: 1; cursor: pointer;
   /* a finger's worth: this is tapped on a phone */
   min-height: 36px; padding: .5em .8em; background: var(--signal); color: var(--paper);
   font: 700 1rem/1.2 var(--mono); letter-spacing: .01em;
 }
 /* nested boxes share corners: each level down puts its tag in the other one */
-.${ROOT_CLASS}[data-xray] [data-action] [data-action] > .xray-tag { right: auto; left: 0; }
-.${ROOT_CLASS}[data-xray] [data-action] [data-action] [data-action] > .xray-tag { left: auto; right: 0; }
-.${ROOT_CLASS}[data-xray] [data-action] [data-action] [data-action] [data-action] > .xray-tag { right: auto; left: 0; }
+:is(.${ROOT_CLASS}[data-xray], .${ROOT_CLASS} .cell[data-xray]) [data-action] [data-action] > .xray-tag { right: auto; left: 0; }
+:is(.${ROOT_CLASS}[data-xray], .${ROOT_CLASS} .cell[data-xray]) [data-action] [data-action] [data-action] > .xray-tag { left: auto; right: 0; }
+:is(.${ROOT_CLASS}[data-xray], .${ROOT_CLASS} .cell[data-xray]) [data-action] [data-action] [data-action] [data-action] > .xray-tag { right: auto; left: 0; }
 /* over the screen, the corner at the top is the sheet's Close: the tag goes to the bottom */
-.${ROOT_CLASS}[data-xray] [data-canvas="overlay"] [data-action] > .xray-tag { top: auto; bottom: 0; }
+:is(.${ROOT_CLASS}[data-xray], .${ROOT_CLASS} .cell[data-xray]) [data-canvas="overlay"] [data-action] > .xray-tag { top: auto; bottom: 0; }
 
 /* ═══ THE READING GRAMMAR — nisc.dev's, on the stage ═══
    A sheet at the page scale is a slide that is READ, not glanced at: every
@@ -478,6 +504,9 @@ ${DIALOG} > .action:active { transform: translate(2px, 2px); box-shadow: 2px 2px
   font: 400 .9rem/1.6 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere;
 }
 .${ROOT_CLASS} .exhibit > pre > span { display: block; }
+/* fit: the whole document shows — the type is set small enough for its line count and its longest line */
+.${ROOT_CLASS} .exhibit[data-fit] { flex: 1 1 auto; min-height: 0; align-self: stretch; container-type: size; grid-template-rows: auto minmax(0, 1fr); }
+.${ROOT_CLASS} .exhibit[data-fit] > pre { white-space: pre; overflow: hidden; font-size: min(.9rem, calc((100cqh - 3.4rem) / (var(--lines) * 1.6)), calc((100cqw - 2.6rem) / (var(--cols) * .61))); }
 .${ROOT_CLASS} [data-ink="ink"] .exhibit > pre, .${ROOT_CLASS} [data-ink="signal"] .exhibit > pre { border-color: var(--paper); }
 .${ROOT_CLASS} .exhibit[data-tone="ink"] { gap: 0; }
 .${ROOT_CLASS} .exhibit[data-tone="ink"] > figcaption { justify-self: start; background: #111; color: #e9e6dc; border: var(--rule) solid var(--ink); border-bottom: 0; padding: .45rem .7rem .35rem; }

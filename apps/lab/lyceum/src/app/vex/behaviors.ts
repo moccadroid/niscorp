@@ -25,16 +25,25 @@ export const BEHAVIORS: ScopeBehaviors = {
   question_verdicts: {
     default: {},
     stage: { read: [{ match: 'appropriate', to: 'fitToShow' }] },
+    // A phone given the Q&A sees the same: only what the moderator let through.
+    audience: { read: [{ match: 'appropriate', to: 'fitToShow' }] },
+  },
+  member_renderers: {
+    default: {
+      read: [{ match: 'member_id', to: 'userId' }],
+      insert: [{ set: 'member_id', to: 'userId' }],
+      update: [{ match: 'member_id', to: 'userId' }],
+    },
+    stage: {},
+  },
+  claps: {
+    default: { insert: [{ set: 'member_id', to: 'userId' }] },
   },
   presses: {
     default: { insert: [{ set: 'member_id', to: 'userId' }] },
   },
-  // A member reads only the automations they saved; the speaker, the stage
-  // and the scheduler read every one.
   timers: {
-    default: { insert: [{ set: 'saved_by', to: 'userId' }], read: [{ match: 'saved_by', to: 'userId' }] },
-    room: { insert: [{ set: 'saved_by', to: 'userId' }] },
-    stage: {},
+    default: { insert: [{ set: 'saved_by', to: 'userId' }] },
   },
   assistant_turns: {
     default: {

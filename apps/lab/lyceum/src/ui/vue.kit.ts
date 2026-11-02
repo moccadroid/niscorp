@@ -22,6 +22,7 @@ import {
   SIGIL_SHAPES,
   areaOf,
   codeLines,
+  fitOf,
   flowDelays,
   numbers,
   instantOf,
@@ -155,6 +156,7 @@ const Cell = functional((props, children, place) =>
       ...data('align', oneOf(props['align'], ALIGNS)),
       ...data('pad', oneOf(props['pad'], ['none'] as const)),
       ...data('scroll', oneOf(props['scroll'], ['y', 'end'] as const)),
+      ...(props['xray'] === true ? { 'data-xray': '' } : {}),
     },
     children,
   ),
@@ -183,7 +185,17 @@ const Text = functional((props, children, place) =>
 
 // The reading grammar, as the DOM kit draws it (./kit.ts).
 const Exhibit = functional((props, _children, place) =>
-  h('figure', { ...place(), class: 'exhibit', ...data('lang', oneOf(props['lang'], LANGS)), ...data('tone', oneOf(props['tone'], PANES)), ...data('flag', oneOf(props['flag'], INKS)) }, [
+  h(
+    'figure',
+    {
+      ...place(fitOf(props['fit'], text(props['text']) ?? '') ?? {}),
+      class: 'exhibit',
+      ...data('lang', oneOf(props['lang'], LANGS)),
+      ...data('tone', oneOf(props['tone'], PANES)),
+      ...data('flag', oneOf(props['flag'], INKS)),
+      ...(props['fit'] === true ? { 'data-fit': '' } : {}),
+    },
+    [
     h('figcaption', text(props['label']) ?? ''),
     h(
       'pre',
@@ -191,7 +203,8 @@ const Exhibit = functional((props, _children, place) =>
         h('span', { key: i, ...(line.marked ? { 'data-marked': '' } : {}), innerHTML: line.html }),
       ),
     ),
-  ]),
+    ],
+  ),
 );
 
 const Pair = functional((props, children, place) => h('div', { ...place(), class: 'pair', ...data('split', oneOf(props['split'], SPLITS)) }, children));
@@ -527,6 +540,24 @@ const Field: NovaComponent = stateful((props) => {
   };
 });
 
+const Check: NovaComponent = stateful((props) => {
+  const dispatch = useNovaDispatch();
+  const narrow = inject(NarrowKey, undefined);
+  return () => {
+    const model = modelOf(props);
+    return h('label', { ...placed(props, dispatch, narrow?.()), class: 'check' }, [
+      h('input', {
+        type: 'checkbox',
+        checked: props['value'] === true,
+        onChange: (event: Event) => {
+          if (model !== undefined && event.target instanceof HTMLInputElement) dispatch({ type: 'ui:model', ref: model, payload: event.target.checked });
+        },
+      }),
+      h('span', text(props['label']) ?? ''),
+    ]);
+  };
+});
+
 const Look = functional(() => h('span', { class: 'look' }));
 const Xray = functional(() => h('span', { class: 'look' }));
 
@@ -552,6 +583,7 @@ export const VUE_KIT: KitOf<NovaComponent> = {
   Columns,
   Action,
   Field,
+  Check,
   Look,
   Xray,
   Menu,

@@ -7,7 +7,7 @@ import { DDL, LYCEUM_SEQUENCE, LYCEUM_SEQUENCES } from '@lyceum/db/schema';
 import { check, finish } from './harness';
 
 const BASELINE_TABLES = ['departments', 'members', 'slides', 'slide_notes', 'deck', 'grants', 'login_links'];
-const TABLES = [...BASELINE_TABLES.filter((table) => table !== 'departments'), 'slide_tools', 'queries', 'timers', 'assistant_turns', 'questions', 'renderers', 'refused_names', 'question_verdicts', 'presses', 'talks'];
+const TABLES = [...BASELINE_TABLES.filter((table) => table !== 'departments'), 'slide_tools', 'queries', 'timers', 'assistant_turns', 'questions', 'renderers', 'refused_names', 'question_verdicts', 'presses', 'talks', 'question_shown', 'member_renderers', 'claps'];
 const BOOT_TABLES = [...TABLES, ...TIDE_TABLES];
 const ALL = LYCEUM_SEQUENCE.migrations.map((_, index) => `lyceum.app/${index + 1}`).join();
 

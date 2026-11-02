@@ -6,6 +6,8 @@ const MemberRowSchema = z.object({ member_id: z.string() }).nullable();
 const GrantRowsSchema = z.array(z.object({ role: z.string() }));
 
 const ANONYMOUS: IdentityRecord = { roles: ['public'], scope: {} };
+// Every member's record wears it: what is given to the room is given to all of them at once.
+export const MEMBERS = 'members';
 
 export const lyceumIdentity: NonNullable<NiscApp['identity']> = {
   as: 'identity',
@@ -19,6 +21,6 @@ export const lyceumIdentity: NonNullable<NiscApp['identity']> = {
     const roles = [...new Set([...(member === null ? [] : ['member']), ...grants.map((grant) => grant.role), ...everybody.map((grant) => grant.role)])];
     // `fitToShow` is what the stage's reach compares a verdict against: a
     // constant, stamped here so no request can say it.
-    return roles.length === 0 ? ANONYMOUS : { roles, scope: { fitToShow: true } };
+    return roles.length === 0 ? ANONYMOUS : { roles, scope: { fitToShow: true }, ...(member === null ? {} : { tag: MEMBERS }) };
   },
 };

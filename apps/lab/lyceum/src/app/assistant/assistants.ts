@@ -20,14 +20,6 @@ export const ASSISTANTS: readonly AssistantDeclaration[] = [
     applies: { screen: 'member.phone' },
   },
   {
-    id: 'automator',
-    title: 'Your assistant',
-    context: 'An automation of theirs can show them a message on their phone, at a time.',
-    grounding: [],
-    tools: ['automate'],
-    applies: { screen: 'automations.yours' },
-  },
-  {
     id: 'controller',
     title: 'The controller\'s assistant',
     context: "They are the speaker, on the controller that runs the talk. An automation can put one of the deck's slides on screen at a time.",

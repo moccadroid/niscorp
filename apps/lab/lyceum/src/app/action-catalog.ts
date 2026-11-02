@@ -14,7 +14,7 @@ import { notificationAction } from './actions/speaker/notification.action';
 import { resetAction } from './actions/speaker/reset.action';
 import { timersAction } from './actions/speaker/timers.action';
 import { lookTool } from './actions/tools/look.action';
-import { integrationsTool } from './actions/tools/integrations.action';
+import { applauseTool, integrationsTool } from './actions/tools/integrations.action';
 import { assistantAction } from './actions/assistant/assistant.action';
 import { stageRegisterAction } from './actions/stage/register.action';
 import { deckAction } from './actions/stage/deck.action';
@@ -22,9 +22,10 @@ import { stripAction } from './actions/stage/strip.action';
 import { sinkAction } from './actions/kit/sink.action';
 import { signinAction } from './actions/lectern/signin.action';
 import { SLIDE_ACTIONS } from './actions/slide/slide.actions';
-import { askerTool, assistantTool, automatorTool, watcherTool, xrayTool } from './actions/tools/give.actions';
-import { memberNotificationAction, yoursAction } from './actions/automations/yours.action';
-import { streamTool, streamWatchAction } from './actions/tools/stream.action';
+import { askerTool, assistantTool, questionsGiveTool, screensGiveTool, xrayTool } from './actions/tools/give.actions';
+import { showTool } from './actions/questions/show.action';
+import { askTool as formAskTool, brokenTool, lookAction, typeTool } from './actions/screens/screens';
+import { upAction } from './actions/questions/up.action';
 import { askRecordsAction, askTool } from './actions/ask/ask.actions';
 import { searchTool } from './actions/tools/search.action';
 import { xrayDocumentAction } from './actions/xray/document.action';
@@ -52,20 +53,23 @@ export const ACTIONS: Record<string, ActionDefinition> = Object.fromEntries(
     timersAction,
     lookTool,
     xrayTool,
+    screensGiveTool,
+    questionsGiveTool,
+    showTool,
+    lookAction,
+    upAction,
+    formAskTool,
+    brokenTool,
+    typeTool,
     assistantTool,
     askerTool,
-    automatorTool,
-    watcherTool,
-    yoursAction,
-    streamTool,
-    streamWatchAction,
-    memberNotificationAction,
     askTool,
     askRecordsAction,
     searchTool,
     xrayDocumentAction,
     xraySwitchAction,
     integrationsTool,
+    applauseTool,
     buttonTool,
     stepTool,
     buttonPressAction,

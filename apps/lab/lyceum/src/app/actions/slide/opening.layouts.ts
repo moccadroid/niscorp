@@ -41,7 +41,7 @@ export const mirrorLayout: LayoutNode = {
   children: [
     cell('head', [headline('display', '{{$.title}}')], { align: 'middle' }),
     cell('asked', [
-      label('Asked, on the controller'),
+      label('I asked'),
       { component: 'Code', props: { text: { $if: typing, $then: '$.draft', $else: { $prism: last('message') } } } },
     ]),
     {
@@ -49,14 +49,14 @@ export const mirrorLayout: LayoutNode = {
       then: cell('state', [headline('name', 'A model is writing…')], { mark: 'hatch' }),
       else: {
         if: proposed,
-        then: cell('state', [label('To read, then save'), { component: 'Code', props: { text: drafted('when') } }], { ink: 'highlight' }),
+        then: cell('state', [label('Read it, then save it'), { component: 'Code', props: { text: drafted('when') } }], { ink: 'highlight' }),
         else: { if: { $prism: last('outcome') }, then: cell('state', [label('Saved'), { component: 'Code', props: { text: { $prism: last('outcome') } } }], { ink: 'live' }) },
       },
     },
     cell(
       'doc',
       [
-        label('What came back'),
+        label('It answered'),
         {
           if: proposed,
           then: { component: 'Code', props: { text: drafted('json') } },

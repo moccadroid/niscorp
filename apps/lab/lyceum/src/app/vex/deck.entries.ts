@@ -83,7 +83,6 @@ export const slidesAll: SeedEntry = {
     fields: ['slides.position', 'slides.title', 'slides.talk_id', 'cur.talk'],
     filter: { gte: ['slides.position', 0] },
     sort: [{ field: 'slides.position', dir: 'asc' }],
-    limit: 1000,
   },
   mapping: {
     $with: {
@@ -158,7 +157,6 @@ export const slidesDeck: SeedEntry = {
     fields: ['slides.slide_id', 'slides.position', 'slides.title', 'slides.talk_id', 'cur.talk'],
     filter: { gte: ['slides.position', 0] },
     sort: [{ field: 'slides.position', dir: 'asc' }],
-    limit: 1000,
   },
   mapping: {
     $with: {

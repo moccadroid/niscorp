@@ -32,5 +32,7 @@ export const CANVASES: ShellManifest['canvases'] = [
   { id: 'attached', mode: 'list', actionLayout: { if: '$.active', then: { for: '$.instances', as: 'instance', do: { component: 'ActionSlot', props: { instanceId: '$instance.id' } } } } },
   { id: 'controls', initial: ['speaker.controls'] },
   { id: 'overlay' },
+  // What a slide runs on the projector, beside what it says about it.
+  { id: 'demo' },
   { id: 'deck', initial: ['stage.deck', 'speaker.deck'] },
 ];

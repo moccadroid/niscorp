@@ -104,15 +104,15 @@ export const askerGiven = asker.given;
 export const askerGive = asker.give;
 export const askerTake = asker.take;
 
-const automator = givingAll('automator', 'automations');
-export const automatorGiven = automator.given;
-export const automatorGive = automator.give;
-export const automatorTake = automator.take;
+const screens = givingAll('screens', 'the room’s screens');
+export const screensGiven = screens.given;
+export const screensGive = screens.give;
+export const screensTake = screens.take;
 
-const watcher = givingAll('watcher', 'the stream');
-export const watcherGiven = watcher.given;
-export const watcherGive = watcher.give;
-export const watcherTake = watcher.take;
+const questions = givingAll('questions', 'the Q&A');
+export const questionsGiven = questions.given;
+export const questionsGive = questions.give;
+export const questionsTake = questions.take;
 
 const button = giving('button', 'the button');
 export const buttonGiven = button.given;
@@ -133,6 +133,6 @@ export const buttonHolders: SeedEntry = {
   },
 };
 
-export const GRANT_CHANGES: readonly string[] = [xray, assistant, asker, automator, watcher, button].flatMap((each) => [each.give.fingerprint, each.take.fingerprint]);
+export const GRANT_CHANGES: readonly string[] = [xray, assistant, asker, screens, questions, button].flatMap((each) => [each.give.fingerprint, each.take.fingerprint]);
 
-export const GRANT_ENTRIES: readonly (SeedEntry | SeedMutation)[] = [...[xray, assistant, asker, automator, watcher, button].flatMap((each) => [each.given, each.give, each.take]), buttonHolders];
+export const GRANT_ENTRIES: readonly (SeedEntry | SeedMutation)[] = [...[xray, assistant, asker, screens, questions, button].flatMap((each) => [each.given, each.give, each.take]), buttonHolders];

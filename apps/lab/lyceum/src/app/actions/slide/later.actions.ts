@@ -121,10 +121,9 @@ export const strataSlide = still('slide.strata', 'Grammars get migrations.', str
   marked: LYCEUM_KIT.migrations.flatMap((migration, index) => (migration.steps.length > 0 ? [index + 1] : [])),
 });
 
-export const endSlide = still('slide.end', 'It’s all in one folder.', endLayout, {
-  repo: 'https://github.com/moccadroid/niscorp',
-  repoWords: 'github.com/moccadroid/niscorp',
-  folder: 'apps/lab/lyceum',
+export const endSlide = still('slide.end', 'The whole app is data.', endLayout, {
+  docs: 'https://nisc.dev/elop',
+  docsWords: 'nisc.dev/elop',
 });
 
 export const LATER_SLIDES: readonly ActionDefinition[] = [

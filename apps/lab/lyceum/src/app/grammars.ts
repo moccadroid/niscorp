@@ -97,5 +97,25 @@ export const LYCEUM_KIT: Sequence = {
       description: 'Sheet: scale dense — the reading scale a size down, for a slide that holds more',
       steps: [],
     },
+    {
+      // A MARKER: a component added.
+      description: 'Check: a box that is ticked or not, bound to a yes or no in the data',
+      steps: [],
+    },
+    {
+      // A MARKER: a prop added.
+      description: 'Exhibit: fit — a document set small enough that every line shows',
+      steps: [],
+    },
+    {
+      // A MARKER: a set widened.
+      description: 'Look: svelte, angular and text join dom, react and vue',
+      steps: [],
+    },
+    {
+      // A MARKER: a prop added.
+      description: 'Cell: xray — every action inside it outlined, with its id',
+      steps: [],
+    },
   ],
 };

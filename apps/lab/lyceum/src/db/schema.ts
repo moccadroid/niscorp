@@ -245,6 +245,36 @@ const SLIDE_PARTS = `
   ALTER TABLE slides ADD COLUMN parts INTEGER NOT NULL DEFAULT 1;
 `;
 
+// Only a question the moderator has judged can be put up: the row points at its verdict.
+const QUESTION_SHOWN = /* sql */ `
+  CREATE TABLE question_shown (
+    shown_id    TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    question_id TEXT NOT NULL REFERENCES question_verdicts (question_id) ON DELETE CASCADE,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  COMMENT ON TABLE question_shown IS 'Each time the speaker put a question on the projector, one row; the newest is the one on screen.';
+`;
+
+const SIX_RENDERERS = /* sql */ `
+  ALTER TABLE renderers DROP CONSTRAINT renderers_renderer_check;
+  ALTER TABLE renderers ADD CONSTRAINT renderers_renderer_check CHECK (renderer IN ('dom', 'react', 'vue', 'svelte', 'angular', 'text'));
+  CREATE TABLE member_renderers (
+    member_id TEXT PRIMARY KEY REFERENCES members (member_id) ON DELETE CASCADE,
+    renderer  TEXT NOT NULL CHECK (renderer IN ('dom', 'react', 'vue', 'svelte', 'angular', 'text'))
+  );
+  COMMENT ON TABLE member_renderers IS 'The renderer a member picked for their own phone; a member with no row gets the phones'' renderer.';
+`;
+
+const CLAPS = /* sql */ `
+  CREATE TABLE claps (
+    clap_id    TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    member_id  TEXT NOT NULL REFERENCES members (member_id) ON DELETE CASCADE,
+    kind       TEXT NOT NULL CHECK (kind IN ('clap')),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  COMMENT ON TABLE claps IS 'Each clap from Applause, an integration installed from outside in the Nova talk: who clapped, and when.';
+`;
+
 const QUESTIONS_THROUGH = /* sql */ `
   COMMENT ON TABLE questions IS 'Questions the people in the audience sent the speaker, through the Q&A integration. A question is never edited or deleted once sent.';
 `;
@@ -301,6 +331,9 @@ export const LYCEUM_SEQUENCE: Sequence = {
     { description: 'The questions table says how questions arrive without naming a vendor', steps: sqlSteps(QUESTIONS_THROUGH) },
     { description: 'A slide says how many parts it is shown in', steps: sqlSteps(SLIDE_PARTS) },
     { description: 'Talks: the room can give more than one; a slide belongs to one, and the deck row says which is on', steps: sqlSteps(TALKS) },
+    { description: 'A question on the projector: each time the speaker puts one up, a row; the newest is on screen', steps: sqlSteps(QUESTION_SHOWN) },
+    { description: 'Six renderers: Svelte, Angular and text join DOM, React and Vue; a member can pick their own phone’s', steps: sqlSteps(SIX_RENDERERS) },
+    { description: 'Claps: Applause, an integration from outside, counts the room’s claps', steps: sqlSteps(CLAPS) },
   ],
 };
 

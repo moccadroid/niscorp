@@ -10,6 +10,9 @@ import { FONTS_HREF, LYCEUM_CSS, ROOT_CLASS } from './tokens';
 import { LOOKS, POSTER_KIT, oneOf } from './kit';
 import { REACT_KIT } from './react.kit';
 import { vueRenderer } from './vue.kit';
+import { svelteRenderer } from './svelte';
+import { angularRenderer } from './angular';
+import { textRenderer } from './text.target';
 import { lyceumRegistry } from './registry';
 
 const dressed = new WeakSet<Document>();
@@ -88,7 +91,7 @@ export const lyceumTarget = (config: { root: HTMLElement }): Target => {
   // thrown away when another is: whatever a framework leaves on the element it
   // mounted into (Vue's data-v-app, React's container key) goes with it. The
   // host is display: contents, so it adds no box.
-  const renderers: Record<(typeof LOOKS)[number], (host: HTMLElement) => Target> = { dom: domRenderer, react: reactRenderer, vue: vueRenderer };
+  const renderers: Record<(typeof LOOKS)[number], (host: HTMLElement) => Target> = { dom: domRenderer, react: reactRenderer, vue: vueRenderer, svelte: svelteRenderer, angular: angularRenderer, text: textRenderer };
   return (api) => {
     dress(root.ownerDocument);
     root.classList.add(ROOT_CLASS);

@@ -12,10 +12,11 @@ import type { Orchestrator } from '../assistant/orchestrator';
 import type { Querier } from '../querying';
 import type { TimerRequest, TimerWriter, Timing, Written } from '../timing';
 import { answerSchemaOf, isDraft } from '@niscorp/tide/agent';
-import { anchorTimer, DRAFT_HERE, dueOf, localNow, proposable, runsAs, slideIdsOf } from '../timing';
+import { anchorTimer, DRAFT_HERE, dueOf, localNow, proposable, slideIdsOf } from '../timing';
 import { slidesDeck } from '@lyceum/app/vex/deck.entries';
 import { timerDelete, timerSave } from '@lyceum/app/vex/timer.entries';
 import { vexOver } from '../vex-over';
+import { heldActions } from '../held';
 
 const DraftSchema = z.object({ draft: z.string() });
 const ChosenSchema = z.object({ chosen: z.object({ timerId: z.string().min(1), draft: z.unknown() }) });
@@ -64,7 +65,7 @@ const knowledgeOf = async (session: FunctionSession, assembled: Assembled, tz: s
     ),
   );
   const facts = grounded.join('\n');
-  const actions = offerableActions(session.actions).map((id) => {
+  const actions = offerableActions(heldActions(session.shell)).map((id) => {
     const prefill = prefillOf(id);
     const action = ACTIONS[id];
     return `- ${id} — ${action?.title ?? id}: ${action?.description ?? ''}${prefill.length === 0 ? '' : ` Pre-fill: ${prefill.map((entry) => `${entry.key} (${entry.description})`).join('; ')}.`}`;
@@ -89,7 +90,7 @@ export const assistantFunctions = (
     id: 'assistant.intro',
     description: 'Answers what the person’s assistant is built from: { title, builtFrom, tools }. Send nothing.',
     execute: async () => {
-      const assembled = assembleFor(session.actions);
+      const assembled = assembleFor(heldActions(session.shell));
       const main = assembled.from[assembled.from.length - 1];
       return {
         title: main?.title ?? 'Assistant',
@@ -104,7 +105,7 @@ export const assistantFunctions = (
     execute: async (data) => {
       const message = DraftSchema.parse(data).draft.trim();
       if (message === '') throw new Error('Write something first.');
-      const assembled = assembleFor(session.actions);
+      const assembled = assembleFor(heldActions(session.shell));
       const { knowledge, facts, earlier } = await knowledgeOf(session, assembled, deps.tz);
       const proposals: Proposal[] = [];
       const opened: Opened[] = [];
@@ -121,9 +122,8 @@ export const assistantFunctions = (
     description: 'Saves a timer the assistant drafted. Send { chosen: { timerId, draft } }; answers { dueLocal }, the local time it is next due, or empty.',
     execute: async (data) => {
       const { chosen } = ChosenSchema.parse(data);
-      const as = runsAs(session.principal ?? '');
-      const slideIds = as === 'clock' ? slideIdsOf(await vexOver(session.wire)(slidesDeck.fingerprint)) : [];
-      const reflex = anchorTimer(proposable(chosen.draft, slideIds), chosen.timerId, Date.now(), deps.tz, slideIds, as);
+      const slideIds = slideIdsOf(await vexOver(session.wire)(slidesDeck.fingerprint));
+      const reflex = anchorTimer(proposable(chosen.draft, slideIds), chosen.timerId, Date.now(), deps.tz, slideIds);
       const due = dueOf(reflex, Date.now());
       await vexOver(session.wire)(timerSave.fingerprint, {
         timerId: chosen.timerId,

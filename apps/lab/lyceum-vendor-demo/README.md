@@ -22,4 +22,9 @@ anywhere.
 `vendor-broken/bundle` is the same bundle with a trigger that re-emits its own
 channel — a loop. Intake refuses it, and says where the loop is.
 
-    pnpm publish:to <dir>    # writes <dir>/vendor/bundle and <dir>/vendor-broken/bundle
+`applause/bundle` is a second made-up company, for the Nova talk: a Clap button
+on every phone (`ext.member.applause.clap`) and the room's count on the
+projector's slide 8 (`ext.stage.applause.meter`), calling lyceum's `claps`
+queries.
+
+    pnpm publish:to <dir>    # writes <dir>/vendor/bundle, <dir>/vendor-broken/bundle and <dir>/applause/bundle

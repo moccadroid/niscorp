@@ -28,14 +28,14 @@ export const KIT_PROPS = z
       })
       .partial()
       .strict(),
-    Cell: z.object({ area, ink, mark, align: z.enum(ALIGNS), pad: z.literal('none'), scroll: z.enum(['y', 'end']) }).partial().strict(),
+    Cell: z.object({ area, ink, mark, align: z.enum(ALIGNS), pad: z.literal('none'), scroll: z.enum(['y', 'end']), xray: z.literal(true) }).partial().strict(),
     Label: z.object({}).strict(),
     Headline: z.object({ level: z.enum(LEVELS) }).partial().strict(),
     Text: z.object({ tone: z.literal('muted'), size: z.enum(SIZES) }).partial().strict(),
     // The reading grammar: a document set out to be read, two things side by
     // side, things one under another, a row of figures.
     Exhibit: z
-      .object({ area, label, text: z.string(), lang: z.enum(LANGS), tone: z.enum(PANES), flag: ink, marked: z.array(z.number()) })
+      .object({ area, label, text: z.string(), lang: z.enum(LANGS), tone: z.enum(PANES), flag: ink, marked: z.array(z.number()), fit: z.literal(true).describe('Set small enough that every line shows') })
       .partial()
       .strict(),
     Pair: z.object({ area, split: z.enum(SPLITS) }).partial().strict(),
@@ -75,6 +75,7 @@ export const KIT_PROPS = z
     Columns: z.object({ bars: z.array(z.object({ label, value: z.number(), ink, mark }).partial({ ink: true, mark: true }).strict()) }).partial().strict(),
     Action: z.object({ area, ink, label, lines: z.literal('two'), size: z.literal('large'), sound: z.literal('chime') }).partial().strict(),
     Field: z.object({ area, placeholder: z.string(), value: z.string(), enter: z.literal('clears') }).partial().strict(),
+    Check: z.object({ area, label, value: z.boolean().describe('Ticked or not; bind it with `model` instead of setting it') }).partial().strict(),
     Look: z.object({ look: z.enum(LOOKS) }).partial().strict(),
     Xray: z.object({ on: z.boolean() }).partial().strict(),
     Menu: z.object({ area, label }).partial().strict(),

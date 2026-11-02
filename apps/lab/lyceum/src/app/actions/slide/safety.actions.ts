@@ -42,6 +42,7 @@ export const installSlide: ActionDefinition = {
   id: 'slide.install',
   title: 'Installing someone else’s Q&A',
   data: {
+    integration: 'qa',
     kicker: 'An external plugin, loaded from GitHub',
     title: 'Installing someone else’s Q&A',
     vendor: { id: '', url: '', status: '', reasons: [], checks: [], culprit: '' },

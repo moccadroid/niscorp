@@ -6,41 +6,32 @@ import { createReflexAgent, effectProblem, isDraft, reflexConversation } from '@
 import type { OfferedEffect, ReflexAnswer } from '@niscorp/tide/agent';
 import { evaluate } from '@niscorp/prism';
 import { createSignal } from '@niscorp/signal';
+import { mintSession } from '@niscorp/moss';
 import type { MossServer } from '@niscorp/moss';
 import { deckShow, slidesDeck, TALK_DECK } from '@lyceum/app/vex/deck.entries';
 import { timersAll } from '@lyceum/app/vex/timer.entries';
-import { mintSession } from '@niscorp/moss';
 import { vexOver, wireAs } from './vex-over';
 import type { LyceumRuntime } from './runtime';
 
 export const talkZone = (env: Record<string, string | undefined>): string => env['LYCEUM_TZ'] ?? 'Europe/Vienna';
 
-const NOTIFY: OfferedEffect = {
-  name: 'notify',
-  description:
-    'Show a message to whoever saved this automation, on their screen, the moment it fires — a reminder, an alert, or that a timer is up. Shown only if they are connected then; if they are not, it is not shown later.',
-  input: z.object({ text: z.string().min(1).describe('The message, in a few words.') }).strict(),
-};
-
-// No slides to show: only the message is offered.
 export const timerEffects = (slideIds: readonly string[]): readonly OfferedEffect[] => {
   const [first, ...rest] = slideIds;
-  if (first === undefined) return [NOTIFY];
+  if (first === undefined) throw new Error('lyceum: the deck has no slides for a timer to show');
   return [
     {
       name: 'deck.show',
       description: "Put one of the deck's slides on the projector, in place of the one showing now. The stage and every screen following the deck move with it.",
       input: z.object({ slideId: z.enum([first, ...rest]).describe('The slide to put on screen, by its id.') }).strict(),
     },
-    NOTIFY,
+    {
+      name: 'notify',
+      description:
+        'Show a message to whoever saved this automation, on their screen, the moment it fires — a reminder, an alert, or that a timer is up. Shown only if they are connected then; if they are not, it is not shown later.',
+      input: z.object({ text: z.string().min(1).describe('The message, in a few words.') }).strict(),
+    },
   ];
 };
-
-// The speaker's timers run as the clock, which can move the slide and nothing
-// else; anybody else's runs as them, and is not offered the slides at all.
-const SPEAKER = 'speaker';
-export const runsAs = (savedBy: string): string => (savedBy === SPEAKER ? 'clock' : savedBy);
-export const slidesFor = (as: string, slideIds: readonly string[]): readonly string[] => (as === 'clock' ? slideIds : []);
 
 const SlideIdsSchema = z.array(z.object({ slide_id: z.string() }));
 export const slideIdsOf = (rows: unknown): string[] => SlideIdsSchema.parse(rows ?? []).map((row) => row.slide_id);
@@ -102,15 +93,14 @@ const fakeWriter = (): TimerWriter => ({
   kind: 'fake',
   write: async ({ intent, slideIds, earlier }) => {
     const closing = { name: 'deck.show', input: { slideId: slideIds.at(-1) ?? '' } };
-    const showsSlides = slideIds.length > 0;
     if (/email/i.test(intent)) return { answer: { refused: 'Nothing here can send an email.' }, reasoning: 'An email: no offered effect sends one.' };
     const last = earlier.at(-1)?.answer;
-    if (last !== undefined && isDraft(last) && showsSlides && /slide/i.test(intent)) {
+    if (last !== undefined && isDraft(last) && /slide/i.test(intent)) {
       return { answer: DraftHereSchema.parse({ ...last, intent: 'Put the closing slide on screen.', effect: closing }), reasoning: 'A correction: the same time, the closing slide instead.' };
     }
     const minutes = /(\d+)\s*min/i.exec(intent)?.[1];
     if (minutes !== undefined) {
-      const slide = showsSlides && /slide/i.test(intent);
+      const slide = /slide/i.test(intent);
       return {
         answer: DraftHereSchema.parse({
           id: `timer-${minutes}m`,
@@ -140,12 +130,12 @@ export const createTimerWriter = (env: Record<string, string | undefined>): Time
   return liveWriter();
 };
 
-// Whatever the document said, the reflex runs as `as`, stamped here.
-export const armable = (document: unknown, slideIds: readonly string[], as = 'clock'): Reflex => {
+// Whatever the document said, the reflex runs as the clock.
+export const armable = (document: unknown, slideIds: readonly string[]): Reflex => {
   const reflex = ReflexSchema.parse(document);
-  const problem = effectProblem(timerEffects(slidesFor(as, slideIds)), reflex);
+  const problem = effectProblem(timerEffects(slideIds), reflex);
   if (problem !== undefined) throw new Error(problem);
-  return { ...reflex, as };
+  return { ...reflex, as: 'clock' };
 };
 
 export const proposable = (document: unknown, slideIds: readonly string[]): ReflexDraft => {
@@ -155,16 +145,12 @@ export const proposable = (document: unknown, slideIds: readonly string[]): Refl
   return draft;
 };
 
-export const anchorTimer = (draft: ReflexDraft, timerId: string, at: number, tz: string, slideIds: readonly string[], as = 'clock'): Reflex =>
-  armable(anchorDraft({ ...draft, id: timerId }, { at, tz }), slideIds, as);
-
-// Delivered to the stage whenever the saved automations are loaded again.
-export const TIMERS_CHANNEL = 'timers-changed';
+export const anchorTimer = (draft: ReflexDraft, timerId: string, at: number, tz: string, slideIds: readonly string[]): Reflex =>
+  armable(anchorDraft({ ...draft, id: timerId }, { at, tz }), slideIds);
 
 export type Timing = { tide: Tide; driver: TideDriver; reload: () => Promise<number>; stop: () => Promise<void> };
 
 export const startTiming = async (server: MossServer, runtime: LyceumRuntime): Promise<Timing> => {
-  // Showing a slide is armed only for the clock (armable).
   const clock = vexOver(wireAs(server, await mintSession(runtime.pool, 'clock', 30 * 86_400_000)));
   const savedBy = new Map<string, string>();
 
@@ -206,7 +192,7 @@ export const startTiming = async (server: MossServer, runtime: LyceumRuntime): P
     const slideIds = slideIdsOf(await server.executeAs('scheduler', slidesDeck.fingerprint, {}));
     const reflexes = rows.flatMap((row) => {
       try {
-        return [armable(row.reflex, slideIds, runsAs(row.saved_by))];
+        return [armable(row.reflex, slideIds)];
       } catch (error) {
         console.error('[lyceum] a saved timer could not be loaded:', error instanceof Error ? error.message : error);
         return [];
@@ -214,7 +200,6 @@ export const startTiming = async (server: MossServer, runtime: LyceumRuntime): P
     });
     await tide.load(reflexes, { at: Date.now() });
     void driver.wake();
-    server.shells?.deliver('stage', TIMERS_CHANNEL);
     return reflexes.length;
   };
   await reload();

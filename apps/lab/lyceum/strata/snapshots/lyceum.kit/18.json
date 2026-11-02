@@ -1,0 +1,882 @@
+{
+  "kinds": {
+    "lyceum.kit/props": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "description": "The props each lyceum kit component accepts, by component name",
+      "properties": {
+        "Action": {
+          "additionalProperties": false,
+          "properties": {
+            "area": {
+              "description": "A grid area name from the enclosing Sheet",
+              "type": "string"
+            },
+            "ink": {
+              "enum": [
+                "paper",
+                "ink",
+                "signal",
+                "alert",
+                "live",
+                "highlight"
+              ],
+              "type": "string"
+            },
+            "label": {
+              "type": "string"
+            },
+            "lines": {
+              "const": "two",
+              "type": "string"
+            },
+            "size": {
+              "const": "large",
+              "type": "string"
+            },
+            "sound": {
+              "const": "chime",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "Bar": {
+          "additionalProperties": false,
+          "properties": {
+            "segments": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "ink": {
+                    "enum": [
+                      "paper",
+                      "ink",
+                      "signal",
+                      "alert",
+                      "live",
+                      "highlight"
+                    ],
+                    "type": "string"
+                  },
+                  "mark": {
+                    "enum": [
+                      "stripes",
+                      "dots",
+                      "bars",
+                      "checks",
+                      "hatch"
+                    ],
+                    "type": "string"
+                  },
+                  "value": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "value"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            }
+          },
+          "type": "object"
+        },
+        "Cell": {
+          "additionalProperties": false,
+          "properties": {
+            "align": {
+              "enum": [
+                "start",
+                "end",
+                "center",
+                "between",
+                "middle"
+              ],
+              "type": "string"
+            },
+            "area": {
+              "description": "A grid area name from the enclosing Sheet",
+              "type": "string"
+            },
+            "ink": {
+              "enum": [
+                "paper",
+                "ink",
+                "signal",
+                "alert",
+                "live",
+                "highlight"
+              ],
+              "type": "string"
+            },
+            "mark": {
+              "enum": [
+                "stripes",
+                "dots",
+                "bars",
+                "checks",
+                "hatch"
+              ],
+              "type": "string"
+            },
+            "pad": {
+              "const": "none",
+              "type": "string"
+            },
+            "scroll": {
+              "enum": [
+                "y",
+                "end"
+              ],
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "Check": {
+          "additionalProperties": false,
+          "properties": {
+            "area": {
+              "description": "A grid area name from the enclosing Sheet",
+              "type": "string"
+            },
+            "label": {
+              "type": "string"
+            },
+            "value": {
+              "description": "Ticked or not; bind it with `model` instead of setting it",
+              "type": "boolean"
+            }
+          },
+          "type": "object"
+        },
+        "Code": {
+          "additionalProperties": false,
+          "properties": {
+            "marked": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "text": {
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "Columns": {
+          "additionalProperties": false,
+          "properties": {
+            "bars": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "ink": {
+                    "enum": [
+                      "paper",
+                      "ink",
+                      "signal",
+                      "alert",
+                      "live",
+                      "highlight"
+                    ],
+                    "type": "string"
+                  },
+                  "label": {
+                    "type": "string"
+                  },
+                  "mark": {
+                    "enum": [
+                      "stripes",
+                      "dots",
+                      "bars",
+                      "checks",
+                      "hatch"
+                    ],
+                    "type": "string"
+                  },
+                  "value": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "label",
+                  "value"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            }
+          },
+          "type": "object"
+        },
+        "Countdown": {
+          "additionalProperties": false,
+          "properties": {
+            "label": {
+              "type": "string"
+            },
+            "to": {
+              "description": "The instant counted down to",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "Exhibit": {
+          "additionalProperties": false,
+          "properties": {
+            "area": {
+              "description": "A grid area name from the enclosing Sheet",
+              "type": "string"
+            },
+            "fit": {
+              "const": true,
+              "description": "Set small enough that every line shows",
+              "type": "boolean"
+            },
+            "flag": {
+              "enum": [
+                "paper",
+                "ink",
+                "signal",
+                "alert",
+                "live",
+                "highlight"
+              ],
+              "type": "string"
+            },
+            "label": {
+              "type": "string"
+            },
+            "lang": {
+              "enum": [
+                "json",
+                "sql",
+                "ts"
+              ],
+              "type": "string"
+            },
+            "marked": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "text": {
+              "type": "string"
+            },
+            "tone": {
+              "enum": [
+                "paper",
+                "ink"
+              ],
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "Field": {
+          "additionalProperties": false,
+          "properties": {
+            "area": {
+              "description": "A grid area name from the enclosing Sheet",
+              "type": "string"
+            },
+            "enter": {
+              "const": "clears",
+              "type": "string"
+            },
+            "placeholder": {
+              "type": "string"
+            },
+            "value": {
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "Figure": {
+          "additionalProperties": false,
+          "properties": {
+            "label": {
+              "type": "string"
+            },
+            "value": {
+              "type": [
+                "string",
+                "number"
+              ]
+            }
+          },
+          "type": "object"
+        },
+        "Flow": {
+          "additionalProperties": false,
+          "properties": {
+            "from": {
+              "description": "What the first end is",
+              "type": "string"
+            },
+            "lanes": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "ink": {
+                    "enum": [
+                      "paper",
+                      "ink",
+                      "signal",
+                      "alert",
+                      "live",
+                      "highlight"
+                    ],
+                    "type": "string"
+                  },
+                  "label": {
+                    "type": "string"
+                  },
+                  "toward": {
+                    "enum": [
+                      "to",
+                      "from"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "label",
+                  "toward"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "to": {
+              "description": "What the second end is",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "Headline": {
+          "additionalProperties": false,
+          "properties": {
+            "level": {
+              "enum": [
+                "display",
+                "title",
+                "name"
+              ],
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "Label": {
+          "additionalProperties": false,
+          "properties": {},
+          "type": "object"
+        },
+        "Look": {
+          "additionalProperties": false,
+          "properties": {
+            "look": {
+              "enum": [
+                "dom",
+                "react",
+                "vue"
+              ],
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "Menu": {
+          "additionalProperties": false,
+          "properties": {
+            "area": {
+              "description": "A grid area name from the enclosing Sheet",
+              "type": "string"
+            },
+            "label": {
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "Page": {
+          "additionalProperties": false,
+          "properties": {},
+          "type": "object"
+        },
+        "Pair": {
+          "additionalProperties": false,
+          "properties": {
+            "area": {
+              "description": "A grid area name from the enclosing Sheet",
+              "type": "string"
+            },
+            "split": {
+              "enum": [
+                "even",
+                "narrow-wide",
+                "wide-narrow"
+              ],
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "Pipeline": {
+          "additionalProperties": false,
+          "properties": {
+            "area": {
+              "description": "A grid area name from the enclosing Sheet",
+              "type": "string"
+            },
+            "detour": {
+              "additionalProperties": false,
+              "properties": {
+                "direct": {
+                  "description": "What the link it stands in for is called",
+                  "type": "string"
+                },
+                "enter": {
+                  "description": "What the way in is called",
+                  "type": "string"
+                },
+                "from": {
+                  "description": "The step the detour leaves the line at, from 0",
+                  "type": "number"
+                },
+                "label": {
+                  "type": "string"
+                },
+                "leave": {
+                  "description": "What the way back is called",
+                  "type": "string"
+                },
+                "off": {
+                  "type": "boolean"
+                },
+                "steps": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "ink": {
+                        "enum": [
+                          "paper",
+                          "ink",
+                          "signal",
+                          "alert",
+                          "live",
+                          "highlight"
+                        ],
+                        "type": "string"
+                      },
+                      "label": {
+                        "type": "string"
+                      },
+                      "note": {
+                        "description": "Set apart in the step’s corner: how long it took",
+                        "type": "string"
+                      },
+                      "off": {
+                        "type": "boolean"
+                      },
+                      "value": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "label",
+                      "value"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "to": {
+                  "description": "The step it comes back at",
+                  "type": "number"
+                }
+              },
+              "required": [
+                "from",
+                "to",
+                "steps"
+              ],
+              "type": "object"
+            },
+            "legend": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "ink": {
+                    "enum": [
+                      "paper",
+                      "ink",
+                      "signal",
+                      "alert",
+                      "live",
+                      "highlight"
+                    ],
+                    "type": "string"
+                  },
+                  "label": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "label"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "steps": {
+              "description": "What always runs, in order; a step that did not happen is off",
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "ink": {
+                    "enum": [
+                      "paper",
+                      "ink",
+                      "signal",
+                      "alert",
+                      "live",
+                      "highlight"
+                    ],
+                    "type": "string"
+                  },
+                  "label": {
+                    "type": "string"
+                  },
+                  "note": {
+                    "description": "Set apart in the step’s corner: how long it took",
+                    "type": "string"
+                  },
+                  "off": {
+                    "type": "boolean"
+                  },
+                  "value": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "label",
+                  "value"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            }
+          },
+          "type": "object"
+        },
+        "Qr": {
+          "additionalProperties": false,
+          "properties": {
+            "value": {
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "Rows": {
+          "additionalProperties": false,
+          "properties": {
+            "clickKey": {
+              "type": "string"
+            },
+            "columns": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "key": {
+                    "type": "string"
+                  },
+                  "kind": {
+                    "enum": [
+                      "text",
+                      "mono",
+                      "sigil"
+                    ],
+                    "type": "string"
+                  },
+                  "label": {
+                    "type": "string"
+                  },
+                  "missing": {
+                    "type": "string"
+                  },
+                  "w": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "label",
+                  "key"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "empty": {
+              "type": "string"
+            },
+            "rowKey": {
+              "type": "string"
+            },
+            "rowRef": {
+              "type": "string"
+            },
+            "rows": {
+              "items": {
+                "additionalProperties": {},
+                "propertyNames": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "selected": {}
+          },
+          "type": "object"
+        },
+        "Sheet": {
+          "additionalProperties": false,
+          "properties": {
+            "areas": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "cols": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "narrow": {
+              "additionalProperties": false,
+              "properties": {
+                "areas": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "cols": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "type": "array"
+                },
+                "rows": {
+                  "items": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "const": "auto",
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "areas"
+              ],
+              "type": "object"
+            },
+            "rows": {
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "const": "auto",
+                    "type": "string"
+                  }
+                ]
+              },
+              "type": "array"
+            },
+            "scale": {
+              "description": "The reading scale: sizes fixed in rem with a measure, for a slide that is read",
+              "enum": [
+                "page",
+                "dense"
+              ],
+              "type": "string"
+            },
+            "size": {
+              "enum": [
+                "fill",
+                "auto"
+              ],
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "Sigil": {
+          "additionalProperties": false,
+          "properties": {
+            "shape": {
+              "enum": [
+                "triangle",
+                "circle",
+                "square",
+                "cross",
+                "check",
+                "x"
+              ],
+              "type": "string"
+            },
+            "size": {
+              "const": "large",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "Stack": {
+          "additionalProperties": false,
+          "properties": {
+            "area": {
+              "description": "A grid area name from the enclosing Sheet",
+              "type": "string"
+            },
+            "gap": {
+              "enum": [
+                "normal",
+                "tight"
+              ],
+              "type": "string"
+            },
+            "scroll": {
+              "const": "y",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "Stats": {
+          "additionalProperties": false,
+          "properties": {
+            "area": {
+              "description": "A grid area name from the enclosing Sheet",
+              "type": "string"
+            },
+            "items": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "ink": {
+                    "enum": [
+                      "paper",
+                      "ink",
+                      "signal",
+                      "alert",
+                      "live",
+                      "highlight"
+                    ],
+                    "type": "string"
+                  },
+                  "label": {
+                    "type": "string"
+                  },
+                  "value": {
+                    "type": [
+                      "string",
+                      "number"
+                    ]
+                  }
+                },
+                "required": [
+                  "label",
+                  "value"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            }
+          },
+          "type": "object"
+        },
+        "Text": {
+          "additionalProperties": false,
+          "properties": {
+            "size": {
+              "enum": [
+                "body",
+                "lede",
+                "small",
+                "fine"
+              ],
+              "type": "string"
+            },
+            "tone": {
+              "const": "muted",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "Xray": {
+          "additionalProperties": false,
+          "properties": {
+            "on": {
+              "type": "boolean"
+            }
+          },
+          "type": "object"
+        }
+      },
+      "required": [
+        "Page",
+        "Sheet",
+        "Cell",
+        "Label",
+        "Headline",
+        "Text",
+        "Exhibit",
+        "Pair",
+        "Stack",
+        "Stats",
+        "Figure",
+        "Countdown",
+        "Code",
+        "Sigil",
+        "Qr",
+        "Rows",
+        "Bar",
+        "Flow",
+        "Columns",
+        "Action",
+        "Field",
+        "Check",
+        "Look",
+        "Xray",
+        "Menu",
+        "Pipeline"
+      ],
+      "type": "object"
+    }
+  },
+  "sequence": "lyceum.kit",
+  "version": 18
+}

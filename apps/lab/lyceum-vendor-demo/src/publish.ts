@@ -1,5 +1,6 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { APPLAUSE_BUNDLE } from './applause';
 import { QA_BROKEN_BUNDLE, QA_BUNDLE } from './bundle';
 
 // moss registers an integration by fetching `<url>/bundle` and reading it as
@@ -7,7 +8,7 @@ import { QA_BROKEN_BUNDLE, QA_BUNDLE } from './bundle';
 const dir = process.argv[2];
 if (dir === undefined) throw new Error('usage: publish:to <dir>');
 
-for (const [folder, bundle] of [['vendor', QA_BUNDLE], ['vendor-broken', QA_BROKEN_BUNDLE]] as const) {
+for (const [folder, bundle] of [['vendor', QA_BUNDLE], ['vendor-broken', QA_BROKEN_BUNDLE], ['applause', APPLAUSE_BUNDLE]] as const) {
   const out = resolve(dir, folder);
   mkdirSync(out, { recursive: true });
   writeFileSync(join(out, 'bundle'), JSON.stringify(bundle, null, 2));

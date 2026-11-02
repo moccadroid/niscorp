@@ -1,6 +1,7 @@
 // Vite loads its config from this file's default export and nothing else, so
 // this one file keeps one.
 import { defineConfig, type Plugin, type ViteDevServer } from 'vite';
+import { svelte } from '@sveltejs/vite-plugin-svelte';
 import { getRequestListener } from '@hono/node-server';
 import { attachSocket } from '@niscorp/moss/node';
 import { mintSession, sessionCookies } from '@niscorp/moss';
@@ -183,7 +184,7 @@ const appServer = (): Plugin => ({
 const workspaceRoot = resolve(here, '../../..');
 
 export default defineConfig({
-  plugins: [appServer()],
+  plugins: [appServer(), svelte()],
   resolve: { alias: { '@lyceum': resolve(here, 'src') } },
   server: { port: PORT, fs: { allow: [workspaceRoot] } },
   optimizeDeps: { exclude: ['@electric-sql/pglite'] },

@@ -14,6 +14,7 @@ import {
   SIGIL_SHAPES,
   areaOf,
   codeLines,
+  fitOf,
   flowDelays,
   numbers,
   instantOf,
@@ -105,6 +106,7 @@ const Cell: NovaComponent = (props: Props) =>
       ...data('align', oneOf(props['align'], ALIGNS)),
       ...data('pad', oneOf(props['pad'], ['none'] as const)),
       ...data('scroll', oneOf(props['scroll'], ['y', 'end'] as const)),
+      ...(props['xray'] === true ? { 'data-xray': '' } : {}),
     },
     props.children,
   );
@@ -137,7 +139,14 @@ const Text: NovaComponent = (props: Props) =>
 const Exhibit: NovaComponent = (props: Props) =>
   h(
     'figure',
-    { ...usePlaced(props), className: 'exhibit', ...data('lang', oneOf(props['lang'], LANGS)), ...data('tone', oneOf(props['tone'], PANES)), ...data('flag', oneOf(props['flag'], INKS)) },
+    {
+      ...usePlaced(props, fitOf(props['fit'], text(props['text']) ?? '') ?? {}),
+      className: 'exhibit',
+      ...data('lang', oneOf(props['lang'], LANGS)),
+      ...data('tone', oneOf(props['tone'], PANES)),
+      ...data('flag', oneOf(props['flag'], INKS)),
+      ...(props['fit'] === true ? { 'data-fit': '' } : {}),
+    },
     h('figcaption', null, text(props['label']) ?? ''),
     h(
       'pre',
@@ -472,6 +481,23 @@ const Field: NovaComponent = (props: Props) => {
   });
 };
 
+const Check: NovaComponent = (props: Props) => {
+  const dispatch = useNovaDispatch();
+  const model = props.novaModel;
+  return h(
+    'label',
+    { ...usePlaced(props), className: 'check' },
+    h('input', {
+      type: 'checkbox',
+      checked: props['value'] === true,
+      onChange: (event: { target: { checked: boolean } }) => {
+        if (model !== undefined) dispatch({ type: 'ui:model', ref: model.ref, payload: event.target.checked });
+      },
+    }),
+    h('span', null, text(props['label']) ?? ''),
+  );
+};
+
 const Look: NovaComponent = () => h('span', { className: 'look' });
 const Xray: NovaComponent = () => h('span', { className: 'look' });
 
@@ -496,6 +522,7 @@ export const REACT_KIT: KitOf<NovaComponent> = {
   Columns,
   Action,
   Field,
+  Check,
   Look,
   Xray,
   Menu,

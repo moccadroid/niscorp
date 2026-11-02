@@ -10,7 +10,7 @@ import { setRenderer } from '@lyceum/app/vex/renderer.entries';
 import { refusedAll, resetGrants, resetMembers, resetPresses, resetQueries, resetQuestions, resetRefused, resetTimers, resetTurns } from '@lyceum/app/vex/reset.entries';
 import type { Timing } from '../timing';
 import { vexOver } from '../vex-over';
-import { removeVendor } from './integration.functions';
+import { removeVendors } from './integration.functions';
 
 // `talk.reset` deletes what points at a person before the person.
 const MembersSchema = z.array(z.object({ member_id: z.string() }));
@@ -22,8 +22,8 @@ const TalksSchema = z.array(z.object({ talk_id: z.string(), title: z.string() })
 const TallySchema = z.object({ replayed: z.number(), generated: z.number(), refused: z.number() });
 const counted = (count: number, one: string, many: string): string[] => (count === 0 ? [] : [`${count} ${count === 1 ? one : many}`]);
 
-export const resetFunctions = (session: FunctionSession, server: () => MossServer, operatorKey: string, timing: () => Timing): FunctionDefinition[] => {
-  const reset = resetWith(session, server, operatorKey, timing);
+export const resetFunctions = (session: FunctionSession, server: () => MossServer, operatorKey: string, timing: () => Timing, resetScreens: () => Promise<void>): FunctionDefinition[] => {
+  const reset = resetWith(session, server, operatorKey, timing, resetScreens);
   return [
     {
       id: 'talk.switch',
@@ -63,7 +63,7 @@ export const resetFunctions = (session: FunctionSession, server: () => MossServe
 };
 
 const resetWith =
-  (session: FunctionSession, server: () => MossServer, operatorKey: string, timing: () => Timing) =>
+  (session: FunctionSession, server: () => MossServer, operatorKey: string, timing: () => Timing, resetScreens: () => Promise<void>) =>
   async (toTalk?: string): Promise<{ done: boolean; people: number }> => {
     const vex = vexOver(session.wire);
     const members = MembersSchema.parse(await vex(memberRegister.fingerprint)).map((member) => member.member_id);
@@ -71,12 +71,13 @@ const resetWith =
     for (const each of [resetPresses, resetQuestions, resetQueries, resetTurns]) await vex(each.fingerprint, { people });
     await vex(resetGrants.fingerprint, { people: [...members, EVERYBODY] });
     await vex(resetMembers.fingerprint, { people: members });
-    for (const savedBy of people) await vex(resetTimers.fingerprint, { savedBy });
+    await vex(resetTimers.fingerprint, { savedBy: 'speaker' });
     await vex(resetRefused.fingerprint, { refused: RefusedSchema.parse(await vex(refusedAll.fingerprint)).map((row) => row.refused_id) });
     for (const surface of SURFACES) await vex(setRenderer.fingerprint, { surface, renderer: 'dom' });
     const talk = toTalk ?? z.object({ talk_id: z.string() }).parse(await vex(deckTalk.fingerprint)).talk_id;
     await vex(deckGo.fingerprint, { deck: TALK_DECK, talk, position: 0 });
-    await removeVendor(server(), operatorKey);
+    await removeVendors(server(), operatorKey);
+    await resetScreens();
     await timing().reload();
     for (const member of members) server().invalidateIdentity(member);
     for (const shell of server().shells?.list() ?? []) server().invalidateIdentity(shell.principal);

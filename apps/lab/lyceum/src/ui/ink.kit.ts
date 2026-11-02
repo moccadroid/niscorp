@@ -1,7 +1,7 @@
 import { Children, createElement, useEffect, useState } from 'react';
 import { Box, Text as InkText } from 'ink';
 import { renderUnicodeCompact } from 'uqr';
-import { Input, Mark, useActionable } from '@niscorp/nova/adapters/ink';
+import { Checkbox, Input, Mark, useActionable } from '@niscorp/nova/adapters/ink';
 import { createComponentRegistry } from '@niscorp/nova';
 import type { ComponentRegistry } from '@niscorp/nova';
 import type { NovaComponent } from '@niscorp/nova/adapters/react';
@@ -195,6 +195,7 @@ const Action: NovaComponent = ({ novaRef, ...props }) => {
 };
 
 const Field: NovaComponent = (props) => h(Input, props);
+const Check: NovaComponent = (props) => h(Box, { flexShrink: 0 }, h(Checkbox, props), h(InkText, {}, ` ${text(props['label']) ?? ''}`));
 
 const Look: NovaComponent = () => null;
 const Xray: NovaComponent = () => null;
@@ -218,7 +219,7 @@ const Stats: NovaComponent = ({ ...props }) =>
   h(Box, { gap: 2 }, ...records(props['items']).map((item, i) => h(InkText, { key: i }, `${text(item['value']) ?? '—'} ${text(item['label']) ?? ''}`)));
 const Pipeline: NovaComponent = ({ ...props }) => h(Box, { flexDirection: 'column' }, ...pipelineText(pipelineOf(props)).map((line, i) => h(InkText, { key: i }, line)));
 
-export const INK_KIT: KitOf<NovaComponent> = { Page, Sheet, Cell, Label, Headline, Text, Figure, Countdown, Code, Sigil, Qr, Rows, Bar, Flow, Columns, Action, Field, Look, Xray, Menu, Exhibit, Pair, Stack, Stats, Pipeline };
+export const INK_KIT: KitOf<NovaComponent> = { Page, Sheet, Cell, Label, Headline, Text, Figure, Countdown, Code, Sigil, Qr, Rows, Bar, Flow, Columns, Action, Field, Check, Look, Xray, Menu, Exhibit, Pair, Stack, Stats, Pipeline };
 
 // moss's ink target adds the wire-backed slots (ActionSlot, CanvasSlot) itself.
 export const lyceumInkRegistry = (): ComponentRegistry<NovaComponent> => {

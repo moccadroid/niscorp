@@ -6,9 +6,10 @@ import type { FunctionSession } from '@niscorp/moss';
 import { ACTIONS } from '@lyceum/app/action-catalog';
 import { shapeOfKind } from '@lyceum/app/vex/query.shapes';
 import { routeQuery } from './vex-query';
+import { heldActions } from '../held';
 import type { Querier } from '../querying';
 import { slidesDeck } from '@lyceum/app/vex/deck.entries';
-import { proposable, runsAs, slideIdsOf, whenWords } from '../timing';
+import { proposable, slideIdsOf, whenWords } from '../timing';
 import type { TimerRequest, TimerWriter, Written } from '../timing';
 import { vexOver } from '../vex-over';
 import type { ToolName } from './declarations';
@@ -29,7 +30,7 @@ export type ToolDeps = {
   wrote: Written[];
 };
 
-const NOT_OFFERED: ReadonlySet<string> = new Set(['assistant.thread', 'query.result', 'speaker.notification', 'member.notification', 'xray.document']);
+const NOT_OFFERED: ReadonlySet<string> = new Set(['assistant.thread', 'query.result', 'speaker.notification', 'xray.document']);
 
 const inputProperties = (actionId: string): Record<string, unknown> => {
   const schema: unknown = ACTIONS[actionId]?.input;
@@ -48,7 +49,7 @@ export const OPENABLE_KEYS: readonly string[] = [...new Set(offerableActions(Obj
 export const hostTools = (deps: ToolDeps, offered: ReadonlySet<ToolName>): ToolDefinition[] => {
   const tools: ToolDefinition[] = [];
 
-  const [firstAction, ...moreActions] = offerableActions(deps.session.actions);
+  const [firstAction, ...moreActions] = offerableActions(heldActions(deps.session.shell));
   if (offered.has('open') && firstAction !== undefined) {
     tools.push(
       defineTool({
@@ -109,7 +110,7 @@ export const hostTools = (deps: ToolDeps, offered: ReadonlySet<ToolName>): ToolD
           "Hand a request for something to happen at a time, or after a while, to the automation writer, in the person's own words. It writes an automation and puts it on their screen to read; it runs only once they save it. It can refuse what no automation can do.",
         input: z.object({ request: z.string().describe("What should happen, and when, in the person's words.") }),
         execute: async ({ request }) => {
-          const slideIds = runsAs(deps.session.principal ?? '') === 'clock' ? slideIdsOf(await vexOver(deps.session.wire)(slidesDeck.fingerprint)) : [];
+          const slideIds = slideIdsOf(await vexOver(deps.session.wire)(slidesDeck.fingerprint));
           const written = await deps.writer.write({ intent: request, now: Date.now(), tz: deps.tz, facts: deps.facts, slideIds, earlier: deps.earlier });
           const { answer, reasoning } = written;
           const read = reasoning ?? '';

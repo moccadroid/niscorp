@@ -13,10 +13,12 @@ import { createCensus } from './census';
 import { assistantFunctions } from './functions/assistant.functions';
 import { lecternFunctions } from './functions/lectern.functions';
 import { phoneInputs } from './phone';
+import { followPlacement } from './placement';
 import { attachedSeeds } from './attached';
 import { buttonFunctions } from './functions/button.functions';
 import { resetFunctions } from './functions/reset.functions';
 import { xrayFunctions } from './functions/xray.functions';
+import { createScreens } from './screens';
 import { followRenderers } from './renderers';
 import { integrationFunctions, vendorAddresses } from './functions/integration.functions';
 import { randomBytes } from 'node:crypto';
@@ -29,7 +31,6 @@ import type { Timing } from './timing';
 import { compilerFor, createQuerier } from './querying';
 import { createTracer, GENERATION_CHANNEL, generationFunctions } from './generation';
 import { queryFunctions } from './functions/query.functions';
-import { streaming } from './streaming';
 import { devRuntime } from './runtime';
 import { createModerator, startModeration } from './moderation';
 import type { DevRuntime, LyceumRuntime } from './runtime';
@@ -71,7 +72,7 @@ export const bootOn = async <R extends LyceumRuntime>(runtime: R, options: BootO
     send: options.send ?? createMailer(process.env, publicUrl),
   };
   const mirror = mirrorSpeaker(() => server());
-  const stream = streaming(() => server());
+  const screens = createScreens(() => server());
   let timingUp: Timing | undefined;
   const timing = (): Timing => {
     if (timingUp === undefined) throw new Error('lyceum: the timers are not up yet');
@@ -85,16 +86,18 @@ export const bootOn = async <R extends LyceumRuntime>(runtime: R, options: BootO
 
   const renderers = followRenderers();
   const integrations = createIntegrations({ extension: seatsExtension });
+  const placement = followPlacement(integrations);
   const app = buildLyceum({
     features: [integrations],
     identity: lyceumIdentity,
-    functions: (session) => [...doorFunctions(session, server, runtime.pool, moderation), ...roomFunctions(session, publicUrl, options.sshAddress ?? process.env['LYCEUM_SSH_ADDRESS'] ?? '', census), ...assistantFunctions(session, { querier, writer: timerWriter, orchestrator, tz, timing }), ...lecternFunctions(server, speakerMail), ...xrayFunctions(session), ...buttonFunctions(session, server), ...mirror.functions(session), ...resetFunctions(session, server, operatorKey, timing), ...integrationFunctions(session, server, operatorKey, vendor), ...generationFunctions(session, tracer), ...queryFunctions(session, querier, () => compilerFor(runtime.pool)), ...stream.functions(session)],
-    reactions: [...lyceumReactions(server, moderation), renderers.reaction],
+    functions: (session) => [...doorFunctions(session, server, runtime.pool, moderation), ...roomFunctions(session, publicUrl, options.sshAddress ?? process.env['LYCEUM_SSH_ADDRESS'] ?? '', census), ...assistantFunctions(session, { querier, writer: timerWriter, orchestrator, tz, timing }), ...lecternFunctions(server, speakerMail), ...xrayFunctions(session), ...buttonFunctions(session, server), ...mirror.functions(session), ...resetFunctions(session, server, operatorKey, timing, screens.reset), ...screens.functions(session), ...integrationFunctions(session, server, operatorKey, vendor), ...generationFunctions(session, tracer), ...queryFunctions(session, querier, () => compilerFor(runtime.pool))],
+    reactions: [...lyceumReactions(server, moderation), ...renderers.reactions],
     inputs: phoneInputs(integrations),
     seeds: attachedSeeds(integrations),
     onSession: (session) => {
       renderers.onSession(session);
       mirror.onSession(session);
+      placement(session);
     },
     components: Object.fromEntries(Object.entries(KIT_PROPS.shape).map(([name, propsSchema]) => [name, { meta: { propsSchema } }])),
   });

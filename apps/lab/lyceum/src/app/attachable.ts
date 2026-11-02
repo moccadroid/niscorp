@@ -5,6 +5,7 @@ export const ATTACHABLE: Record<string, Record<string, string>> = {
   'member.phone': {},
   'speaker.console': {},
   'slide.end': {},
+  'slide.nova-stranger': {},
 };
 
 const SeatsSchema = z

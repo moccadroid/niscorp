@@ -86,4 +86,43 @@ export const questionsMine: SeedEntry = {
   },
 };
 
-export const QUESTION_ENTRIES: readonly (SeedEntry | SeedMutation)[] = [questionSend, questionsShown, questionsEvery, questionsMine, questionsToJudge, verdictsAll, questionJudge];
+export const questionShow: SeedMutation = {
+  fingerprint: 'questions/show',
+  intent: 'Put a question the moderator judged on the projector',
+  mutation: {
+    op: 'insert',
+    table: 'question_shown',
+    values: { question_id: { $context: 'question_id' } },
+  },
+};
+
+// The filter says what it is for; the stage's reach keeps it to fit questions either way.
+export const questionOnScreen: SeedEntry = {
+  fingerprint: 'questions/on-screen',
+  refresh: 'reactive',
+  intent: 'The question the speaker put on the projector last, with its text',
+  shape: [{ question_id: '', text: '' }],
+  dsl: {
+    from: ['question_shown', 'question_verdicts'],
+    fields: ['question_verdicts.question_id', 'question_verdicts.text'],
+    filter: { eq: ['question_verdicts.appropriate', true] },
+    sort: [{ field: 'question_shown.created_at', dir: 'desc' }, { field: 'question_shown.shown_id', dir: 'desc' }],
+    limit: 1,
+  },
+};
+
+// A person reads only their own questions, so this is the newest of theirs the speaker put up.
+export const questionMineOnScreen: SeedEntry = {
+  fingerprint: 'questions/mine-on-screen',
+  refresh: 'reactive',
+  intent: 'The newest of this person’s questions the speaker put on the projector',
+  shape: [{ question_id: '' }],
+  dsl: {
+    from: ['question_shown', 'question_verdicts', 'questions'],
+    fields: ['questions.question_id'],
+    sort: [{ field: 'question_shown.created_at', dir: 'desc' }, { field: 'question_shown.shown_id', dir: 'desc' }],
+    limit: 1,
+  },
+};
+
+export const QUESTION_ENTRIES: readonly (SeedEntry | SeedMutation)[] = [questionSend, questionsShown, questionsEvery, questionsMine, questionsToJudge, verdictsAll, questionJudge, questionShow, questionOnScreen, questionMineOnScreen];

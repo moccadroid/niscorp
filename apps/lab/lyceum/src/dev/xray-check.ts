@@ -51,8 +51,12 @@ const main = async (): Promise<void> => {
   }
   check('...and it is on the controller there', await speaker.shows('tools', 'Give everybody the X-ray'));
   await speaker.shows('tools', '"label":"Who has it, late joiners included","value":"Nobody"');
+  const halfTyped = 'Remind me when the slide';
+  ada.type('body', 'draft', halfTyped);
+  await ada.shows('body', halfTyped);
   speaker.click('tools', 'give');
   check('pressing Give: the X-ray is on the first phone’s list', await ada.shows('body', 'xray.switch'));
+  check('...and what was half-typed on that phone is still there', ada.showsNow('body', halfTyped));
   check('...and on the second', await ben.shows('body', 'xray.switch'));
   check('...and the tool says everybody has it', await speaker.shows('tools', '"label":"Who has it, late joiners included","value":"Everybody"'));
   const late = await join();

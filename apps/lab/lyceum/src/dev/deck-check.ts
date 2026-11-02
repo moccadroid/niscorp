@@ -10,13 +10,11 @@ import { readFileSync } from 'node:fs';
 import { z } from 'zod';
 import { strataSlide } from '@lyceum/app/actions/slide/later.actions';
 import { boot } from '@lyceum/server/boot';
-import { ACTIONS } from '@lyceum/app/action-catalog';
-import { registerLayout } from '@lyceum/app/actions/stage/register.layout';
 import { check, connect, finish, waitUntil } from './harness';
 import type { Terminal } from './harness';
 
-// The slides that carry the code to scan: every talk's register.
-const isRegister = (slideId: string): boolean => ACTIONS[slideId]?.layout === registerLayout;
+// The slides that carry the code to scan: the register, in either talk.
+const REGISTERS = ['stage.register', 'slide.joined'];
 
 const main = async (): Promise<void> => {
   const { server, runtime, close } = await boot();
@@ -36,7 +34,8 @@ const main = async (): Promise<void> => {
   check(`every slide of every talk is an action the stage is granted${unheld.length === 0 ? '' : ` (missing: ${unheld.map((s) => s.slideId).join(', ')})`}`, unheld.length === 0);
   check('the speaker is granted no slide — the controller moves the deck, it does not show it', !every.some((slide) => speakerHello.catalog.actions.includes(slide.slideId)));
   const tools = every.flatMap((slide) => slide.tools);
-  check('every slide\'s tools are actions the speaker is granted, and the stage is not', tools.every((toolId) => speakerHello.catalog.actions.includes(toolId) && !stageHello.catalog.actions.includes(toolId)));
+  check('every slide\'s tools are actions the speaker is granted', tools.every((toolId) => speakerHello.catalog.actions.includes(toolId)));
+  check('the controller\'s own tools (tools.*) are not the stage\'s', tools.filter((toolId) => toolId.startsWith('tools.')).every((toolId) => !stageHello.catalog.actions.includes(toolId)));
   check('a slide is in one talk', new Set(every.map((slide) => slide.slideId)).size === every.length);
 
   const SAYS: Record<string, string> = {
@@ -44,15 +43,19 @@ const main = async (): Promise<void> => {
     'tools.look': 'Which renderer draws',
     'tools.xray': 'X-ray — everybody’s own screen',
     'tools.integrations': 'Integrations — somebody else’s screen',
+    'tools.applause': 'Applause — somebody else’s screen',
     'tools.button': 'The button — an action only some people have',
     'tools.assistant': 'The assistant — on everybody’s phone',
     'tools.asker': 'The ask — on everybody’s phone',
-    'tools.automator': 'Automations — on everybody’s phone',
-    'tools.watcher': 'The stream — on everybody’s phone',
-    'tools.stream': 'Solid — a reply being written',
     'tools.ask': 'Ask the records — the room watches it answered',
     'tools.search': 'Search the room — a value in the request',
     'tools.step': 'This slide, in steps',
+    'tools.form-ask': 'Ask the model for a layout',
+    'tools.screens-give': 'The framework bar — on everybody’s phone',
+    'tools.form-broken': 'A layout with two mistakes',
+    'tools.form-type': 'Type into the projector’s form',
+    'tools.questions-give': 'The Q&A on everybody’s phone',
+    'tools.questions-show': 'Put a question on the screen',
     ...Object.fromEntries(CUE_TOOLS.map((cue) => [cue.id, cue.title])),
   };
   const toolsAre = (expected: readonly string[]): Promise<boolean> =>
@@ -104,7 +107,7 @@ const main = async (): Promise<void> => {
         const counted = await createCensus()();
         check(`...and the census is counted from the source (${counted.data} lines of data, ${counted.code} of code, ${counted.share}%, ${counted.checks} checks)`, counted.data > 0 && counted.code > 0 && counted.checks === CHECKS.length && (await stage.shows('main', `"value":${counted.data}`)) && stage.showsNow('main', `"value":${counted.share}`));
       }
-      if (isRegister(talk.slides[index]?.slideId ?? '')) check('...and the register carries the code to scan while the room arrives', await stage.shows('main', '"name":"Qr"') && stage.showsNow('main', '"value":"http://localhost:8796"'));
+      if (REGISTERS.includes(talk.slides[index]?.slideId ?? '')) check('...and the register carries the code to scan while the room arrives', await stage.shows('main', '"name":"Qr"') && stage.showsNow('main', '"value":"http://localhost:8796"'));
       check(`...and exactly its tools, in order (${(talk.slides[index]?.tools ?? []).join(', ') || 'none'})`, await toolsAre(talk.slides[index]?.tools ?? []));
     }
     speaker.click('controls', 'next');
@@ -123,7 +126,7 @@ const main = async (): Promise<void> => {
     check('a pick past the end stays on the last slide', await onSlide(total - 1));
     speaker.click('controls', 'all');
     await speaker.shows('overlay', 'All slides');
-    check(`${talk.talkId}: all slides lists this talk's slides and no other's`, talk.slides.every((slide) => speaker.showsNow('overlay', slide.title)) && !TALKS.filter((other) => other !== talk).some((other) => other.slides.some((slide) => !talk.slides.some((own) => own.title === slide.title) && speaker.showsNow('overlay', slide.title))));
+    check(`${talk.talkId}: all slides lists this talk's slides and no other's`, talk.slides.every((slide) => speaker.showsNow('overlay', slide.title)) && !TALKS.filter((other) => other !== talk).some((other) => other.slides.some((slide) => !talk.slides.some((own) => own.title.includes(slide.title)) && speaker.showsNow('overlay', slide.title))));
     speaker.click('overlay', 'close');
     check(`${talk.talkId}: Close shuts the list and changes nothing`, (await waitUntil(() => !speaker.showsNow('overlay', 'All slides'))) && (await onSlide(total - 1)));
 
@@ -144,9 +147,10 @@ const main = async (): Promise<void> => {
     await walk(talk);
   }
 
-  const last = TALKS.at(-1);
-  if (last === undefined) throw new Error('no talks');
-  const live = last.slides.findIndex((slide) => isRegister(slide.slideId));
+  const last = TALKS.find((talk) => talk.slides.some((slide) => REGISTERS.includes(slide.slideId)));
+  if (last === undefined) throw new Error('no talk has the register');
+  await load(last);
+  const live = last.slides.findIndex((slide) => REGISTERS.includes(slide.slideId));
   await pick(live);
   check('the register is on the stage', await stage.shows('main', last.slides[live]?.title ?? '\u0000'));
   check('the register counts an empty room', await stage.shows('main', '"label":"Joined","value":0'));

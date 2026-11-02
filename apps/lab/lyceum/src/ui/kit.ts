@@ -1,6 +1,6 @@
 import type { DomComponent } from '@niscorp/nova/adapters/dom';
 import type { Kit } from './kit.props';
-import { areaOf, codeLines, LANGS, numbers, pipelineColumns, pipelineOf, SIGIL_SHAPES, flowDelays, instantOf, narrowOf, qrOf, remaining, sheetStyle, templateOf, text, weight } from './kit.shape';
+import { areaOf, codeLines, fitOf, LANGS, numbers, pipelineColumns, pipelineOf, SIGIL_SHAPES, flowDelays, instantOf, narrowOf, qrOf, remaining, sheetStyle, templateOf, text, weight } from './kit.shape';
 
 export { codeLines, LANGS, numbers, text } from './kit.shape';
 
@@ -9,7 +9,7 @@ export const MARKS = ['stripes', 'dots', 'bars', 'checks', 'hatch'] as const;
 export const SIGILS = ['triangle', 'circle', 'square', 'cross', 'check', 'x'] as const;
 export const ALIGNS = ['start', 'end', 'center', 'between', 'middle'] as const;
 export const LEVELS = ['display', 'title', 'name'] as const;
-export const LOOKS = ['dom', 'react', 'vue'] as const;
+export const LOOKS = ['dom', 'react', 'vue', 'svelte', 'angular', 'text'] as const;
 // THE READING GRAMMAR (nisc.dev's, on the stage): what a slide that is read
 // rather than glanced at is set in — a sheet at the page scale, text in sizes,
 // a document in an exhibit, two things side by side, things one under another,
@@ -79,6 +79,7 @@ export const Cell: DomComponent = ({ props, children }) => {
   setData(node, 'align', oneOf(props['align'], ALIGNS));
   setData(node, 'pad', oneOf(props['pad'], ['none'] as const));
   setData(node, 'scroll', oneOf(props['scroll'], ['y', 'end'] as const));
+  setData(node, 'xray', props['xray'] === true ? '' : undefined);
   return node;
 };
 
@@ -119,6 +120,11 @@ export const Exhibit: DomComponent = ({ props }) => {
   setData(node, 'lang', oneOf(props['lang'], LANGS));
   setData(node, 'tone', oneOf(props['tone'], PANES));
   setData(node, 'flag', oneOf(props['flag'], INKS));
+  const fit = fitOf(props['fit'], text(props['text']) ?? '');
+  if (fit !== undefined) {
+    node.setAttribute('data-fit', '');
+    for (const [name, value] of Object.entries(fit)) node.style.setProperty(name, value);
+  }
   return node;
 };
 
@@ -458,6 +464,17 @@ export const Field: DomComponent = ({ props }) => {
   return node;
 };
 
+export const Check: DomComponent = ({ props }) => {
+  const box = document.createElement('input');
+  box.type = 'checkbox';
+  box.checked = props['value'] === true;
+  const words = el('span', '');
+  words.textContent = text(props['label']) ?? '';
+  const node = el('label', 'check', [box, words]);
+  placeIn(node, props['area']);
+  return node;
+};
+
 // The browser keeps a focused field's typing over whatever the server sends,
 // so a server that empties the field is not seen while the person is still in
 // it: the field empties itself.
@@ -492,4 +509,4 @@ export const Menu: DomComponent = ({ props, children }) => {
 // Shows nothing, like Look: the render target reads it off the frame.
 export const Xray: DomComponent = () => el('span', 'look');
 
-export const POSTER_KIT: Kit = { Page, Sheet, Cell, Label, Headline, Text, Figure, Countdown, Code, Sigil, Qr, Rows, Bar, Flow, Columns, Action, Field, Look, Xray, Menu, Exhibit, Pair, Stack, Stats, Pipeline };
+export const POSTER_KIT: Kit = { Page, Sheet, Cell, Label, Headline, Text, Figure, Countdown, Code, Sigil, Qr, Rows, Bar, Flow, Columns, Action, Field, Check, Look, Xray, Menu, Exhibit, Pair, Stack, Stats, Pipeline };

@@ -23,6 +23,13 @@ hljs.registerLanguage('json', json);
 hljs.registerLanguage('sql', sql);
 hljs.registerLanguage('ts', typescript);
 export const LANGS = ['json', 'sql', 'ts'] as const;
+
+// How many lines a document has, and how long its longest is: what an Exhibit that fits is sized by.
+export const fitOf = (fit: unknown, document: string): Record<string, string> | undefined => {
+  if (fit !== true) return undefined;
+  const lines = document.split('\n');
+  return { '--lines': String(lines.length), '--cols': String(Math.max(1, ...lines.map((line) => line.length))) };
+};
 export type Lang = (typeof LANGS)[number];
 
 const escaped = (line: string): string => line.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');

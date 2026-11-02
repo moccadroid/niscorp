@@ -1,15 +1,13 @@
 import type { LayoutNode } from '@niscorp/nova';
+import { RENDERERS, SURFACES } from '@lyceum/app/vex/renderer.entries';
+
+const rowOf = (surface: string): string => [surface, ...RENDERERS.map((renderer) => `${surface}-${renderer}`)].join(' ');
 
 export const lookLayout: LayoutNode = {
   component: 'Sheet',
   props: {
-    areas: [
-      'kick kick kick kick',
-      'phones phones-dom phones-react phones-vue',
-      'stage stage-dom stage-react stage-vue',
-      'controller controller-dom controller-react controller-vue',
-    ],
-    cols: [2, 1, 1, 1],
+    areas: [Array.from({ length: RENDERERS.length + 1 }, () => 'kick').join(' '), ...SURFACES.map(rowOf)],
+    cols: [2, ...RENDERERS.map(() => 1)],
   },
   children: [
     { component: 'Cell', props: { area: 'kick', ink: 'ink' }, children: [{ component: 'Label', children: 'Which renderer draws each kind of screen' }] },
