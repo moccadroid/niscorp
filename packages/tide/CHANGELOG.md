@@ -1,5 +1,17 @@
 # @niscorp/tide
 
+## 0.1.9
+
+### Patch Changes
+
+- 4e1a905: The reflex agent is shown the dates to look up instead of counting them, and a date it writes beside the wrong weekday is sent back.
+  - **What it is told:** from the `now` it is handed (which must begin `YYYY-MM-DDTHH:MM`; otherwise it is told today is not known), today with its weekday, the coming days — today, the rest of this week, and the two weeks after it, a week running Monday to Sunday — and this month and the next.
+  - **What a weekday means, as it is told:** a weekday on its own is the coming one (0.1.8 told it to ask about a weekday whose week is not said: it guessed a wrong day instead). Today's own weekday, and "next" before a weekday that could be this week's or next week's, are to be asked about, naming the dates as looked up. Nothing checks this: the check sees the agent's answer, not the request.
+  - **What is checked:** it is told to write every date it drafts or asks about with its weekday ("Fri 2026-11-06"). A date its reasoning writes beside the wrong weekday is sent back in the same run, with the weekday it is and the two dates of the named weekday around it; so is a date that does not exist, as not a date. How the reasoning words a date is its own: a draft is never sent back for that (asking for the weekday beside every drafted date, measured, refused correct edits worded "Wed 4 Nov" until the run failed), so a date written some other way is not checked.
+  - **Measured** with gpt-oss-120b at low reasoning, 8 runs each, today a Tuesday: "Friday at 14:30" was drafted on the coming Friday 8 of 8 times (before: once, besides a Wednesday and questions); "tomorrow at 9" 8 of 8, as before; "the last Friday of November" 6 of 8 (before: 2), once on Sunday the 29th, written as a Sunday, so nothing sent it back, and once answered `{ refused }`, which is a failure. "next Wednesday" was asked about 7 of 8 times and drafted next week's once (before: a Sunday or a Monday, never asked). "Tuesday at 17:00", said on a Tuesday, was drafted for today 7 of 8 times and next week's once, never asked: the line about today's weekday is kept as the decision it records, and is a known gap. A run took 1.05 model calls. In an app's set of automations asked by chat, 8 runs each: new ones 109 of 112 right ("Friday at 14:30" 8 of 8, from 0; "next Wednesday" asked 8 of 8, from wrong 8 of 8), and changes to one 61 of 64, run one at a time as before the change (60 of 64), none ended by the date check.
+
+  **What to change:** nothing. The answer's shape is as before.
+
 ## 0.1.8
 
 ### Patch Changes
