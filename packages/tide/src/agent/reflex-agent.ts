@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { ZodType } from 'zod';
 import { defineAgent, type AgentDefinition, type Message } from '@niscorp/cortex';
 import { draftSchemaOf, type DraftChoice, type ReflexDraft } from '../schemas';
+import { dateProblems, whenItIs } from './dates';
 
 export type OfferedEffect = { name: string; description: string; input: ZodType };
 
@@ -57,13 +58,28 @@ const INSTRUCTIONS = `You are Tide's reflex agent. Somebody describes an automat
 
 Your envelope's \`data\` is that answer. In \`reasoning\`, first restate the whole request as the conversation now has it; then decide. The answer must validate against the OUTPUT SCHEMA (its descriptions say what each part is); a draft must name one of the OFFERED EFFECTS and give it an input its schema accepts.
 
-Times: a date or a time that could mean more than one moment is a question, never a guess — a day without its year, a time of day without morning or evening, a weekday whose week is not said. An automation happens once unless the person says it repeats. Never write a time that has already passed.
+Times: a date is looked up in TODAY, COMING DAYS and CALENDAR, never counted. A weekday on its own is the coming one: the first of that weekday in COMING DAYS after today. In \`reasoning\`, write every date you draft or ask about as COMING DAYS writes it: the weekday's three letters, then the date. A date or a time that could still mean more than one moment is a question, never a guess — a day without its year, a time of day without morning or evening, today's own weekday (today, or a week from today), "next" before a weekday that could be this week's or next week's; a question about dates names them, as looked up. An automation happens once unless the person says it repeats. Never write a time that has already passed.
 
 A reply answers your last question: together with the request before it, it is one request — keep what the request said, and add what the reply decides.
 
 When you ask, ask about everything still undecided in one question, so one reply can settle it.
 
 Effects: when the request names something to be done that no offered effect does — a channel, a device, an action — refuse it; never put a different effect in its place.`;
+
+// What it is handed is a request, or a conversation whose last turn is the latest: either way `now` is in it.
+const nowOf = (input: unknown): string | undefined => {
+  const last = Array.isArray(input) ? input.at(-1) : undefined;
+  const turn: unknown = typeof last === 'object' && last !== null && 'content' in last ? parsedJson(String(last.content)) : input;
+  const parsed = ReflexAgentInputSchema.safeParse(turn);
+  return parsed.success ? parsed.data.now : undefined;
+};
+const parsedJson = (text: string): unknown => {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return undefined;
+  }
+};
 
 // Converted by the schema's own zod: a caller's schema may come from another copy.
 const describeEffects = (effects: readonly OfferedEffect[]): string =>
@@ -85,13 +101,13 @@ export const createReflexAgent = (config: { effects: readonly OfferedEffect[] } 
     id: 'tide.reflex',
     description: 'Answers what somebody wants automated with one tide reflex draft, a question back, or a refusal.',
     instructions: INSTRUCTIONS,
-    context: [() => describeEffects(config.effects)],
+    context: [() => describeEffects(config.effects), ({ input }) => whenItIs(nowOf(input) ?? '')],
     output: {
       schema: answerSchemaOf(config),
       validate: (envelope) => {
-        if (!isDraft(envelope.data)) return { ok: true };
-        const problem = effectProblem(config.effects, envelope.data);
-        return problem === undefined ? { ok: true } : { retry: problem };
+        const effect = isDraft(envelope.data) ? effectProblem(config.effects, envelope.data) : undefined;
+        const problems = [...(effect === undefined ? [] : [effect]), ...dateProblems(envelope.reasoning)];
+        return problems.length === 0 ? { ok: true } : { retry: problems.join('\n') };
       },
     },
   });

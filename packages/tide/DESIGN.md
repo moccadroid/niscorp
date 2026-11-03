@@ -920,6 +920,7 @@ src/
 
   agent/
     reflex-agent.ts        createReflexAgent — the ./agent entry; the only file that imports cortex
+    dates.ts               what the agent reads a date off (today, the coming days, two months) and the date check
     index.ts
 
 test/
@@ -934,7 +935,7 @@ test/
   baselines.test.ts        the checksum of each migration of TIDE_SEQUENCE, pinned
   driver.test.ts           the driver: stopping, and a wait longer than a timer holds
   anchor.test.ts           a draft's timer, anchored when it is saved
-  agent.test.ts            the reflex agent — its answer schemas, effect check and conversation turns
+  agent.test.ts            the reflex agent — its answer schemas, effect check, conversation turns, and dates looked up and checked
   support.ts               shared fixtures
 ```
 

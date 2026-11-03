@@ -766,6 +766,18 @@ type ReflexRefusal = { refused: string };
 draft naming an effect that is not offered, or an input that effect's schema
 refuses, is sent back to the model to correct within the same run.
 
+Dates are looked up, never counted. From the `now` it is handed — which must
+begin `YYYY-MM-DDTHH:MM` for this — the agent is told today with its weekday,
+the coming days (the rest of this week, Monday to Sunday, and the two weeks
+after it), and this month and the next. It is told that a weekday on its own is
+the coming one, and to ask about today's own weekday and about "next" before one
+that could be this week's or next week's; nothing checks that it does, and it
+often does not. It is told to write every date it drafts or asks about with
+its weekday ("Fri 2026-11-06"), and a date its reasoning writes beside the wrong
+weekday is sent back in the same run with the weekday it is, as is a date that
+does not exist. How it words a date is its own: a draft is never sent back for
+that, so a date it writes some other way is not checked.
+
 ```typescript
 const agent = createReflexAgent({ effects, triggers: ['clock', 'timer'] });
 const result = await agent.run({ intent, now, tz }, { llm }).result;
