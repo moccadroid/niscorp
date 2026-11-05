@@ -1,4 +1,5 @@
 import type { FactInput, Reflex, ReflexInput } from './schemas';
+import type { TideErrorCode } from './errors';
 
 export type Row = Record<string, unknown>;
 
@@ -150,11 +151,15 @@ export type AdvanceReport = {
   parked: number;
 };
 
+// A reflex a load left out, under `isolate`: its id where it had one, and why.
+export type LoadRefusal = { reflexId: string | undefined; code: TideErrorCode; message: string };
+
 export type LoadReport = {
   loaded: number;
   cycles: readonly { reflexIds: readonly string[]; guarded: boolean }[];
   blind: readonly { reflexId: string; effect: string }[];
   warnings: readonly string[];
+  refused: readonly LoadRefusal[];
 };
 
 export type PreviewUnit = {

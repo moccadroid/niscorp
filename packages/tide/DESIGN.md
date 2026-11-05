@@ -672,7 +672,9 @@ cannot count it:
   ping-pong, because the depth that parked it had not changed and never would.
 
 Load **refuses** outright: an unguarded cycle, a reflex naming an unregistered
-effect, a `when` on a non-fact trigger. The verification is only as good as the
+effect, a `when` on a non-fact trigger. A host whose reflexes are its people's
+rows loads with `isolate`: then each such reflex is left out alone and reported,
+because one person's bad row refusing the load stopped everybody else's. The verification is only as good as the
 effects' `writes`: under moss they are *derived* (from `mutationEffect` on the vex
 mutation behind each effect), so an edge is never guessed; a plain host declares
 them or forgoes the check, and an effect with none is reported as a **blind** edge,

@@ -6,6 +6,17 @@ const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
 const MMDD = /^(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
 const LOCAL_DATETIME = /^\d{4}-\d{2}-\d{2}T([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/;
 
+// A zone Intl does not know throws wherever a clock is read, on every advance: it is refused where the reflex is parsed.
+const knownZone = (tz: string): boolean => {
+  try {
+    return new Intl.DateTimeFormat('en-US', { timeZone: tz }).resolvedOptions().timeZone !== '';
+  } catch {
+    return false;
+  }
+};
+
+export const TimeZoneSchema = z.string().refine(knownZone, { message: 'not a time zone Intl knows' }).describe('IANA timezone name.');
+
 export const ClockUnitSchema = z.enum(['day', 'week', 'month', 'year']);
 
 export const ClockRecurringSchema = z
@@ -18,7 +29,7 @@ export const ClockRecurringSchema = z
         'week → a weekday, or a list of them: ["mon","tue","wed","thu","fri"] is every weekday; month → 1..31, where 31 is the last day of every month (a shorter month clamps to its end); year → "MM-DD". Omitted for day.',
       ),
     at: z.string().regex(HHMM).describe('Local wall-clock time, "HH:MM".'),
-    tz: z.string().describe('IANA timezone name.'),
+    tz: TimeZoneSchema,
   })
   .strict()
   .superRefine((clock, ctx) => {
@@ -37,7 +48,7 @@ export const ClockRecurringSchema = z
 export const ClockOnceSchema = z
   .object({
     at: z.string().regex(LOCAL_DATETIME).describe('A fixed local date and time, once: "YYYY-MM-DDTHH:MM" or, to the second, "YYYY-MM-DDTHH:MM:SS".'),
-    tz: z.string().describe('IANA timezone name.'),
+    tz: TimeZoneSchema,
   })
   .strict()
   .describe('Once: fires at one date and time, then never again.');

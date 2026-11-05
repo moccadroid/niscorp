@@ -107,16 +107,39 @@ applied — `policy`, `enabled` and `select.mode` may be omitted). The parts are
 exported too: `SelectionSchema`, `EffectRefSchema`, `TriggerSchema` and its
 members (`ClockTriggerSchema`, `ClockRecurringSchema`, `ClockOnceSchema`,
 `WriteTriggerSchema`, `SignalTriggerSchema`, `RunTriggerSchema`,
-`ManualTriggerSchema`), `ClockUnitSchema`, `OpSchema`, `WEEKDAYS`,
+`ManualTriggerSchema`), `ClockUnitSchema`, `TimeZoneSchema`, `OpSchema`, `WEEKDAYS`,
 `PolicySchema`, `RetrySchema`, `FactInputSchema` and `FactKindSchema`, with the
 types `Selection`, `EffectRef`, `Trigger`, `Clock`, `ClockRecurring`,
 `ClockOnce`, `Op`, `Weekday`, `Policy`, `Retry`, `FactInput` and `FactKind`.
+
+A clock's `tz` is a zone `Intl` knows (`TimeZoneSchema`) — an IANA name, in any
+case, or an offset such as `+01:00`: any other is refused where the reflex is
+parsed, since it would throw wherever the clock is read.
+
+A host that keeps reflexes its people wrote parses them with only the trigger
+kinds it offers, as a draft is parsed:
+
+```typescript
+reflexSchemaOf(choice?: { triggers?: readonly ReflexTrigger[] }): z.ZodType<Reflex, ReflexInput>
+REFLEX_TRIGGERS                         // 'clock' | 'write' | 'signal' | 'run' | 'manual' → its schema
+```
+
+`reflexSchemaOf()` is `ReflexSchema`; it throws a plain `Error` on an empty
+`triggers` list, and keeps the reflex's own rules.
 
 **Load refuses**, in one pass: a reflex that does not parse, a duplicate id, an
 unregistered effect, `when` on a non-fact trigger, `each` mode with no
 `unitKey`, a run subscription to a reflex that is not
 loaded, and an **unguarded cycle** — a loop on which no reflex has a `select`
-or a `when`.
+or a `when`. By default one such reflex refuses the whole load. With
+`load(reflexes, { isolate: true })` each is left out alone — with every reflex on
+an unguarded cycle, and any reflex left watching the run of one left out — and
+the rest load; the report's `refused` says which, and why (`LoadRefusal`). That
+is for a host whose reflexes are its people's rows. It keeps one person's bad
+reflex from stopping another's only where the host owns the ids (a duplicate
+leaves out every reflex after the first) and one person's triggers never wake on
+another's writes (every reflex on an unguarded cycle is left out, whoever's it
+is).
 
 **`enabled` is the host's.** Tide reads it off the reflex it is handed and
 holds no copy. To pause an automation, write your own row and `load` again.
@@ -206,8 +229,10 @@ timerMs(timer: Timer): number
 
 `anchorDraft` turns a draft into a stored reflex at the moment it is saved. A
 `timer` becomes a one-shot clock at `anchor.at` plus its length, rounded **up**
-to the whole second, as a local date-time in `anchor.tz`; any other trigger
-passes through. The result is parsed by `ReflexSchema`, so defaults are applied
+to the whole second, as a local date-time in `anchor.tz` — or, where that local
+time names another instant (the hour a clock turns back shows twice, and a local
+time there names its first pass), in `UTC`, which names every instant once. Any
+other trigger passes through. The result is parsed by `ReflexSchema`, so defaults are applied
 and a bad draft throws. The host adds `as` afterwards.
 
 ---
@@ -337,13 +362,15 @@ not duplicates of each other, and without it one of them loses its rows.
 ## Verbs
 
 ```typescript
-load(reflexes, options?: { at?: number }): Promise<LoadReport>
+load(reflexes, options?: { at?: number; isolate?: boolean }): Promise<LoadReport>
 ```
 Validates, hashes versions, derives and verifies the graph, and arms. `at` is
 the host's boot time; arming persists, so a restart does not reopen the past.
-`LoadReport` carries `{ loaded, cycles, blind, warnings }` — guarded
+`LoadReport` carries `{ loaded, cycles, blind, warnings, refused }` — guarded
 cycles are legal and reported; effects with no `writes` are reported as
-blind edges. Calling it again is how a host changes what is running,
+blind edges; `refused` is each reflex `isolate` left out, as
+`{ reflexId, code, message }` (`reflexId` is undefined for one that had none),
+and is empty without it. Calling it again is how a host changes what is running,
 including turning one off.
 
 ```typescript
@@ -818,8 +845,9 @@ if (result.ok && isDraft(result.output.data)) {
 | `store` | a selection exists but no `select` seam is wired |
 
 `load` checks the whole graph in one pass. When it refuses, `details.errors`
-lists every reason and `details.refusals` gives each with its own code; the
-error's `code` is the first one's.
+lists every reason and `details.refusals` gives each with its own code and the
+`reflexIds` it is about (`GraphRefusal`, as `graph().refusals` gives them); the error's `code` is the first one's. Under `isolate`
+nothing is thrown for these: they are in the report's `refused`.
 
 Runtime failures are **not** exceptions: a handler that throws becomes a
 recorded attempt, a `when` that throws becomes a recorded non-match, and an `advance`
