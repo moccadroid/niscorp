@@ -1,0 +1,189 @@
+{
+  "id": "discovery-seventeen",
+  "concurrency": 4,
+  "repetitions": 2,
+  "cases": [
+    {
+      "id": "sqlite",
+      "url": "https://www.sqlite.org/download.html",
+      "instruction": "Select the archive download links for precompiled command-line tools for Linux. Exclude source code, libraries, Windows and macOS packages, checksums and signatures.",
+      "expectedSelector": "a:contains('sqlite-tools-linux-')"
+    },
+    {
+      "id": "debian",
+      "url": "https://www.debian.org/releases/",
+      "instruction": "Select the codename links in the table of Debian releases. Exclude release-number links, dates, navigation and links in prose outside the table.",
+      "expectedSelector": "table tr td:nth-child(2) a"
+    },
+    {
+      "id": "lua",
+      "url": "https://www.lua.org/download.html",
+      "instruction": "Select direct source archive download links in the main content. Exclude documentation, checksums, signatures, mirrors and links to other pages.",
+      "expectedSelector": "table.columns a[href$='.tar.gz']"
+    },
+    {
+      "id": "rust",
+      "url": "https://rust-lang.org/learn/",
+      "instruction": "Select the main learning-resource links in the getting-started section. Exclude installation, site navigation and resources in other sections.",
+      "expectedSelector": "main div:has(> header > h2:contains('Get started with Rust')) > section .buttons a"
+    },
+    {
+      "id": "python-release",
+      "url": "https://www.python.org/downloads/release/python-3130/",
+      "instruction": "Select the Windows installer download links in the Files table. Exclude embeddable packages, help files, source archives, other operating systems and navigation.",
+      "expectedSelector": "table tr:has(a:contains('Windows installer')) td:first-child a"
+    },
+    {
+      "id": "gutenberg-search",
+      "url": "https://www.gutenberg.org/ebooks/search/?sort_order=downloads",
+      "instruction": "Select one book-detail link for each listed book in the main results. Exclude author, subject, pagination and navigation links.",
+      "expectedSelector": "li.booklink > a.link[href]"
+    },
+    {
+      "id": "zlib",
+      "url": "https://www.zlib.net/",
+      "instruction": "Select direct archive download links for the current zlib source release. Exclude signatures, checksums, historical releases and other software.",
+      "expectedSelector": "a[href^='zlib-'][href$='.tar.gz'], a[href^='zlib-'][href$='.tar.xz'], a[href^='zlib'][href$='.zip'], a[href='current/zlib.tar.gz']"
+    },
+    {
+      "id": "ruby",
+      "url": "https://www.ruby-lang.org/en/documentation/",
+      "instruction": "Select the links listed under Official Ruby Documentation, excluding the C Extension Guide. Exclude tutorials, community documentation and site navigation.",
+      "expectedSelector": "article p a[href^='https://docs.ruby-lang.org/en']:not([href*='extension_rdoc'])"
+    },
+    {
+      "id": "perl",
+      "url": "https://www.perl.org/books/library.html",
+      "instruction": "Select the primary Read the entire book free online link for each book that offers one. Exclude sample chapters, purchase links, cover links, extra edition links and navigation.",
+      "expectedSelector": "p.description > a:contains('Read the entire book free online')"
+    },
+    {
+      "id": "7zip",
+      "url": "https://www.7-zip.org/download.html",
+      "instruction": "Select the download links for Windows .exe installers in the current release table. Exclude .msi packages, extra tools, historical versions, source code, Linux and macOS downloads.",
+      "expectedSelector": "h1 + p + table tr:has(> td:nth-child(2):contains('.exe')):not(:has(td:contains('console'))) > td:first-child > a[href$='.exe']"
+    },
+    {
+      "id": "adafruit-price",
+      "url": "https://www.adafruit.com/product/4296",
+      "instruction": "Select the current single-unit price span in the main desktop purchase panel for Raspberry Pi 4 Model B - 4 GB RAM. Exclude the duplicate mobile heading price, other RAM variants, accessories, recommendations, metadata and quantity discounts.",
+      "expectedSelector": "#prod-price > span[itemprop=\"price\"]",
+      "checkContent": true
+    },
+    {
+      "id": "pythonanywhere-prices",
+      "url": "https://www.pythonanywhere.com/pricing/",
+      "instruction": "Select the monthly price elements in the top pricing cards for the Developer and Custom paid plans. Exclude duplicate prices in the comparison table, free plans, annual discounts and the custom-plan calculator.",
+      "expectedSelector": ".pricing_table .paid_plan .pricing_pane > li > .price",
+      "checkContent": true
+    },
+    {
+      "id": "django-news",
+      "url": "https://www.djangoproject.com/weblog/",
+      "instruction": "Return every news entry from the main weblog list, including featured entries, in document order. For each entry return its headline and introductory paragraph text, trimming surrounding whitespace. Exclude author/date bylines, Read more labels, navigation, sidebar and footer content.",
+      "expectedSelector": "ul.list-news > li",
+      "outputSchema": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "headline": {
+              "type": "string",
+              "description": "News entry headline text, with surrounding whitespace removed."
+            },
+            "intro": {
+              "type": "string",
+              "description": "Introductory paragraph of the same news entry, with surrounding whitespace removed; excludes byline and Read more text."
+            }
+          },
+          "required": ["headline", "intro"],
+          "additionalProperties": false
+        }
+      },
+      "expectedFields": {
+        "title": {
+          "selector": ":scope > h2",
+          "attribute": null,
+          "minimum": 1,
+          "maximum": 1
+        },
+        "introductory": {
+          "selector": ":scope > p",
+          "attribute": null,
+          "minimum": 1,
+          "maximum": 1
+        }
+      },
+      "expectedMetadata": {
+        "visited": ["https://www.djangoproject.com/weblog/"],
+        "limited": false
+      },
+      "expectedMapping": {
+        "$map": {
+          "over": {
+            "$ref": "$.input.pages[0].items"
+          },
+          "as": "record",
+          "body": {
+            "headline": {
+              "$trim": {
+                "$get": {
+                  "from": {
+                    "$var": "record"
+                  },
+                  "path": ["fields", "title", 0]
+                }
+              }
+            },
+            "intro": {
+              "$trim": {
+                "$get": {
+                  "from": {
+                    "$var": "record"
+                  },
+                  "path": ["fields", "introductory", 0]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "github-service-status",
+      "url": "https://www.githubstatus.com/",
+      "instruction": "Select the individual components for Git Operations, API Requests and Actions. Each selected element must itself carry the machine-readable current status and contain the component name. Exclude surrounding layout wrappers, other components, banners, forms and incident history.",
+      "expectedSelector": ".components-container .component-inner-container:has(> .name:contains(\"Git Operations\")), .components-container .component-inner-container:has(> .name:contains(\"API Requests\")), .components-container .component-inner-container:has(> .name:contains(\"Actions\"))",
+      "checkContent": true
+    },
+    {
+      "id": "curl-release-dates",
+      "url": "https://curl.se/docs/releases.html",
+      "instruction": "Select the release date cells for the five newest releases at the top of the main release-history table. Exclude table headings, version links, release numbers, relative ages and statistics columns.",
+      "expectedSelector": "table tr:has(> td):nth-child(-n+7) > td:nth-child(3)",
+      "checkContent": true
+    },
+    {
+      "id": "django-linked-posts",
+      "url": "https://www.djangoproject.com/weblog/",
+      "instruction": "Visit the three most recent news posts linked from this weblog. Select each post's main article heading and complete article body element, including all paragraphs, lists and section headings. Exclude publication bylines, navigation, sidebar and footer elements.",
+      "expectedSelector": "ul.list-news > li > h2 > a",
+      "expectedDestinationSelector": "#main-content > h1, #main-content > .blog-entry-body",
+      "checkContent": true,
+      "allowLinkFollowing": true,
+      "linkDepth": 1,
+      "maxPages": 4
+    },
+    {
+      "id": "sqlite-release-notes",
+      "url": "https://www.sqlite.org/chronology.html",
+      "instruction": "Visit the three most recent release-note pages linked from this chronology. Select each page's main release heading and all its top-level ordered change lists, including lists of earlier changes and nested entries. Exclude navigation and footer elements.",
+      "expectedSelector": "table td a[href^='releaselog/']",
+      "expectedDestinationSelector": "h2, ol.lessindent",
+      "checkContent": true,
+      "allowLinkFollowing": true,
+      "linkDepth": 1,
+      "maxPages": 4
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "requestHeaders": { "user-agent": "Haptic/0.0.0" },
+  "maxEncodedBytes": 8388608,
+  "maxDecodedBytes": 8388608,
+  "maxDecodeWorkBytes": 33554432,
+  "maxContentEncodings": 4,
+  "maxSelectedItems": 10000
+}

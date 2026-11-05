@@ -1,0 +1,5210 @@
+{
+  "stamp": { "eden.engine": 1, "nisc.prism": 2 },
+  "flows": [
+    {
+      "id": "observe-source",
+      "revision": 1,
+      "flow": {
+        "inputSchema": { "type": "object" },
+        "outputSchema": { "type": "object" },
+        "steps": [
+          { "id": "current-level", "value": { "$ref": "$.input.level" } },
+          { "id": "captures", "value": { "$ref": "$.input.sources" } },
+          {
+            "id": "current-rule",
+            "value": {
+              "$get": {
+                "from": { "$ref": "$.steps.current-level.value" },
+                "path": ["rule"],
+                "fallback": null
+              }
+            }
+          },
+          {
+            "id": "can-follow",
+            "value": {
+              "$and": [
+                { "$ref": "$.input.policy.allowLinkFollowing" },
+                {
+                  "$lt": [
+                    {
+                      "$get": {
+                        "from": { "$ref": "$.steps.current-level.value" },
+                        "path": ["depth"],
+                        "fallback": 0
+                      }
+                    },
+                    { "$ref": "$.input.policy.linkDepth" }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "id": "facts",
+            "call": { "operation": "html.measure" },
+            "input": {
+              "sources": { "$ref": "$.steps.captures.value" },
+              "queries": {
+                "$filter": {
+                  "over": [
+                    {
+                      "id": "selector",
+                      "selector": {
+                        "$get": {
+                          "from": { "$ref": "$.steps.current-rule.value" },
+                          "path": ["selector"],
+                          "fallback": null
+                        }
+                      },
+                      "fields": {
+                        "$get": {
+                          "from": { "$ref": "$.steps.current-rule.value" },
+                          "path": ["fields"],
+                          "fallback": null
+                        }
+                      },
+                      "anchors": {
+                        "$filter": {
+                          "over": [
+                            {
+                              "$get": {
+                                "from": { "$ref": "$.steps.current-rule.value" },
+                                "path": ["links"],
+                                "fallback": null
+                              }
+                            }
+                          ],
+                          "as": "anchor",
+                          "when": { "$neq": [{ "$var": "anchor" }, null] }
+                        }
+                      }
+                    },
+                    {
+                      "id": "links",
+                      "selector": {
+                        "$get": {
+                          "from": { "$ref": "$.steps.current-rule.value" },
+                          "path": ["links"],
+                          "fallback": null
+                        }
+                      },
+                      "anchors": {
+                        "$filter": {
+                          "over": [
+                            {
+                              "$get": {
+                                "from": { "$ref": "$.steps.current-rule.value" },
+                                "path": ["selector"],
+                                "fallback": null
+                              }
+                            }
+                          ],
+                          "as": "anchor",
+                          "when": { "$neq": [{ "$var": "anchor" }, null] }
+                        }
+                      }
+                    }
+                  ],
+                  "as": "query",
+                  "when": {
+                    "$neq": [
+                      {
+                        "$get": {
+                          "from": { "$var": "query" },
+                          "path": ["selector"],
+                          "fallback": null
+                        }
+                      },
+                      null
+                    ]
+                  }
+                }
+              },
+              "diagnostics": { "$ref": "$.input.diagnostics" },
+              "contextPolicy": {
+                "$case": {
+                  "branches": [
+                    {
+                      "when": { "$ref": "$.input.htmlContext.enabled" },
+                      "then": { "$ref": "$.input.htmlContext.policy" }
+                    }
+                  ],
+                  "else": null
+                }
+              }
+            },
+            "when": {
+              "$and": [
+                {
+                  "$eq": [
+                    {
+                      "$get": {
+                        "from": { "$ref": "$.steps.current-level.value" },
+                        "path": ["format"],
+                        "fallback": null
+                      }
+                    },
+                    "html"
+                  ]
+                },
+                { "$neq": [{ "$ref": "$.steps.current-rule.value" }, null] }
+              ]
+            }
+          },
+          {
+            "id": "admission",
+            "call": { "flow": { "id": "html-candidate-admission", "revision": 1 } },
+            "input": {
+              "rules": { "$ref": "$.steps.current-rule.value" },
+              "facts": { "$ref": "$.steps.facts.value" },
+              "context": {
+                "task": { "$ref": "$.input.task" },
+                "canFetch": { "$ref": "$.input.resources.allowResourceFetching" },
+                "canFollow": { "$ref": "$.steps.can-follow.value" },
+                "authoring": { "$ref": "$.input.authoring" },
+                "minimumResultMatches": { "$ref": "$.input.minimumResultMatches" },
+                "resultFlows": { "$ref": "$.input.resultFlows" }
+              }
+            },
+            "when": {
+              "$eq": [
+                {
+                  "$get": {
+                    "from": { "$ref": "$.steps.current-level.value" },
+                    "path": ["format"],
+                    "fallback": null
+                  }
+                },
+                "html"
+              ]
+            }
+          },
+          {
+            "id": "feedback",
+            "value": {
+              "$get": {
+                "from": { "$ref": "$.steps.admission.value" },
+                "path": ["feedback"],
+                "fallback": null
+              }
+            }
+          },
+          {
+            "id": "bound",
+            "call": { "flow": { "id": "bind", "revision": 1 } },
+            "input": {
+              "mode": "stage",
+              "blueprint": { "$ref": "$.input.blueprint" },
+              "rule": { "$ref": "$.steps.current-rule.value" },
+              "task": { "$ref": "$.input.task" },
+              "policy": { "$ref": "$.input.policy" },
+              "canFollow": { "$ref": "$.steps.can-follow.value" },
+              "minimumResultMatches": { "$ref": "$.input.minimumResultMatches" },
+              "seen": [],
+              "resources": { "$ref": "$.input.resources" },
+              "formats": { "$ref": "$.input.formats" }
+            },
+            "when": {
+              "$and": [
+                { "$eq": [{ "$ref": "$.steps.feedback.value" }, null] },
+                {
+                  "$not": {
+                    "$get": {
+                      "from": { "$ref": "$.steps.current-level.value" },
+                      "path": ["standalone"],
+                      "fallback": false
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "id": "trial-artifact",
+            "value": {
+              "$merge": [
+                { "$ref": "$.steps.bound.value" },
+                {
+                  "flow": {
+                    "inputSchema": { "$ref": "$.input.blueprint.execution.sourceInputSchema" },
+                    "outputSchema": { "type": "object" },
+                    "steps": {
+                      "$const": [
+                        {
+                          "id": "stage",
+                          "call": { "flow": { "id": "stage", "revision": 1 } },
+                          "input": {
+                            "$merge": [
+                              {
+                                "$pick": {
+                                  "from": { "$ref": "$.data" },
+                                  "keys": ["policy", "canFollow", "minimumResultMatches", "seen"]
+                                }
+                              },
+                              {
+                                "url": { "$ref": "$.input.url" },
+                                "source": { "$ref": "$.input.source" },
+                                "rule": { "$ref": "$.data.rules[0]" }
+                              }
+                            ]
+                          }
+                        }
+                      ]
+                    },
+                    "output": { "$const": { "$ref": "$.steps.stage.value" } }
+                  }
+                }
+              ]
+            },
+            "when": { "$neq": [{ "$ref": "$.steps.bound.value" }, null] }
+          },
+          {
+            "id": "trials",
+            "call": { "operation": "artifact.trial" },
+            "input": {
+              "artifact": { "$ref": "$.steps.trial-artifact.value" },
+              "cases": {
+                "$map": {
+                  "over": { "$ref": "$.steps.captures.value" },
+                  "as": "source",
+                  "body": {
+                    "id": {
+                      "$get": { "from": { "$var": "source" }, "path": ["url"], "fallback": null }
+                    },
+                    "input": {
+                      "url": {
+                        "$get": { "from": { "$var": "source" }, "path": ["url"], "fallback": null }
+                      },
+                      "source": { "$var": "source" }
+                    }
+                  }
+                }
+              }
+            },
+            "when": { "$neq": [{ "$ref": "$.steps.bound.value" }, null] }
+          },
+          {
+            "id": "xml-trials",
+            "call": { "operation": "xml.select" },
+            "input": {
+              "source": { "$ref": "$.item" },
+              "rule": {
+                "$case": {
+                  "branches": [
+                    {
+                      "when": {
+                        "$get": {
+                          "from": { "$ref": "$.steps.current-level.value" },
+                          "path": ["standalone"],
+                          "fallback": false
+                        }
+                      },
+                      "then": {
+                        "$get": {
+                          "from": { "$ref": "$.steps.current-rule.value" },
+                          "path": ["xml"],
+                          "fallback": null
+                        }
+                      }
+                    }
+                  ],
+                  "else": {
+                    "$get": {
+                      "from": { "$ref": "$.steps.current-rule.value" },
+                      "path": ["reference", "xml"],
+                      "fallback": null
+                    }
+                  }
+                }
+              }
+            },
+            "when": {
+              "$and": [
+                {
+                  "$eq": [
+                    {
+                      "$get": {
+                        "from": { "$ref": "$.steps.current-level.value" },
+                        "path": ["format"],
+                        "fallback": null
+                      }
+                    },
+                    "xml"
+                  ]
+                },
+                {
+                  "$or": [
+                    {
+                      "$get": {
+                        "from": { "$ref": "$.steps.current-level.value" },
+                        "path": ["standalone"],
+                        "fallback": false
+                      }
+                    },
+                    {
+                      "$not": {
+                        "$empty": {
+                          "$filter": {
+                            "over": {
+                              "$get": {
+                                "from": { "$ref": "$.steps.trials.value" },
+                                "path": ["outcomes"],
+                                "fallback": []
+                              }
+                            },
+                            "as": "trial",
+                            "when": {
+                              "$neq": [
+                                {
+                                  "$get": {
+                                    "from": { "$var": "trial" },
+                                    "path": ["status"],
+                                    "fallback": null
+                                  }
+                                },
+                                "completed"
+                              ]
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            "each": { "items": { "$ref": "$.steps.captures.value" }, "onFailure": "record" }
+          },
+          {
+            "id": "trials-result",
+            "call": { "flow": { "id": "source-trials", "revision": 1 } },
+            "input": {
+              "trials": {
+                "$coalesce": [
+                  {
+                    "$get": {
+                      "from": { "$ref": "$.steps.trials.value" },
+                      "path": ["outcomes"],
+                      "fallback": null
+                    }
+                  },
+                  { "$ref": "$.steps.xml-trials.value" },
+                  []
+                ]
+              }
+            }
+          },
+          {
+            "id": "resource-projections",
+            "call": { "operation": "url.collect" },
+            "input": {
+              "values": {
+                "$map": {
+                  "over": {
+                    "$get": {
+                      "from": { "$ref": "$.item" },
+                      "path": ["value", "selection", "items"],
+                      "fallback": []
+                    }
+                  },
+                  "as": "selected",
+                  "body": {
+                    "$reduce": {
+                      "over": {
+                        "$get": {
+                          "from": { "$ref": "$.steps.current-rule.value" },
+                          "path": ["result", "input", "reference"],
+                          "fallback": []
+                        }
+                      },
+                      "as": "__getSegment",
+                      "acc": "__getValue",
+                      "init": { "$var": "selected" },
+                      "body": {
+                        "$get": {
+                          "from": { "$var": "__getValue" },
+                          "path": [{ "$var": "__getSegment" }],
+                          "fallback": null
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "base": {
+                "$get": {
+                  "from": { "$ref": "$.item" },
+                  "path": ["value", "selection", "baseUrl"],
+                  "fallback": null
+                }
+              },
+              "encoding": {
+                "$get": {
+                  "from": { "$ref": "$.item" },
+                  "path": ["value", "selection", "encoding"],
+                  "fallback": null
+                }
+              },
+              "limit": {
+                "$length": {
+                  "$get": {
+                    "from": { "$ref": "$.item" },
+                    "path": ["value", "selection", "items"],
+                    "fallback": []
+                  }
+                }
+              },
+              "exclude": [],
+              "stripFragments": { "$ref": "$.input.resources.stripFragments" }
+            },
+            "each": {
+              "items": {
+                "$filter": {
+                  "over": { "$ref": "$.steps.trials-result.value" },
+                  "as": "trial",
+                  "when": {
+                    "$and": [
+                      {
+                        "$neq": [
+                          {
+                            "$get": {
+                              "from": { "$ref": "$.steps.current-rule.value" },
+                              "path": ["result"],
+                              "fallback": null
+                            }
+                          },
+                          null
+                        ]
+                      },
+                      {
+                        "$eq": [
+                          {
+                            "$get": {
+                              "from": { "$var": "trial" },
+                              "path": ["status"],
+                              "fallback": null
+                            }
+                          },
+                          "completed"
+                        ]
+                      },
+                      {
+                        "$gt": [
+                          {
+                            "$length": {
+                              "$get": {
+                                "from": { "$var": "trial" },
+                                "path": ["value", "selection", "items"],
+                                "fallback": []
+                              }
+                            }
+                          },
+                          0
+                        ]
+                      }
+                    ]
+                  }
+                }
+              },
+              "onFailure": "record"
+            }
+          },
+          {
+            "id": "projection-errors",
+            "value": {
+              "$filter": {
+                "over": { "$coalesce": [{ "$ref": "$.steps.resource-projections.value" }, []] },
+                "as": "projection",
+                "when": {
+                  "$neq": [
+                    {
+                      "$get": {
+                        "from": { "$var": "projection" },
+                        "path": ["status"],
+                        "fallback": null
+                      }
+                    },
+                    "completed"
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "id": "evidence-count",
+            "value": {
+              "$sum": {
+                "over": {
+                  "$map": {
+                    "over": { "$ref": "$.steps.trials-result.value" },
+                    "as": "trial",
+                    "body": {
+                      "$case": {
+                        "branches": [
+                          {
+                            "when": {
+                              "$get": {
+                                "from": { "$ref": "$.steps.current-level.value" },
+                                "path": ["standalone"],
+                                "fallback": false
+                              }
+                            },
+                            "then": {
+                              "$length": {
+                                "$get": {
+                                  "from": { "$var": "trial" },
+                                  "path": ["value", "items"],
+                                  "fallback": []
+                                }
+                              }
+                            }
+                          }
+                        ],
+                        "else": {
+                          "$add": [
+                            {
+                              "$length": {
+                                "$get": {
+                                  "from": { "$var": "trial" },
+                                  "path": ["value", "selection", "items"],
+                                  "fallback": []
+                                }
+                              }
+                            },
+                            {
+                              "$length": {
+                                "$get": {
+                                  "from": { "$var": "trial" },
+                                  "path": ["value", "urls"],
+                                  "fallback": []
+                                }
+                              }
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "id": "evidence-ready",
+            "value": {
+              "$or": [
+                {
+                  "$eq": [
+                    {
+                      "$get": {
+                        "from": { "$ref": "$.steps.current-level.value" },
+                        "path": ["format"],
+                        "fallback": null
+                      }
+                    },
+                    "html"
+                  ]
+                },
+                {
+                  "$gte": [
+                    { "$ref": "$.steps.evidence-count.value" },
+                    { "$ref": "$.input.authoring.minimumMatchesAcrossPages" }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "id": "passed",
+            "value": {
+              "$and": [
+                { "$eq": [{ "$ref": "$.steps.feedback.value" }, null] },
+                { "$ref": "$.steps.evidence-ready.value" },
+                { "$eq": [{ "$length": { "$ref": "$.steps.projection-errors.value" } }, 0] },
+                { "$gt": [{ "$length": { "$ref": "$.steps.trials-result.value" } }, 0] },
+                {
+                  "$empty": {
+                    "$filter": {
+                      "over": { "$ref": "$.steps.trials-result.value" },
+                      "as": "trial",
+                      "when": {
+                        "$not": {
+                          "$eq": [
+                            {
+                              "$get": {
+                                "from": { "$var": "trial" },
+                                "path": ["status"],
+                                "fallback": null
+                              }
+                            },
+                            "completed"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "output": {
+          "passed": { "$ref": "$.steps.passed.value" },
+          "trials": { "$ref": "$.steps.trials-result.value" },
+          "feedback": {
+            "$case": {
+              "branches": [
+                {
+                  "when": {
+                    "$gt": [{ "$length": { "$ref": "$.steps.projection-errors.value" } }, 0]
+                  },
+                  "then": {
+                    "error": "INVALID_RESOURCE_REFERENCE",
+                    "details": { "$ref": "$.steps.projection-errors.value" }
+                  }
+                },
+                {
+                  "when": {
+                    "$and": [
+                      { "$not": { "$ref": "$.steps.evidence-ready.value" } },
+                      {
+                        "$empty": {
+                          "$filter": {
+                            "over": { "$ref": "$.steps.trials-result.value" },
+                            "as": "trial",
+                            "when": {
+                              "$neq": [
+                                {
+                                  "$get": {
+                                    "from": { "$var": "trial" },
+                                    "path": ["status"],
+                                    "fallback": null
+                                  }
+                                },
+                                "completed"
+                              ]
+                            }
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  "then": {
+                    "error": "AUTHORING_MINIMUM_MATCHES",
+                    "actual": { "$ref": "$.steps.evidence-count.value" },
+                    "minimum": { "$ref": "$.input.authoring.minimumMatchesAcrossPages" }
+                  }
+                }
+              ],
+              "else": { "$ref": "$.steps.feedback.value" }
+            }
+          },
+          "part": {
+            "$case": {
+              "branches": [
+                {
+                  "when": { "$eq": [{ "$ref": "$.input.part" }, "referenceRule"] },
+                  "then": "referenceRule"
+                }
+              ],
+              "else": {
+                "$case": {
+                  "branches": [
+                    {
+                      "when": {
+                        "$gt": [{ "$length": { "$ref": "$.steps.projection-errors.value" } }, 0]
+                      },
+                      "then": "processing"
+                    },
+                    {
+                      "when": { "$neq": [{ "$ref": "$.steps.feedback.value" }, null] },
+                      "then": {
+                        "$get": {
+                          "from": { "$ref": "$.data.errorParts" },
+                          "path": [
+                            {
+                              "$get": {
+                                "from": { "$ref": "$.steps.feedback.value" },
+                                "path": ["error"],
+                                "fallback": null
+                              }
+                            }
+                          ],
+                          "fallback": "selection"
+                        }
+                      }
+                    }
+                  ],
+                  "else": { "$ref": "$.input.part" }
+                }
+              }
+            }
+          },
+          "kind": "source-trial",
+          "selectedValues": {
+            "$map": {
+              "over": {
+                "$filter": {
+                  "over": { "$coalesce": [{ "$ref": "$.steps.xml-trials.value" }, []] },
+                  "as": "trial",
+                  "when": {
+                    "$eq": [
+                      {
+                        "$get": {
+                          "from": { "$var": "trial" },
+                          "path": ["status"],
+                          "fallback": null
+                        }
+                      },
+                      "completed"
+                    ]
+                  }
+                }
+              },
+              "as": "trial",
+              "body": {
+                "$get": { "from": { "$var": "trial" }, "path": ["value"], "fallback": null }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "source-request",
+      "revision": 1,
+      "flow": {
+        "inputSchema": { "type": "object" },
+        "outputSchema": { "type": "object" },
+        "steps": [
+          { "id": "current-level", "value": { "$ref": "$.input.level" } },
+          { "id": "sources", "value": { "$ref": "$.input.sources" } },
+          {
+            "id": "html-views",
+            "call": { "flow": { "id": "html-model-view", "revision": 1 } },
+            "each": { "items": { "$ref": "$.steps.sources.value" }, "onFailure": "stop" },
+            "input": {
+              "document": {
+                "url": {
+                  "$get": {
+                    "from": { "$ref": "$.item" },
+                    "path": ["document", "url"],
+                    "fallback": null
+                  }
+                },
+                "html": {
+                  "$get": {
+                    "from": { "$ref": "$.item" },
+                    "path": ["document", "html"],
+                    "fallback": null
+                  }
+                },
+                "sourceSha256": {
+                  "$coalesce": [
+                    {
+                      "$get": {
+                        "from": { "$ref": "$.item" },
+                        "path": ["document", "sourceSha256"],
+                        "fallback": null
+                      }
+                    },
+                    {
+                      "$get": {
+                        "from": { "$ref": "$.item" },
+                        "path": ["document", "sha256"],
+                        "fallback": null
+                      }
+                    }
+                  ]
+                }
+              },
+              "initial": { "$ref": "$.input.htmlContext.initialInspection" },
+              "maxBytes": {
+                "$max": {
+                  "over": [
+                    1,
+                    {
+                      "$round": {
+                        "value": {
+                          "$div": [
+                            {
+                              "$min": {
+                                "over": [
+                                  {
+                                    "$get": {
+                                      "from": { "$ref": "$.input" },
+                                      "path": ["observations", "maxBytes"],
+                                      "fallback": null
+                                    }
+                                  },
+                                  {
+                                    "$get": {
+                                      "from": { "$ref": "$.input" },
+                                      "path": ["htmlContext", "maxInlineBytes"],
+                                      "fallback": {
+                                        "$get": {
+                                          "from": { "$ref": "$.input" },
+                                          "path": ["maxInputBytes"],
+                                          "fallback": null
+                                        }
+                                      }
+                                    }
+                                  }
+                                ]
+                              }
+                            },
+                            { "$length": { "$ref": "$.steps.sources.value" } }
+                          ]
+                        },
+                        "digits": 0,
+                        "mode": "floor"
+                      }
+                    }
+                  ]
+                }
+              },
+              "inspection": {
+                "$case": {
+                  "branches": [
+                    {
+                      "when": {
+                        "$and": [
+                          { "$ref": "$.input.observations.useScopedHtml" },
+                          {
+                            "$eq": [
+                              {
+                                "$get": {
+                                  "from": { "$ref": "$.input" },
+                                  "path": ["feedback", "inspection", "result", "status"],
+                                  "fallback": null
+                                }
+                              },
+                              "completed"
+                            ]
+                          },
+                          {
+                            "$eq": [
+                              {
+                                "$get": {
+                                  "from": { "$ref": "$.input" },
+                                  "path": ["feedback", "inspection", "source", "url"],
+                                  "fallback": null
+                                }
+                              },
+                              {
+                                "$get": {
+                                  "from": { "$ref": "$.item" },
+                                  "path": ["source", "url"],
+                                  "fallback": null
+                                }
+                              }
+                            ]
+                          },
+                          {
+                            "$eq": [
+                              {
+                                "$get": {
+                                  "from": { "$ref": "$.input" },
+                                  "path": ["feedback", "inspection", "source", "sha256"],
+                                  "fallback": null
+                                }
+                              },
+                              {
+                                "$get": {
+                                  "from": { "$ref": "$.item" },
+                                  "path": ["source", "body", "sha256"],
+                                  "fallback": null
+                                }
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "then": {
+                        "$get": {
+                          "from": { "$ref": "$.input" },
+                          "path": ["feedback", "inspection", "result", "value"],
+                          "fallback": null
+                        }
+                      }
+                    }
+                  ],
+                  "else": null
+                }
+              },
+              "source": {
+                "$get": { "from": { "$ref": "$.item" }, "path": ["index"], "fallback": null }
+              }
+            },
+            "when": {
+              "$eq": [
+                { "$get": { "from": { "$ref": "$.item" }, "path": ["format"], "fallback": null } },
+                "html"
+              ]
+            }
+          },
+          {
+            "id": "context",
+            "call": { "operation": "json.encode" },
+            "input": {
+              "format": {
+                "$get": {
+                  "from": { "$ref": "$.steps.current-level.value" },
+                  "path": ["format"],
+                  "fallback": null
+                }
+              },
+              "component": { "$ref": "$.input.part" },
+              "task": { "$ref": "$.input.task" },
+              "resultDataSchema": { "$ref": "$.input.schema" },
+              "canFollow": {
+                "$and": [
+                  { "$ref": "$.input.policy.allowLinkFollowing" },
+                  {
+                    "$lt": [
+                      { "$ref": "$.input.level.depth" },
+                      { "$ref": "$.input.policy.linkDepth" }
+                    ]
+                  }
+                ]
+              },
+              "canFetch": { "$ref": "$.input.resources.allowResourceFetching" },
+              "sourceIndices": {
+                "$map": {
+                  "over": { "$ref": "$.steps.sources.value" },
+                  "as": "owned",
+                  "body": { "$pick": { "from": { "$var": "owned" }, "keys": ["index", "format"] } }
+                }
+              },
+              "remainingAuthorAllowance": { "$ref": "$.input.allowance" }
+            }
+          },
+          {
+            "id": "rule-view",
+            "call": { "flow": { "id": "source-rule-view", "revision": 1 } },
+            "input": {
+              "rule": {
+                "$get": {
+                  "from": { "$ref": "$.steps.current-level.value" },
+                  "path": ["rule"],
+                  "fallback": null
+                }
+              }
+            }
+          },
+          {
+            "id": "rule",
+            "call": { "operation": "json.encode" },
+            "input": { "$ref": "$.steps.rule-view.value" }
+          },
+          {
+            "id": "feedback-view",
+            "call": { "flow": { "id": "source-observation", "revision": 1 } },
+            "input": { "feedback": { "$ref": "$.input.feedback" } }
+          },
+          {
+            "id": "feedback",
+            "call": { "operation": "json.encode" },
+            "input": {
+              "$case": {
+                "branches": [
+                  {
+                    "when": {
+                      "$and": [
+                        {
+                          "$eq": [
+                            {
+                              "$get": {
+                                "from": { "$ref": "$.steps.current-level.value" },
+                                "path": ["format"]
+                              }
+                            },
+                            "html"
+                          ]
+                        },
+                        { "$ref": "$.input.observations.useScopedHtml" },
+                        {
+                          "$eq": [
+                            {
+                              "$get": {
+                                "from": {
+                                  "$get": {
+                                    "from": { "$ref": "$.steps.feedback-view.value" },
+                                    "path": ["inspection"],
+                                    "fallback": null
+                                  }
+                                },
+                                "path": ["result", "status"],
+                                "fallback": null
+                              }
+                            },
+                            "completed"
+                          ]
+                        },
+                        {
+                          "$gt": [
+                            {
+                              "$length": {
+                                "$get": {
+                                  "from": { "$ref": "$.input" },
+                                  "path": ["feedback", "inspection", "result", "value", "items"],
+                                  "fallback": []
+                                }
+                              }
+                            },
+                            0
+                          ]
+                        }
+                      ]
+                    },
+                    "then": {
+                      "$merge": [
+                        { "$ref": "$.steps.feedback-view.value" },
+                        {
+                          "inspection": {
+                            "$merge": [
+                              {
+                                "$get": {
+                                  "from": { "$ref": "$.steps.feedback-view.value" },
+                                  "path": ["inspection"],
+                                  "fallback": null
+                                }
+                              },
+                              {
+                                "result": {
+                                  "$omit": {
+                                    "from": {
+                                      "$get": {
+                                        "from": {
+                                          "$get": {
+                                            "from": { "$ref": "$.steps.feedback-view.value" },
+                                            "path": ["inspection"],
+                                            "fallback": null
+                                          }
+                                        },
+                                        "path": ["result"],
+                                        "fallback": null
+                                      }
+                                    },
+                                    "keys": ["value"]
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                  }
+                ],
+                "else": { "$ref": "$.steps.feedback-view.value" }
+              }
+            }
+          },
+          {
+            "id": "observation",
+            "call": { "operation": "json.encode" },
+            "input": {
+              "context": { "component": { "$ref": "$.input.part" } },
+              "feedback": { "$ref": "$.steps.feedback-view.value" }
+            }
+          },
+          {
+            "id": "history",
+            "call": { "flow": { "id": "model-history", "revision": 1 } },
+            "input": {
+              "histories": { "$ref": "$.input.histories" },
+              "repairCount": { "$ref": "$.input.repairCount" },
+              "repairFeedback": { "$ref": "$.input.repairFeedback" },
+              "job": "source",
+              "scope": {
+                "format": {
+                  "$get": {
+                    "from": { "$ref": "$.steps.current-level.value" },
+                    "path": ["format"],
+                    "fallback": null
+                  }
+                },
+                "frontier": {
+                  "$get": {
+                    "from": { "$ref": "$.steps.current-level.value" },
+                    "path": ["frontier"],
+                    "fallback": []
+                  }
+                }
+              },
+              "observation": {
+                "$join": {
+                  "parts": [
+                    { "$ref": "$.data.observationLabel" },
+                    { "$ref": "$.steps.observation.value" }
+                  ],
+                  "sep": ""
+                }
+              }
+            }
+          },
+          {
+            "id": "model-settings",
+            "call": { "flow": { "id": "model-settings", "revision": 1 } },
+            "input": {
+              "settings": { "$ref": "$.input.settings" },
+              "allowance": { "$ref": "$.input.allowance" },
+              "responseAttempts": { "$ref": "$.input.responseAttempts" },
+              "stepLimit": { "$ref": "$.input.responseAttempts" }
+            }
+          }
+        ],
+        "output": {
+          "instructions": {
+            "$case": {
+              "branches": [
+                {
+                  "when": { "$eq": [{ "$ref": "$.input.part" }, "referenceRule"] },
+                  "then": {
+                    "$join": {
+                      "parts": [
+                        { "$ref": "$.data.prompts.source" },
+                        "\n",
+                        { "$ref": "$.data.prompts.xmlReference" }
+                      ],
+                      "sep": ""
+                    }
+                  }
+                }
+              ],
+              "else": { "$ref": "$.data.prompts.source" }
+            }
+          },
+          "messages": {
+            "$flatten": [
+              [
+                {
+                  "role": "user",
+                  "content": {
+                    "$join": {
+                      "parts": ["ORIGINAL REQUEST\n", { "$ref": "$.input.instruction" }],
+                      "sep": ""
+                    }
+                  }
+                },
+                {
+                  "role": "user",
+                  "content": {
+                    "$join": {
+                      "parts": ["AS OF\n", { "$toString": { "$ref": "$.input.asOf" } }],
+                      "sep": ""
+                    }
+                  }
+                }
+              ],
+              { "$ref": "$.steps.history.value.messages" },
+              [
+                {
+                  "role": "user",
+                  "content": {
+                    "$join": {
+                      "parts": ["SOURCE AUTHORING CONTEXT\n", { "$ref": "$.steps.context.value" }],
+                      "sep": ""
+                    }
+                  }
+                },
+                {
+                  "role": "user",
+                  "content": {
+                    "$join": {
+                      "parts": ["CURRENT SOURCE RULE\n", { "$ref": "$.steps.rule.value" }],
+                      "sep": ""
+                    }
+                  }
+                },
+                {
+                  "role": "user",
+                  "content": {
+                    "$join": {
+                      "parts": ["CURRENT FEEDBACK\n", { "$ref": "$.steps.feedback.value" }],
+                      "sep": ""
+                    }
+                  }
+                }
+              ],
+              {
+                "$map": {
+                  "over": { "$ref": "$.steps.sources.value" },
+                  "as": "owned",
+                  "body": {
+                    "role": "user",
+                    "content": {
+                      "$join": {
+                        "parts": [
+                          "UNTRUSTED ",
+                          {
+                            "$get": {
+                              "from": { "$var": "owned" },
+                              "path": ["format"],
+                              "fallback": null
+                            }
+                          },
+                          " SOURCE\nSOURCE INDEX: ",
+                          {
+                            "$toString": {
+                              "$get": {
+                                "from": { "$var": "owned" },
+                                "path": ["index"],
+                                "fallback": null
+                              }
+                            }
+                          },
+                          "\nURL: ",
+                          {
+                            "$get": {
+                              "from": { "$var": "owned" },
+                              "path": ["document", "url"],
+                              "fallback": null
+                            }
+                          },
+                          "\n",
+                          {
+                            "$case": {
+                              "branches": [
+                                {
+                                  "when": {
+                                    "$eq": [
+                                      {
+                                        "$get": {
+                                          "from": { "$var": "owned" },
+                                          "path": ["format"],
+                                          "fallback": null
+                                        }
+                                      },
+                                      "html"
+                                    ]
+                                  },
+                                  "then": {
+                                    "$get": {
+                                      "from": {
+                                        "$get": {
+                                          "from": {
+                                            "$filter": {
+                                              "over": {
+                                                "$map": {
+                                                  "over": { "$ref": "$.steps.html-views.value" },
+                                                  "as": "entry",
+                                                  "body": {
+                                                    "$get": {
+                                                      "from": { "$var": "entry" },
+                                                      "path": ["value"],
+                                                      "fallback": null
+                                                    }
+                                                  }
+                                                }
+                                              },
+                                              "as": "rendered",
+                                              "when": {
+                                                "$eq": [
+                                                  {
+                                                    "$get": {
+                                                      "from": { "$var": "rendered" },
+                                                      "path": ["source"],
+                                                      "fallback": null
+                                                    }
+                                                  },
+                                                  {
+                                                    "$get": {
+                                                      "from": { "$var": "owned" },
+                                                      "path": ["index"],
+                                                      "fallback": null
+                                                    }
+                                                  }
+                                                ]
+                                              }
+                                            }
+                                          },
+                                          "path": [0],
+                                          "fallback": null
+                                        }
+                                      },
+                                      "path": ["text"],
+                                      "fallback": null
+                                    }
+                                  }
+                                }
+                              ],
+                              "else": {
+                                "$get": {
+                                  "from": { "$var": "owned" },
+                                  "path": ["document", "xml"],
+                                  "fallback": null
+                                }
+                              }
+                            }
+                          }
+                        ],
+                        "sep": ""
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "settings": { "$ref": "$.steps.model-settings.value" },
+          "maxInputBytes": { "$ref": "$.input.maxInputBytes" },
+          "evidenceReady": {
+            "$eq": [
+              {
+                "$length": {
+                  "$filter": {
+                    "over": {
+                      "$map": {
+                        "over": { "$ref": "$.steps.html-views.value" },
+                        "as": "entry",
+                        "body": {
+                          "$get": {
+                            "from": { "$var": "entry" },
+                            "path": ["value"],
+                            "fallback": null
+                          }
+                        }
+                      }
+                    },
+                    "as": "view",
+                    "when": {
+                      "$eq": [
+                        {
+                          "$get": {
+                            "from": { "$var": "view" },
+                            "path": ["usable"],
+                            "fallback": true
+                          }
+                        },
+                        false
+                      ]
+                    }
+                  }
+                }
+              },
+              0
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "build-source",
+      "revision": 1,
+      "flow": {
+        "inputSchema": { "type": "object" },
+        "outputSchema": { "type": "object" },
+        "steps": [
+          {
+            "id": "reference",
+            "call": { "flow": { "id": "build-reference", "revision": 1 } },
+            "input": {
+              "$pick": {
+                "from": { "$ref": "$.input" },
+                "keys": [
+                  "level",
+                  "sources",
+                  "task",
+                  "schema",
+                  "instruction",
+                  "asOf",
+                  "policy",
+                  "blueprint",
+                  "authoring",
+                  "resources",
+                  "formats",
+                  "resultFlows",
+                  "htmlContext",
+                  "diagnostics",
+                  "minimumResultMatches",
+                  "settings",
+                  "responseAttempts",
+                  "maxInputBytes",
+                  "observations",
+                  "allowance",
+                  "histories",
+                  "repairFeedback",
+                  "repairCount",
+                  "feedback",
+                  "part"
+                ]
+              }
+            },
+            "when": { "$eq": [{ "$ref": "$.input.part" }, "referenceProgram"] }
+          },
+          {
+            "id": "current-level",
+            "value": { "$ref": "$.input.level" },
+            "when": { "$neq": [{ "$ref": "$.input.part" }, "referenceProgram"] }
+          },
+          {
+            "id": "request",
+            "call": { "flow": { "id": "source-request", "revision": 1 } },
+            "input": {
+              "$pick": {
+                "from": { "$ref": "$.input" },
+                "keys": [
+                  "level",
+                  "sources",
+                  "task",
+                  "schema",
+                  "instruction",
+                  "asOf",
+                  "policy",
+                  "resources",
+                  "settings",
+                  "responseAttempts",
+                  "maxInputBytes",
+                  "observations",
+                  "htmlContext",
+                  "allowance",
+                  "histories",
+                  "repairFeedback",
+                  "repairCount",
+                  "feedback",
+                  "part"
+                ]
+              }
+            },
+            "when": { "$neq": [{ "$ref": "$.input.part" }, "referenceProgram"] }
+          },
+          {
+            "id": "html",
+            "call": { "operation": "author.html" },
+            "input": {
+              "$omit": { "from": { "$ref": "$.steps.request.value" }, "keys": ["evidenceReady"] }
+            },
+            "when": {
+              "$and": [
+                {
+                  "$and": [
+                    { "$neq": [{ "$ref": "$.input.part" }, "referenceProgram"] },
+                    {
+                      "$and": [
+                        {
+                          "$and": [
+                            {
+                              "$gt": [
+                                {
+                                  "$get": {
+                                    "from": { "$ref": "$.input" },
+                                    "path": ["allowance", "steps"],
+                                    "fallback": 0
+                                  }
+                                },
+                                0
+                              ]
+                            },
+                            {
+                              "$gt": [
+                                {
+                                  "$get": {
+                                    "from": { "$ref": "$.input" },
+                                    "path": ["allowance", "ms"],
+                                    "fallback": 0
+                                  }
+                                },
+                                0
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "$eq": [
+                            {
+                              "$get": {
+                                "from": { "$ref": "$.steps.current-level.value" },
+                                "path": ["format"],
+                                "fallback": null
+                              }
+                            },
+                            "html"
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "$get": {
+                    "from": { "$ref": "$.steps.request.value" },
+                    "path": ["evidenceReady"],
+                    "fallback": true
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "id": "xml",
+            "call": { "operation": "author.xml.selection" },
+            "input": {
+              "$omit": { "from": { "$ref": "$.steps.request.value" }, "keys": ["evidenceReady"] }
+            },
+            "when": {
+              "$and": [
+                {
+                  "$and": [
+                    { "$neq": [{ "$ref": "$.input.part" }, "referenceProgram"] },
+                    {
+                      "$and": [
+                        {
+                          "$and": [
+                            {
+                              "$gt": [
+                                {
+                                  "$get": {
+                                    "from": { "$ref": "$.input" },
+                                    "path": ["allowance", "steps"],
+                                    "fallback": 0
+                                  }
+                                },
+                                0
+                              ]
+                            },
+                            {
+                              "$gt": [
+                                {
+                                  "$get": {
+                                    "from": { "$ref": "$.input" },
+                                    "path": ["allowance", "ms"],
+                                    "fallback": 0
+                                  }
+                                },
+                                0
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "$and": [
+                            {
+                              "$eq": [
+                                {
+                                  "$get": {
+                                    "from": { "$ref": "$.input" },
+                                    "path": ["level", "format"],
+                                    "fallback": null
+                                  }
+                                },
+                                "xml"
+                              ]
+                            },
+                            {
+                              "$or": [
+                                { "$eq": [{ "$ref": "$.input.part" }, "selection"] },
+                                { "$eq": [{ "$ref": "$.input.part" }, "referenceRule"] }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "$get": {
+                    "from": { "$ref": "$.steps.request.value" },
+                    "path": ["evidenceReady"],
+                    "fallback": true
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "id": "model",
+            "value": {
+              "$coalesce": [{ "$ref": "$.steps.html.value" }, { "$ref": "$.steps.xml.value" }]
+            },
+            "when": { "$neq": [{ "$ref": "$.input.part" }, "referenceProgram"] }
+          },
+          {
+            "id": "model-error",
+            "call": { "flow": { "id": "model-error", "revision": 1 } },
+            "input": {
+              "prefix": "Source author failed.",
+              "model": { "$ref": "$.steps.model.value" }
+            }
+          },
+          {
+            "id": "spent",
+            "call": { "flow": { "id": "spend-model", "revision": 1 } },
+            "input": {
+              "allowance": { "$ref": "$.input.allowance" },
+              "meta": {
+                "$pick": {
+                  "from": {
+                    "$coalesce": [
+                      {
+                        "$get": {
+                          "from": { "$ref": "$.steps.model.value" },
+                          "path": ["meta"],
+                          "fallback": null
+                        }
+                      },
+                      {}
+                    ]
+                  },
+                  "keys": ["steps", "elapsedMs"]
+                }
+              }
+            },
+            "when": {
+              "$and": [
+                { "$neq": [{ "$ref": "$.input.part" }, "referenceProgram"] },
+                { "$neq": [{ "$ref": "$.steps.model.value" }, null] }
+              ]
+            }
+          },
+          {
+            "id": "charged",
+            "value": {
+              "$merge": [
+                { "$ref": "$.input" },
+                {
+                  "allowance": {
+                    "$coalesce": [
+                      { "$ref": "$.steps.spent.value" },
+                      { "$ref": "$.input.allowance" }
+                    ]
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "id": "responded",
+            "value": {
+              "$and": [
+                { "$neq": [{ "$ref": "$.steps.model.value" }, null] },
+                {
+                  "$eq": [
+                    {
+                      "$get": {
+                        "from": { "$ref": "$.steps.model.value" },
+                        "path": ["ok"],
+                        "fallback": null
+                      }
+                    },
+                    true
+                  ]
+                }
+              ]
+            },
+            "when": { "$neq": [{ "$ref": "$.input.part" }, "referenceProgram"] }
+          },
+          {
+            "id": "inspected",
+            "call": { "flow": { "id": "inspect-source", "revision": 1 } },
+            "input": {
+              "$merge": [
+                {
+                  "$pick": {
+                    "from": { "$ref": "$.steps.charged.value" },
+                    "keys": [
+                      "sources",
+                      "authoring",
+                      "htmlContext",
+                      "maxInputBytes",
+                      "observations",
+                      "feedback"
+                    ]
+                  }
+                },
+                {
+                  "action": {
+                    "$get": {
+                      "from": { "$ref": "$.steps.model.value" },
+                      "path": ["decision"],
+                      "fallback": null
+                    }
+                  }
+                }
+              ]
+            },
+            "when": {
+              "$and": [
+                { "$neq": [{ "$ref": "$.input.part" }, "referenceProgram"] },
+                {
+                  "$and": [
+                    { "$ref": "$.steps.responded.value" },
+                    {
+                      "$eq": [
+                        {
+                          "$get": {
+                            "from": { "$ref": "$.steps.model.value" },
+                            "path": ["decision", "action"],
+                            "fallback": null
+                          }
+                        },
+                        "inspect"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "id": "xml-proposed",
+            "value": {
+              "$and": [
+                { "$eq": [{ "$ref": "$.input.part" }, "referenceRule"] },
+                { "$ref": "$.steps.responded.value" },
+                {
+                  "$eq": [
+                    {
+                      "$get": {
+                        "from": { "$ref": "$.steps.model.value" },
+                        "path": ["decision", "action"],
+                        "fallback": null
+                      }
+                    },
+                    "propose"
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "id": "xml-sources",
+            "when": { "$ref": "$.steps.xml-proposed.value" },
+            "value": { "$ref": "$.input.sources" }
+          },
+          {
+            "id": "xml-reference",
+            "call": { "flow": { "id": "test-xml-reference", "revision": 1 } },
+            "input": {
+              "level": { "$ref": "$.steps.current-level.value" },
+              "sources": {
+                "$map": {
+                  "over": { "$coalesce": [{ "$ref": "$.steps.xml-sources.value" }, []] },
+                  "as": "owned",
+                  "body": {
+                    "$get": { "from": { "$var": "owned" }, "path": ["source"], "fallback": null }
+                  }
+                }
+              },
+              "task": { "$ref": "$.steps.charged.value.task" },
+              "blueprint": { "$ref": "$.steps.charged.value.blueprint" },
+              "policy": { "$ref": "$.steps.charged.value.policy" },
+              "authoring": { "$ref": "$.steps.charged.value.authoring" },
+              "resources": { "$ref": "$.steps.charged.value.resources" },
+              "formats": { "$ref": "$.steps.charged.value.formats" },
+              "resultFlows": { "$ref": "$.steps.charged.value.resultFlows" },
+              "htmlContext": {
+                "enabled": { "$ref": "$.steps.charged.value.htmlContext.enabled" },
+                "policy": { "$ref": "$.steps.charged.value.htmlContext.policy" }
+              },
+              "diagnostics": { "$ref": "$.steps.charged.value.diagnostics" },
+              "minimumResultMatches": { "$ref": "$.steps.charged.value.minimumResultMatches" },
+              "xml": {
+                "$get": {
+                  "from": { "$ref": "$.steps.model.value" },
+                  "path": ["decision", "candidate"],
+                  "fallback": null
+                }
+              },
+              "instruction": { "$ref": "$.input.instruction" },
+              "asOf": { "$ref": "$.input.asOf" },
+              "settings": { "$ref": "$.input.settings" },
+              "responseAttempts": { "$ref": "$.input.responseAttempts" },
+              "maxInputBytes": { "$ref": "$.input.maxInputBytes" },
+              "allowance": { "$ref": "$.steps.charged.value.allowance" },
+              "histories": { "$ref": "$.input.histories" },
+              "repairFeedback": { "$ref": "$.input.repairFeedback" },
+              "repairCount": { "$ref": "$.input.repairCount" },
+              "feedback": { "$ref": "$.input.feedback" },
+              "observationMaxBytes": { "$ref": "$.input.observations.maxBytes" }
+            },
+            "when": { "$ref": "$.steps.xml-proposed.value" }
+          },
+          {
+            "id": "xml-applied",
+            "value": {
+              "level": { "$ref": "$.steps.xml-reference.value.level" },
+              "feedback": { "$ref": "$.steps.xml-reference.value.feedback" },
+              "reason": { "$ref": "$.steps.xml-reference.value.reason" },
+              "histories": { "$ref": "$.steps.xml-reference.value.histories" },
+              "allowance": { "$ref": "$.steps.xml-reference.value.allowance" }
+            },
+            "when": { "$ref": "$.steps.xml-proposed.value" }
+          },
+          {
+            "id": "proposed",
+            "call": { "flow": { "id": "test-source", "revision": 1 } },
+            "input": {
+              "$merge": [
+                {
+                  "$pick": {
+                    "from": { "$ref": "$.steps.charged.value" },
+                    "keys": [
+                      "level",
+                      "sources",
+                      "task",
+                      "blueprint",
+                      "policy",
+                      "authoring",
+                      "resources",
+                      "formats",
+                      "resultFlows",
+                      "htmlContext",
+                      "diagnostics",
+                      "minimumResultMatches",
+                      "observations",
+                      "part"
+                    ]
+                  }
+                },
+                {
+                  "candidate": {
+                    "$get": {
+                      "from": { "$ref": "$.steps.model.value" },
+                      "path": ["decision", "candidate"],
+                      "fallback": null
+                    }
+                  }
+                }
+              ]
+            },
+            "when": {
+              "$and": [
+                { "$neq": [{ "$ref": "$.input.part" }, "referenceProgram"] },
+                { "$neq": [{ "$ref": "$.input.part" }, "referenceRule"] },
+                { "$ref": "$.steps.responded.value" },
+                {
+                  "$eq": [
+                    {
+                      "$get": {
+                        "from": { "$ref": "$.steps.model.value" },
+                        "path": ["decision", "action"],
+                        "fallback": null
+                      }
+                    },
+                    "propose"
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "id": "outcome-state",
+            "value": {
+              "$merge": [
+                { "$ref": "$.steps.charged.value" },
+                {
+                  "$coalesce": [
+                    { "$ref": "$.steps.inspected.value" },
+                    { "$ref": "$.steps.xml-applied.value" },
+                    { "$ref": "$.steps.proposed.value" },
+                    {
+                      "$merge": [
+                        {
+                          "$coalesce": [{ "$ref": "$.steps.charged.value" }, { "$ref": "$.input" }]
+                        },
+                        {
+                          "reason": {
+                            "$case": {
+                              "branches": [
+                                {
+                                  "when": {
+                                    "$eq": [
+                                      {
+                                        "$get": {
+                                          "from": { "$ref": "$.steps.request.value" },
+                                          "path": ["evidenceReady"],
+                                          "fallback": true
+                                        }
+                                      },
+                                      false
+                                    ]
+                                  },
+                                  "then": "No HTML subtree fits the configured display window; no source proposal was requested."
+                                },
+                                {
+                                  "when": { "$eq": [{ "$ref": "$.steps.model.value" }, null] },
+                                  "then": "Source author allowance exhausted."
+                                }
+                              ],
+                              "else": { "$ref": "$.steps.model-error.value" }
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            "when": { "$neq": [{ "$ref": "$.input.part" }, "referenceProgram"] }
+          },
+          {
+            "id": "history-feedback",
+            "call": { "flow": { "id": "source-observation", "revision": 1 } },
+            "input": {
+              "feedback": {
+                "$get": {
+                  "from": { "$ref": "$.steps.outcome-state.value" },
+                  "path": ["feedback"],
+                  "fallback": null
+                }
+              }
+            },
+            "when": { "$neq": [{ "$ref": "$.input.part" }, "referenceProgram"] }
+          },
+          {
+            "id": "remembered",
+            "call": { "flow": { "id": "remember-author", "revision": 1 } },
+            "input": {
+              "histories": { "$ref": "$.steps.outcome-state.value.histories" },
+              "repairCount": { "$ref": "$.steps.outcome-state.value.repairCount" },
+              "repairFeedback": { "$ref": "$.steps.outcome-state.value.repairFeedback" },
+              "feedback": { "$ref": "$.steps.history-feedback.value" },
+              "model": { "$ref": "$.steps.model.value" },
+              "job": "source",
+              "scope": {
+                "format": {
+                  "$get": {
+                    "from": { "$ref": "$.steps.current-level.value" },
+                    "path": ["format"],
+                    "fallback": null
+                  }
+                },
+                "frontier": {
+                  "$get": {
+                    "from": { "$ref": "$.steps.current-level.value" },
+                    "path": ["frontier"],
+                    "fallback": []
+                  }
+                }
+              },
+              "context": { "component": { "$ref": "$.input.part" } }
+            },
+            "when": { "$neq": [{ "$ref": "$.input.part" }, "referenceProgram"] }
+          },
+          {
+            "id": "state",
+            "value": {
+              "$merge": [
+                { "$ref": "$.steps.outcome-state.value" },
+                { "histories": { "$ref": "$.steps.remembered.value" } }
+              ]
+            },
+            "when": { "$neq": [{ "$ref": "$.input.part" }, "referenceProgram"] }
+          },
+          {
+            "id": "next",
+            "call": { "flow": { "id": "build-source", "revision": 1 } },
+            "input": {
+              "$pick": {
+                "from": { "$ref": "$.steps.state.value" },
+                "keys": [
+                  "level",
+                  "sources",
+                  "task",
+                  "schema",
+                  "instruction",
+                  "asOf",
+                  "policy",
+                  "blueprint",
+                  "authoring",
+                  "resources",
+                  "formats",
+                  "resultFlows",
+                  "htmlContext",
+                  "diagnostics",
+                  "minimumResultMatches",
+                  "settings",
+                  "responseAttempts",
+                  "maxInputBytes",
+                  "observations",
+                  "allowance",
+                  "histories",
+                  "repairFeedback",
+                  "repairCount",
+                  "feedback",
+                  "part"
+                ]
+              }
+            },
+            "when": {
+              "$and": [
+                { "$neq": [{ "$ref": "$.input.part" }, "referenceProgram"] },
+                {
+                  "$and": [
+                    {
+                      "$eq": [
+                        {
+                          "$get": {
+                            "from": { "$ref": "$.steps.state.value" },
+                            "path": ["reason"],
+                            "fallback": null
+                          }
+                        },
+                        null
+                      ]
+                    },
+                    {
+                      "$not": {
+                        "$get": {
+                          "from": { "$ref": "$.steps.state.value" },
+                          "path": ["level", "ready"],
+                          "fallback": false
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ],
+        "output": {
+          "$pick": {
+            "from": {
+              "$coalesce": [
+                { "$ref": "$.steps.reference.value" },
+                { "$ref": "$.steps.next.value" },
+                { "$ref": "$.steps.state.value" }
+              ]
+            },
+            "keys": ["level", "part", "feedback", "allowance", "histories", "reason"]
+          }
+        }
+      }
+    },
+    {
+      "id": "test-source",
+      "revision": 1,
+      "flow": {
+        "inputSchema": { "type": "object" },
+        "outputSchema": { "type": "object" },
+        "steps": [
+          {
+            "id": "processing-allowed",
+            "value": {
+              "$or": [
+                {
+                  "$eq": [
+                    {
+                      "$get": {
+                        "from": { "$ref": "$.input.candidate" },
+                        "path": ["result", "reference"],
+                        "fallback": null
+                      }
+                    },
+                    null
+                  ]
+                },
+                { "$neq": [{ "$ref": "$.input.task.resultFlow" }, null] }
+              ]
+            }
+          },
+          {
+            "id": "offered-rule",
+            "value": {
+              "$case": {
+                "branches": [
+                  {
+                    "when": {
+                      "$eq": [
+                        {
+                          "$get": {
+                            "from": { "$ref": "$.input" },
+                            "path": ["level", "format"],
+                            "fallback": null
+                          }
+                        },
+                        "html"
+                      ]
+                    },
+                    "then": {
+                      "$merge": [
+                        {
+                          "$omit": { "from": { "$ref": "$.input.candidate" }, "keys": ["result"] }
+                        },
+                        {
+                          "result": {
+                            "$case": {
+                              "branches": [
+                                {
+                                  "when": {
+                                    "$and": [
+                                      { "$neq": [{ "$ref": "$.input.task.resultFlow" }, null] },
+                                      {
+                                        "$neq": [
+                                          {
+                                            "$get": {
+                                              "from": { "$ref": "$.input.candidate" },
+                                              "path": ["result", "reference"],
+                                              "fallback": null
+                                            }
+                                          },
+                                          null
+                                        ]
+                                      }
+                                    ]
+                                  },
+                                  "then": {
+                                    "flow": { "$ref": "$.input.task.resultFlow" },
+                                    "input": {
+                                      "reference": {
+                                        "$get": {
+                                          "from": { "$ref": "$.input.candidate" },
+                                          "path": ["result", "reference"],
+                                          "fallback": null
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              ],
+                              "else": null
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "when": { "$eq": [{ "$ref": "$.input.part" }, "referenceRule"] },
+                    "then": {
+                      "$merge": [
+                        {
+                          "$get": {
+                            "from": { "$ref": "$.input" },
+                            "path": ["level", "rule"],
+                            "fallback": {}
+                          }
+                        },
+                        {
+                          "reference": {
+                            "$merge": [
+                              {
+                                "$get": {
+                                  "from": { "$ref": "$.input" },
+                                  "path": ["level", "rule", "reference"],
+                                  "fallback": {}
+                                }
+                              },
+                              { "$ref": "$.input.candidate" }
+                            ]
+                          },
+                          "result": {
+                            "$case": {
+                              "branches": [
+                                {
+                                  "when": { "$neq": [{ "$ref": "$.input.task.resultFlow" }, null] },
+                                  "then": {
+                                    "flow": { "$ref": "$.input.task.resultFlow" },
+                                    "input": { "reference": ["reference"] }
+                                  }
+                                }
+                              ],
+                              "else": null
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "when": {
+                      "$and": [
+                        { "$eq": [{ "$ref": "$.input.part" }, "selection"] },
+                        {
+                          "$get": {
+                            "from": { "$ref": "$.input" },
+                            "path": ["level", "standalone"],
+                            "fallback": false
+                          }
+                        }
+                      ]
+                    },
+                    "then": {
+                      "$merge": [
+                        {
+                          "$get": {
+                            "from": { "$ref": "$.input" },
+                            "path": ["level", "rule"],
+                            "fallback": {}
+                          }
+                        },
+                        { "xml": { "$ref": "$.input.candidate" } }
+                      ]
+                    }
+                  }
+                ],
+                "else": {
+                  "$merge": [
+                    {
+                      "$get": {
+                        "from": { "$ref": "$.input" },
+                        "path": ["level", "rule"],
+                        "fallback": {}
+                      }
+                    },
+                    { "$ref": "$.input.candidate" }
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "id": "fields",
+            "call": { "flow": { "id": "source-fields", "revision": 1 } },
+            "input": {
+              "fields": {
+                "$get": {
+                  "from": { "$ref": "$.steps.offered-rule.value" },
+                  "path": ["fields"],
+                  "fallback": null
+                }
+              },
+              "bounds": { "$ref": "$.input.authoring.fieldBounds" }
+            }
+          },
+          {
+            "id": "rule",
+            "value": {
+              "$case": {
+                "branches": [
+                  {
+                    "when": {
+                      "$eq": [
+                        {
+                          "$get": {
+                            "from": { "$ref": "$.input" },
+                            "path": ["level", "format"],
+                            "fallback": null
+                          }
+                        },
+                        "html"
+                      ]
+                    },
+                    "then": {
+                      "$merge": [
+                        { "$ref": "$.steps.offered-rule.value" },
+                        { "preconditions": [], "fields": { "$ref": "$.steps.fields.value" } }
+                      ]
+                    }
+                  }
+                ],
+                "else": { "$ref": "$.steps.offered-rule.value" }
+              }
+            }
+          },
+          {
+            "id": "edited",
+            "value": {
+              "$merge": [
+                { "$ref": "$.input" },
+                {
+                  "level": {
+                    "$merge": [
+                      { "$ref": "$.input.level" },
+                      { "rule": { "$ref": "$.steps.rule.value" } }
+                    ]
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "id": "trial-sources",
+            "when": { "$ref": "$.steps.processing-allowed.value" },
+            "value": { "$ref": "$.input.sources" }
+          },
+          {
+            "id": "observed",
+            "call": { "flow": { "id": "observe-source", "revision": 1 } },
+            "input": {
+              "level": {
+                "$get": {
+                  "from": { "$ref": "$.steps.edited.value" },
+                  "path": ["level"],
+                  "fallback": null
+                }
+              },
+              "sources": {
+                "$map": {
+                  "over": { "$coalesce": [{ "$ref": "$.steps.trial-sources.value" }, []] },
+                  "as": "owned",
+                  "body": {
+                    "$get": { "from": { "$var": "owned" }, "path": ["source"], "fallback": null }
+                  }
+                }
+              },
+              "task": { "$ref": "$.steps.edited.value.task" },
+              "blueprint": { "$ref": "$.steps.edited.value.blueprint" },
+              "policy": { "$ref": "$.steps.edited.value.policy" },
+              "authoring": { "$ref": "$.steps.edited.value.authoring" },
+              "resources": { "$ref": "$.steps.edited.value.resources" },
+              "formats": { "$ref": "$.steps.edited.value.formats" },
+              "resultFlows": { "$ref": "$.steps.edited.value.resultFlows" },
+              "htmlContext": {
+                "enabled": { "$ref": "$.steps.edited.value.htmlContext.enabled" },
+                "policy": { "$ref": "$.steps.edited.value.htmlContext.policy" }
+              },
+              "diagnostics": { "$ref": "$.steps.edited.value.diagnostics" },
+              "minimumResultMatches": { "$ref": "$.steps.edited.value.minimumResultMatches" },
+              "part": { "$ref": "$.steps.edited.value.part" }
+            },
+            "each": { "items": [null], "onFailure": "record" },
+            "when": { "$ref": "$.steps.processing-allowed.value" }
+          },
+          {
+            "id": "observation",
+            "value": {
+              "$case": {
+                "branches": [
+                  {
+                    "when": { "$not": { "$ref": "$.steps.processing-allowed.value" } },
+                    "then": {
+                      "passed": false,
+                      "trials": [],
+                      "part": "processing",
+                      "feedback": {
+                        "error": "TASK_RESULT_MISMATCH",
+                        "reason": "No resource processor is declared for this task; result/reference must be null."
+                      }
+                    }
+                  }
+                ],
+                "else": {
+                  "$coalesce": [
+                    {
+                      "$get": {
+                        "from": { "$ref": "$.steps.observed.value" },
+                        "path": [0, "value"],
+                        "fallback": null
+                      }
+                    },
+                    {
+                      "passed": false,
+                      "trials": [],
+                      "feedback": {
+                        "$get": {
+                          "from": { "$ref": "$.steps.observed.value" },
+                          "path": [0, "error"],
+                          "fallback": null
+                        }
+                      },
+                      "part": { "$ref": "$.input.part" }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "id": "feedback",
+            "value": {
+              "$case": {
+                "branches": [
+                  {
+                    "when": {
+                      "$get": {
+                        "from": { "$ref": "$.steps.observation.value" },
+                        "path": ["passed"],
+                        "fallback": false
+                      }
+                    },
+                    "then": null
+                  }
+                ],
+                "else": {
+                  "$merge": [
+                    {
+                      "kind": "source-trial",
+                      "rule": { "$ref": "$.steps.rule.value" },
+                      "passed": {
+                        "$get": {
+                          "from": { "$ref": "$.steps.observation.value" },
+                          "path": ["passed"],
+                          "fallback": false
+                        }
+                      },
+                      "feedback": {
+                        "$get": {
+                          "from": { "$ref": "$.steps.observation.value" },
+                          "path": ["feedback"],
+                          "fallback": null
+                        }
+                      },
+                      "trials": {
+                        "$map": {
+                          "over": {
+                            "$get": {
+                              "from": { "$ref": "$.steps.observation.value" },
+                              "path": ["trials"],
+                              "fallback": []
+                            }
+                          },
+                          "as": "trial",
+                          "body": {
+                            "$merge": [
+                              {
+                                "$pick": {
+                                  "from": { "$var": "trial" },
+                                  "keys": ["status", "error"]
+                                }
+                              },
+                              {
+                                "value": {
+                                  "$case": {
+                                    "branches": [
+                                      {
+                                        "when": {
+                                          "$eq": [
+                                            {
+                                              "$get": {
+                                                "from": { "$var": "trial" },
+                                                "path": ["status"],
+                                                "fallback": null
+                                              }
+                                            },
+                                            "completed"
+                                          ]
+                                        },
+                                        "then": {
+                                          "$omit": {
+                                            "from": {
+                                              "$get": {
+                                                "from": { "$var": "trial" },
+                                                "path": ["value"],
+                                                "fallback": {}
+                                              }
+                                            },
+                                            "keys": ["source", "redirects"]
+                                          }
+                                        }
+                                      }
+                                    ],
+                                    "else": null
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "$case": {
+                        "branches": [
+                          {
+                            "when": { "$eq": [{ "$ref": "$.input.part" }, "referenceRule"] },
+                            "then": {
+                              "selectedValues": {
+                                "$get": {
+                                  "from": { "$ref": "$.steps.observation.value" },
+                                  "path": ["selectedValues"],
+                                  "fallback": []
+                                }
+                              }
+                            }
+                          }
+                        ],
+                        "else": {}
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "id": "encoded",
+            "call": { "operation": "json.encode" },
+            "input": { "$ref": "$.steps.feedback.value" }
+          },
+          {
+            "id": "bytes",
+            "call": { "operation": "text.bytes" },
+            "input": { "$ref": "$.steps.encoded.value" }
+          }
+        ],
+        "output": {
+          "level": {
+            "$merge": [
+              { "$ref": "$.steps.edited.value.level" },
+              {
+                "trials": {
+                  "$get": {
+                    "from": { "$ref": "$.steps.observation.value" },
+                    "path": ["trials"],
+                    "fallback": []
+                  }
+                },
+                "ready": {
+                  "$get": {
+                    "from": { "$ref": "$.steps.observation.value" },
+                    "path": ["passed"],
+                    "fallback": false
+                  }
+                }
+              }
+            ]
+          },
+          "part": {
+            "$case": {
+              "branches": [
+                {
+                  "when": {
+                    "$eq": [
+                      {
+                        "$get": {
+                          "from": { "$ref": "$.input" },
+                          "path": ["level", "format"],
+                          "fallback": null
+                        }
+                      },
+                      "html"
+                    ]
+                  },
+                  "then": "initial"
+                }
+              ],
+              "else": {
+                "$get": {
+                  "from": { "$ref": "$.steps.observation.value" },
+                  "path": ["part"],
+                  "fallback": { "$ref": "$.input.part" }
+                }
+              }
+            }
+          },
+          "feedback": {
+            "failure": {
+              "$case": {
+                "branches": [
+                  {
+                    "when": {
+                      "$get": {
+                        "from": { "$ref": "$.steps.observation.value" },
+                        "path": ["passed"],
+                        "fallback": false
+                      }
+                    },
+                    "then": null
+                  }
+                ],
+                "else": { "$ref": "$.steps.feedback.value" }
+              }
+            },
+            "inspection": null
+          },
+          "reason": {
+            "$case": {
+              "branches": [
+                {
+                  "when": {
+                    "$and": [
+                      {
+                        "$not": {
+                          "$get": {
+                            "from": { "$ref": "$.steps.observation.value" },
+                            "path": ["passed"],
+                            "fallback": false
+                          }
+                        }
+                      },
+                      {
+                        "$gt": [
+                          { "$ref": "$.steps.bytes.value" },
+                          { "$ref": "$.input.observations.maxBytes" }
+                        ]
+                      }
+                    ]
+                  },
+                  "then": "Source trial feedback exceeds the configured observation allowance."
+                }
+              ],
+              "else": null
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "build-reference",
+      "revision": 1,
+      "flow": {
+        "inputSchema": { "type": "object" },
+        "outputSchema": { "type": "object" },
+        "steps": [
+          { "id": "current-level", "value": { "$ref": "$.input.level" } },
+          { "id": "sources", "value": { "$ref": "$.input.sources" } },
+          {
+            "id": "current-rule",
+            "value": {
+              "$get": {
+                "from": { "$ref": "$.steps.current-level.value" },
+                "path": ["rule"],
+                "fallback": null
+              }
+            }
+          },
+          {
+            "id": "proposal",
+            "call": { "flow": { "id": "reference-proposal", "revision": 1 } },
+            "input": {
+              "instruction": { "$ref": "$.input.instruction" },
+              "asOf": { "$ref": "$.input.asOf" },
+              "task": { "$ref": "$.input.task" },
+              "canFollow": {
+                "$and": [
+                  { "$ref": "$.input.policy.allowLinkFollowing" },
+                  {
+                    "$lt": [
+                      { "$ref": "$.input.level.depth" },
+                      { "$ref": "$.input.policy.linkDepth" }
+                    ]
+                  }
+                ]
+              },
+              "canFetch": { "$ref": "$.input.resources.allowResourceFetching" },
+              "settings": { "$ref": "$.input.settings" },
+              "responseAttempts": { "$ref": "$.input.responseAttempts" },
+              "maxInputBytes": { "$ref": "$.input.maxInputBytes" },
+              "histories": { "$ref": "$.input.histories" },
+              "repairFeedback": { "$ref": "$.input.repairFeedback" },
+              "repairCount": { "$ref": "$.input.repairCount" },
+              "scope": {
+                "format": {
+                  "$get": {
+                    "from": { "$ref": "$.steps.current-level.value" },
+                    "path": ["format"],
+                    "fallback": null
+                  }
+                },
+                "frontier": {
+                  "$get": {
+                    "from": { "$ref": "$.steps.current-level.value" },
+                    "path": ["frontier"],
+                    "fallback": []
+                  }
+                }
+              },
+              "values": {
+                "$map": {
+                  "over": { "$ref": "$.steps.sources.value" },
+                  "as": "source",
+                  "body": {
+                    "$get": {
+                      "from": { "$var": "source" },
+                      "path": ["document", "document"],
+                      "fallback": null
+                    }
+                  }
+                }
+              },
+              "feedback": { "$ref": "$.input.feedback" },
+              "allowance": { "$ref": "$.input.allowance" }
+            }
+          },
+          { "id": "model", "value": { "$ref": "$.steps.proposal.value.model" } },
+          { "id": "spent", "value": { "$ref": "$.steps.proposal.value.allowance" } },
+          {
+            "id": "model-error",
+            "call": { "flow": { "id": "model-error", "revision": 1 } },
+            "input": {
+              "prefix": "Reference author failed.",
+              "model": { "$ref": "$.steps.model.value" }
+            }
+          },
+          {
+            "id": "charged",
+            "value": {
+              "$merge": [
+                { "$ref": "$.input" },
+                {
+                  "allowance": {
+                    "$coalesce": [
+                      { "$ref": "$.steps.spent.value" },
+                      { "$ref": "$.input.allowance" }
+                    ]
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "id": "edited",
+            "value": {
+              "$merge": [
+                { "$ref": "$.steps.charged.value" },
+                {
+                  "level": {
+                    "$merge": [
+                      { "$ref": "$.steps.current-level.value" },
+                      {
+                        "rule": {
+                          "$merge": [
+                            { "$ref": "$.steps.current-rule.value" },
+                            {
+                              "reference": {
+                                "$merge": [
+                                  {
+                                    "$get": {
+                                      "from": { "$ref": "$.steps.current-rule.value" },
+                                      "path": ["reference"],
+                                      "fallback": {}
+                                    }
+                                  },
+                                  {
+                                    "mapping": {
+                                      "$get": {
+                                        "from": { "$ref": "$.steps.model.value" },
+                                        "path": ["decision"],
+                                        "fallback": null
+                                      }
+                                    }
+                                  }
+                                ]
+                              },
+                              "result": {
+                                "$case": {
+                                  "branches": [
+                                    {
+                                      "when": {
+                                        "$neq": [{ "$ref": "$.input.task.resultFlow" }, null]
+                                      },
+                                      "then": {
+                                        "flow": { "$ref": "$.input.task.resultFlow" },
+                                        "input": { "reference": ["reference"] }
+                                      }
+                                    }
+                                  ],
+                                  "else": null
+                                }
+                              }
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "id": "observed",
+            "call": { "flow": { "id": "observe-source", "revision": 1 } },
+            "input": {
+              "level": {
+                "$get": {
+                  "from": { "$ref": "$.steps.edited.value" },
+                  "path": ["level"],
+                  "fallback": null
+                }
+              },
+              "sources": {
+                "$map": {
+                  "over": { "$ref": "$.steps.sources.value" },
+                  "as": "owned",
+                  "body": {
+                    "$get": { "from": { "$var": "owned" }, "path": ["source"], "fallback": null }
+                  }
+                }
+              },
+              "task": { "$ref": "$.steps.edited.value.task" },
+              "blueprint": { "$ref": "$.steps.edited.value.blueprint" },
+              "policy": { "$ref": "$.steps.edited.value.policy" },
+              "authoring": { "$ref": "$.steps.edited.value.authoring" },
+              "resources": { "$ref": "$.steps.edited.value.resources" },
+              "formats": { "$ref": "$.steps.edited.value.formats" },
+              "resultFlows": { "$ref": "$.steps.edited.value.resultFlows" },
+              "htmlContext": {
+                "enabled": { "$ref": "$.steps.edited.value.htmlContext.enabled" },
+                "policy": { "$ref": "$.steps.edited.value.htmlContext.policy" }
+              },
+              "diagnostics": { "$ref": "$.steps.edited.value.diagnostics" },
+              "minimumResultMatches": { "$ref": "$.steps.edited.value.minimumResultMatches" },
+              "part": { "$ref": "$.steps.edited.value.part" }
+            },
+            "when": {
+              "$and": [
+                { "$neq": [{ "$ref": "$.steps.model.value" }, null] },
+                {
+                  "$eq": [
+                    {
+                      "$get": {
+                        "from": { "$ref": "$.steps.model.value" },
+                        "path": ["ok"],
+                        "fallback": null
+                      }
+                    },
+                    true
+                  ]
+                }
+              ]
+            },
+            "each": { "items": [null], "onFailure": "record" }
+          },
+          {
+            "id": "observation",
+            "value": {
+              "$coalesce": [
+                {
+                  "$get": {
+                    "from": { "$ref": "$.steps.observed.value" },
+                    "path": [0, "value"],
+                    "fallback": null
+                  }
+                },
+                {
+                  "passed": false,
+                  "trials": [],
+                  "feedback": {
+                    "$get": {
+                      "from": { "$ref": "$.steps.observed.value" },
+                      "path": [0, "error"],
+                      "fallback": null
+                    }
+                  },
+                  "part": "referenceProgram"
+                }
+              ]
+            }
+          },
+          {
+            "id": "outcome-state",
+            "value": {
+              "$case": {
+                "branches": [
+                  {
+                    "when": {
+                      "$or": [
+                        { "$eq": [{ "$ref": "$.steps.model.value" }, null] },
+                        {
+                          "$not": {
+                            "$get": {
+                              "from": { "$ref": "$.steps.model.value" },
+                              "path": ["ok"],
+                              "fallback": false
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    "then": {
+                      "$merge": [
+                        {
+                          "$coalesce": [{ "$ref": "$.steps.charged.value" }, { "$ref": "$.input" }]
+                        },
+                        {
+                          "reason": {
+                            "$case": {
+                              "branches": [
+                                {
+                                  "when": { "$eq": [{ "$ref": "$.steps.model.value" }, null] },
+                                  "then": "Reference author allowance exhausted."
+                                }
+                              ],
+                              "else": { "$ref": "$.steps.model-error.value" }
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                ],
+                "else": {
+                  "$merge": [
+                    { "$ref": "$.steps.edited.value" },
+                    {
+                      "feedback": {
+                        "kind": "reference-trial",
+                        "program": {
+                          "$get": {
+                            "from": { "$ref": "$.steps.model.value" },
+                            "path": ["decision"],
+                            "fallback": null
+                          }
+                        },
+                        "feedback": {
+                          "$get": {
+                            "from": { "$ref": "$.steps.observation.value" },
+                            "path": ["feedback"],
+                            "fallback": null
+                          }
+                        },
+                        "trials": {
+                          "$map": {
+                            "over": {
+                              "$get": {
+                                "from": { "$ref": "$.steps.observation.value" },
+                                "path": ["trials"],
+                                "fallback": []
+                              }
+                            },
+                            "as": "trial",
+                            "body": {
+                              "$merge": [
+                                {
+                                  "$pick": {
+                                    "from": { "$var": "trial" },
+                                    "keys": ["status", "error"]
+                                  }
+                                },
+                                {
+                                  "value": {
+                                    "$case": {
+                                      "branches": [
+                                        {
+                                          "when": {
+                                            "$eq": [
+                                              {
+                                                "$get": {
+                                                  "from": { "$var": "trial" },
+                                                  "path": ["status"],
+                                                  "fallback": null
+                                                }
+                                              },
+                                              "completed"
+                                            ]
+                                          },
+                                          "then": {
+                                            "$omit": {
+                                              "from": {
+                                                "$get": {
+                                                  "from": { "$var": "trial" },
+                                                  "path": ["value"],
+                                                  "fallback": {}
+                                                }
+                                              },
+                                              "keys": ["source", "redirects"]
+                                            }
+                                          }
+                                        }
+                                      ],
+                                      "else": null
+                                    }
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        }
+                      },
+                      "reason": {
+                        "$case": {
+                          "branches": [
+                            {
+                              "when": { "$eq": [{ "$ref": "$.steps.model.value" }, null] },
+                              "then": "Reference author allowance exhausted."
+                            },
+                            {
+                              "when": {
+                                "$not": {
+                                  "$get": {
+                                    "from": { "$ref": "$.steps.model.value" },
+                                    "path": ["ok"],
+                                    "fallback": false
+                                  }
+                                }
+                              },
+                              "then": { "$ref": "$.steps.model-error.value" }
+                            }
+                          ],
+                          "else": null
+                        }
+                      },
+                      "level": {
+                        "$merge": [
+                          { "$ref": "$.steps.edited.value.level" },
+                          {
+                            "trials": {
+                              "$get": {
+                                "from": { "$ref": "$.steps.observation.value" },
+                                "path": ["trials"],
+                                "fallback": []
+                              }
+                            },
+                            "ready": {
+                              "$get": {
+                                "from": { "$ref": "$.steps.observation.value" },
+                                "path": ["passed"],
+                                "fallback": false
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "id": "remembered",
+            "call": { "flow": { "id": "remember-author", "revision": 1 } },
+            "input": {
+              "histories": { "$ref": "$.steps.outcome-state.value.histories" },
+              "repairCount": { "$ref": "$.steps.outcome-state.value.repairCount" },
+              "repairFeedback": { "$ref": "$.steps.outcome-state.value.repairFeedback" },
+              "feedback": {
+                "$get": {
+                  "from": { "$ref": "$.steps.outcome-state.value" },
+                  "path": ["feedback"],
+                  "fallback": null
+                }
+              },
+              "model": { "$ref": "$.steps.model.value" },
+              "job": "reference",
+              "scope": {
+                "format": {
+                  "$get": {
+                    "from": { "$ref": "$.steps.current-level.value" },
+                    "path": ["format"],
+                    "fallback": null
+                  }
+                },
+                "frontier": {
+                  "$get": {
+                    "from": { "$ref": "$.steps.current-level.value" },
+                    "path": ["frontier"],
+                    "fallback": []
+                  }
+                }
+              },
+              "context": { "job": "reference" }
+            }
+          },
+          {
+            "id": "state",
+            "value": {
+              "$merge": [
+                { "$ref": "$.steps.outcome-state.value" },
+                { "histories": { "$ref": "$.steps.remembered.value" } }
+              ]
+            }
+          },
+          {
+            "id": "retry",
+            "call": { "flow": { "id": "build-reference", "revision": 1 } },
+            "input": {
+              "$pick": {
+                "from": { "$ref": "$.steps.state.value" },
+                "keys": [
+                  "level",
+                  "sources",
+                  "task",
+                  "schema",
+                  "instruction",
+                  "asOf",
+                  "policy",
+                  "blueprint",
+                  "authoring",
+                  "resources",
+                  "formats",
+                  "resultFlows",
+                  "htmlContext",
+                  "diagnostics",
+                  "minimumResultMatches",
+                  "settings",
+                  "responseAttempts",
+                  "maxInputBytes",
+                  "observations",
+                  "allowance",
+                  "histories",
+                  "repairFeedback",
+                  "repairCount",
+                  "feedback",
+                  "part"
+                ]
+              }
+            },
+            "when": {
+              "$and": [
+                {
+                  "$eq": [
+                    {
+                      "$get": {
+                        "from": { "$ref": "$.steps.state.value" },
+                        "path": ["reason"],
+                        "fallback": null
+                      }
+                    },
+                    null
+                  ]
+                },
+                {
+                  "$not": {
+                    "$get": {
+                      "from": { "$ref": "$.steps.observation.value" },
+                      "path": ["passed"],
+                      "fallback": false
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "output": {
+          "$pick": {
+            "from": {
+              "$coalesce": [{ "$ref": "$.steps.retry.value" }, { "$ref": "$.steps.state.value" }]
+            },
+            "keys": ["level", "part", "feedback", "allowance", "histories", "reason"]
+          }
+        }
+      }
+    },
+    {
+      "id": "inspect-source",
+      "revision": 1,
+      "flow": {
+        "inputSchema": { "type": "object" },
+        "outputSchema": { "type": "object" },
+        "steps": [
+          { "id": "view", "value": { "$ref": "$.input.action" } },
+          { "id": "sources", "value": { "$ref": "$.input.sources" } },
+          {
+            "id": "source",
+            "value": {
+              "$get": {
+                "from": {
+                  "$filter": {
+                    "over": { "$ref": "$.steps.sources.value" },
+                    "as": "owned",
+                    "when": {
+                      "$eq": [
+                        {
+                          "$get": {
+                            "from": { "$var": "owned" },
+                            "path": ["index"],
+                            "fallback": null
+                          }
+                        },
+                        {
+                          "$get": {
+                            "from": { "$ref": "$.steps.view.value" },
+                            "path": ["source"],
+                            "fallback": null
+                          }
+                        }
+                      ]
+                    }
+                  }
+                },
+                "path": [0],
+                "fallback": null
+              }
+            }
+          },
+          {
+            "id": "query-valid",
+            "value": {
+              "$case": {
+                "branches": [
+                  {
+                    "when": {
+                      "$eq": [
+                        {
+                          "$get": {
+                            "from": { "$ref": "$.steps.source.value" },
+                            "path": ["format"],
+                            "fallback": null
+                          }
+                        },
+                        "xml"
+                      ]
+                    },
+                    "then": {
+                      "$and": [
+                        {
+                          "$has": {
+                            "from": {
+                              "$get": {
+                                "from": { "$ref": "$.steps.view.value" },
+                                "path": ["query"],
+                                "fallback": null
+                              }
+                            },
+                            "path": ["namespaces"]
+                          }
+                        },
+                        {
+                          "$has": {
+                            "from": {
+                              "$get": {
+                                "from": { "$ref": "$.steps.view.value" },
+                                "path": ["query"],
+                                "fallback": null
+                              }
+                            },
+                            "path": ["fields"]
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "when": {
+                      "$eq": [
+                        {
+                          "$get": {
+                            "from": { "$ref": "$.steps.source.value" },
+                            "path": ["format"],
+                            "fallback": null
+                          }
+                        },
+                        "html"
+                      ]
+                    },
+                    "then": {
+                      "$and": [
+                        {
+                          "$eq": [
+                            {
+                              "$type": {
+                                "$get": {
+                                  "from": { "$ref": "$.steps.view.value" },
+                                  "path": ["query"],
+                                  "fallback": null
+                                }
+                              }
+                            },
+                            "object"
+                          ]
+                        },
+                        {
+                          "$not": {
+                            "$has": {
+                              "from": {
+                                "$get": {
+                                  "from": { "$ref": "$.steps.view.value" },
+                                  "path": ["query"],
+                                  "fallback": null
+                                }
+                              },
+                              "path": ["namespaces"]
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                ],
+                "else": false
+              }
+            }
+          },
+          {
+            "id": "identity",
+            "value": {
+              "$case": {
+                "branches": [
+                  { "when": { "$eq": [{ "$ref": "$.steps.source.value" }, null] }, "then": null }
+                ],
+                "else": {
+                  "url": {
+                    "$get": {
+                      "from": { "$ref": "$.steps.source.value" },
+                      "path": ["source", "url"],
+                      "fallback": null
+                    }
+                  },
+                  "sha256": {
+                    "$get": {
+                      "from": { "$ref": "$.steps.source.value" },
+                      "path": ["source", "body", "sha256"],
+                      "fallback": null
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "id": "repeated",
+            "value": {
+              "$and": [
+                {
+                  "$get": {
+                    "from": { "$ref": "$.input" },
+                    "path": ["observations", "skipRepeated"],
+                    "fallback": false
+                  }
+                },
+                { "$not": { "$eq": [{ "$ref": "$.steps.source.value" }, null] } },
+                {
+                  "$eq": [
+                    {
+                      "$get": {
+                        "from": { "$ref": "$.input" },
+                        "path": ["feedback", "inspection", "request"],
+                        "fallback": null
+                      }
+                    },
+                    { "$ref": "$.steps.view.value" }
+                  ]
+                },
+                {
+                  "$eq": [
+                    {
+                      "$get": {
+                        "from": { "$ref": "$.input" },
+                        "path": ["feedback", "inspection", "source"],
+                        "fallback": null
+                      }
+                    },
+                    { "$ref": "$.steps.identity.value" }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "id": "fields",
+            "call": { "flow": { "id": "source-fields", "revision": 1 } },
+            "input": {
+              "fields": {
+                "$get": {
+                  "from": { "$ref": "$.steps.view.value" },
+                  "path": ["query", "fields"],
+                  "fallback": null
+                }
+              },
+              "bounds": { "$ref": "$.input.authoring.fieldBounds" }
+            },
+            "when": {
+              "$and": [
+                { "$ref": "$.steps.query-valid.value" },
+                {
+                  "$eq": [
+                    {
+                      "$get": {
+                        "from": { "$ref": "$.steps.source.value" },
+                        "path": ["format"],
+                        "fallback": null
+                      }
+                    },
+                    "html"
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "id": "html",
+            "call": { "operation": "html.view" },
+            "input": {
+              "document": {
+                "url": {
+                  "$get": {
+                    "from": { "$ref": "$.steps.source.value" },
+                    "path": ["document", "url"],
+                    "fallback": null
+                  }
+                },
+                "html": {
+                  "$get": {
+                    "from": { "$ref": "$.steps.source.value" },
+                    "path": ["document", "html"],
+                    "fallback": null
+                  }
+                },
+                "sourceSha256": {
+                  "$coalesce": [
+                    {
+                      "$get": {
+                        "from": { "$ref": "$.steps.source.value" },
+                        "path": ["document", "sourceSha256"],
+                        "fallback": null
+                      }
+                    },
+                    {
+                      "$get": {
+                        "from": { "$ref": "$.steps.source.value" },
+                        "path": ["document", "sha256"],
+                        "fallback": null
+                      }
+                    }
+                  ]
+                }
+              },
+              "selector": {
+                "$get": {
+                  "from": { "$ref": "$.steps.view.value" },
+                  "path": ["query", "selector"],
+                  "fallback": null
+                }
+              },
+              "fields": { "$ref": "$.steps.fields.value" },
+              "window": { "$ref": "$.input.action.window" },
+              "maxBytes": {
+                "$max": {
+                  "over": [
+                    1,
+                    {
+                      "$round": {
+                        "value": {
+                          "$div": [
+                            {
+                              "$min": {
+                                "over": [
+                                  {
+                                    "$get": {
+                                      "from": { "$ref": "$.input" },
+                                      "path": ["observations", "maxBytes"],
+                                      "fallback": null
+                                    }
+                                  },
+                                  {
+                                    "$get": {
+                                      "from": { "$ref": "$.input" },
+                                      "path": ["htmlContext", "maxInlineBytes"],
+                                      "fallback": {
+                                        "$get": {
+                                          "from": { "$ref": "$.input" },
+                                          "path": ["maxInputBytes"],
+                                          "fallback": null
+                                        }
+                                      }
+                                    }
+                                  }
+                                ]
+                              }
+                            },
+                            { "$length": { "$ref": "$.steps.sources.value" } }
+                          ]
+                        },
+                        "digits": 0,
+                        "mode": "floor"
+                      }
+                    }
+                  ]
+                }
+              },
+              "omitNested": {
+                "$eq": [
+                  {
+                    "$get": {
+                      "from": { "$ref": "$.input.action" },
+                      "path": ["query", "fields"],
+                      "fallback": null
+                    }
+                  },
+                  null
+                ]
+              }
+            },
+            "when": {
+              "$and": [
+                {
+                  "$and": [
+                    { "$ref": "$.steps.query-valid.value" },
+                    {
+                      "$eq": [
+                        {
+                          "$get": {
+                            "from": { "$ref": "$.steps.source.value" },
+                            "path": ["format"],
+                            "fallback": null
+                          }
+                        },
+                        "html"
+                      ]
+                    }
+                  ]
+                },
+                { "$not": { "$ref": "$.steps.repeated.value" } }
+              ]
+            },
+            "each": { "items": [null], "onFailure": "record" }
+          },
+          {
+            "id": "xml",
+            "call": { "operation": "xml.select" },
+            "input": {
+              "source": {
+                "$get": {
+                  "from": { "$ref": "$.steps.source.value" },
+                  "path": ["source"],
+                  "fallback": null
+                }
+              },
+              "rule": {
+                "$get": {
+                  "from": { "$ref": "$.steps.view.value" },
+                  "path": ["query"],
+                  "fallback": null
+                }
+              }
+            },
+            "when": {
+              "$and": [
+                {
+                  "$and": [
+                    { "$ref": "$.steps.query-valid.value" },
+                    {
+                      "$eq": [
+                        {
+                          "$get": {
+                            "from": { "$ref": "$.steps.source.value" },
+                            "path": ["format"],
+                            "fallback": null
+                          }
+                        },
+                        "xml"
+                      ]
+                    }
+                  ]
+                },
+                { "$not": { "$ref": "$.steps.repeated.value" } }
+              ]
+            },
+            "each": { "items": [null], "onFailure": "record" }
+          },
+          {
+            "id": "xml-items",
+            "value": {
+              "$get": {
+                "from": { "$ref": "$.steps.xml.value" },
+                "path": [0, "value", "items"],
+                "fallback": []
+              }
+            }
+          },
+          { "id": "xml-window", "value": { "$ref": "$.input.action.window" } },
+          {
+            "id": "xml-preview",
+            "value": {
+              "$merge": [
+                {
+                  "$get": { "from": { "$ref": "$.steps.xml.value" }, "path": [0], "fallback": {} }
+                },
+                {
+                  "value": {
+                    "$merge": [
+                      {
+                        "$coalesce": [
+                          {
+                            "$get": {
+                              "from": { "$ref": "$.steps.xml.value" },
+                              "path": [0, "value"],
+                              "fallback": null
+                            }
+                          },
+                          {}
+                        ]
+                      },
+                      {
+                        "items": {
+                          "$map": {
+                            "over": {
+                              "$filter": {
+                                "over": {
+                                  "$reduce": {
+                                    "over": { "$ref": "$.steps.xml-items.value" },
+                                    "as": "__indexedItem",
+                                    "acc": "__indexedRows",
+                                    "init": [],
+                                    "body": {
+                                      "$flatten": [
+                                        { "$var": "__indexedRows" },
+                                        [
+                                          {
+                                            "index": { "$length": { "$var": "__indexedRows" } },
+                                            "value": { "$var": "__indexedItem" }
+                                          }
+                                        ]
+                                      ]
+                                    }
+                                  }
+                                },
+                                "as": "__sliceEntry",
+                                "when": {
+                                  "$and": [
+                                    {
+                                      "$gte": [
+                                        {
+                                          "$get": {
+                                            "from": { "$var": "__sliceEntry" },
+                                            "path": ["index"],
+                                            "fallback": null
+                                          }
+                                        },
+                                        {
+                                          "$get": {
+                                            "from": { "$ref": "$.steps.xml-window.value" },
+                                            "path": ["offset"],
+                                            "fallback": null
+                                          }
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "$lt": [
+                                        {
+                                          "$get": {
+                                            "from": { "$var": "__sliceEntry" },
+                                            "path": ["index"],
+                                            "fallback": null
+                                          }
+                                        },
+                                        {
+                                          "$add": [
+                                            {
+                                              "$get": {
+                                                "from": { "$ref": "$.steps.xml-window.value" },
+                                                "path": ["offset"],
+                                                "fallback": null
+                                              }
+                                            },
+                                            {
+                                              "$get": {
+                                                "from": { "$ref": "$.steps.xml-window.value" },
+                                                "path": ["limit"],
+                                                "fallback": null
+                                              }
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              }
+                            },
+                            "as": "__sliceEntry",
+                            "body": {
+                              "$get": {
+                                "from": { "$var": "__sliceEntry" },
+                                "path": ["value"],
+                                "fallback": null
+                              }
+                            }
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  "total": { "$length": { "$ref": "$.steps.xml-items.value" } },
+                  "range": {
+                    "offset": {
+                      "$get": {
+                        "from": { "$ref": "$.steps.xml-window.value" },
+                        "path": ["offset"],
+                        "fallback": null
+                      }
+                    },
+                    "end": {
+                      "$case": {
+                        "branches": [
+                          {
+                            "when": {
+                              "$lt": [
+                                { "$length": { "$ref": "$.steps.xml-items.value" } },
+                                {
+                                  "$add": [
+                                    {
+                                      "$get": {
+                                        "from": { "$ref": "$.steps.xml-window.value" },
+                                        "path": ["offset"],
+                                        "fallback": null
+                                      }
+                                    },
+                                    {
+                                      "$get": {
+                                        "from": { "$ref": "$.steps.xml-window.value" },
+                                        "path": ["limit"],
+                                        "fallback": null
+                                      }
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            "then": { "$length": { "$ref": "$.steps.xml-items.value" } }
+                          }
+                        ],
+                        "else": {
+                          "$add": [
+                            {
+                              "$get": {
+                                "from": { "$ref": "$.steps.xml-window.value" },
+                                "path": ["offset"],
+                                "fallback": null
+                              }
+                            },
+                            {
+                              "$get": {
+                                "from": { "$ref": "$.steps.xml-window.value" },
+                                "path": ["limit"],
+                                "fallback": null
+                              }
+                            }
+                          ]
+                        }
+                      }
+                    },
+                    "nextOffset": {
+                      "$case": {
+                        "branches": [
+                          {
+                            "when": {
+                              "$lt": [
+                                {
+                                  "$add": [
+                                    {
+                                      "$get": {
+                                        "from": { "$ref": "$.steps.xml-window.value" },
+                                        "path": ["offset"],
+                                        "fallback": null
+                                      }
+                                    },
+                                    {
+                                      "$get": {
+                                        "from": { "$ref": "$.steps.xml-window.value" },
+                                        "path": ["limit"],
+                                        "fallback": null
+                                      }
+                                    }
+                                  ]
+                                },
+                                { "$length": { "$ref": "$.steps.xml-items.value" } }
+                              ]
+                            },
+                            "then": {
+                              "$add": [
+                                {
+                                  "$get": {
+                                    "from": { "$ref": "$.steps.xml-window.value" },
+                                    "path": ["offset"],
+                                    "fallback": null
+                                  }
+                                },
+                                {
+                                  "$get": {
+                                    "from": { "$ref": "$.steps.xml-window.value" },
+                                    "path": ["limit"],
+                                    "fallback": null
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        ],
+                        "else": null
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "id": "value",
+            "value": {
+              "$case": {
+                "branches": [
+                  {
+                    "when": { "$ref": "$.steps.repeated.value" },
+                    "then": {
+                      "$get": {
+                        "from": { "$ref": "$.input" },
+                        "path": ["feedback", "inspection", "result"],
+                        "fallback": null
+                      }
+                    }
+                  },
+                  {
+                    "when": { "$eq": [{ "$ref": "$.steps.source.value" }, null] },
+                    "then": { "error": "SOURCE_NOT_OWNED" }
+                  },
+                  {
+                    "when": { "$not": { "$ref": "$.steps.query-valid.value" } },
+                    "then": {
+                      "error": "SOURCE_QUERY_FORMAT",
+                      "format": {
+                        "$get": {
+                          "from": { "$ref": "$.steps.source.value" },
+                          "path": ["format"],
+                          "fallback": null
+                        }
+                      },
+                      "reason": "Use CSS for the owned HTML source or XPath with namespaces and fields for the owned XML source."
+                    }
+                  },
+                  {
+                    "when": {
+                      "$eq": [
+                        {
+                          "$get": {
+                            "from": { "$ref": "$.steps.source.value" },
+                            "path": ["format"],
+                            "fallback": null
+                          }
+                        },
+                        "html"
+                      ]
+                    },
+                    "then": {
+                      "$get": {
+                        "from": { "$ref": "$.steps.html.value" },
+                        "path": [0],
+                        "fallback": null
+                      }
+                    }
+                  },
+                  {
+                    "when": {
+                      "$eq": [
+                        {
+                          "$get": {
+                            "from": { "$ref": "$.steps.source.value" },
+                            "path": ["format"],
+                            "fallback": null
+                          }
+                        },
+                        "xml"
+                      ]
+                    },
+                    "then": { "$ref": "$.steps.xml-preview.value" }
+                  }
+                ],
+                "else": {
+                  "error": "SOURCE_QUERY_FORMAT",
+                  "reason": "Source inspection is available only for the current HTML or XML source."
+                }
+              }
+            }
+          },
+          {
+            "id": "encoded",
+            "call": { "operation": "json.encode" },
+            "input": {
+              "kind": "source-inspection",
+              "view": { "$ref": "$.steps.view.value" },
+              "result": { "$ref": "$.steps.value.value" }
+            }
+          },
+          {
+            "id": "bytes",
+            "call": { "operation": "text.bytes" },
+            "input": { "$ref": "$.steps.encoded.value" }
+          }
+        ],
+        "output": {
+          "feedback": {
+            "failure": { "$ref": "$.input.feedback.failure" },
+            "inspection": {
+              "kind": "source-inspection",
+              "request": { "$ref": "$.steps.view.value" },
+              "source": { "$ref": "$.steps.identity.value" },
+              "repeated": { "$ref": "$.steps.repeated.value" },
+              "result": { "$ref": "$.steps.value.value" }
+            }
+          },
+          "reason": {
+            "$case": {
+              "branches": [
+                {
+                  "when": {
+                    "$and": [
+                      {
+                        "$not": {
+                          "$eq": [
+                            {
+                              "$get": {
+                                "from": { "$ref": "$.steps.source.value" },
+                                "path": ["format"],
+                                "fallback": null
+                              }
+                            },
+                            "html"
+                          ]
+                        }
+                      },
+                      {
+                        "$gt": [
+                          { "$ref": "$.steps.bytes.value" },
+                          { "$ref": "$.input.observations.maxBytes" }
+                        ]
+                      }
+                    ]
+                  },
+                  "then": "Source inspection exceeds the configured observation allowance."
+                }
+              ],
+              "else": null
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "source-fields",
+      "revision": 1,
+      "flow": {
+        "inputSchema": { "type": "object" },
+        "outputSchema": {},
+        "steps": [],
+        "output": {
+          "$case": {
+            "branches": [{ "when": { "$eq": [{ "$ref": "$.input.fields" }, null] }, "then": null }],
+            "else": {
+              "$fromEntries": {
+                "$map": {
+                  "over": { "$keys": { "$ref": "$.input.fields" } },
+                  "as": "name",
+                  "body": [
+                    { "$var": "name" },
+                    {
+                      "$merge": [
+                        {
+                          "$get": {
+                            "from": { "$ref": "$.input.fields" },
+                            "path": [{ "$var": "name" }],
+                            "fallback": null
+                          }
+                        },
+                        { "$ref": "$.input.bounds" }
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "source-rule-view",
+      "revision": 1,
+      "flow": {
+        "inputSchema": { "type": "object" },
+        "outputSchema": {},
+        "steps": [],
+        "output": {
+          "$case": {
+            "branches": [
+              {
+                "when": {
+                  "$eq": [
+                    {
+                      "$get": {
+                        "from": { "$ref": "$.input.rule" },
+                        "path": ["reference", "format"],
+                        "fallback": null
+                      }
+                    },
+                    "xml"
+                  ]
+                },
+                "then": {
+                  "$get": {
+                    "from": { "$ref": "$.input.rule" },
+                    "path": ["reference", "xml"],
+                    "fallback": null
+                  }
+                }
+              },
+              { "when": { "$eq": [{ "$ref": "$.input.rule" }, null] }, "then": null }
+            ],
+            "else": {
+              "$merge": [
+                {
+                  "$omit": {
+                    "from": { "$ref": "$.input.rule" },
+                    "keys": ["preconditions", "result"]
+                  }
+                },
+                {
+                  "fields": {
+                    "$case": {
+                      "branches": [
+                        {
+                          "when": {
+                            "$eq": [
+                              {
+                                "$get": {
+                                  "from": { "$ref": "$.input.rule" },
+                                  "path": ["fields"],
+                                  "fallback": null
+                                }
+                              },
+                              null
+                            ]
+                          },
+                          "then": null
+                        }
+                      ],
+                      "else": {
+                        "$fromEntries": {
+                          "$map": {
+                            "over": {
+                              "$keys": {
+                                "$get": {
+                                  "from": { "$ref": "$.input.rule" },
+                                  "path": ["fields"],
+                                  "fallback": null
+                                }
+                              }
+                            },
+                            "as": "name",
+                            "body": [
+                              { "$var": "name" },
+                              {
+                                "$omit": {
+                                  "from": {
+                                    "$get": {
+                                      "from": {
+                                        "$get": {
+                                          "from": { "$ref": "$.input.rule" },
+                                          "path": ["fields"],
+                                          "fallback": null
+                                        }
+                                      },
+                                      "path": [{ "$var": "name" }],
+                                      "fallback": null
+                                    }
+                                  },
+                                  "keys": ["minimum", "maximum"]
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "result": {
+                    "$case": {
+                      "branches": [
+                        {
+                          "when": {
+                            "$eq": [
+                              {
+                                "$get": {
+                                  "from": { "$ref": "$.input.rule" },
+                                  "path": ["result"],
+                                  "fallback": null
+                                }
+                              },
+                              null
+                            ]
+                          },
+                          "then": null
+                        }
+                      ],
+                      "else": {
+                        "reference": {
+                          "$get": {
+                            "from": { "$ref": "$.input.rule" },
+                            "path": ["result", "input", "reference"],
+                            "fallback": null
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "source-observation",
+      "revision": 1,
+      "flow": {
+        "inputSchema": { "type": "object" },
+        "outputSchema": { "type": "object" },
+        "steps": [
+          {
+            "id": "rule-view",
+            "call": { "flow": { "id": "source-rule-view", "revision": 1 } },
+            "input": {
+              "rule": {
+                "$get": {
+                  "from": { "$ref": "$.input.feedback" },
+                  "path": ["failure", "rule"],
+                  "fallback": null
+                }
+              }
+            }
+          },
+          {
+            "id": "feedback",
+            "value": {
+              "$case": {
+                "branches": [
+                  {
+                    "when": {
+                      "$eq": [
+                        {
+                          "$get": {
+                            "from": { "$ref": "$.input.feedback" },
+                            "path": ["failure"],
+                            "fallback": null
+                          }
+                        },
+                        null
+                      ]
+                    },
+                    "then": { "$ref": "$.input.feedback" }
+                  }
+                ],
+                "else": {
+                  "$merge": [
+                    { "$ref": "$.input.feedback" },
+                    {
+                      "failure": {
+                        "$merge": [
+                          {
+                            "$get": {
+                              "from": { "$ref": "$.input.feedback" },
+                              "path": ["failure"],
+                              "fallback": null
+                            }
+                          },
+                          { "rule": { "$ref": "$.steps.rule-view.value" } }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        ],
+        "output": {
+          "$case": {
+            "branches": [
+              {
+                "when": {
+                  "$and": [
+                    {
+                      "$eq": [
+                        {
+                          "$get": {
+                            "from": {
+                              "$get": {
+                                "from": { "$ref": "$.steps.feedback.value" },
+                                "path": ["inspection"],
+                                "fallback": null
+                              }
+                            },
+                            "path": ["result", "status"],
+                            "fallback": null
+                          }
+                        },
+                        "completed"
+                      ]
+                    },
+                    {
+                      "$has": {
+                        "from": {
+                          "$get": {
+                            "from": {
+                              "$get": {
+                                "from": { "$ref": "$.steps.feedback.value" },
+                                "path": ["inspection"],
+                                "fallback": null
+                              }
+                            },
+                            "path": ["result", "value"],
+                            "fallback": null
+                          }
+                        },
+                        "path": ["sourceSha256"]
+                      }
+                    }
+                  ]
+                },
+                "then": {
+                  "$merge": [
+                    { "$ref": "$.steps.feedback.value" },
+                    {
+                      "inspection": {
+                        "$merge": [
+                          {
+                            "$get": {
+                              "from": { "$ref": "$.steps.feedback.value" },
+                              "path": ["inspection"],
+                              "fallback": null
+                            }
+                          },
+                          {
+                            "result": {
+                              "$merge": [
+                                {
+                                  "$get": {
+                                    "from": {
+                                      "$get": {
+                                        "from": { "$ref": "$.steps.feedback.value" },
+                                        "path": ["inspection"],
+                                        "fallback": null
+                                      }
+                                    },
+                                    "path": ["result"],
+                                    "fallback": null
+                                  }
+                                },
+                                {
+                                  "value": {
+                                    "$merge": [
+                                      {
+                                        "$get": {
+                                          "from": {
+                                            "$get": {
+                                              "from": { "$ref": "$.steps.feedback.value" },
+                                              "path": ["inspection"],
+                                              "fallback": null
+                                            }
+                                          },
+                                          "path": ["result", "value"],
+                                          "fallback": null
+                                        }
+                                      },
+                                      {
+                                        "items": {
+                                          "$map": {
+                                            "over": {
+                                              "$get": {
+                                                "from": {
+                                                  "$get": {
+                                                    "from": {
+                                                      "$get": {
+                                                        "from": {
+                                                          "$ref": "$.steps.feedback.value"
+                                                        },
+                                                        "path": ["inspection"],
+                                                        "fallback": null
+                                                      }
+                                                    },
+                                                    "path": ["result", "value"],
+                                                    "fallback": null
+                                                  }
+                                                },
+                                                "path": ["items"],
+                                                "fallback": null
+                                              }
+                                            },
+                                            "as": "item",
+                                            "body": {
+                                              "$omit": {
+                                                "from": { "$var": "item" },
+                                                "keys": ["html"]
+                                              }
+                                            }
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              }
+            ],
+            "else": { "$ref": "$.steps.feedback.value" }
+          }
+        }
+      }
+    },
+    {
+      "id": "source-trials",
+      "revision": 1,
+      "flow": {
+        "inputSchema": { "type": "object" },
+        "outputSchema": { "type": "array" },
+        "steps": [],
+        "output": {
+          "$map": {
+            "over": { "$ref": "$.input.trials" },
+            "as": "trial",
+            "body": {
+              "$case": {
+                "branches": [
+                  {
+                    "when": {
+                      "$neq": [
+                        {
+                          "$get": {
+                            "from": { "$var": "trial" },
+                            "path": ["value", "source"],
+                            "fallback": null
+                          }
+                        },
+                        null
+                      ]
+                    },
+                    "then": {
+                      "$merge": [
+                        { "$var": "trial" },
+                        {
+                          "value": {
+                            "$merge": [
+                              {
+                                "$get": {
+                                  "from": { "$var": "trial" },
+                                  "path": ["value"],
+                                  "fallback": null
+                                }
+                              },
+                              {
+                                "source": {
+                                  "$pick": {
+                                    "from": {
+                                      "$get": {
+                                        "from": { "$var": "trial" },
+                                        "path": ["value", "source"],
+                                        "fallback": null
+                                      }
+                                    },
+                                    "keys": ["url"]
+                                  }
+                                }
+                              },
+                              {
+                                "$case": {
+                                  "branches": [
+                                    {
+                                      "when": {
+                                        "$has": {
+                                          "from": { "$var": "trial" },
+                                          "path": ["value", "redirects"]
+                                        }
+                                      },
+                                      "then": {
+                                        "redirects": {
+                                          "$map": {
+                                            "over": {
+                                              "$get": {
+                                                "from": { "$var": "trial" },
+                                                "path": ["value", "redirects"],
+                                                "fallback": null
+                                              }
+                                            },
+                                            "as": "redirect",
+                                            "body": {
+                                              "url": {
+                                                "$get": {
+                                                  "from": { "$var": "redirect" },
+                                                  "path": ["url"],
+                                                  "fallback": null
+                                                }
+                                              },
+                                              "status": {
+                                                "$get": {
+                                                  "from": { "$var": "redirect" },
+                                                  "path": ["status"],
+                                                  "fallback": null
+                                                }
+                                              },
+                                              "headers": {
+                                                "$get": {
+                                                  "from": { "$var": "redirect" },
+                                                  "path": ["headers"],
+                                                  "fallback": null
+                                                }
+                                              },
+                                              "sha256": {
+                                                "$get": {
+                                                  "from": { "$var": "redirect" },
+                                                  "path": ["body", "sha256"],
+                                                  "fallback": null
+                                                }
+                                              }
+                                            }
+                                          }
+                                        }
+                                      }
+                                    }
+                                  ],
+                                  "else": {}
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                  }
+                ],
+                "else": { "$var": "trial" }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "reference-proposal",
+      "revision": 1,
+      "flow": {
+        "inputSchema": { "type": "object" },
+        "outputSchema": { "type": "object" },
+        "steps": [
+          {
+            "id": "native",
+            "call": { "flow": { "id": "program-context", "revision": 1 } },
+            "input": { "values": { "$ref": "$.input.values" } }
+          },
+          {
+            "id": "context",
+            "call": { "operation": "json.encode" },
+            "input": {
+              "task": { "$ref": "$.input.task" },
+              "canFollow": { "$ref": "$.input.canFollow" },
+              "canFetch": { "$ref": "$.input.canFetch" }
+            }
+          },
+          {
+            "id": "feedback",
+            "call": { "operation": "json.encode" },
+            "input": { "$ref": "$.input.feedback" }
+          },
+          {
+            "id": "history",
+            "call": { "flow": { "id": "model-history", "revision": 1 } },
+            "input": {
+              "histories": { "$ref": "$.input.histories" },
+              "repairCount": { "$ref": "$.input.repairCount" },
+              "repairFeedback": { "$ref": "$.input.repairFeedback" },
+              "job": "reference",
+              "scope": { "$ref": "$.input.scope" }
+            }
+          },
+          {
+            "id": "model-settings",
+            "call": { "flow": { "id": "model-settings", "revision": 1 } },
+            "input": {
+              "settings": { "$ref": "$.input.settings" },
+              "allowance": { "$ref": "$.input.allowance" },
+              "responseAttempts": { "$ref": "$.input.responseAttempts" },
+              "stepLimit": { "$ref": "$.input.responseAttempts" }
+            },
+            "when": {
+              "$and": [
+                {
+                  "$gt": [
+                    {
+                      "$get": {
+                        "from": { "$ref": "$.input.allowance" },
+                        "path": ["steps"],
+                        "fallback": 0
+                      }
+                    },
+                    0
+                  ]
+                },
+                {
+                  "$gt": [
+                    {
+                      "$get": {
+                        "from": { "$ref": "$.input.allowance" },
+                        "path": ["ms"],
+                        "fallback": 0
+                      }
+                    },
+                    0
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "id": "model",
+            "call": { "operation": "author.reference" },
+            "input": {
+              "messages": {
+                "$flatten": [
+                  [
+                    {
+                      "role": "user",
+                      "content": {
+                        "$join": {
+                          "parts": [
+                            "TRANSFORMATION REQUIREMENTS\n",
+                            { "$ref": "$.data.prompts.reference" }
+                          ],
+                          "sep": ""
+                        }
+                      }
+                    },
+                    {
+                      "role": "user",
+                      "content": {
+                        "$join": {
+                          "parts": ["ORIGINAL REQUEST\n", { "$ref": "$.input.instruction" }],
+                          "sep": ""
+                        }
+                      }
+                    },
+                    {
+                      "role": "user",
+                      "content": {
+                        "$join": {
+                          "parts": ["AS OF\n", { "$toString": { "$ref": "$.input.asOf" } }],
+                          "sep": ""
+                        }
+                      }
+                    }
+                  ],
+                  { "$ref": "$.steps.history.value.messages" },
+                  [
+                    { "$ref": "$.steps.native.value" },
+                    {
+                      "role": "user",
+                      "content": {
+                        "$join": {
+                          "parts": [
+                            "REFERENCE ACTION CEILING\n",
+                            { "$ref": "$.steps.context.value" }
+                          ],
+                          "sep": ""
+                        }
+                      }
+                    },
+                    {
+                      "role": "user",
+                      "content": {
+                        "$join": {
+                          "parts": [
+                            "CURRENT REFERENCE FEEDBACK\n",
+                            { "$ref": "$.steps.feedback.value" }
+                          ],
+                          "sep": ""
+                        }
+                      }
+                    }
+                  ]
+                ]
+              },
+              "settings": { "$ref": "$.steps.model-settings.value" },
+              "maxInputBytes": { "$ref": "$.input.maxInputBytes" }
+            },
+            "when": {
+              "$and": [
+                {
+                  "$gt": [
+                    {
+                      "$get": {
+                        "from": { "$ref": "$.input.allowance" },
+                        "path": ["steps"],
+                        "fallback": 0
+                      }
+                    },
+                    0
+                  ]
+                },
+                {
+                  "$gt": [
+                    {
+                      "$get": {
+                        "from": { "$ref": "$.input.allowance" },
+                        "path": ["ms"],
+                        "fallback": 0
+                      }
+                    },
+                    0
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "id": "spent",
+            "call": { "flow": { "id": "spend-model", "revision": 1 } },
+            "input": {
+              "allowance": { "$ref": "$.input.allowance" },
+              "meta": {
+                "$pick": {
+                  "from": {
+                    "$coalesce": [
+                      {
+                        "$get": {
+                          "from": { "$ref": "$.steps.model.value" },
+                          "path": ["meta"],
+                          "fallback": null
+                        }
+                      },
+                      {}
+                    ]
+                  },
+                  "keys": ["steps", "elapsedMs"]
+                }
+              }
+            },
+            "when": { "$neq": [{ "$ref": "$.steps.model.value" }, null] }
+          }
+        ],
+        "output": {
+          "model": { "$ref": "$.steps.model.value" },
+          "allowance": {
+            "$coalesce": [{ "$ref": "$.steps.spent.value" }, { "$ref": "$.input.allowance" }]
+          }
+        }
+      }
+    },
+    {
+      "id": "test-xml-reference",
+      "revision": 1,
+      "flow": {
+        "inputSchema": { "type": "object" },
+        "outputSchema": { "type": "object" },
+        "steps": [
+          {
+            "id": "selections",
+            "call": { "operation": "xml.select" },
+            "input": { "source": { "$ref": "$.item" }, "rule": { "$ref": "$.input.xml" } },
+            "each": { "items": { "$ref": "$.input.sources" }, "onFailure": "record" }
+          },
+          {
+            "id": "selected",
+            "value": {
+              "$and": [
+                { "$gt": [{ "$length": { "$ref": "$.steps.selections.value" } }, 0] },
+                {
+                  "$empty": {
+                    "$filter": {
+                      "over": { "$ref": "$.steps.selections.value" },
+                      "as": "trial",
+                      "when": {
+                        "$neq": [
+                          {
+                            "$get": {
+                              "from": { "$var": "trial" },
+                              "path": ["status"],
+                              "fallback": null
+                            }
+                          },
+                          "completed"
+                        ]
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "id": "proposal",
+            "call": { "flow": { "id": "reference-proposal", "revision": 1 } },
+            "input": {
+              "values": {
+                "$map": {
+                  "over": {
+                    "$filter": {
+                      "over": { "$ref": "$.steps.selections.value" },
+                      "as": "trial",
+                      "when": {
+                        "$eq": [
+                          {
+                            "$get": {
+                              "from": { "$var": "trial" },
+                              "path": ["status"],
+                              "fallback": null
+                            }
+                          },
+                          "completed"
+                        ]
+                      }
+                    }
+                  },
+                  "as": "trial",
+                  "body": {
+                    "$get": { "from": { "$var": "trial" }, "path": ["value"], "fallback": null }
+                  }
+                }
+              },
+              "feedback": {
+                "kind": "reference-trial",
+                "program": {
+                  "$get": {
+                    "from": { "$ref": "$.input.feedback" },
+                    "path": ["failure", "rule", "reference", "mapping"],
+                    "fallback": null
+                  }
+                },
+                "feedback": {
+                  "$get": {
+                    "from": { "$ref": "$.input.feedback" },
+                    "path": ["failure", "feedback"],
+                    "fallback": null
+                  }
+                },
+                "trials": {
+                  "$get": {
+                    "from": { "$ref": "$.input.feedback" },
+                    "path": ["failure", "trials"],
+                    "fallback": []
+                  }
+                }
+              },
+              "instruction": { "$ref": "$.input.instruction" },
+              "asOf": { "$ref": "$.input.asOf" },
+              "task": { "$ref": "$.input.task" },
+              "canFollow": {
+                "$and": [
+                  { "$ref": "$.input.policy.allowLinkFollowing" },
+                  {
+                    "$lt": [
+                      { "$ref": "$.input.level.depth" },
+                      { "$ref": "$.input.policy.linkDepth" }
+                    ]
+                  }
+                ]
+              },
+              "canFetch": { "$ref": "$.input.resources.allowResourceFetching" },
+              "settings": { "$ref": "$.input.settings" },
+              "responseAttempts": { "$ref": "$.input.responseAttempts" },
+              "maxInputBytes": { "$ref": "$.input.maxInputBytes" },
+              "allowance": { "$ref": "$.input.allowance" },
+              "histories": { "$ref": "$.input.histories" },
+              "repairFeedback": { "$ref": "$.input.repairFeedback" },
+              "repairCount": { "$ref": "$.input.repairCount" },
+              "scope": { "format": "xml", "frontier": { "$ref": "$.input.level.frontier" } }
+            },
+            "when": { "$ref": "$.steps.selected.value" }
+          },
+          {
+            "id": "model-error",
+            "call": { "flow": { "id": "model-error", "revision": 1 } },
+            "input": {
+              "prefix": "Reference author failed.",
+              "model": {
+                "$get": {
+                  "from": { "$ref": "$.steps.proposal.value" },
+                  "path": ["model"],
+                  "fallback": null
+                }
+              }
+            }
+          },
+          {
+            "id": "failure",
+            "value": {
+              "$case": {
+                "branches": [
+                  {
+                    "when": {
+                      "$and": [
+                        { "$ref": "$.steps.selected.value" },
+                        {
+                          "$not": {
+                            "$get": {
+                              "from": { "$ref": "$.steps.proposal.value" },
+                              "path": ["model", "ok"],
+                              "fallback": false
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    "then": {
+                      "$case": {
+                        "branches": [
+                          {
+                            "when": {
+                              "$eq": [
+                                {
+                                  "$get": {
+                                    "from": { "$ref": "$.steps.proposal.value" },
+                                    "path": ["model"],
+                                    "fallback": null
+                                  }
+                                },
+                                null
+                              ]
+                            },
+                            "then": "Reference author allowance exhausted."
+                          }
+                        ],
+                        "else": { "$ref": "$.steps.model-error.value" }
+                      }
+                    }
+                  }
+                ],
+                "else": null
+              }
+            }
+          },
+          {
+            "id": "rule",
+            "value": {
+              "$merge": [
+                { "$ref": "$.input.level.rule" },
+                {
+                  "reference": {
+                    "$merge": [
+                      { "$ref": "$.input.level.rule.reference" },
+                      {
+                        "xml": { "$ref": "$.input.xml" },
+                        "mapping": {
+                          "$get": {
+                            "from": { "$ref": "$.steps.proposal.value" },
+                            "path": ["model", "decision"],
+                            "fallback": null
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  "result": {
+                    "$case": {
+                      "branches": [
+                        {
+                          "when": { "$neq": [{ "$ref": "$.input.task.resultFlow" }, null] },
+                          "then": {
+                            "flow": { "$ref": "$.input.task.resultFlow" },
+                            "input": { "reference": ["reference"] }
+                          }
+                        }
+                      ],
+                      "else": null
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "id": "observed",
+            "call": { "flow": { "id": "observe-source", "revision": 1 } },
+            "input": {
+              "sources": { "$ref": "$.input.sources" },
+              "task": { "$ref": "$.input.task" },
+              "blueprint": { "$ref": "$.input.blueprint" },
+              "policy": { "$ref": "$.input.policy" },
+              "authoring": { "$ref": "$.input.authoring" },
+              "resources": { "$ref": "$.input.resources" },
+              "formats": { "$ref": "$.input.formats" },
+              "resultFlows": { "$ref": "$.input.resultFlows" },
+              "htmlContext": { "$ref": "$.input.htmlContext" },
+              "diagnostics": { "$ref": "$.input.diagnostics" },
+              "minimumResultMatches": { "$ref": "$.input.minimumResultMatches" },
+              "level": {
+                "$merge": [
+                  { "$ref": "$.input.level" },
+                  { "rule": { "$ref": "$.steps.rule.value" } }
+                ]
+              },
+              "part": "referenceRule"
+            },
+            "when": { "$eq": [{ "$ref": "$.steps.failure.value" }, null] },
+            "each": { "items": [null], "onFailure": "record" }
+          },
+          {
+            "id": "observation",
+            "value": {
+              "$coalesce": [
+                {
+                  "$get": {
+                    "from": { "$ref": "$.steps.observed.value" },
+                    "path": [0, "value"],
+                    "fallback": null
+                  }
+                },
+                {
+                  "passed": false,
+                  "trials": [],
+                  "feedback": {
+                    "$coalesce": [
+                      {
+                        "$get": {
+                          "from": { "$ref": "$.steps.observed.value" },
+                          "path": [0, "error"],
+                          "fallback": null
+                        }
+                      },
+                      {
+                        "$get": {
+                          "from": { "$ref": "$.steps.proposal.value" },
+                          "path": ["model", "error"],
+                          "fallback": null
+                        }
+                      }
+                    ]
+                  },
+                  "part": "referenceRule",
+                  "selectedValues": {
+                    "$map": {
+                      "over": {
+                        "$filter": {
+                          "over": { "$ref": "$.steps.selections.value" },
+                          "as": "trial",
+                          "when": {
+                            "$eq": [
+                              {
+                                "$get": {
+                                  "from": { "$var": "trial" },
+                                  "path": ["status"],
+                                  "fallback": null
+                                }
+                              },
+                              "completed"
+                            ]
+                          }
+                        }
+                      },
+                      "as": "trial",
+                      "body": {
+                        "$get": { "from": { "$var": "trial" }, "path": ["value"], "fallback": null }
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "id": "feedback",
+            "value": {
+              "$case": {
+                "branches": [
+                  {
+                    "when": {
+                      "$get": {
+                        "from": { "$ref": "$.steps.observation.value" },
+                        "path": ["passed"],
+                        "fallback": false
+                      }
+                    },
+                    "then": null
+                  }
+                ],
+                "else": {
+                  "$merge": [
+                    {
+                      "kind": "source-trial",
+                      "rule": { "$ref": "$.steps.rule.value" },
+                      "passed": {
+                        "$get": {
+                          "from": { "$ref": "$.steps.observation.value" },
+                          "path": ["passed"],
+                          "fallback": false
+                        }
+                      },
+                      "feedback": {
+                        "$get": {
+                          "from": { "$ref": "$.steps.observation.value" },
+                          "path": ["feedback"],
+                          "fallback": null
+                        }
+                      },
+                      "trials": {
+                        "$map": {
+                          "over": {
+                            "$get": {
+                              "from": { "$ref": "$.steps.observation.value" },
+                              "path": ["trials"],
+                              "fallback": []
+                            }
+                          },
+                          "as": "trial",
+                          "body": {
+                            "$merge": [
+                              {
+                                "$pick": {
+                                  "from": { "$var": "trial" },
+                                  "keys": ["status", "error"]
+                                }
+                              },
+                              {
+                                "value": {
+                                  "$case": {
+                                    "branches": [
+                                      {
+                                        "when": {
+                                          "$eq": [
+                                            {
+                                              "$get": {
+                                                "from": { "$var": "trial" },
+                                                "path": ["status"],
+                                                "fallback": null
+                                              }
+                                            },
+                                            "completed"
+                                          ]
+                                        },
+                                        "then": {
+                                          "$omit": {
+                                            "from": {
+                                              "$get": {
+                                                "from": { "$var": "trial" },
+                                                "path": ["value"],
+                                                "fallback": {}
+                                              }
+                                            },
+                                            "keys": ["source", "redirects"]
+                                          }
+                                        }
+                                      }
+                                    ],
+                                    "else": null
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "selectedValues": {
+                        "$get": {
+                          "from": { "$ref": "$.steps.observation.value" },
+                          "path": ["selectedValues"],
+                          "fallback": []
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "id": "encoded",
+            "call": { "operation": "json.encode" },
+            "input": { "$ref": "$.steps.feedback.value" }
+          },
+          {
+            "id": "bytes",
+            "call": { "operation": "text.bytes" },
+            "input": { "$ref": "$.steps.encoded.value" }
+          },
+          {
+            "id": "remembered",
+            "call": { "flow": { "id": "remember-author", "revision": 1 } },
+            "input": {
+              "histories": { "$ref": "$.input.histories" },
+              "repairCount": { "$ref": "$.input.repairCount" },
+              "repairFeedback": { "$ref": "$.input.repairFeedback" },
+              "feedback": {
+                "kind": "reference-trial",
+                "program": {
+                  "$get": {
+                    "from": { "$ref": "$.steps.proposal.value" },
+                    "path": ["model", "decision"],
+                    "fallback": null
+                  }
+                },
+                "feedback": {
+                  "$get": {
+                    "from": { "$ref": "$.steps.observation.value" },
+                    "path": ["feedback"],
+                    "fallback": null
+                  }
+                },
+                "trials": {
+                  "$get": {
+                    "from": { "$ref": "$.steps.feedback.value" },
+                    "path": ["trials"],
+                    "fallback": []
+                  }
+                }
+              },
+              "model": {
+                "$get": {
+                  "from": { "$ref": "$.steps.proposal.value" },
+                  "path": ["model"],
+                  "fallback": null
+                }
+              },
+              "job": "reference",
+              "scope": { "format": "xml", "frontier": { "$ref": "$.input.level.frontier" } },
+              "context": { "job": "reference" }
+            }
+          }
+        ],
+        "output": {
+          "level": {
+            "$merge": [
+              { "$ref": "$.input.level" },
+              {
+                "rule": { "$ref": "$.steps.rule.value" },
+                "trials": {
+                  "$get": {
+                    "from": { "$ref": "$.steps.observation.value" },
+                    "path": ["trials"],
+                    "fallback": []
+                  }
+                },
+                "ready": {
+                  "$get": {
+                    "from": { "$ref": "$.steps.observation.value" },
+                    "path": ["passed"],
+                    "fallback": false
+                  }
+                }
+              }
+            ]
+          },
+          "feedback": { "failure": { "$ref": "$.steps.feedback.value" }, "inspection": null },
+          "allowance": {
+            "$coalesce": [
+              {
+                "$get": {
+                  "from": { "$ref": "$.steps.proposal.value" },
+                  "path": ["allowance"],
+                  "fallback": null
+                }
+              },
+              { "$ref": "$.input.allowance" }
+            ]
+          },
+          "histories": { "$ref": "$.steps.remembered.value" },
+          "reason": {
+            "$coalesce": [
+              { "$ref": "$.steps.failure.value" },
+              {
+                "$case": {
+                  "branches": [
+                    {
+                      "when": {
+                        "$and": [
+                          {
+                            "$not": {
+                              "$get": {
+                                "from": { "$ref": "$.steps.observation.value" },
+                                "path": ["passed"],
+                                "fallback": false
+                              }
+                            }
+                          },
+                          {
+                            "$gt": [
+                              { "$ref": "$.steps.bytes.value" },
+                              { "$ref": "$.input.observationMaxBytes" }
+                            ]
+                          }
+                        ]
+                      },
+                      "then": "Source trial feedback exceeds the configured observation allowance."
+                    }
+                  ],
+                  "else": null
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

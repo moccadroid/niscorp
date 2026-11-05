@@ -1,0 +1,1 @@
+{ "maxIdleSockets": 8, "perOriginConcurrency": 4, "headerTimeoutMs": 30000, "idleTimeoutMs": 30000 }

@@ -1,0 +1,1705 @@
+{
+  "stamp": { "eden.engine": 1, "nisc.prism": 2 },
+  "flow": {
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "instruction": { "type": "string", "minLength": 1 },
+        "query": { "type": "string", "minLength": 1 },
+        "maxFollowResults": { "type": "integer", "minimum": 1 },
+        "minSuccessfulSources": { "type": "integer", "minimum": 0 },
+        "maxQueryRewrites": { "type": "integer", "minimum": 0 },
+        "page": {
+          "type": "object",
+          "description": "Existing discovery options applied separately to each selected destination; maxPages/maxResources are per destination.",
+          "properties": {
+            "allowLinkFollowing": { "type": "boolean" },
+            "linkDepth": { "type": "integer", "minimum": 0 },
+            "maxPages": { "type": "integer", "minimum": 1 },
+            "allowResourceFetching": { "type": "boolean" },
+            "maxResources": { "type": "integer", "minimum": 0 },
+            "outputSchema": { "type": "object" }
+          },
+          "additionalProperties": false
+        },
+        "asOf": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Caller-supplied reference time for interpreting time-dependent requests; does not add task restrictions."
+        }
+      },
+      "required": ["instruction"],
+      "additionalProperties": false
+    },
+    "outputSchema": { "type": "object" },
+    "steps": [
+      { "id": "profile", "call": { "operation": "search.profile" }, "input": null },
+      { "id": "page-profile", "call": { "operation": "discovery.profile" }, "input": null },
+      {
+        "id": "options",
+        "value": {
+          "$merge": [
+            { "$ref": "$.steps.profile.value.selection" },
+            {
+              "$pick": {
+                "from": { "$ref": "$.steps.profile.value.rewrite" },
+                "keys": ["maxQueryRewrites"]
+              }
+            },
+            {
+              "$pick": {
+                "from": { "$ref": "$.input" },
+                "keys": ["maxFollowResults", "minSuccessfulSources", "maxQueryRewrites"]
+              }
+            }
+          ]
+        },
+        "checks": [
+          {
+            "id": "search-minimum-within-follow-allowance",
+            "test": {
+              "$lte": [
+                { "$ref": "$.value.minSuccessfulSources" },
+                { "$ref": "$.value.maxFollowResults" }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "search",
+        "call": { "flow": { "id": "search-loop", "revision": 1 } },
+        "input": {
+          "instruction": { "$ref": "$.input.instruction" },
+          "query": {
+            "$get": {
+              "from": { "$ref": "$.input" },
+              "path": ["query"],
+              "fallback": { "$ref": "$.input.instruction" }
+            }
+          },
+          "profile": { "$ref": "$.steps.profile.value" },
+          "options": { "$ref": "$.steps.options.value" },
+          "attempts": [],
+          "candidates": [],
+          "pageOptions": {
+            "$merge": [
+              {
+                "$pick": {
+                  "from": { "$ref": "$.steps.page-profile.value.traversal" },
+                  "keys": ["allowLinkFollowing", "linkDepth", "maxPages"]
+                }
+              },
+              {
+                "$pick": {
+                  "from": { "$ref": "$.steps.page-profile.value.resources" },
+                  "keys": ["allowResourceFetching", "maxResources"]
+                }
+              },
+              { "$ref": "$.steps.profile.value.pageDefaults" },
+              { "$get": { "from": { "$ref": "$.input" }, "path": ["page"], "fallback": {} } },
+              { "$pick": { "from": { "$ref": "$.input" }, "keys": ["asOf"] } }
+            ]
+          },
+          "remainingRewrites": { "$ref": "$.steps.options.value.maxQueryRewrites" },
+          "selected": [],
+          "destinations": [],
+          "observations": [],
+          "asOf": { "$get": { "from": { "$ref": "$.input" }, "path": ["asOf"], "fallback": null } }
+        }
+      }
+    ],
+    "output": {
+      "$merge": [
+        { "instruction": { "$ref": "$.input.instruction" } },
+        { "$ref": "$.steps.search.value" }
+      ]
+    }
+  },
+  "flows": [
+    {
+      "id": "search-page",
+      "revision": 1,
+      "flow": {
+        "inputSchema": { "type": "object" },
+        "outputSchema": {},
+        "steps": [
+          {
+            "id": "url",
+            "call": { "operation": "url.build" },
+            "input": {
+              "url": { "$ref": "$.input.profile.provider.endpoint" },
+              "parameters": [
+                {
+                  "name": { "$ref": "$.input.profile.provider.queryParameter" },
+                  "value": { "$ref": "$.input.query" }
+                }
+              ]
+            }
+          },
+          {
+            "id": "fetch",
+            "call": { "flow": { "id": "fetch", "revision": 2 } },
+            "input": {
+              "url": { "$ref": "$.steps.url.value" },
+              "remaining": { "$ref": "$.input.profile.provider.maxRedirects" },
+              "seen": [{ "$ref": "$.steps.url.value" }],
+              "accept": {
+                "statuses": [200, 202],
+                "mediaTypes": ["text/html", "application/xhtml+xml"]
+              }
+            }
+          },
+          {
+            "id": "selection",
+            "call": { "flow": { "id": "search-read-page", "revision": 1 } },
+            "input": {
+              "source": { "$ref": "$.steps.fetch.value.source" },
+              "provider": { "$ref": "$.input.profile.provider" },
+              "recovered": false
+            }
+          },
+          {
+            "id": "results",
+            "call": { "flow": { "id": "search-result", "revision": 1 } },
+            "input": {
+              "record": { "$ref": "$.item" },
+              "id": { "$toString": { "$ref": "$.index" } },
+              "base": { "$ref": "$.steps.selection.value.baseUrl" },
+              "encoding": { "$ref": "$.steps.selection.value.encoding" },
+              "destinationParameter": { "$ref": "$.input.profile.provider.destinationParameter" },
+              "wrapper": { "$ref": "$.input.profile.provider.wrapper" }
+            },
+            "each": { "items": { "$ref": "$.steps.selection.value.items" }, "onFailure": "stop" }
+          }
+        ],
+        "output": {
+          "query": { "$ref": "$.input.query" },
+          "results": { "$pluck": { "over": { "$ref": "$.steps.results.value" }, "key": "value" } }
+        }
+      }
+    },
+    {
+      "id": "search-read-page",
+      "revision": 1,
+      "flow": {
+        "inputSchema": { "type": "object" },
+        "outputSchema": {},
+        "steps": [
+          {
+            "id": "items",
+            "call": { "operation": "html.select" },
+            "input": {
+              "source": { "$ref": "$.input.source" },
+              "selector": { "$ref": "$.input.provider.selector" },
+              "fields": { "$ref": "$.input.provider.fields" }
+            },
+            "checks": [
+              {
+                "id": "recovered-search-response-accepted",
+                "test": {
+                  "$or": [
+                    { "$not": { "$ref": "$.input.recovered" } },
+                    { "$eq": [{ "$ref": "$.input.source.status" }, 200] }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "id": "empty",
+            "call": { "operation": "html.select" },
+            "input": {
+              "source": { "$ref": "$.input.source" },
+              "selector": { "$ref": "$.input.provider.emptySelector" }
+            },
+            "when": { "$eq": [{ "$length": { "$ref": "$.steps.items.value.items" } }, 0] },
+            "checks": [
+              {
+                "id": "recovered-search-layout-recognized",
+                "test": {
+                  "$or": [
+                    { "$not": { "$ref": "$.input.recovered" } },
+                    { "$gt": [{ "$length": { "$ref": "$.value.items" } }, 0] }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "id": "recovery",
+            "call": { "operation": "search.recover" },
+            "input": { "$ref": "$.input.source" },
+            "when": {
+              "$and": [
+                { "$not": { "$ref": "$.input.recovered" } },
+                {
+                  "$or": [
+                    { "$neq": [{ "$ref": "$.input.source.status" }, 200] },
+                    {
+                      "$and": [
+                        { "$eq": [{ "$length": { "$ref": "$.steps.items.value.items" } }, 0] },
+                        {
+                          "$eq": [
+                            {
+                              "$length": {
+                                "$get": {
+                                  "from": { "$ref": "$.steps.empty.value" },
+                                  "path": ["items"],
+                                  "fallback": []
+                                }
+                              }
+                            },
+                            0
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "id": "next",
+            "call": { "flow": { "id": "search-read-page", "revision": 1 } },
+            "input": {
+              "source": { "$ref": "$.steps.recovery.value" },
+              "provider": { "$ref": "$.input.provider" },
+              "recovered": true
+            },
+            "when": { "$neq": [{ "$ref": "$.steps.recovery.value" }, null] }
+          }
+        ],
+        "output": {
+          "$coalesce": [{ "$ref": "$.steps.next.value" }, { "$ref": "$.steps.items.value" }]
+        }
+      }
+    },
+    {
+      "id": "search-result",
+      "revision": 1,
+      "flow": {
+        "inputSchema": { "type": "object" },
+        "outputSchema": {},
+        "steps": [
+          {
+            "id": "resolved",
+            "call": { "operation": "url.resolve" },
+            "input": {
+              "value": {
+                "$get": { "from": { "$ref": "$.input.record" }, "path": ["fields", "url", 0] }
+              },
+              "base": { "$ref": "$.input.base" },
+              "encoding": { "$ref": "$.input.encoding" }
+            }
+          },
+          {
+            "id": "wrapper",
+            "call": { "operation": "url.parse" },
+            "input": { "url": { "$ref": "$.steps.resolved.value" } }
+          },
+          {
+            "id": "target",
+            "value": {
+              "$case": {
+                "branches": [
+                  {
+                    "when": {
+                      "$and": [
+                        {
+                          "$eq": [
+                            { "$ref": "$.steps.wrapper.value.origin" },
+                            {
+                              "$get": {
+                                "from": { "$ref": "$.input.wrapper" },
+                                "path": ["origin"],
+                                "fallback": null
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "$eq": [
+                            { "$ref": "$.steps.wrapper.value.pathname" },
+                            {
+                              "$get": {
+                                "from": { "$ref": "$.input.wrapper" },
+                                "path": ["pathname"],
+                                "fallback": null
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    "then": {
+                      "$get": {
+                        "from": {
+                          "$filter": {
+                            "over": { "$ref": "$.steps.wrapper.value.parameters" },
+                            "as": "parameter",
+                            "when": {
+                              "$eq": [
+                                { "$get": { "from": { "$var": "parameter" }, "path": ["name"] } },
+                                { "$ref": "$.input.destinationParameter" }
+                              ]
+                            }
+                          }
+                        },
+                        "path": [0, "value"],
+                        "fallback": null
+                      }
+                    }
+                  }
+                ],
+                "else": null
+              }
+            }
+          },
+          {
+            "id": "destination",
+            "call": { "operation": "url.parse" },
+            "input": { "url": { "$ref": "$.steps.target.value" } },
+            "when": { "$neq": [{ "$ref": "$.steps.target.value" }, null] }
+          }
+        ],
+        "output": {
+          "id": { "$ref": "$.input.id" },
+          "title": {
+            "$get": { "from": { "$ref": "$.input.record" }, "path": ["fields", "title", 0] }
+          },
+          "description": {
+            "$get": {
+              "from": { "$ref": "$.input.record" },
+              "path": ["fields", "description", 0],
+              "fallback": ""
+            }
+          },
+          "url": {
+            "$coalesce": [
+              {
+                "$get": {
+                  "from": { "$ref": "$.steps.destination.value" },
+                  "path": ["withoutFragment"],
+                  "fallback": null
+                }
+              },
+              { "$ref": "$.steps.wrapper.value.withoutFragment" }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "search-query",
+      "revision": 1,
+      "flow": {
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "instruction": { "type": "string" },
+            "query": { "type": "string", "minLength": 1 },
+            "profile": { "type": "object" },
+            "asOf": { "anyOf": [{ "type": "string", "format": "date-time" }, { "type": "null" }] },
+            "selected": { "type": "array" },
+            "remainingFollow": { "type": "integer", "minimum": 1 },
+            "pageOptions": { "type": "object" },
+            "observations": { "type": "array" }
+          },
+          "required": [
+            "instruction",
+            "query",
+            "profile",
+            "selected",
+            "remainingFollow",
+            "pageOptions",
+            "observations"
+          ],
+          "additionalProperties": false
+        },
+        "outputSchema": {
+          "type": "object",
+          "properties": {
+            "query": { "type": "string" },
+            "results": { "type": "array" },
+            "candidates": { "type": "array" },
+            "rankedIds": { "type": "array", "items": { "type": "string" } }
+          },
+          "required": ["query", "results", "candidates", "rankedIds"],
+          "additionalProperties": false
+        },
+        "steps": [
+          {
+            "id": "page",
+            "call": { "flow": { "id": "search-page", "revision": 1 } },
+            "input": {
+              "query": { "$ref": "$.input.query" },
+              "profile": { "$ref": "$.input.profile" }
+            }
+          },
+          {
+            "id": "available",
+            "value": {
+              "$reduce": {
+                "over": {
+                  "$filter": {
+                    "over": { "$ref": "$.steps.page.value.results" },
+                    "as": "candidate",
+                    "when": {
+                      "$empty": {
+                        "$filter": {
+                          "over": { "$ref": "$.input.selected" },
+                          "as": "selected",
+                          "when": {
+                            "$eq": [
+                              {
+                                "$get": {
+                                  "from": { "$var": "selected" },
+                                  "path": ["url"],
+                                  "fallback": null
+                                }
+                              },
+                              {
+                                "$get": {
+                                  "from": { "$var": "candidate" },
+                                  "path": ["url"],
+                                  "fallback": null
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "as": "candidate",
+                "acc": "queue",
+                "init": [],
+                "body": {
+                  "$case": {
+                    "branches": [
+                      {
+                        "when": {
+                          "$empty": {
+                            "$filter": {
+                              "over": { "$var": "queue" },
+                              "as": "queued",
+                              "when": {
+                                "$eq": [
+                                  {
+                                    "$get": {
+                                      "from": { "$var": "queued" },
+                                      "path": ["url"],
+                                      "fallback": null
+                                    }
+                                  },
+                                  {
+                                    "$get": {
+                                      "from": { "$var": "candidate" },
+                                      "path": ["url"],
+                                      "fallback": null
+                                    }
+                                  }
+                                ]
+                              }
+                            }
+                          }
+                        },
+                        "then": { "$flatten": [{ "$var": "queue" }, [{ "$var": "candidate" }]] }
+                      }
+                    ],
+                    "else": { "$var": "queue" }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "id": "index",
+            "value": {
+              "$keyBy": {
+                "over": { "$ref": "$.steps.available.value" },
+                "as": "candidate",
+                "key": {
+                  "$get": { "from": { "$var": "candidate" }, "path": ["id"], "fallback": null }
+                }
+              }
+            }
+          },
+          {
+            "id": "ranking",
+            "call": { "operation": "search.rank" },
+            "when": { "$gt": [{ "$length": { "$ref": "$.steps.available.value" } }, 0] },
+            "input": {
+              "instructions": { "$ref": "$.input.profile.ranking.instructions" },
+              "settings": { "$ref": "$.input.profile.ranking.settings" },
+              "maxInputBytes": { "$ref": "$.input.profile.maxInputBytes" },
+              "messages": [
+                {
+                  "role": "user",
+                  "content": {
+                    "$toString": {
+                      "instruction": { "$ref": "$.input.instruction" },
+                      "query": { "$ref": "$.input.query" },
+                      "asOf": {
+                        "$get": {
+                          "from": { "$ref": "$.input" },
+                          "path": ["asOf"],
+                          "fallback": null
+                        }
+                      },
+                      "results": { "$ref": "$.steps.available.value" },
+                      "maxResults": { "$ref": "$.input.remainingFollow" },
+                      "observations": { "$ref": "$.input.observations" },
+                      "perDestination": { "$ref": "$.input.pageOptions" }
+                    }
+                  }
+                }
+              ]
+            },
+            "checks": [
+              { "id": "SEARCH_RANKING_FAILED", "test": { "$eq": [{ "$ref": "$.value.ok" }, true] } }
+            ]
+          },
+          {
+            "id": "ids",
+            "value": {
+              "$get": {
+                "from": { "$ref": "$.steps.ranking.value" },
+                "path": ["decision", "rankedIds"],
+                "fallback": []
+              }
+            },
+            "checks": [
+              {
+                "id": "SEARCH_RANKING_LIMIT",
+                "test": {
+                  "$lte": [
+                    { "$length": { "$ref": "$.value" } },
+                    { "$ref": "$.input.remainingFollow" }
+                  ]
+                }
+              },
+              {
+                "id": "SEARCH_RANKING_UNIQUE",
+                "test": {
+                  "$eq": [
+                    { "$length": { "$unique": { "$ref": "$.value" } } },
+                    { "$length": { "$ref": "$.value" } }
+                  ]
+                }
+              },
+              {
+                "id": "SEARCH_RANKING_MEMBERSHIP",
+                "test": {
+                  "$empty": {
+                    "$filter": {
+                      "over": { "$ref": "$.value" },
+                      "as": "id",
+                      "when": {
+                        "$empty": {
+                          "$filter": {
+                            "over": { "$ref": "$.steps.available.value" },
+                            "as": "candidate",
+                            "when": {
+                              "$eq": [
+                                { "$get": { "from": { "$var": "candidate" }, "path": ["id"] } },
+                                { "$var": "id" }
+                              ]
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "id": "candidates",
+            "value": {
+              "$map": {
+                "over": { "$ref": "$.steps.ids.value" },
+                "as": "id",
+                "body": {
+                  "$get": {
+                    "from": { "$ref": "$.steps.index.value" },
+                    "path": [{ "$var": "id" }],
+                    "fallback": null
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "output": {
+          "query": { "$ref": "$.input.query" },
+          "results": { "$ref": "$.steps.page.value.results" },
+          "rankedIds": { "$ref": "$.steps.ids.value" },
+          "candidates": { "$ref": "$.steps.candidates.value" }
+        }
+      }
+    },
+    {
+      "id": "search-progress",
+      "revision": 1,
+      "flow": {
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "options": { "type": "object" },
+            "selected": { "type": "array" },
+            "observations": { "type": "array" }
+          },
+          "required": ["options", "selected", "observations"],
+          "additionalProperties": false
+        },
+        "outputSchema": {
+          "type": "object",
+          "properties": {
+            "successfulSources": { "type": "integer", "minimum": 0 },
+            "remainingFollow": { "type": "integer", "minimum": 0 },
+            "canContinue": { "type": "boolean" }
+          },
+          "required": ["successfulSources", "remainingFollow", "canContinue"],
+          "additionalProperties": false
+        },
+        "steps": [],
+        "output": {
+          "$with": {
+            "let": {
+              "successful": {
+                "$length": {
+                  "$filter": {
+                    "over": { "$ref": "$.input.observations" },
+                    "as": "observation",
+                    "when": {
+                      "$get": {
+                        "from": { "$var": "observation" },
+                        "path": ["usable"],
+                        "fallback": false
+                      }
+                    }
+                  }
+                }
+              },
+              "remaining": {
+                "$sub": [
+                  { "$ref": "$.input.options.maxFollowResults" },
+                  { "$length": { "$ref": "$.input.selected" } }
+                ]
+              }
+            },
+            "value": {
+              "successfulSources": { "$var": "successful" },
+              "remainingFollow": { "$var": "remaining" },
+              "canContinue": { "$gt": [{ "$var": "remaining" }, 0] }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "search-loop",
+      "revision": 1,
+      "flow": {
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "instruction": { "type": "string" },
+            "profile": { "type": "object" },
+            "options": { "type": "object" },
+            "pageOptions": { "type": "object" },
+            "query": { "type": ["string", "null"] },
+            "remainingRewrites": { "type": "integer", "minimum": 0 },
+            "attempts": { "type": "array" },
+            "candidates": { "type": "array" },
+            "selected": { "type": "array" },
+            "destinations": { "type": "array" },
+            "observations": { "type": "array" },
+            "asOf": { "anyOf": [{ "type": "string", "format": "date-time" }, { "type": "null" }] }
+          },
+          "required": [
+            "instruction",
+            "profile",
+            "options",
+            "pageOptions",
+            "query",
+            "remainingRewrites",
+            "attempts",
+            "candidates",
+            "selected",
+            "destinations",
+            "observations"
+          ],
+          "additionalProperties": false
+        },
+        "outputSchema": {
+          "type": "object",
+          "properties": {
+            "attempts": { "type": "array" },
+            "selected": { "type": "array" },
+            "destinations": { "type": "array" },
+            "successfulSources": { "type": "integer", "minimum": 0 },
+            "insufficient": { "type": "boolean" },
+            "continuationError": {
+              "anyOf": [
+                { "type": "null" },
+                {
+                  "type": "object",
+                  "properties": {
+                    "phase": { "enum": ["rewrite", "search"] },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": { "type": "string" },
+                        "message": { "type": "string" }
+                      },
+                      "required": ["code", "message"],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": ["phase", "error"],
+                  "additionalProperties": false
+                }
+              ]
+            }
+          },
+          "required": [
+            "attempts",
+            "selected",
+            "destinations",
+            "successfulSources",
+            "insufficient",
+            "continuationError"
+          ],
+          "additionalProperties": false
+        },
+        "steps": [
+          {
+            "id": "progress",
+            "call": { "flow": { "id": "search-progress", "revision": 1 } },
+            "input": {
+              "options": { "$ref": "$.input.options" },
+              "selected": { "$ref": "$.input.selected" },
+              "observations": { "$ref": "$.input.observations" }
+            }
+          },
+          {
+            "id": "page",
+            "call": { "flow": { "id": "search-query", "revision": 1 } },
+            "input": {
+              "instruction": { "$ref": "$.input.instruction" },
+              "query": { "$ref": "$.input.query" },
+              "profile": { "$ref": "$.input.profile" },
+              "asOf": {
+                "$get": { "from": { "$ref": "$.input" }, "path": ["asOf"], "fallback": null }
+              },
+              "selected": { "$ref": "$.input.selected" },
+              "remainingFollow": { "$ref": "$.steps.progress.value.remainingFollow" },
+              "pageOptions": { "$ref": "$.input.pageOptions" },
+              "observations": { "$ref": "$.input.observations" }
+            },
+            "when": {
+              "$and": [
+                { "$ref": "$.steps.progress.value.canContinue" },
+                { "$neq": [{ "$ref": "$.input.query" }, null] }
+              ]
+            }
+          },
+          {
+            "id": "state",
+            "value": {
+              "attempts": {
+                "$flatten": [
+                  { "$ref": "$.input.attempts" },
+                  {
+                    "$case": {
+                      "branches": [
+                        {
+                          "when": { "$eq": [{ "$ref": "$.steps.page.status" }, "completed"] },
+                          "then": [
+                            {
+                              "query": { "$ref": "$.input.query" },
+                              "results": {
+                                "$get": {
+                                  "from": { "$ref": "$.steps.page.value" },
+                                  "path": ["results"],
+                                  "fallback": []
+                                }
+                              },
+                              "rankedIds": {
+                                "$get": {
+                                  "from": { "$ref": "$.steps.page.value" },
+                                  "path": ["rankedIds"],
+                                  "fallback": []
+                                }
+                              }
+                            }
+                          ]
+                        }
+                      ],
+                      "else": []
+                    }
+                  }
+                ]
+              },
+              "candidates": {
+                "$coalesce": [
+                  {
+                    "$get": {
+                      "from": { "$ref": "$.steps.page.value" },
+                      "path": ["candidates"],
+                      "fallback": null
+                    }
+                  },
+                  { "$ref": "$.input.candidates" }
+                ]
+              }
+            }
+          },
+          {
+            "id": "candidate",
+            "value": {
+              "$get": {
+                "from": { "$ref": "$.steps.state.value.candidates" },
+                "path": [0],
+                "fallback": null
+              }
+            },
+            "when": { "$ref": "$.steps.progress.value.canContinue" }
+          },
+          {
+            "id": "destination",
+            "call": { "flow": { "id": "search-destination", "revision": 1 } },
+            "input": {
+              "result": { "$ref": "$.item" },
+              "instruction": { "$ref": "$.input.instruction" },
+              "pageOptions": { "$ref": "$.input.pageOptions" }
+            },
+            "each": {
+              "items": {
+                "$case": {
+                  "branches": [
+                    {
+                      "when": { "$neq": [{ "$ref": "$.steps.candidate.value" }, null] },
+                      "then": [{ "$ref": "$.steps.candidate.value" }]
+                    }
+                  ],
+                  "else": []
+                }
+              },
+              "onFailure": "record"
+            }
+          },
+          {
+            "id": "observed",
+            "value": {
+              "attempts": { "$ref": "$.steps.state.value.attempts" },
+              "candidates": {
+                "$case": {
+                  "branches": [
+                    {
+                      "when": { "$neq": [{ "$ref": "$.steps.candidate.value" }, null] },
+                      "then": {
+                        "$slice": {
+                          "from": { "$ref": "$.steps.state.value.candidates" },
+                          "start": 1
+                        }
+                      }
+                    }
+                  ],
+                  "else": { "$ref": "$.steps.state.value.candidates" }
+                }
+              },
+              "selected": {
+                "$flatten": [
+                  { "$ref": "$.input.selected" },
+                  {
+                    "$case": {
+                      "branches": [
+                        {
+                          "when": { "$neq": [{ "$ref": "$.steps.candidate.value" }, null] },
+                          "then": [{ "$ref": "$.steps.candidate.value" }]
+                        }
+                      ],
+                      "else": []
+                    }
+                  }
+                ]
+              },
+              "destinations": {
+                "$flatten": [
+                  { "$ref": "$.input.destinations" },
+                  {
+                    "$get": {
+                      "from": { "$ref": "$.steps.destination" },
+                      "path": ["value"],
+                      "fallback": []
+                    }
+                  }
+                ]
+              },
+              "observations": {
+                "$flatten": [
+                  { "$ref": "$.input.observations" },
+                  {
+                    "$case": {
+                      "branches": [
+                        {
+                          "when": { "$neq": [{ "$ref": "$.steps.candidate.value" }, null] },
+                          "then": [
+                            {
+                              "url": {
+                                "$get": {
+                                  "from": { "$ref": "$.steps.candidate.value" },
+                                  "path": ["url"],
+                                  "fallback": null
+                                }
+                              },
+                              "status": {
+                                "$get": {
+                                  "from": { "$ref": "$.steps.destination.value" },
+                                  "path": [0, "status"],
+                                  "fallback": null
+                                }
+                              },
+                              "discoveryStatus": {
+                                "$get": {
+                                  "from": { "$ref": "$.steps.destination.value" },
+                                  "path": [0, "value", "status"],
+                                  "fallback": null
+                                }
+                              },
+                              "usable": {
+                                "$get": {
+                                  "from": { "$ref": "$.steps.destination.value" },
+                                  "path": [0, "value", "usable"],
+                                  "fallback": false
+                                }
+                              },
+                              "feedback": {
+                                "$get": {
+                                  "from": { "$ref": "$.steps.destination.value" },
+                                  "path": [0, "value", "feedback"],
+                                  "fallback": null
+                                }
+                              },
+                              "error": {
+                                "$get": {
+                                  "from": { "$ref": "$.steps.destination.value" },
+                                  "path": [0, "error"],
+                                  "fallback": null
+                                }
+                              }
+                            }
+                          ]
+                        }
+                      ],
+                      "else": []
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "id": "after",
+            "call": { "flow": { "id": "search-progress", "revision": 1 } },
+            "input": {
+              "options": { "$ref": "$.input.options" },
+              "selected": { "$ref": "$.steps.observed.value.selected" },
+              "observations": { "$ref": "$.steps.observed.value.observations" }
+            }
+          },
+          {
+            "id": "rewrite",
+            "call": { "flow": { "id": "search-query-candidate", "revision": 1 } },
+            "each": { "items": [null], "onFailure": "record" },
+            "input": {
+              "instruction": { "$ref": "$.input.instruction" },
+              "attempts": { "$ref": "$.steps.state.value.attempts" },
+              "policy": {
+                "$pick": {
+                  "from": { "$ref": "$.input.profile.rewrite" },
+                  "keys": ["instructions", "settings"]
+                }
+              },
+              "maxInputBytes": { "$ref": "$.input.profile.maxInputBytes" },
+              "observations": { "$ref": "$.steps.observed.value.observations" },
+              "asOf": {
+                "$get": { "from": { "$ref": "$.input" }, "path": ["asOf"], "fallback": null }
+              }
+            },
+            "when": {
+              "$and": [
+                { "$ref": "$.steps.after.value.canContinue" },
+                { "$gt": [{ "$ref": "$.input.remainingRewrites" }, 0] },
+                { "$eq": [{ "$length": { "$ref": "$.steps.observed.value.candidates" } }, 0] },
+                {
+                  "$lt": [
+                    { "$ref": "$.steps.after.value.successfulSources" },
+                    { "$ref": "$.input.options.minSuccessfulSources" }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "id": "next",
+            "call": { "flow": { "id": "search-loop", "revision": 1 } },
+            "each": { "items": [null], "onFailure": "record" },
+            "input": {
+              "$merge": [
+                { "$ref": "$.input" },
+                { "$ref": "$.steps.observed.value" },
+                {
+                  "query": {
+                    "$get": {
+                      "from": { "$ref": "$.steps.rewrite.value" },
+                      "path": [0, "value", "query"],
+                      "fallback": null
+                    }
+                  },
+                  "remainingRewrites": {
+                    "$sub": [
+                      { "$ref": "$.input.remainingRewrites" },
+                      {
+                        "$case": {
+                          "branches": [
+                            {
+                              "when": {
+                                "$eq": [
+                                  {
+                                    "$get": {
+                                      "from": { "$ref": "$.steps.rewrite.value" },
+                                      "path": [0, "status"],
+                                      "fallback": null
+                                    }
+                                  },
+                                  "completed"
+                                ]
+                              },
+                              "then": 1
+                            }
+                          ],
+                          "else": 0
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            },
+            "when": {
+              "$and": [
+                { "$ref": "$.steps.after.value.canContinue" },
+                {
+                  "$or": [
+                    {
+                      "$neq": [
+                        {
+                          "$get": {
+                            "from": { "$ref": "$.steps.rewrite.value" },
+                            "path": [0, "value", "query"],
+                            "fallback": null
+                          }
+                        },
+                        null
+                      ]
+                    },
+                    { "$gt": [{ "$length": { "$ref": "$.steps.observed.value.candidates" } }, 0] }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "id": "continuation-error",
+            "value": {
+              "$case": {
+                "branches": [
+                  {
+                    "when": {
+                      "$eq": [
+                        {
+                          "$get": {
+                            "from": { "$ref": "$.steps.rewrite.value" },
+                            "path": [0, "status"],
+                            "fallback": null
+                          }
+                        },
+                        "failed"
+                      ]
+                    },
+                    "then": {
+                      "phase": "rewrite",
+                      "error": {
+                        "$get": {
+                          "from": { "$ref": "$.steps.rewrite.value" },
+                          "path": [0, "error"]
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "when": {
+                      "$eq": [
+                        {
+                          "$get": {
+                            "from": { "$ref": "$.steps.next.value" },
+                            "path": [0, "status"],
+                            "fallback": null
+                          }
+                        },
+                        "failed"
+                      ]
+                    },
+                    "then": {
+                      "phase": "search",
+                      "error": {
+                        "$get": { "from": { "$ref": "$.steps.next.value" }, "path": [0, "error"] }
+                      }
+                    }
+                  }
+                ],
+                "else": null
+              }
+            },
+            "checks": [
+              {
+                "id": {
+                  "$join": {
+                    "parts": [
+                      "SEARCH_CONTINUATION_FAILED: ",
+                      { "$toString": { "$ref": "$.value" } }
+                    ],
+                    "sep": ""
+                  }
+                },
+                "test": {
+                  "$or": [
+                    { "$eq": [{ "$ref": "$.value" }, null] },
+                    { "$gt": [{ "$ref": "$.steps.after.value.successfulSources" }, 0] }
+                  ]
+                }
+              }
+            ]
+          }
+        ],
+        "output": {
+          "$coalesce": [
+            {
+              "$get": {
+                "from": { "$ref": "$.steps.next.value" },
+                "path": [0, "value"],
+                "fallback": null
+              }
+            },
+            {
+              "attempts": { "$ref": "$.steps.observed.value.attempts" },
+              "selected": { "$ref": "$.steps.observed.value.selected" },
+              "destinations": { "$ref": "$.steps.observed.value.destinations" },
+              "successfulSources": { "$ref": "$.steps.after.value.successfulSources" },
+              "insufficient": {
+                "$lt": [
+                  { "$ref": "$.steps.after.value.successfulSources" },
+                  { "$ref": "$.input.options.minSuccessfulSources" }
+                ]
+              },
+              "continuationError": { "$ref": "$.steps.continuation-error.value" }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "search-destination",
+      "revision": 1,
+      "flow": {
+        "inputSchema": { "type": "object" },
+        "outputSchema": {},
+        "steps": [
+          {
+            "id": "discovery",
+            "call": { "flow": { "id": "search-page-discovery", "revision": 1 } },
+            "input": {
+              "$merge": [
+                { "$ref": "$.input.pageOptions" },
+                {
+                  "url": { "$ref": "$.input.result.url" },
+                  "instruction": { "$ref": "$.input.instruction" }
+                }
+              ]
+            }
+          },
+          {
+            "id": "usable",
+            "value": {
+              "$and": [
+                {
+                  "$neq": [
+                    {
+                      "$get": {
+                        "from": { "$ref": "$.steps.discovery.value" },
+                        "path": ["artifact"],
+                        "fallback": null
+                      }
+                    },
+                    null
+                  ]
+                },
+                {
+                  "$eq": [
+                    {
+                      "$get": {
+                        "from": { "$ref": "$.steps.discovery.value" },
+                        "path": ["status"],
+                        "fallback": null
+                      }
+                    },
+                    "ready"
+                  ]
+                },
+                {
+                  "$eq": [
+                    {
+                      "$get": {
+                        "from": { "$ref": "$.steps.discovery.value" },
+                        "path": ["trial", "status"],
+                        "fallback": null
+                      }
+                    },
+                    "completed"
+                  ]
+                },
+                {
+                  "$eq": [
+                    {
+                      "$get": {
+                        "from": { "$ref": "$.steps.discovery.value" },
+                        "path": ["trial", "error"],
+                        "fallback": null
+                      }
+                    },
+                    null
+                  ]
+                },
+                {
+                  "$case": {
+                    "branches": [
+                      {
+                        "when": {
+                          "$has": {
+                            "from": { "$ref": "$.input.pageOptions" },
+                            "path": ["outputSchema"]
+                          }
+                        },
+                        "then": true
+                      }
+                    ],
+                    "else": {
+                      "$or": [
+                        {
+                          "$gt": [
+                            {
+                              "$length": {
+                                "$filter": {
+                                  "over": {
+                                    "$get": {
+                                      "from": { "$ref": "$.steps.discovery.value" },
+                                      "path": ["trial", "value", "pages"],
+                                      "fallback": []
+                                    }
+                                  },
+                                  "as": "page",
+                                  "when": {
+                                    "$gt": [
+                                      {
+                                        "$length": {
+                                          "$get": {
+                                            "from": { "$var": "page" },
+                                            "path": ["items"],
+                                            "fallback": []
+                                          }
+                                        }
+                                      },
+                                      0
+                                    ]
+                                  }
+                                }
+                              }
+                            },
+                            0
+                          ]
+                        },
+                        {
+                          "$gt": [
+                            {
+                              "$length": {
+                                "$get": {
+                                  "from": { "$ref": "$.steps.discovery.value" },
+                                  "path": ["trial", "value", "resources", "items"],
+                                  "fallback": []
+                                }
+                              }
+                            },
+                            0
+                          ]
+                        },
+                        {
+                          "$and": [
+                            {
+                              "$has": {
+                                "from": {
+                                  "$get": {
+                                    "from": { "$ref": "$.steps.discovery.value" },
+                                    "path": ["trial", "value"],
+                                    "fallback": null
+                                  }
+                                },
+                                "path": ["data"]
+                              }
+                            },
+                            {
+                              "$not": {
+                                "$empty": {
+                                  "$get": {
+                                    "from": { "$ref": "$.steps.discovery.value" },
+                                    "path": ["trial", "value", "data"],
+                                    "fallback": null
+                                  }
+                                }
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "output": {
+          "source": { "$ref": "$.input.result" },
+          "artifact": { "$ref": "$.steps.discovery.value.artifact" },
+          "status": { "$ref": "$.steps.discovery.value.status" },
+          "trial": { "$ref": "$.steps.discovery.value.trial" },
+          "execution": {
+            "$case": {
+              "branches": [
+                {
+                  "when": { "$neq": [{ "$ref": "$.steps.discovery.value.artifact" }, null] },
+                  "then": { "$ref": "$.steps.discovery.value.trial" }
+                }
+              ],
+              "else": null
+            }
+          },
+          "usable": { "$ref": "$.steps.usable.value" },
+          "feedback": {
+            "status": {
+              "$get": {
+                "from": { "$ref": "$.steps.discovery.value" },
+                "path": ["status"],
+                "fallback": null
+              }
+            },
+            "reason": {
+              "$get": {
+                "from": { "$ref": "$.steps.discovery.value" },
+                "path": ["reason"],
+                "fallback": null
+              }
+            },
+            "trialError": {
+              "$get": {
+                "from": { "$ref": "$.steps.discovery.value" },
+                "path": ["trial", "error"],
+                "fallback": null
+              }
+            },
+            "review": {
+              "$get": {
+                "from": { "$ref": "$.steps.discovery.value" },
+                "path": ["review", "decision"],
+                "fallback": null
+              }
+            },
+            "partialTrial": {
+              "$case": {
+                "branches": [
+                  {
+                    "when": {
+                      "$neq": [
+                        {
+                          "$get": {
+                            "from": { "$ref": "$.steps.discovery.value" },
+                            "path": ["partialTrial"],
+                            "fallback": null
+                          }
+                        },
+                        null
+                      ]
+                    },
+                    "then": {
+                      "status": {
+                        "$get": {
+                          "from": { "$ref": "$.steps.discovery.value" },
+                          "path": ["partialTrial", "outcome", "status"],
+                          "fallback": null
+                        }
+                      },
+                      "error": {
+                        "$get": {
+                          "from": { "$ref": "$.steps.discovery.value" },
+                          "path": ["partialTrial", "outcome", "error"],
+                          "fallback": null
+                        }
+                      }
+                    }
+                  }
+                ],
+                "else": null
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "search-query-candidate",
+      "revision": 1,
+      "flow": {
+        "inputSchema": { "type": "object" },
+        "outputSchema": { "type": "object" },
+        "steps": [
+          {
+            "id": "model",
+            "call": { "operation": "search.rewrite" },
+            "input": {
+              "instructions": { "$ref": "$.input.policy.instructions" },
+              "settings": { "$ref": "$.input.policy.settings" },
+              "maxInputBytes": { "$ref": "$.input.maxInputBytes" },
+              "messages": [
+                {
+                  "role": "user",
+                  "content": {
+                    "$toString": {
+                      "instruction": { "$ref": "$.input.instruction" },
+                      "attempts": { "$ref": "$.input.attempts" },
+                      "feedback": {
+                        "$get": {
+                          "from": { "$ref": "$.input" },
+                          "path": ["feedback"],
+                          "fallback": null
+                        }
+                      },
+                      "observations": {
+                        "$get": {
+                          "from": { "$ref": "$.input" },
+                          "path": ["observations"],
+                          "fallback": []
+                        }
+                      },
+                      "asOf": {
+                        "$get": {
+                          "from": { "$ref": "$.input" },
+                          "path": ["asOf"],
+                          "fallback": null
+                        }
+                      }
+                    }
+                  }
+                }
+              ]
+            },
+            "checks": [
+              { "id": "SEARCH_REWRITE_FAILED", "test": { "$eq": [{ "$ref": "$.value.ok" }, true] } }
+            ]
+          },
+          { "id": "query", "value": { "$ref": "$.steps.model.value.decision.query" } },
+          {
+            "id": "fresh",
+            "value": {
+              "$empty": {
+                "$filter": {
+                  "over": { "$ref": "$.input.attempts" },
+                  "as": "attempt",
+                  "when": {
+                    "$eq": [
+                      { "$get": { "from": { "$var": "attempt" }, "path": ["query"] } },
+                      { "$ref": "$.steps.query.value" }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          {
+            "id": "allowance",
+            "call": { "flow": { "id": "model-allowance", "revision": 1 } },
+            "input": {
+              "settings": { "$ref": "$.input.policy.settings" },
+              "meta": {
+                "$get": {
+                  "from": { "$ref": "$.steps.model.value" },
+                  "path": ["meta"],
+                  "fallback": null
+                }
+              }
+            }
+          },
+          {
+            "id": "repair",
+            "call": { "flow": { "id": "search-query-candidate", "revision": 1 } },
+            "when": {
+              "$and": [
+                { "$neq": [{ "$ref": "$.steps.query.value" }, null] },
+                { "$not": { "$ref": "$.steps.fresh.value" } },
+                { "$gt": [{ "$ref": "$.steps.allowance.value.maxSteps" }, 0] },
+                { "$gt": [{ "$ref": "$.steps.allowance.value.outputAttempts" }, 0] },
+                { "$gt": [{ "$ref": "$.steps.allowance.value.maxMs" }, 0] }
+              ]
+            },
+            "input": {
+              "$merge": [
+                { "$ref": "$.input" },
+                {
+                  "policy": {
+                    "$merge": [
+                      { "$ref": "$.input.policy" },
+                      {
+                        "settings": {
+                          "$merge": [
+                            { "$ref": "$.input.policy.settings" },
+                            { "$ref": "$.steps.allowance.value" }
+                          ]
+                        }
+                      }
+                    ]
+                  },
+                  "feedback": {
+                    "error": "REPEATED_QUERY",
+                    "query": { "$ref": "$.steps.query.value" }
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "output": {
+          "$coalesce": [
+            { "$ref": "$.steps.repair.value" },
+            {
+              "query": {
+                "$case": {
+                  "branches": [
+                    {
+                      "when": { "$ref": "$.steps.fresh.value" },
+                      "then": { "$ref": "$.steps.query.value" }
+                    }
+                  ],
+                  "else": null
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "model-allowance",
+      "revision": 1,
+      "flow": {
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "settings": { "type": "object" },
+            "meta": { "type": ["object", "null"] }
+          },
+          "required": ["settings", "meta"],
+          "additionalProperties": false
+        },
+        "outputSchema": {
+          "type": "object",
+          "properties": {
+            "maxSteps": { "type": "number" },
+            "outputAttempts": { "type": "number" },
+            "maxMs": { "type": "number" }
+          },
+          "required": ["maxSteps", "outputAttempts", "maxMs"],
+          "additionalProperties": false
+        },
+        "steps": [
+          {
+            "id": "remaining",
+            "value": {
+              "maxSteps": {
+                "$sub": [
+                  { "$ref": "$.input.settings.maxSteps" },
+                  {
+                    "$get": {
+                      "from": { "$ref": "$.input.meta" },
+                      "path": ["steps"],
+                      "fallback": { "$ref": "$.input.settings.maxSteps" }
+                    }
+                  }
+                ]
+              },
+              "outputAttempts": {
+                "$sub": [
+                  { "$ref": "$.input.settings.outputAttempts" },
+                  {
+                    "$add": [
+                      {
+                        "$get": {
+                          "from": { "$ref": "$.input.meta" },
+                          "path": ["outputRetries"],
+                          "fallback": { "$ref": "$.input.settings.outputAttempts" }
+                        }
+                      },
+                      1
+                    ]
+                  }
+                ]
+              },
+              "maxMs": {
+                "$sub": [
+                  { "$ref": "$.input.settings.maxMs" },
+                  {
+                    "$get": {
+                      "from": { "$ref": "$.input.meta" },
+                      "path": ["elapsedMs"],
+                      "fallback": { "$ref": "$.input.settings.maxMs" }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        ],
+        "output": {
+          "$merge": [
+            { "$ref": "$.steps.remaining.value" },
+            {
+              "outputAttempts": {
+                "$min": {
+                  "over": [
+                    { "$ref": "$.steps.remaining.value.maxSteps" },
+                    { "$ref": "$.steps.remaining.value.outputAttempts" }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

@@ -70,6 +70,9 @@ jobs:
       # built. The templates pass inside the workspace by being linked to the
       # packages next door; this is what a new app actually gets. See
       # scripts/check-create.mts.
+      - name: Check Haptic isolated consumers
+        run: pnpm --filter @niscorp/haptic check:package
+
       - name: Check created apps
         run: pnpm check:create
 

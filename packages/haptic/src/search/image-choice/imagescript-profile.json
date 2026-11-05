@@ -1,0 +1,11 @@
+{
+  "formats": ["png", "jpeg"],
+  "minimumWidth": 280,
+  "minimumHeight": 280,
+  "background": { "r": 255, "g": 255, "b": 255, "alpha": 1 },
+  "maxInputBytes": 8388608,
+  "maxInputPixels": 16777216,
+  "maxOutputPixels": 16777216,
+  "maxOutputBytes": 8388608,
+  "png": { "compression": 6, "metadata": { "creationTime": 0, "software": "" } }
+}

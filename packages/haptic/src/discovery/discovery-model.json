@@ -1,0 +1,489 @@
+{
+  "stamp": { "eden.engine": 1, "nisc.prism": 2 },
+  "flows": [
+    {
+      "id": "spend-model",
+      "revision": 1,
+      "flow": {
+        "inputSchema": { "type": "object" },
+        "outputSchema": { "type": "object" },
+        "steps": [],
+        "output": {
+          "steps": {
+            "$sub": [
+              { "$ref": "$.input.allowance.steps" },
+              {
+                "$get": {
+                  "from": { "$ref": "$.input.meta" },
+                  "path": ["steps"],
+                  "fallback": { "$ref": "$.input.allowance.steps" }
+                }
+              }
+            ]
+          },
+          "ms": {
+            "$sub": [
+              { "$ref": "$.input.allowance.ms" },
+              {
+                "$get": {
+                  "from": { "$ref": "$.input.meta" },
+                  "path": ["elapsedMs"],
+                  "fallback": { "$ref": "$.input.allowance.ms" }
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "program-context",
+      "revision": 1,
+      "flow": {
+        "inputSchema": { "type": "object" },
+        "outputSchema": { "type": "object" },
+        "steps": [
+          {
+            "id": "encoded",
+            "call": { "operation": "json.encode" },
+            "input": {
+              "$map": {
+                "over": { "$ref": "$.input.values" },
+                "as": "sourceValue",
+                "body": { "input": { "$var": "sourceValue" } }
+              }
+            }
+          }
+        ],
+        "output": {
+          "role": "user",
+          "content": {
+            "$join": {
+              "parts": [
+                "EXAMPLE PROGRAM CONTEXTS \u2014 independent execution scopes, not a runtime array. Your program runs on each scope exactly as shown; source data is $.input.\n",
+                { "$ref": "$.steps.encoded.value" }
+              ],
+              "sep": ""
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "model-history",
+      "revision": 1,
+      "flow": {
+        "inputSchema": { "type": "object" },
+        "outputSchema": { "type": "object" },
+        "steps": [
+          {
+            "id": "feedback",
+            "call": { "operation": "json.encode" },
+            "input": { "$ref": "$.input.repairFeedback" }
+          },
+          {
+            "id": "new-feedback",
+            "value": {
+              "$case": {
+                "branches": [
+                  {
+                    "when": {
+                      "$and": [
+                        { "$neq": [{ "$ref": "$.input.repairFeedback" }, null] },
+                        {
+                          "$empty": {
+                            "$filter": {
+                              "over": {
+                                "$filter": {
+                                  "over": { "$ref": "$.input.histories" },
+                                  "as": "entry",
+                                  "when": {
+                                    "$and": [
+                                      {
+                                        "$eq": [
+                                          {
+                                            "$get": {
+                                              "from": { "$var": "entry" },
+                                              "path": ["job"],
+                                              "fallback": null
+                                            }
+                                          },
+                                          { "$ref": "$.input.job" }
+                                        ]
+                                      },
+                                      {
+                                        "$eq": [
+                                          {
+                                            "$get": {
+                                              "from": { "$var": "entry" },
+                                              "path": ["scope"],
+                                              "fallback": null
+                                            }
+                                          },
+                                          { "$ref": "$.input.scope" }
+                                        ]
+                                      }
+                                    ]
+                                  }
+                                }
+                              },
+                              "as": "past",
+                              "when": {
+                                "$eq": [
+                                  {
+                                    "$get": {
+                                      "from": { "$var": "past" },
+                                      "path": ["round"],
+                                      "fallback": 0
+                                    }
+                                  },
+                                  { "$ref": "$.input.repairCount" }
+                                ]
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    "then": [
+                      {
+                        "role": "user",
+                        "content": {
+                          "$join": {
+                            "parts": [
+                              "REVIEW FEEDBACK ON THE PREVIOUS RESULT\n",
+                              { "$ref": "$.steps.feedback.value" }
+                            ],
+                            "sep": ""
+                          }
+                        }
+                      }
+                    ]
+                  }
+                ],
+                "else": []
+              }
+            }
+          }
+        ],
+        "output": {
+          "messages": {
+            "$flatten": [
+              {
+                "$flatMap": {
+                  "over": {
+                    "$filter": {
+                      "over": { "$ref": "$.input.histories" },
+                      "as": "entry",
+                      "when": {
+                        "$and": [
+                          {
+                            "$eq": [
+                              {
+                                "$get": {
+                                  "from": { "$var": "entry" },
+                                  "path": ["job"],
+                                  "fallback": null
+                                }
+                              },
+                              { "$ref": "$.input.job" }
+                            ]
+                          },
+                          {
+                            "$eq": [
+                              {
+                                "$get": {
+                                  "from": { "$var": "entry" },
+                                  "path": ["scope"],
+                                  "fallback": null
+                                }
+                              },
+                              { "$ref": "$.input.scope" }
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  "as": "entry",
+                  "body": {
+                    "$filter": {
+                      "over": {
+                        "$get": {
+                          "from": { "$var": "entry" },
+                          "path": ["messages"],
+                          "fallback": []
+                        }
+                      },
+                      "as": "message",
+                      "when": {
+                        "$neq": [
+                          {
+                            "$get": {
+                              "from": { "$var": "message" },
+                              "path": ["content"],
+                              "fallback": null
+                            }
+                          },
+                          {
+                            "$get": {
+                              "from": { "$ref": "$.input" },
+                              "path": ["observation"],
+                              "fallback": null
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              },
+              { "$ref": "$.steps.new-feedback.value" }
+            ]
+          },
+          "feedback": { "$ref": "$.steps.new-feedback.value" }
+        }
+      }
+    },
+    {
+      "id": "remember-author",
+      "revision": 1,
+      "flow": {
+        "inputSchema": { "type": "object" },
+        "outputSchema": { "type": "array" },
+        "steps": [
+          {
+            "id": "answer",
+            "call": { "operation": "json.encode" },
+            "input": {
+              "data": {
+                "$get": {
+                  "from": { "$ref": "$.input.model" },
+                  "path": ["decision"],
+                  "fallback": null
+                }
+              }
+            }
+          },
+          {
+            "id": "outcome",
+            "call": { "operation": "json.encode" },
+            "input": {
+              "context": { "$ref": "$.input.context" },
+              "feedback": { "$ref": "$.input.feedback" }
+            }
+          },
+          {
+            "id": "history",
+            "call": { "flow": { "id": "model-history", "revision": 1 } },
+            "input": {
+              "histories": { "$ref": "$.input.histories" },
+              "repairCount": { "$ref": "$.input.repairCount" },
+              "repairFeedback": { "$ref": "$.input.repairFeedback" },
+              "job": { "$ref": "$.input.job" },
+              "scope": { "$ref": "$.input.scope" }
+            }
+          }
+        ],
+        "output": {
+          "$case": {
+            "branches": [
+              {
+                "when": {
+                  "$get": { "from": { "$ref": "$.input.model" }, "path": ["ok"], "fallback": false }
+                },
+                "then": {
+                  "$flatten": [
+                    { "$ref": "$.input.histories" },
+                    [
+                      {
+                        "job": { "$ref": "$.input.job" },
+                        "scope": { "$ref": "$.input.scope" },
+                        "messages": {
+                          "$flatten": [
+                            { "$ref": "$.steps.history.value.feedback" },
+                            [
+                              {
+                                "role": "assistant",
+                                "content": { "$ref": "$.steps.answer.value" }
+                              },
+                              {
+                                "role": "user",
+                                "content": {
+                                  "$join": {
+                                    "parts": [
+                                      { "$ref": "$.data.observationLabel" },
+                                      { "$ref": "$.steps.outcome.value" }
+                                    ],
+                                    "sep": ""
+                                  }
+                                }
+                              }
+                            ]
+                          ]
+                        },
+                        "round": { "$ref": "$.input.repairCount" }
+                      }
+                    ]
+                  ]
+                }
+              }
+            ],
+            "else": { "$ref": "$.input.histories" }
+          }
+        }
+      }
+    },
+    {
+      "id": "model-settings",
+      "revision": 1,
+      "flow": {
+        "inputSchema": { "type": "object" },
+        "outputSchema": { "type": "object" },
+        "steps": [
+          {
+            "id": "step-limit",
+            "value": {
+              "$case": {
+                "branches": [
+                  {
+                    "when": {
+                      "$lt": [
+                        { "$ref": "$.input.stepLimit" },
+                        { "$ref": "$.input.allowance.steps" }
+                      ]
+                    },
+                    "then": { "$ref": "$.input.stepLimit" }
+                  }
+                ],
+                "else": { "$ref": "$.input.allowance.steps" }
+              }
+            }
+          },
+          {
+            "id": "response-limit",
+            "value": {
+              "$case": {
+                "branches": [
+                  {
+                    "when": {
+                      "$lt": [
+                        { "$ref": "$.input.responseAttempts" },
+                        { "$ref": "$.input.allowance.steps" }
+                      ]
+                    },
+                    "then": { "$ref": "$.input.responseAttempts" }
+                  }
+                ],
+                "else": { "$ref": "$.input.allowance.steps" }
+              }
+            }
+          }
+        ],
+        "output": {
+          "$merge": [
+            { "$ref": "$.input.settings" },
+            {
+              "maxSteps": { "$ref": "$.steps.step-limit.value" },
+              "outputAttempts": { "$ref": "$.steps.response-limit.value" },
+              "maxMs": { "$ref": "$.input.allowance.ms" }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "model-budget",
+      "revision": 1,
+      "flow": {
+        "inputSchema": { "type": "object" },
+        "outputSchema": { "type": "object" },
+        "steps": [],
+        "output": {
+          "author": {
+            "steps": { "$ref": "$.input.author.maxModelSteps" },
+            "ms": { "$ref": "$.input.author.maxModelMs" }
+          },
+          "review": {
+            "steps": { "$ref": "$.input.review.maxModelSteps" },
+            "ms": { "$ref": "$.input.review.maxModelMs" }
+          }
+        }
+      }
+    },
+    {
+      "id": "model-error",
+      "revision": 1,
+      "flow": {
+        "inputSchema": { "type": "object" },
+        "outputSchema": {
+          "anyOf": [{ "type": "string" }, { "type": "object" }, { "type": "null" }]
+        },
+        "steps": [],
+        "output": {
+          "$case": {
+            "branches": [
+              {
+                "when": {
+                  "$get": { "from": { "$ref": "$.input.model" }, "path": ["ok"], "fallback": false }
+                },
+                "then": null
+              },
+              {
+                "when": {
+                  "$eq": [
+                    {
+                      "$get": {
+                        "from": {
+                          "$get": {
+                            "from": { "$ref": "$.input.model" },
+                            "path": ["error"],
+                            "fallback": null
+                          }
+                        },
+                        "path": ["kind"],
+                        "fallback": null
+                      }
+                    },
+                    "provider"
+                  ]
+                },
+                "then": {
+                  "$get": {
+                    "from": { "$ref": "$.input.model" },
+                    "path": ["error"],
+                    "fallback": null
+                  }
+                }
+              }
+            ],
+            "else": {
+              "$join": {
+                "parts": [
+                  { "$ref": "$.input.prefix" },
+                  " ",
+                  {
+                    "$get": {
+                      "from": { "$ref": "$.input.model" },
+                      "path": ["error", "code"],
+                      "fallback": "UNKNOWN"
+                    }
+                  },
+                  ": ",
+                  {
+                    "$get": {
+                      "from": { "$ref": "$.input.model" },
+                      "path": ["error", "message"],
+                      "fallback": "No provider error detail was returned."
+                    }
+                  }
+                ],
+                "sep": ""
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

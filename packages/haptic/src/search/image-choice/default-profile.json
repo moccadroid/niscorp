@@ -1,0 +1,44 @@
+{
+  "form": "#challenge-form",
+  "instruction": ".anomaly-modal__instructions",
+  "tile": ".anomaly-modal__box",
+  "image": "img.anomaly-modal__image",
+  "checkbox": "input[type=checkbox]",
+  "submit": "button[name=challenge-submit]",
+  "allowedFormOrigins": ["https://duckduckgo.com"],
+  "allowedImageOrigins": ["https://html.duckduckgo.com", "https://lite.duckduckgo.com"],
+  "continuation": {
+    "form": "#success-form",
+    "allowedOrigins": ["https://duckduckgo.com", "https://html.duckduckgo.com"],
+    "redirectStatuses": [302],
+    "maxRedirects": 3
+  },
+  "jev": {
+    "endpoint": "https://api.typesafe.ai/v1/systemone",
+    "model": "jev-latest",
+    "headers": { "TypeSafe-Danger-Zone-Images": "true" },
+    "question": "Does the picture in `tiles.{id}` contain the object requested by the challenge instruction?",
+    "trueCriterion": "The requested object is visibly present in this tile, including a partially visible instance.",
+    "falseCriterion": "The requested object is not visibly present in this tile.",
+    "threshold": 0.5,
+    "selection": {
+      "$filter": {
+        "over": { "$ref": "$.tiles" },
+        "as": "tile",
+        "when": {
+          "$gte": [
+            {
+              "$get": {
+                "from": { "$ref": "$.answers" },
+                "path": [{ "$get": { "from": { "$var": "tile" }, "path": ["id"] } }, "noul"]
+              }
+            },
+            { "$ref": "$.threshold" }
+          ]
+        }
+      }
+    },
+    "maxMs": 120000
+  },
+  "transport": { "maxMs": 30000, "maxResponseBytes": 8388608 }
+}

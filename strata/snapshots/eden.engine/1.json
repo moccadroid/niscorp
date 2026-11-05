@@ -1,0 +1,1355 @@
+{
+  "kinds": {
+    "eden.engine/artifact": {
+      "$defs": {
+        "__schema0": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            },
+            {
+              "items": {
+                "$ref": "#/$defs/__schema0"
+              },
+              "type": "array"
+            },
+            {
+              "additionalProperties": {
+                "$ref": "#/$defs/__schema0"
+              },
+              "propertyNames": {
+                "type": "string"
+              },
+              "type": "object"
+            }
+          ]
+        },
+        "__schema1": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            },
+            {
+              "items": {
+                "$ref": "#/$defs/__schema1"
+              },
+              "type": "array"
+            },
+            {
+              "additionalProperties": {
+                "$ref": "#/$defs/__schema1"
+              },
+              "propertyNames": {
+                "type": "string"
+              },
+              "type": "object"
+            }
+          ]
+        },
+        "__schema2": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            },
+            {
+              "items": {
+                "$ref": "#/$defs/__schema2"
+              },
+              "type": "array"
+            },
+            {
+              "additionalProperties": {
+                "$ref": "#/$defs/__schema2"
+              },
+              "propertyNames": {
+                "type": "string"
+              },
+              "type": "object"
+            }
+          ]
+        },
+        "__schema3": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            },
+            {
+              "items": {
+                "$ref": "#/$defs/__schema3"
+              },
+              "type": "array"
+            },
+            {
+              "additionalProperties": {
+                "$ref": "#/$defs/__schema3"
+              },
+              "propertyNames": {
+                "type": "string"
+              },
+              "type": "object"
+            }
+          ]
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "data": {
+          "additionalProperties": {
+            "$ref": "#/$defs/__schema0"
+          },
+          "default": {},
+          "description": "Literal artifact data shared by every flow as $.data. These values are never interpreted as expressions.",
+          "propertyNames": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "flow": {
+          "additionalProperties": false,
+          "description": "Entry flow.",
+          "properties": {
+            "inputSchema": {
+              "additionalProperties": {
+                "$ref": "#/$defs/__schema1"
+              },
+              "description": "Accepted flow input.",
+              "propertyNames": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "output": {
+              "$ref": "#/$defs/__schema2",
+              "description": "Prism mapping of final output. Use $ref to read completed step results at $.steps.<id>.value, never $.<id>. Flow input remains at $.input. $var reads only a lexical binding name created by as/let; it cannot read a root path. Record-mode iterations may contain failed items."
+            },
+            "outputSchema": {
+              "additionalProperties": {
+                "$ref": "#/$defs/__schema1"
+              },
+              "description": "Required published flow output.",
+              "propertyNames": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "steps": {
+              "description": "Ordered steps. Each outcome is available under steps by id.",
+              "items": {
+                "anyOf": [
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "call": {
+                        "anyOf": [
+                          {
+                            "additionalProperties": false,
+                            "properties": {
+                              "operation": {
+                                "description": "Name of a host-supplied operation. No implicit capabilities.",
+                                "minLength": 1,
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "operation"
+                            ],
+                            "type": "object"
+                          },
+                          {
+                            "additionalProperties": false,
+                            "properties": {
+                              "flow": {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "id": {
+                                    "minLength": 1,
+                                    "type": "string"
+                                  },
+                                  "revision": {
+                                    "exclusiveMinimum": 0,
+                                    "maximum": 9007199254740991,
+                                    "type": "integer"
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "revision"
+                                ],
+                                "type": "object"
+                              }
+                            },
+                            "required": [
+                              "flow"
+                            ],
+                            "type": "object"
+                          }
+                        ],
+                        "description": "Call one operation or one exact bundled flow revision."
+                      },
+                      "checks": {
+                        "items": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "anyOf": [
+                                {
+                                  "minLength": 1,
+                                  "type": "string"
+                                },
+                                {
+                                  "additionalProperties": {
+                                    "$ref": "#/$defs/__schema3"
+                                  },
+                                  "propertyNames": {
+                                    "type": "string"
+                                  },
+                                  "type": "object"
+                                }
+                              ],
+                              "description": "Failure name, either a literal string or a Prism object expression compiled during preparation and evaluated only on failure. Must return a nonempty string."
+                            },
+                            "test": {
+                              "$ref": "#/$defs/__schema2",
+                              "description": "Exact boolean over the raw call result in value, before output mapping."
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "test"
+                          ],
+                          "type": "object"
+                        },
+                        "type": "array"
+                      },
+                      "each": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "items": {
+                            "$ref": "#/$defs/__schema2",
+                            "description": "Array to iterate in source order."
+                          },
+                          "onFailure": {
+                            "description": "Stop the flow on an ordinary failure, or record item outcomes and continue.",
+                            "enum": [
+                              "stop",
+                              "record"
+                            ],
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "items",
+                          "onFailure"
+                        ],
+                        "type": "object"
+                      },
+                      "id": {
+                        "description": "Unique step name within its flow; available under steps.",
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "input": {
+                        "$ref": "#/$defs/__schema2",
+                        "description": "Prism mapping of the call input."
+                      },
+                      "output": {
+                        "$ref": "#/$defs/__schema2",
+                        "description": "Prism mapping after success. Use $ref for root paths: raw result $.value, flow input $.input and prior results $.steps.<id>.value. $var is only a lexical binding created by as/let."
+                      },
+                      "when": {
+                        "$ref": "#/$defs/__schema2",
+                        "description": "Optional exact boolean, evaluated per invocation, including each item."
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "call",
+                      "input"
+                    ],
+                    "type": "object"
+                  },
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "checks": {
+                        "items": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "anyOf": [
+                                {
+                                  "minLength": 1,
+                                  "type": "string"
+                                },
+                                {
+                                  "additionalProperties": {
+                                    "$ref": "#/$defs/__schema3"
+                                  },
+                                  "propertyNames": {
+                                    "type": "string"
+                                  },
+                                  "type": "object"
+                                }
+                              ],
+                              "description": "Failure name, either a literal string or a Prism object expression compiled during preparation and evaluated only on failure. Must return a nonempty string."
+                            },
+                            "test": {
+                              "$ref": "#/$defs/__schema2",
+                              "description": "Exact boolean over the raw call result in value, before output mapping."
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "test"
+                          ],
+                          "type": "object"
+                        },
+                        "type": "array"
+                      },
+                      "each": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "items": {
+                            "$ref": "#/$defs/__schema2",
+                            "description": "Array to iterate in source order."
+                          },
+                          "onFailure": {
+                            "description": "Stop the flow on an ordinary failure, or record item outcomes and continue.",
+                            "enum": [
+                              "stop",
+                              "record"
+                            ],
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "items",
+                          "onFailure"
+                        ],
+                        "type": "object"
+                      },
+                      "id": {
+                        "description": "Unique step name within its flow; available under steps.",
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "output": {
+                        "$ref": "#/$defs/__schema2",
+                        "description": "Prism mapping after success. Use $ref for root paths: raw result $.value, flow input $.input and prior results $.steps.<id>.value. $var is only a lexical binding created by as/let."
+                      },
+                      "value": {
+                        "$ref": "#/$defs/__schema2",
+                        "description": "Pure calculation, without calling an operation or flow. Its outcome is available as $.steps.<id>.value."
+                      },
+                      "when": {
+                        "$ref": "#/$defs/__schema2",
+                        "description": "Optional exact boolean, evaluated per invocation, including each item."
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "value"
+                    ],
+                    "type": "object"
+                  }
+                ]
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "inputSchema",
+            "outputSchema",
+            "steps",
+            "output"
+          ],
+          "type": "object"
+        },
+        "flows": {
+          "default": [],
+          "description": "Bundled reusable flows; no storage lookup.",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "flow": {
+                "additionalProperties": false,
+                "properties": {
+                  "inputSchema": {
+                    "additionalProperties": {
+                      "$ref": "#/$defs/__schema1"
+                    },
+                    "description": "Accepted flow input.",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "type": "object"
+                  },
+                  "output": {
+                    "$ref": "#/$defs/__schema2",
+                    "description": "Prism mapping of final output. Use $ref to read completed step results at $.steps.<id>.value, never $.<id>. Flow input remains at $.input. $var reads only a lexical binding name created by as/let; it cannot read a root path. Record-mode iterations may contain failed items."
+                  },
+                  "outputSchema": {
+                    "additionalProperties": {
+                      "$ref": "#/$defs/__schema1"
+                    },
+                    "description": "Required published flow output.",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "type": "object"
+                  },
+                  "steps": {
+                    "description": "Ordered steps. Each outcome is available under steps by id.",
+                    "items": {
+                      "anyOf": [
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "call": {
+                              "anyOf": [
+                                {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "operation": {
+                                      "description": "Name of a host-supplied operation. No implicit capabilities.",
+                                      "minLength": 1,
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "operation"
+                                  ],
+                                  "type": "object"
+                                },
+                                {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "flow": {
+                                      "additionalProperties": false,
+                                      "properties": {
+                                        "id": {
+                                          "minLength": 1,
+                                          "type": "string"
+                                        },
+                                        "revision": {
+                                          "exclusiveMinimum": 0,
+                                          "maximum": 9007199254740991,
+                                          "type": "integer"
+                                        }
+                                      },
+                                      "required": [
+                                        "id",
+                                        "revision"
+                                      ],
+                                      "type": "object"
+                                    }
+                                  },
+                                  "required": [
+                                    "flow"
+                                  ],
+                                  "type": "object"
+                                }
+                              ],
+                              "description": "Call one operation or one exact bundled flow revision."
+                            },
+                            "checks": {
+                              "items": {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "id": {
+                                    "anyOf": [
+                                      {
+                                        "minLength": 1,
+                                        "type": "string"
+                                      },
+                                      {
+                                        "additionalProperties": {
+                                          "$ref": "#/$defs/__schema3"
+                                        },
+                                        "propertyNames": {
+                                          "type": "string"
+                                        },
+                                        "type": "object"
+                                      }
+                                    ],
+                                    "description": "Failure name, either a literal string or a Prism object expression compiled during preparation and evaluated only on failure. Must return a nonempty string."
+                                  },
+                                  "test": {
+                                    "$ref": "#/$defs/__schema2",
+                                    "description": "Exact boolean over the raw call result in value, before output mapping."
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "test"
+                                ],
+                                "type": "object"
+                              },
+                              "type": "array"
+                            },
+                            "each": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "items": {
+                                  "$ref": "#/$defs/__schema2",
+                                  "description": "Array to iterate in source order."
+                                },
+                                "onFailure": {
+                                  "description": "Stop the flow on an ordinary failure, or record item outcomes and continue.",
+                                  "enum": [
+                                    "stop",
+                                    "record"
+                                  ],
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "items",
+                                "onFailure"
+                              ],
+                              "type": "object"
+                            },
+                            "id": {
+                              "description": "Unique step name within its flow; available under steps.",
+                              "minLength": 1,
+                              "type": "string"
+                            },
+                            "input": {
+                              "$ref": "#/$defs/__schema2",
+                              "description": "Prism mapping of the call input."
+                            },
+                            "output": {
+                              "$ref": "#/$defs/__schema2",
+                              "description": "Prism mapping after success. Use $ref for root paths: raw result $.value, flow input $.input and prior results $.steps.<id>.value. $var is only a lexical binding created by as/let."
+                            },
+                            "when": {
+                              "$ref": "#/$defs/__schema2",
+                              "description": "Optional exact boolean, evaluated per invocation, including each item."
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "call",
+                            "input"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "checks": {
+                              "items": {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "id": {
+                                    "anyOf": [
+                                      {
+                                        "minLength": 1,
+                                        "type": "string"
+                                      },
+                                      {
+                                        "additionalProperties": {
+                                          "$ref": "#/$defs/__schema3"
+                                        },
+                                        "propertyNames": {
+                                          "type": "string"
+                                        },
+                                        "type": "object"
+                                      }
+                                    ],
+                                    "description": "Failure name, either a literal string or a Prism object expression compiled during preparation and evaluated only on failure. Must return a nonempty string."
+                                  },
+                                  "test": {
+                                    "$ref": "#/$defs/__schema2",
+                                    "description": "Exact boolean over the raw call result in value, before output mapping."
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "test"
+                                ],
+                                "type": "object"
+                              },
+                              "type": "array"
+                            },
+                            "each": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "items": {
+                                  "$ref": "#/$defs/__schema2",
+                                  "description": "Array to iterate in source order."
+                                },
+                                "onFailure": {
+                                  "description": "Stop the flow on an ordinary failure, or record item outcomes and continue.",
+                                  "enum": [
+                                    "stop",
+                                    "record"
+                                  ],
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "items",
+                                "onFailure"
+                              ],
+                              "type": "object"
+                            },
+                            "id": {
+                              "description": "Unique step name within its flow; available under steps.",
+                              "minLength": 1,
+                              "type": "string"
+                            },
+                            "output": {
+                              "$ref": "#/$defs/__schema2",
+                              "description": "Prism mapping after success. Use $ref for root paths: raw result $.value, flow input $.input and prior results $.steps.<id>.value. $var is only a lexical binding created by as/let."
+                            },
+                            "value": {
+                              "$ref": "#/$defs/__schema2",
+                              "description": "Pure calculation, without calling an operation or flow. Its outcome is available as $.steps.<id>.value."
+                            },
+                            "when": {
+                              "$ref": "#/$defs/__schema2",
+                              "description": "Optional exact boolean, evaluated per invocation, including each item."
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "value"
+                          ],
+                          "type": "object"
+                        }
+                      ]
+                    },
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "inputSchema",
+                  "outputSchema",
+                  "steps",
+                  "output"
+                ],
+                "type": "object"
+              },
+              "id": {
+                "description": "Reusable flow name.",
+                "minLength": 1,
+                "type": "string"
+              },
+              "revision": {
+                "description": "Exact revision, unique together with id.",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "revision",
+              "flow"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "stamp": {
+          "additionalProperties": {
+            "maximum": 9007199254740991,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "description": "Strata document grammar stamp.",
+          "propertyNames": {
+            "type": "string"
+          },
+          "type": "object"
+        }
+      },
+      "required": [
+        "stamp",
+        "flow"
+      ],
+      "type": "object"
+    },
+    "eden.engine/flow": {
+      "$defs": {
+        "__schema0": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            },
+            {
+              "items": {
+                "$ref": "#/$defs/__schema0"
+              },
+              "type": "array"
+            },
+            {
+              "additionalProperties": {
+                "$ref": "#/$defs/__schema0"
+              },
+              "propertyNames": {
+                "type": "string"
+              },
+              "type": "object"
+            }
+          ]
+        },
+        "__schema1": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            },
+            {
+              "items": {
+                "$ref": "#/$defs/__schema1"
+              },
+              "type": "array"
+            },
+            {
+              "additionalProperties": {
+                "$ref": "#/$defs/__schema1"
+              },
+              "propertyNames": {
+                "type": "string"
+              },
+              "type": "object"
+            }
+          ]
+        },
+        "__schema2": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            },
+            {
+              "items": {
+                "$ref": "#/$defs/__schema2"
+              },
+              "type": "array"
+            },
+            {
+              "additionalProperties": {
+                "$ref": "#/$defs/__schema2"
+              },
+              "propertyNames": {
+                "type": "string"
+              },
+              "type": "object"
+            }
+          ]
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "inputSchema": {
+          "additionalProperties": {
+            "$ref": "#/$defs/__schema0"
+          },
+          "description": "Accepted flow input.",
+          "propertyNames": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "output": {
+          "$ref": "#/$defs/__schema1",
+          "description": "Prism mapping of final output. Use $ref to read completed step results at $.steps.<id>.value, never $.<id>. Flow input remains at $.input. $var reads only a lexical binding name created by as/let; it cannot read a root path. Record-mode iterations may contain failed items."
+        },
+        "outputSchema": {
+          "additionalProperties": {
+            "$ref": "#/$defs/__schema0"
+          },
+          "description": "Required published flow output.",
+          "propertyNames": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "steps": {
+          "description": "Ordered steps. Each outcome is available under steps by id.",
+          "items": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "call": {
+                    "anyOf": [
+                      {
+                        "additionalProperties": false,
+                        "properties": {
+                          "operation": {
+                            "description": "Name of a host-supplied operation. No implicit capabilities.",
+                            "minLength": 1,
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "operation"
+                        ],
+                        "type": "object"
+                      },
+                      {
+                        "additionalProperties": false,
+                        "properties": {
+                          "flow": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "id": {
+                                "minLength": 1,
+                                "type": "string"
+                              },
+                              "revision": {
+                                "exclusiveMinimum": 0,
+                                "maximum": 9007199254740991,
+                                "type": "integer"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "revision"
+                            ],
+                            "type": "object"
+                          }
+                        },
+                        "required": [
+                          "flow"
+                        ],
+                        "type": "object"
+                      }
+                    ],
+                    "description": "Call one operation or one exact bundled flow revision."
+                  },
+                  "checks": {
+                    "items": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "id": {
+                          "anyOf": [
+                            {
+                              "minLength": 1,
+                              "type": "string"
+                            },
+                            {
+                              "additionalProperties": {
+                                "$ref": "#/$defs/__schema2"
+                              },
+                              "propertyNames": {
+                                "type": "string"
+                              },
+                              "type": "object"
+                            }
+                          ],
+                          "description": "Failure name, either a literal string or a Prism object expression compiled during preparation and evaluated only on failure. Must return a nonempty string."
+                        },
+                        "test": {
+                          "$ref": "#/$defs/__schema1",
+                          "description": "Exact boolean over the raw call result in value, before output mapping."
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "test"
+                      ],
+                      "type": "object"
+                    },
+                    "type": "array"
+                  },
+                  "each": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "items": {
+                        "$ref": "#/$defs/__schema1",
+                        "description": "Array to iterate in source order."
+                      },
+                      "onFailure": {
+                        "description": "Stop the flow on an ordinary failure, or record item outcomes and continue.",
+                        "enum": [
+                          "stop",
+                          "record"
+                        ],
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "items",
+                      "onFailure"
+                    ],
+                    "type": "object"
+                  },
+                  "id": {
+                    "description": "Unique step name within its flow; available under steps.",
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "input": {
+                    "$ref": "#/$defs/__schema1",
+                    "description": "Prism mapping of the call input."
+                  },
+                  "output": {
+                    "$ref": "#/$defs/__schema1",
+                    "description": "Prism mapping after success. Use $ref for root paths: raw result $.value, flow input $.input and prior results $.steps.<id>.value. $var is only a lexical binding created by as/let."
+                  },
+                  "when": {
+                    "$ref": "#/$defs/__schema1",
+                    "description": "Optional exact boolean, evaluated per invocation, including each item."
+                  }
+                },
+                "required": [
+                  "id",
+                  "call",
+                  "input"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "checks": {
+                    "items": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "id": {
+                          "anyOf": [
+                            {
+                              "minLength": 1,
+                              "type": "string"
+                            },
+                            {
+                              "additionalProperties": {
+                                "$ref": "#/$defs/__schema2"
+                              },
+                              "propertyNames": {
+                                "type": "string"
+                              },
+                              "type": "object"
+                            }
+                          ],
+                          "description": "Failure name, either a literal string or a Prism object expression compiled during preparation and evaluated only on failure. Must return a nonempty string."
+                        },
+                        "test": {
+                          "$ref": "#/$defs/__schema1",
+                          "description": "Exact boolean over the raw call result in value, before output mapping."
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "test"
+                      ],
+                      "type": "object"
+                    },
+                    "type": "array"
+                  },
+                  "each": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "items": {
+                        "$ref": "#/$defs/__schema1",
+                        "description": "Array to iterate in source order."
+                      },
+                      "onFailure": {
+                        "description": "Stop the flow on an ordinary failure, or record item outcomes and continue.",
+                        "enum": [
+                          "stop",
+                          "record"
+                        ],
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "items",
+                      "onFailure"
+                    ],
+                    "type": "object"
+                  },
+                  "id": {
+                    "description": "Unique step name within its flow; available under steps.",
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "output": {
+                    "$ref": "#/$defs/__schema1",
+                    "description": "Prism mapping after success. Use $ref for root paths: raw result $.value, flow input $.input and prior results $.steps.<id>.value. $var is only a lexical binding created by as/let."
+                  },
+                  "value": {
+                    "$ref": "#/$defs/__schema1",
+                    "description": "Pure calculation, without calling an operation or flow. Its outcome is available as $.steps.<id>.value."
+                  },
+                  "when": {
+                    "$ref": "#/$defs/__schema1",
+                    "description": "Optional exact boolean, evaluated per invocation, including each item."
+                  }
+                },
+                "required": [
+                  "id",
+                  "value"
+                ],
+                "type": "object"
+              }
+            ]
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "inputSchema",
+        "outputSchema",
+        "steps",
+        "output"
+      ],
+      "type": "object"
+    },
+    "eden.engine/step": {
+      "$defs": {
+        "__schema0": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            },
+            {
+              "items": {
+                "$ref": "#/$defs/__schema0"
+              },
+              "type": "array"
+            },
+            {
+              "additionalProperties": {
+                "$ref": "#/$defs/__schema0"
+              },
+              "propertyNames": {
+                "type": "string"
+              },
+              "type": "object"
+            }
+          ]
+        },
+        "__schema1": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            },
+            {
+              "items": {
+                "$ref": "#/$defs/__schema1"
+              },
+              "type": "array"
+            },
+            {
+              "additionalProperties": {
+                "$ref": "#/$defs/__schema1"
+              },
+              "propertyNames": {
+                "type": "string"
+              },
+              "type": "object"
+            }
+          ]
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "anyOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "call": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "operation": {
+                      "description": "Name of a host-supplied operation. No implicit capabilities.",
+                      "minLength": 1,
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "operation"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "flow": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "id": {
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        "revision": {
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991,
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "revision"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "flow"
+                  ],
+                  "type": "object"
+                }
+              ],
+              "description": "Call one operation or one exact bundled flow revision."
+            },
+            "checks": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "id": {
+                    "anyOf": [
+                      {
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      {
+                        "additionalProperties": {
+                          "$ref": "#/$defs/__schema1"
+                        },
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "type": "object"
+                      }
+                    ],
+                    "description": "Failure name, either a literal string or a Prism object expression compiled during preparation and evaluated only on failure. Must return a nonempty string."
+                  },
+                  "test": {
+                    "$ref": "#/$defs/__schema0",
+                    "description": "Exact boolean over the raw call result in value, before output mapping."
+                  }
+                },
+                "required": [
+                  "id",
+                  "test"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "each": {
+              "additionalProperties": false,
+              "properties": {
+                "items": {
+                  "$ref": "#/$defs/__schema0",
+                  "description": "Array to iterate in source order."
+                },
+                "onFailure": {
+                  "description": "Stop the flow on an ordinary failure, or record item outcomes and continue.",
+                  "enum": [
+                    "stop",
+                    "record"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "items",
+                "onFailure"
+              ],
+              "type": "object"
+            },
+            "id": {
+              "description": "Unique step name within its flow; available under steps.",
+              "minLength": 1,
+              "type": "string"
+            },
+            "input": {
+              "$ref": "#/$defs/__schema0",
+              "description": "Prism mapping of the call input."
+            },
+            "output": {
+              "$ref": "#/$defs/__schema0",
+              "description": "Prism mapping after success. Use $ref for root paths: raw result $.value, flow input $.input and prior results $.steps.<id>.value. $var is only a lexical binding created by as/let."
+            },
+            "when": {
+              "$ref": "#/$defs/__schema0",
+              "description": "Optional exact boolean, evaluated per invocation, including each item."
+            }
+          },
+          "required": [
+            "id",
+            "call",
+            "input"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "checks": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "id": {
+                    "anyOf": [
+                      {
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      {
+                        "additionalProperties": {
+                          "$ref": "#/$defs/__schema1"
+                        },
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "type": "object"
+                      }
+                    ],
+                    "description": "Failure name, either a literal string or a Prism object expression compiled during preparation and evaluated only on failure. Must return a nonempty string."
+                  },
+                  "test": {
+                    "$ref": "#/$defs/__schema0",
+                    "description": "Exact boolean over the raw call result in value, before output mapping."
+                  }
+                },
+                "required": [
+                  "id",
+                  "test"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "each": {
+              "additionalProperties": false,
+              "properties": {
+                "items": {
+                  "$ref": "#/$defs/__schema0",
+                  "description": "Array to iterate in source order."
+                },
+                "onFailure": {
+                  "description": "Stop the flow on an ordinary failure, or record item outcomes and continue.",
+                  "enum": [
+                    "stop",
+                    "record"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "items",
+                "onFailure"
+              ],
+              "type": "object"
+            },
+            "id": {
+              "description": "Unique step name within its flow; available under steps.",
+              "minLength": 1,
+              "type": "string"
+            },
+            "output": {
+              "$ref": "#/$defs/__schema0",
+              "description": "Prism mapping after success. Use $ref for root paths: raw result $.value, flow input $.input and prior results $.steps.<id>.value. $var is only a lexical binding created by as/let."
+            },
+            "value": {
+              "$ref": "#/$defs/__schema0",
+              "description": "Pure calculation, without calling an operation or flow. Its outcome is available as $.steps.<id>.value."
+            },
+            "when": {
+              "$ref": "#/$defs/__schema0",
+              "description": "Optional exact boolean, evaluated per invocation, including each item."
+            }
+          },
+          "required": [
+            "id",
+            "value"
+          ],
+          "type": "object"
+        }
+      ]
+    }
+  },
+  "sequence": "eden.engine",
+  "version": 1
+}

@@ -1,0 +1,119 @@
+{
+  "status": "completed",
+  "value": {
+    "visited": [
+      "https://www.sqlite.org/chronology.html",
+      "https://www.sqlite.org/releaselog/3_54_1.html",
+      "https://www.sqlite.org/releaselog/3_54_0.html",
+      "https://www.sqlite.org/releaselog/3_53_4.html"
+    ],
+    "limited": false,
+    "redirects": [],
+    "pages": [
+      {
+        "url": "https://www.sqlite.org/releaselog/3_54_1.html",
+        "baseUrl": "https://www.sqlite.org/releaselog/3_54_1.html",
+        "encoding": "utf-8",
+        "items": [
+          {
+            "text": "SQLite Release 3.54.1 On 2026-10-16",
+            "attributes": {},
+            "path": [
+              1,
+              2,
+              5
+            ]
+          },
+          {
+            "text": "\n CLI enhancements:\n     \n      CLI prompt strings may contain escape sequences that\n          expand to show state information.  The initial CLI\n          prompt is now be initialized the values of the\n          SQLITE_PS1 and SQLITE_PS2 environment variables, if\n          those variables exist.\n      The default CLI prompt has been enhanced to take\n          advantage of the new escape sequences described in\n          the previous.\n      For columnar output modes, the CLI now shows the column name header\n          by default even if the query returns no rows.\n      Use the new diskused() extension to implement the\n          \".diskused\" dot-command.  The replaces the separate sqlite3_analyzer\n          utility program, which is now deprecated.\n      On unix, the CLI preserves zero bytes when outputing\n          unformatted BLOB values.\n      Enhance the .mode command with new options\n          \"--rowcount on\"\n          and \"--titles always\".\n          The \"--titles always\" is now the default behavior\n          (see item 3a above).  Legacy behavior can be restored\n          using \"-titles on\".\n      Enhance the .mode command with the new --ifmt option and\n          --fpfmt option that allow the rendering of integer and floating-point\n          values to be more precisely controlled using a printf-style format string.\n      The -csv command-line option automatically disables\n          display limits, for legacy compatibility.\n      The default CLI prompt honors the NO_COLOR environment variable.\n      The ability to end an SQL command using the line that contains just\n          \"go\" or \"/\" (for compatibility with SQL Server and Oracle, respectively)\n          is discontinued, unless the CLI is compiled with\n          option -DSQLITE_SHELL_LEGACY_COMMAND_TERMINATOR.\n     \n Query planner improvements:\n     \n      When doing an UPDATE on a table that has expression indexes,\n          do not change the expression index if the value being indexed\n          is unchanged.\n      Improved optimization of \"expr OR TRUE\" and\n          \"expr OR FALSE\".\n      Ignore DISTINCT in the SELECT statement on the right-hand\n          side of an IN operator.\n      UNION queries with a LIMIT of exactly 1 are now handled faster\n          and with less memory.\n     \n The ALTER TABLE command raises an error on any attempt to add, drop, or rename columns\n     with the special names \"ROWID\", \"_ROWID_\", or \"OID\".\n Add the diskused() SQL function as an optional extension.\n Added the %J and %j conversions used to render JSON string\n     literals to the built-in printf() and the format() SQL function.\n Add the sqlite3_result_str() interface and use it internally to\n     simplify the code.\n Add the sqlite3_incomplete() interface and use it as part of the newly\n     enhanced CLI prompt string management.\n Enhancements to date/time functions:\n     \n      Added the \"weekday -N\" form of the weekday modifier.\n      Added the end of modifier.\n     \n Use O_TMPFILE when generating temporary files, on systems that\n     support that feature.\n Drop support for WindowsXP and earlier Windows versions,\n     including WindowsCE. SQLite for Windows now requires\n     Windows Vista (circa 2007) or later.\n     \n      Improve performance by using\n          Slim Reader/Writer Locks\n          (SRWLs) to implement non-recursive mutexes, instead of\n          CriticalSection,\n          since all supported Windows platforms now provide SRWLs.\n      Use the -DSQLITE_UWP=1 compile-time option for UWP and WebUI applications.\n      To be clear: This changes above only affects SQLite on Windows.\n          Builds for Linux, Mac, BSD, and other unix variants are unaffected.\n     \n The authorizer callback is now invoked for SQL functions found in\n     the DEFAULT clauses of CREATE TABLE statements.  This happens both when\n     the CREATE TABLE statement is first issued and when the DEFAULT value is\n     actually used, but not when reading the schema while opening a database.\n Added SQLITE_LIMIT_SCHEMA and SQLITE_LIMIT_TRIGGER_STEPS to the\n     sqlite3_limit() interface.\n About 4% faster, as measured by counting CPU cycles in the\n     speedtest1\n     preformance benchmark using valgrind on Linux x64.  About 7.5%\n     faster compared to one year ago (version 3.51.0).  Your mileage\n     may vary depending on workload, build options, CPU, compiler,\n     and operating system.\n",
+            "attributes": {
+              "class": "lessindent"
+            },
+            "path": [
+              1,
+              2,
+              9
+            ]
+          },
+          {
+            "text": "\n Fix a possible heap-buffer overflow on 32-bit builds.\n     (64-bit builds are not affected by this problem.)\n Fixes other problems in 3.54.0 reported by users.  See the\n     check-in timeline\n     for details.\nHashes:\nSQLITE_SOURCE_ID: 2026-10-16 14:45:20 555e07ef33f69a0957d24d8e555b702464a131d6f1607f4c3c1e4551e8e6ca76\nSHA3-256 for sqlite3.c: e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81\n\n",
+            "attributes": {
+              "class": "lessindent"
+            },
+            "path": [
+              1,
+              2,
+              14
+            ]
+          }
+        ]
+      },
+      {
+        "url": "https://www.sqlite.org/releaselog/3_54_0.html",
+        "baseUrl": "https://www.sqlite.org/releaselog/3_54_0.html",
+        "encoding": "utf-8",
+        "items": [
+          {
+            "text": "SQLite Release 3.54.0 On 2026-10-09",
+            "attributes": {},
+            "path": [
+              1,
+              2,
+              5
+            ]
+          },
+          {
+            "text": "\n CLI enhancements:\n     \n      CLI prompt strings may contain escape sequences that\n          expand to show state information.  The initial CLI\n          prompt is now be initialized the values of the\n          SQLITE_PS1 and SQLITE_PS2 environment variables, if\n          those variables exist.\n      The default CLI prompt has been enhanced to take\n          advantage of the new escape sequences described in\n          the previous.\n      For columnar output modes, the CLI now shows the column name header\n          by default even if the query returns no rows.\n      Use the new diskused() extension to implement the\n          \".diskused\" dot-command.  The replaces the separate sqlite3_analyzer\n          utility program, which is now deprecated.\n      On unix, the CLI preserves zero bytes when outputing\n          unformatted BLOB values.\n      Enhance the .mode command with new options\n          \"--rowcount on\"\n          and \"--titles always\".\n          The \"--titles always\" is now the default behavior\n          (see item 3a above).  Legacy behavior can be restored\n          using \"-titles on\".\n      Enhance the .mode command with the new --ifmt option and\n          --fpfmt option that allow the rendering of integer and floating-point\n          values to be more precisely controlled using a printf-style format string.\n      The -csv command-line option automatically disables\n          display limits, for legacy compatibility.\n      The default CLI prompt honors the NO_COLOR environment variable.\n      The ability to end an SQL command using the line that contains just\n          \"go\" or \"/\" (for compatibility with SQL Server and Oracle, respectively)\n          is discontinued, unless the CLI is compiled with\n          option -DSQLITE_SHELL_LEGACY_COMMAND_TERMINATOR.\n     \n Query planner improvements:\n     \n      When doing an UPDATE on a table that has expression indexes,\n          do not change the expression index if the value being indexed\n          is unchanged.\n      Improved optimization of \"expr OR TRUE\" and\n          \"expr OR FALSE\".\n      Ignore DISTINCT in the SELECT statement on the right-hand\n          side of an IN operator.\n      UNION queries with a LIMIT of exactly 1 are now handled faster\n          and with less memory.\n     \n The ALTER TABLE command raises an error on any attempt to add, drop, or rename columns\n     with the special names \"ROWID\", \"_ROWID_\", or \"OID\".\n Add the diskused() SQL function as an optional extension.\n Added the %J and %j conversions used to render JSON string\n     literals to the built-in printf() and the format() SQL function.\n Add the sqlite3_result_str() interface and use it internally to\n     simplify the code.\n Add the sqlite3_incomplete() interface and use it as part of the newly\n     enhanced CLI prompt string management.\n Enhancements to date/time functions:\n     \n      Added the \"weekday -N\" form of the weekday modifier.\n      Added the end of modifier.\n     \n Use O_TMPFILE when generating temporary files, on systems that\n     support that feature.\n Drop support for WindowsXP and earlier Windows versions,\n     including WindowsCE. SQLite for Windows now requires\n     Windows Vista (circa 2007) or later.\n     \n      Improve performance by using\n          Slim Reader/Writer Locks\n          (SRWLs) to implement non-recursive mutexes, instead of\n          CriticalSection,\n          since all supported Windows platforms now provide SRWLs.\n      Use the -DSQLITE_UWP=1 compile-time option for UWP and WebUI applications.\n      To be clear: This changes above only affects SQLite on Windows.\n          Builds for Linux, Mac, BSD, and other unix variants are unaffected.\n     \n The authorizer callback is now invoked for SQL functions found in\n     the DEFAULT clauses of CREATE TABLE statements.  This happens both when\n     the CREATE TABLE statement is first issued and when the DEFAULT value is\n     actually used, but not when reading the schema while opening a database.\n Added SQLITE_LIMIT_SCHEMA and SQLITE_LIMIT_TRIGGER_STEPS to the\n     sqlite3_limit() interface.\n About 4% faster, as measured by counting CPU cycles in the\n     speedtest1\n     preformance benchmark using valgrind on Linux x64.  About 7.5%\n     faster compared to one year ago (version 3.51.0).  Your mileage\n     may vary depending on workload, build options, CPU, compiler,\n     and operating system.\nHashes:\nSQLITE_SOURCE_ID: 2026-10-09 15:46:58 be8d059e9a49089ab2dce5ed26dd87aaf598fdc5fbe0b107c0dd758464bcd5e3\nSHA3-256 for sqlite3.c: 8efd453d08a7cfc4c79de5923153036cdc4dcaa254d4f1e617be6a2a98828f9e\n\n",
+            "attributes": {
+              "class": "lessindent"
+            },
+            "path": [
+              1,
+              2,
+              7
+            ]
+          }
+        ]
+      },
+      {
+        "url": "https://www.sqlite.org/releaselog/3_53_4.html",
+        "baseUrl": "https://www.sqlite.org/releaselog/3_53_4.html",
+        "encoding": "utf-8",
+        "items": [
+          {
+            "text": "SQLite Release 3.53.4 On 2026-07-24",
+            "attributes": {},
+            "path": [
+              1,
+              2,
+              5
+            ]
+          },
+          {
+            "text": "\n Fix the WAL-reset database corruption bug.\n Add the Query Result Formatter (QRF)\n     library for formatting the results of SQL queries for human readability\n     on a fixed-pitch font screen.\n     \n      Add the format method to the TCL Interface so that QRF is\n          accessible from TCL.\n      QRF is used for result formatting in the CLI, resulting in improved\n          display capabilities.\n     \n New SQL language features:\n     \n      Enhance ALTER TABLE to permit adding and removing NOT NULL\n          and CHECK constraints.\n      The REINDEX EXPRESSIONS statement rebuilds expression indexes.\n          (Useful to repair stale expression indexes.)\n      The body of TEMP triggers may now modify and/or query tables in\n          the main schema.\n      Enhance VACUUM INTO so that if a URI filename is used as the\n          target and that filename has a reserve=N query parameter with N\n          between 0 and 255, then the reserve amount for\n          the generated database copy is set to N.\n     \n New SQL functions:\n     \n      json_array_insert()\n      jsonb_array_insert()\n     \n Renovations to the CLI:\n     \n      Major enhancements to the .mode command.\n      Improved result formatting, due to the addition of the \n          QRF extension.\n          For example, numeric values are now right-justified by default\n          in tabular output modes.\n      The default output mode for interactive CLI sessions now uses\n          QRF to display query results in boxes formed using Unicode\n          box-drawing characters, for improved legibility.  Batch CLI\n          sessions use the legacy output format for compatibility.\n      Bare (unquoted) semicolons at the end of dot-commands are\n          silently ignored.  ← Potential incompatibility!\n      Fix the .testcase and .check commands so that they actually\n          work, and use those commands in scripts that are part of\n          the standard SQLite test suite included with the source tree.\n      Command-line arguments that match *.sql or *.txt and are\n          the names of non-empty files are read and interpreted as scripts\n          of SQL statements and/or dot-commands.\n      The argument to the \".timer\" command can now be \"once\", to run\n          the timer on only the next SQL statement.\n      The new \"--timeout S\" option to the \".progress\" dot-command\n          causes SQL statements to interrupt after S seconds.\n      The \".indexes\" command was changed so that the PATTERN argument\n          matches the name of the index, not the name of the table\n          being indexed (thus making the PATTERN argument actually useful).\n          And, several new options were added to \".indexes\".\n     \n New C-language interfaces:\n     \n      sqlite3_str_truncate()\n      sqlite3_str_free()\n      sqlite3_carray_bind_v2()\n      Add the SQLITE_PREPARE_FROM_DDL option to sqlite3_prepare_v3() which\n          permits virtual table implementations to safely prepare SQL statements\n          that are derived from the database schema.\n      Added the SQLITE_UTF8_ZT constant which can be used as the encoding parameter to\n          sqlite3_result_text64() or sqlite3_bind_text64() to indicate that the value\n          is UTF-8 encoded and zero terminated.\n      The SQLITE_LIMIT_PARSER_DEPTH option is added to sqlite3_limit().\n      The SQLITE_DBCONFIG_FP_DIGITS option is added to sqlite3_db_config().\n          See also item 9b below.\n     \n Query planner improvements:\n     \n      Always use a sort-and-merge algorithm for EXCEPT, INTERSECT, and\n          UNION, since this is almost always faster than using a hash table.\n      Improvements to join order selection in large multi-way joins on\n          a star schema.\n      Enhance the EXISTS-to-JOIN optimization so that the inserted JOIN\n          terms are not required to be on the inner-most loops, as long as\n          all dependencies for the EXISTS-to-JOIN loops are in outer loops.\n      Enhance the omit-noop-join optimization so that it is able to omit\n          a chain of joins that do not affect the output.\n      Allow queries that use \"GROUP BY e1 ORDER BY e2\" where e1 and e2\n          are identical apart from ASC/DESC sort-orders to be optimized using\n          a single index. \n      Allow virtual tables to optimize DISTINCT in cases where the\n          result-set of a query does not exactly match the ORDER BY clause.\n     \n Add new interfaces to the session extension\n     that enable an application to add changes one at\n     a time to the sqlite3_changegroup object:\n     \n      sqlite3changegroup_change_begin()\n      sqlite3changegroup_change_blob()\n      sqlite3changegroup_change_double()\n      sqlite3changegroup_change_int64()\n      sqlite3changegroup_change_null()\n      sqlite3changegroup_change_text()\n      sqlite3changegroup_change_finish()\n      sqlite3changegroup_config()\n     \n Improvements to floating-point ↔ text conversions.\n     \n      Reimplemented to improve performance.\n      Rounding is now done by default to 17 significant digits,\n          instead of 15, as was the case for all prior versions.\n          The sqlite3_db_config(SQLITE_DBCONFIG_FP_DIGITS) API (item 6g above)\n          can change this, if desired.\n     \n Added the self-healing index feature to deal with the\n     stale expression index problem.\n Add the \"-p|--port\" option to sqlite3_rsync.\n Discontinue support for Windows RT.\n JavaScript/WASM\n     \n      Add the \"opfs-wl\" VFS, functionally identical to the \"opfs\" VFS but\n          using Web Locks for locking, which can promise fairer lock sharing\n          than the \"opfs\" bespoke protocol can. \"opfs-wl\" requires\n          Atomics.waitAsync(), so requires newer browsers than \"opfs\"\n          does.\n     \n \n",
+            "attributes": {
+              "class": "lessindent"
+            },
+            "path": [
+              1,
+              2,
+              9
+            ]
+          },
+          {
+            "text": "\n Fixes for problems in 3.53.0 (and 3.53.1, 3.53.2, and 3.53.3) mostly coming from AIs.  See the\n     check-in timeline\n     for details.\nHashes:\nSQLITE_SOURCE_ID: 2026-07-24 19:02:57 bf7c7f30031888f4e796e429ab3978879485813aaca6f641c7b33e4e09459bcc\nSHA3-256 for sqlite3.c: 67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16\n\n",
+            "attributes": {
+              "class": "lessindent"
+            },
+            "path": [
+              1,
+              2,
+              14
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "error": null
+}

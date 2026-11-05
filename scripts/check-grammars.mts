@@ -1,3 +1,4 @@
+import { ENGINE_SEQUENCE, ENGINE_SCHEMAS } from '../packages/haptic/dist/migrations/index.js';
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { NOVA_SEQUENCE, NOVA_SCHEMAS } from '../packages/nova/dist/migrations/index.js';
@@ -11,6 +12,7 @@ const root = resolve(import.meta.dirname, '..');
 const write = process.argv.includes('--write');
 const rebaseline = process.argv.includes('--rebaseline');
 const GRAMMARS = [
+  { sequence: ENGINE_SEQUENCE, schemas: ENGINE_SCHEMAS },
   { sequence: NOVA_SEQUENCE, schemas: NOVA_SCHEMAS },
   { sequence: PRISM_SEQUENCE, schemas: PRISM_SCHEMAS },
   { sequence: VEX_SEQUENCE, schemas: VEX_SCHEMAS },
@@ -45,7 +47,7 @@ for (const app of existsSync(corpusDir) ? readdirSync(corpusDir) : []) {
   }
 }
 const upgrader = await createUpgrader(GRAMMARS.map((g) => g.sequence), { transform: evaluate });
-const report = await checkCorpus(upgrader, { ...NOVA_SCHEMAS, ...PRISM_SCHEMAS, ...VEX_SCHEMAS }, documents);
+const report = await checkCorpus(upgrader, Object.assign({}, ...GRAMMARS.map((g) => g.schemas)), documents);
 line(
   report.failures.length === 0 && documents.length > 0,
   `corpus: ${report.passed}/${documents.length} captured documents upgrade and parse`,

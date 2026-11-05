@@ -1,0 +1,98 @@
+{
+  "concurrency": 1,
+  "repetitions": 1,
+  "cases": [
+    {
+      "id": "xml-article-pdf",
+      "url": "https://export.arxiv.org/api/query?id_list=1706.03762",
+      "instruction": "Visit the article page for every paper listed in this feed, then download each paper’s PDF. Use the article pages to find the downloads. Do not download other linked content.",
+      "allowLinkFollowing": true,
+      "linkDepth": 1,
+      "maxPages": 5,
+      "allowResourceFetching": true,
+      "maxResources": 5,
+      "expectedFormat": "xml",
+      "referenceTraversal": {
+        "format": "xml",
+        "rule": {
+          "selector": "/a:feed/a:entry",
+          "namespaces": {
+            "a": "http://www.w3.org/2005/Atom"
+          },
+          "fields": {
+            "target": "string(a:link[@rel=\"alternate\"]/@href)"
+          }
+        },
+        "mapping": {
+          "$map": {
+            "over": {
+              "$ref": "$.input.items"
+            },
+            "as": "row",
+            "body": {
+              "$get": {
+                "from": {
+                  "$var": "row"
+                },
+                "path": [
+                  "target"
+                ]
+              }
+            }
+          }
+        }
+      },
+      "expectedDestinationSelector": "a.download-pdf",
+      "resourceReference": [
+        "attributes",
+        "href"
+      ],
+      "variants": [
+        {
+          "id": "changed-link",
+          "sourceUrl": "https://export.arxiv.org/api/query?id_list=1706.03762",
+          "liveTargets": true,
+          "xml": {
+            "namespaces": {
+              "a": "http://www.w3.org/2005/Atom"
+            },
+            "changes": [
+              {
+                "select": "/a:feed/a:entry/a:link[@rel=\"alternate\"]/@href",
+                "text": "https://arxiv.org/abs/1810.04805"
+              },
+              {
+                "select": "/a:feed/a:entry/a:id",
+                "text": "http://arxiv.org/abs/1810.04805"
+              },
+              {
+                "select": "/a:feed/a:entry/a:link[@type=\"application/pdf\"]/@href",
+                "text": "https://arxiv.org/pdf/1810.04805"
+              },
+              {
+                "select": "/a:feed/a:entry/a:title",
+                "text": "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding"
+              }
+            ]
+          }
+        },
+        {
+          "id": "added-link",
+          "sourceUrl": "https://export.arxiv.org/api/query?id_list=1706.03762",
+          "liveTargets": true,
+          "xml": {
+            "namespaces": {
+              "a": "http://www.w3.org/2005/Atom"
+            },
+            "append": [
+              {
+                "select": "/a:feed",
+                "xml": "<entry xmlns=\"http://www.w3.org/2005/Atom\"><id>http://arxiv.org/abs/1810.04805</id><title>BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding</title><link rel=\"alternate\" type=\"text/html\" href=\"https://arxiv.org/abs/1810.04805\"/><link rel=\"related\" type=\"application/pdf\" href=\"https://arxiv.org/pdf/1810.04805\" title=\"pdf\"/></entry>"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

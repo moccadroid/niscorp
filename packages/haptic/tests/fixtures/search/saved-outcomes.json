@@ -1,0 +1,4622 @@
+{
+  "provenance": {
+    "failedRun": "search-connected-2026-10-31T12-36-46-880Z",
+    "successfulRun": "search-connected-2026-10-31T12-06-20-223Z"
+  },
+  "instruction": "ai meetups in Vienna in November",
+  "candidates": [
+    {
+      "id": "0",
+      "title": "AI Events in Wien — Konferenzen & Meetups",
+      "description": "Kuratierte KI-Events in Wien: AI-Konferenzen, Meetups und Workshops mit Datum, Venue, Themen und Anmeldelink.",
+      "url": "https://aieventlist.ai/cities/vienna/"
+    },
+    {
+      "id": "1",
+      "title": "AI Events in Vienna | Conferences, Meetups & Talks",
+      "description": "Find AI events in Vienna — artificial intelligence conferences, machine learning meetups and workshops. Browse upcoming events and register now.",
+      "url": "https://allevents.in/vienna/artificial-intelligence"
+    },
+    {
+      "id": "2",
+      "title": "Best Artificial Intelligence in Vienna November 2025 | AllEvents",
+      "description": "Artificial Intelligence in Vienna in November Dive into the future of artificial intelligence at AI events and conferences in Vienna! From workshops and conferences to hackathons and meetups, find the perfect AI event for you.",
+      "url": "https://allevents.in/vienna/artificial-intelligence--november"
+    },
+    {
+      "id": "3",
+      "title": "Vienna AI - Meetup",
+      "description": "Join us to learn and practice AI, GenAI, LLMs, Agentic AI, Machine Learning, Deep Learning, MLOps, ML and Data technology together with like-minded developers, engineers, builders, founders, and tech leaders.Our goal is to congregate with AI enthusiasts from all over Vienna area to learn and practic",
+      "url": "https://www.meetup.com/vienna-ai/"
+    },
+    {
+      "id": "4",
+      "title": "KI-Events & Meetups in Österreich | AI:AT",
+      "description": "Aktuelle Events, Webinare und Veranstaltungen der AI Factory Austria rund um Künstliche Intelligenz in Österreich. Jetzt informieren und teilnehmen.",
+      "url": "https://ai-at.eu/events/"
+    },
+    {
+      "id": "5",
+      "title": "AI Austria Meetup",
+      "description": "With the AI Austria meetup we want to create a forum for practitioners to exchange ideas and best-practice. If you have practical experience in current methods and tools and you are looking for like-minded AI people this is the right meetup for you! Like what we do? Subscribe to our newsletter or follow-us on Linkedin.",
+      "url": "https://www.meetup.com/ai-austria/"
+    },
+    {
+      "id": "6",
+      "title": "AI Events in Vienna, Austria — What's On · AI What's On",
+      "description": "AI conferences, summits, hackathons, workshops and meetups in Vienna, Austria, with dates and a direct link to every organiser.",
+      "url": "https://aiwhatson.com/EU/AT/vienna"
+    },
+    {
+      "id": "7",
+      "title": "Event Calendar",
+      "description": "The AI Austria Event Calendar is a curated overview of AI-related events in Austria and the wider ecosystem. It helps make relevant meetups, workshops, conferences, and learning opportunities more visible to the community.",
+      "url": "https://aiaustria.com/event-calendar"
+    },
+    {
+      "id": "8",
+      "title": "73 Startup & Tech Events in Vienna: Meetups & Networking · October 2026 ...",
+      "description": "73 upcoming startup & tech events in Vienna: networking nights, founder meetups, pitch events, demo days & more. Updated daily.",
+      "url": "https://foundercal.com/cities/vienna"
+    },
+    {
+      "id": "9",
+      "title": "Events | AI Hub Vienna",
+      "description": "Events Where Ideas Meet Innovation Join us at the AI Factory in Vienna for workshops, seminars, and meetups featuring AI thought leaders, hands-on learning, and networking opportunities.",
+      "url": "https://aihub.wien/events"
+    }
+  ],
+  "answers": {
+    "0": {
+      "type": "noul",
+      "noul": 0.95
+    },
+    "1": {
+      "type": "noul",
+      "noul": 0.94
+    },
+    "2": {
+      "type": "noul",
+      "noul": 0.93
+    },
+    "3": {
+      "type": "noul",
+      "noul": 0.85
+    },
+    "4": {
+      "type": "noul",
+      "noul": 0.84
+    },
+    "5": {
+      "type": "noul",
+      "noul": 0.73
+    },
+    "6": {
+      "type": "noul",
+      "noul": 0.94
+    },
+    "7": {
+      "type": "noul",
+      "noul": 0.87
+    },
+    "8": {
+      "type": "noul",
+      "noul": 0.2
+    },
+    "9": {
+      "type": "noul",
+      "noul": 0.89
+    }
+  },
+  "failures": [
+    {
+      "status": "completed",
+      "value": {
+        "source": {
+          "id": "0",
+          "title": "AI Events in Wien — Konferenzen & Meetups",
+          "description": "Kuratierte KI-Events in Wien: AI-Konferenzen, Meetups und Workshops mit Datum, Venue, Themen und Anmeldelink.",
+          "url": "https://aieventlist.ai/cities/vienna/",
+          "probability": 0.95,
+          "relevant": null
+        },
+        "artifact": null,
+        "status": "unresolved",
+        "trial": null,
+        "execution": null
+      },
+      "error": null
+    },
+    {
+      "status": "completed",
+      "value": {
+        "source": {
+          "id": "1",
+          "title": "AI Events in Vienna | Conferences, Meetups & Talks",
+          "description": "Find AI events in Vienna — artificial intelligence conferences, machine learning meetups and workshops. Browse upcoming events and register now.",
+          "url": "https://allevents.in/vienna/artificial-intelligence",
+          "probability": 0.94,
+          "relevant": null
+        },
+        "artifact": null,
+        "status": "unresolved",
+        "trial": null,
+        "execution": null
+      },
+      "error": null
+    },
+    {
+      "status": "completed",
+      "value": {
+        "source": {
+          "id": "6",
+          "title": "AI Events in Vienna, Austria — What's On · AI What's On",
+          "description": "AI conferences, summits, hackathons, workshops and meetups in Vienna, Austria, with dates and a direct link to every organiser.",
+          "url": "https://aiwhatson.com/EU/AT/vienna",
+          "probability": 0.94,
+          "relevant": null
+        },
+        "artifact": null,
+        "status": "unresolved",
+        "trial": null,
+        "execution": null
+      },
+      "error": null
+    },
+    {
+      "status": "completed",
+      "value": {
+        "source": {
+          "id": "2",
+          "title": "Best Artificial Intelligence in Vienna November 2025 | AllEvents",
+          "description": "Artificial Intelligence in Vienna in November Dive into the future of artificial intelligence at AI events and conferences in Vienna! From workshops and conferences to hackathons and meetups, find the perfect AI event for you.",
+          "url": "https://allevents.in/vienna/artificial-intelligence--november",
+          "probability": 0.93,
+          "relevant": null
+        },
+        "artifact": null,
+        "status": "unresolved",
+        "trial": null,
+        "execution": null
+      },
+      "error": null
+    },
+    {
+      "status": "completed",
+      "value": {
+        "source": {
+          "id": "9",
+          "title": "Events | AI Hub Vienna",
+          "description": "Events Where Ideas Meet Innovation Join us at the AI Factory in Vienna for workshops, seminars, and meetups featuring AI thought leaders, hands-on learning, and networking opportunities.",
+          "url": "https://aihub.wien/events",
+          "probability": 0.89,
+          "relevant": null
+        },
+        "artifact": null,
+        "status": "unresolved",
+        "trial": null,
+        "execution": null
+      },
+      "error": null
+    }
+  ],
+  "successful": {
+    "status": "completed",
+    "value": {
+      "source": {
+        "id": "2",
+        "title": "Vienna AI - Meetup",
+        "description": "Join us to learn and practice AI, GenAI, LLMs, Agentic AI, Machine Learning, Deep Learning, MLOps, ML and Data technology together with like-minded developers, engineers, builders, founders, and tech leaders.Our goal is to congregate with AI enthusiasts from all over Vienna area to learn and practic",
+        "url": "https://www.meetup.com/vienna-ai/",
+        "probability": 0.88,
+        "relevant": null
+      },
+      "artifact": {
+        "stamp": {
+          "eden.engine": 1,
+          "nisc.prism": 2
+        },
+        "data": {
+          "rules": [
+            {
+              "preconditions": [],
+              "selector": "div[data-element-name=\"event-card\"]:has(time:contains('Nov'))",
+              "links": null,
+              "result": null
+            }
+          ],
+          "task": {
+            "requiresNavigation": false,
+            "resultFlow": null
+          },
+          "policy": {
+            "allowLinkFollowing": true,
+            "linkDepth": 1,
+            "maxPages": 4,
+            "maxRedirects": 3,
+            "stripFragments": true,
+            "accept": {
+              "statuses": [
+                200
+              ],
+              "mediaTypes": null
+            }
+          },
+          "canFollow": false,
+          "minimumResultMatches": 0,
+          "seen": [],
+          "resources": {
+            "allowResourceFetching": false,
+            "maxResources": 4,
+            "maxRedirects": 3,
+            "stripFragments": true,
+            "accept": {
+              "statuses": [
+                200
+              ],
+              "mediaTypes": null
+            }
+          },
+          "formats": [
+            {
+              "id": "html",
+              "mediaTypes": [
+                "text/html",
+                "application/xhtml+xml"
+              ],
+              "mediaTypeSuffixes": []
+            },
+            {
+              "id": "json",
+              "mediaTypes": [
+                "application/json"
+              ],
+              "mediaTypeSuffixes": [
+                "+json"
+              ]
+            },
+            {
+              "id": "xml",
+              "mediaTypes": [
+                "application/xml",
+                "text/xml"
+              ],
+              "mediaTypeSuffixes": [
+                "+xml"
+              ],
+              "excludedMediaTypes": [
+                "application/xhtml+xml"
+              ]
+            }
+          ],
+          "resultFlow": null,
+          "mode": "walk"
+        },
+        "flow": {
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "url": {
+                "type": "string",
+                "format": "uri"
+              }
+            },
+            "required": [
+              "url"
+            ],
+            "additionalProperties": false
+          },
+          "outputSchema": {
+            "type": "object"
+          },
+          "steps": [
+            {
+              "id": "task",
+              "checks": [
+                {
+                  "id": "task-result",
+                  "test": {
+                    "$ref": "$.value.accepted"
+                  }
+                }
+              ],
+              "call": {
+                "flow": {
+                  "id": "task-result",
+                  "revision": 1
+                }
+              },
+              "input": {
+                "$merge": [
+                  {
+                    "$ref": "$.data"
+                  },
+                  {
+                    "allowResourceFetching": {
+                      "$ref": "$.data.resources.allowResourceFetching"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "id": "stage",
+              "when": {
+                "$eq": [
+                  {
+                    "$ref": "$.data.mode"
+                  },
+                  "stage"
+                ]
+              },
+              "call": {
+                "flow": {
+                  "id": "stage",
+                  "revision": 1
+                }
+              },
+              "input": {
+                "url": {
+                  "$ref": "$.input.url"
+                },
+                "rule": {
+                  "$ref": "$.data.rules[0]"
+                },
+                "policy": {
+                  "$ref": "$.data.policy"
+                },
+                "canFollow": {
+                  "$ref": "$.data.canFollow"
+                },
+                "minimumResultMatches": {
+                  "$ref": "$.data.minimumResultMatches"
+                },
+                "seen": {
+                  "$ref": "$.data.seen"
+                }
+              }
+            },
+            {
+              "id": "walk",
+              "when": {
+                "$not": {
+                  "$eq": [
+                    {
+                      "$ref": "$.data.mode"
+                    },
+                    "stage"
+                  ]
+                }
+              },
+              "call": {
+                "flow": {
+                  "id": "walk",
+                  "revision": 1
+                }
+              },
+              "input": {
+                "urls": [
+                  {
+                    "$ref": "$.input.url"
+                  }
+                ],
+                "visited": [],
+                "seen": [],
+                "depth": 0,
+                "stages": {
+                  "$ref": "$.data.rules"
+                },
+                "policy": {
+                  "$ref": "$.data.policy"
+                },
+                "minimumResultMatches": {
+                  "$ref": "$.data.minimumResultMatches"
+                }
+              }
+            },
+            {
+              "id": "run",
+              "value": {
+                "$case": {
+                  "branches": [
+                    {
+                      "when": {
+                        "$eq": [
+                          {
+                            "$ref": "$.data.mode"
+                          },
+                          "stage"
+                        ]
+                      },
+                      "then": {
+                        "$ref": "$.steps.stage.value"
+                      }
+                    }
+                  ],
+                  "else": {
+                    "$ref": "$.steps.walk.value"
+                  }
+                }
+              }
+            },
+            {
+              "id": "resources",
+              "when": {
+                "$neq": [
+                  {
+                    "$ref": "$.data.resultFlow"
+                  },
+                  null
+                ]
+              },
+              "call": {
+                "flow": {
+                  "id": "fetch-resources",
+                  "revision": 1
+                }
+              },
+              "input": {
+                "pages": {
+                  "$case": {
+                    "branches": [
+                      {
+                        "when": {
+                          "$eq": [
+                            {
+                              "$ref": "$.data.mode"
+                            },
+                            "stage"
+                          ]
+                        },
+                        "then": [
+                          {
+                            "url": {
+                              "$ref": "$.steps.run.value.source.url"
+                            },
+                            "baseUrl": {
+                              "$get": {
+                                "from": {
+                                  "$ref": "$.steps.run.value.selection"
+                                },
+                                "path": [
+                                  "baseUrl"
+                                ],
+                                "fallback": {
+                                  "$ref": "$.steps.run.value.source.url"
+                                }
+                              }
+                            },
+                            "encoding": {
+                              "$get": {
+                                "from": {
+                                  "$ref": "$.steps.run.value.selection"
+                                },
+                                "path": [
+                                  "encoding"
+                                ],
+                                "fallback": "utf-8"
+                              }
+                            },
+                            "items": {
+                              "$get": {
+                                "from": {
+                                  "$ref": "$.steps.run.value.selection"
+                                },
+                                "path": [
+                                  "items"
+                                ],
+                                "fallback": []
+                              }
+                            },
+                            "result": {
+                              "$ref": "$.data.rules[0].result"
+                            }
+                          }
+                        ]
+                      }
+                    ],
+                    "else": {
+                      "$ref": "$.steps.run.value.pages"
+                    }
+                  }
+                },
+                "policy": {
+                  "$ref": "$.data.resources"
+                }
+              }
+            }
+          ],
+          "output": {
+            "$merge": [
+              {
+                "$case": {
+                  "branches": [
+                    {
+                      "when": {
+                        "$eq": [
+                          {
+                            "$ref": "$.data.mode"
+                          },
+                          "stage"
+                        ]
+                      },
+                      "then": {
+                        "$ref": "$.steps.run.value"
+                      }
+                    }
+                  ],
+                  "else": {
+                    "$merge": [
+                      {
+                        "$pick": {
+                          "from": {
+                            "$ref": "$.steps.run.value"
+                          },
+                          "keys": [
+                            "visited",
+                            "limited",
+                            "redirects"
+                          ]
+                        }
+                      },
+                      {
+                        "pages": {
+                          "$map": {
+                            "over": {
+                              "$ref": "$.steps.run.value.pages"
+                            },
+                            "as": "page",
+                            "body": {
+                              "$omit": {
+                                "from": {
+                                  "$var": "page"
+                                },
+                                "keys": [
+                                  "result"
+                                ]
+                              }
+                            }
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "$case": {
+                  "branches": [
+                    {
+                      "when": {
+                        "$neq": [
+                          {
+                            "$ref": "$.data.resultFlow"
+                          },
+                          null
+                        ]
+                      },
+                      "then": {
+                        "resources": {
+                          "$ref": "$.steps.resources.value"
+                        }
+                      }
+                    }
+                  ],
+                  "else": {}
+                }
+              }
+            ]
+          }
+        },
+        "flows": [
+          {
+            "id": "fetch",
+            "revision": 2,
+            "flow": {
+              "inputSchema": {
+                "type": "object",
+                "properties": {
+                  "url": {
+                    "type": "string",
+                    "format": "uri"
+                  },
+                  "remaining": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "seen": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "accept": {
+                    "type": "object",
+                    "properties": {
+                      "statuses": {
+                        "type": "array",
+                        "minItems": 1,
+                        "items": {
+                          "type": "integer",
+                          "minimum": 100,
+                          "maximum": 599
+                        }
+                      },
+                      "mediaTypes": {
+                        "anyOf": [
+                          {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "minLength": 1
+                            }
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "statuses",
+                      "mediaTypes"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "url",
+                  "remaining",
+                  "seen",
+                  "accept"
+                ],
+                "additionalProperties": false
+              },
+              "outputSchema": {
+                "type": "object"
+              },
+              "steps": [
+                {
+                  "id": "page",
+                  "call": {
+                    "operation": "http.get"
+                  },
+                  "input": {
+                    "url": {
+                      "$ref": "$.input.url"
+                    }
+                  }
+                },
+                {
+                  "id": "redirect",
+                  "checks": [
+                    {
+                      "id": "redirect-budget",
+                      "test": {
+                        "$or": [
+                          {
+                            "$not": {
+                              "$ref": "$.value"
+                            }
+                          },
+                          {
+                            "$gt": [
+                              {
+                                "$ref": "$.input.remaining"
+                              },
+                              0
+                            ]
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "id": "redirect-location",
+                      "test": {
+                        "$or": [
+                          {
+                            "$not": {
+                              "$ref": "$.value"
+                            }
+                          },
+                          {
+                            "$neq": [
+                              {
+                                "$trim": {
+                                  "$get": {
+                                    "from": {
+                                      "$ref": "$.steps.page.value"
+                                    },
+                                    "path": [
+                                      "headers",
+                                      "location",
+                                      0
+                                    ],
+                                    "fallback": ""
+                                  }
+                                }
+                              },
+                              ""
+                            ]
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "id": "response-status-accepted",
+                      "test": {
+                        "$or": [
+                          {
+                            "$ref": "$.value"
+                          },
+                          {
+                            "$not": {
+                              "$empty": {
+                                "$filter": {
+                                  "over": {
+                                    "$ref": "$.input.accept.statuses"
+                                  },
+                                  "as": "status",
+                                  "when": {
+                                    "$eq": [
+                                      {
+                                        "$var": "status"
+                                      },
+                                      {
+                                        "$ref": "$.steps.page.value.status"
+                                      }
+                                    ]
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "id": "response-media-type-accepted",
+                      "test": {
+                        "$or": [
+                          {
+                            "$ref": "$.value"
+                          },
+                          {
+                            "$eq": [
+                              {
+                                "$ref": "$.input.accept.mediaTypes"
+                              },
+                              null
+                            ]
+                          },
+                          {
+                            "$with": {
+                              "let": {
+                                "mime": {
+                                  "$trim": {
+                                    "$get": {
+                                      "from": {
+                                        "$split": {
+                                          "value": {
+                                            "$lower": {
+                                              "$get": {
+                                                "from": {
+                                                  "$ref": "$.steps.page.value"
+                                                },
+                                                "path": [
+                                                  "headers",
+                                                  "content-type",
+                                                  0
+                                                ],
+                                                "fallback": ""
+                                              }
+                                            }
+                                          },
+                                          "sep": ";"
+                                        }
+                                      },
+                                      "path": [
+                                        0
+                                      ],
+                                      "fallback": ""
+                                    }
+                                  }
+                                }
+                              },
+                              "value": {
+                                "$not": {
+                                  "$empty": {
+                                    "$filter": {
+                                      "over": {
+                                        "$ref": "$.input.accept.mediaTypes"
+                                      },
+                                      "as": "mediaType",
+                                      "when": {
+                                        "$eq": [
+                                          {
+                                            "$var": "mediaType"
+                                          },
+                                          {
+                                            "$var": "mime"
+                                          }
+                                        ]
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  ],
+                  "call": {
+                    "flow": {
+                      "id": "redirect",
+                      "revision": 1
+                    }
+                  },
+                  "input": {
+                    "status": {
+                      "$ref": "$.steps.page.value.status"
+                    }
+                  }
+                },
+                {
+                  "id": "url",
+                  "when": {
+                    "$ref": "$.steps.redirect.value"
+                  },
+                  "call": {
+                    "operation": "url.resolve"
+                  },
+                  "input": {
+                    "value": {
+                      "$get": {
+                        "from": {
+                          "$ref": "$.steps.page.value"
+                        },
+                        "path": [
+                          "headers",
+                          "location",
+                          0
+                        ],
+                        "fallback": ""
+                      }
+                    },
+                    "base": {
+                      "$ref": "$.steps.page.value.url"
+                    }
+                  }
+                },
+                {
+                  "id": "next",
+                  "when": {
+                    "$and": [
+                      {
+                        "$ref": "$.steps.redirect.value"
+                      },
+                      {
+                        "$empty": {
+                          "$filter": {
+                            "over": {
+                              "$ref": "$.input.seen"
+                            },
+                            "as": "member",
+                            "when": {
+                              "$eq": [
+                                {
+                                  "$var": "member"
+                                },
+                                {
+                                  "$ref": "$.steps.url.value"
+                                }
+                              ]
+                            }
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  "call": {
+                    "flow": {
+                      "id": "fetch",
+                      "revision": 2
+                    }
+                  },
+                  "input": {
+                    "url": {
+                      "$ref": "$.steps.url.value"
+                    },
+                    "remaining": {
+                      "$sub": [
+                        {
+                          "$ref": "$.input.remaining"
+                        },
+                        1
+                      ]
+                    },
+                    "seen": {
+                      "$ref": "$.input.seen"
+                    },
+                    "accept": {
+                      "$ref": "$.input.accept"
+                    }
+                  }
+                }
+              ],
+              "output": {
+                "$case": {
+                  "branches": [
+                    {
+                      "when": {
+                        "$ref": "$.steps.redirect.value"
+                      },
+                      "then": {
+                        "source": {
+                          "$get": {
+                            "from": {
+                              "$ref": "$.steps.next.value"
+                            },
+                            "path": [
+                              "source"
+                            ],
+                            "fallback": null
+                          }
+                        },
+                        "redirects": {
+                          "$flatten": [
+                            [
+                              {
+                                "$ref": "$.steps.page.value"
+                              }
+                            ],
+                            {
+                              "$get": {
+                                "from": {
+                                  "$ref": "$.steps.next.value"
+                                },
+                                "path": [
+                                  "redirects"
+                                ],
+                                "fallback": []
+                              }
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  ],
+                  "else": {
+                    "source": {
+                      "$ref": "$.steps.page.value"
+                    },
+                    "redirects": []
+                  }
+                }
+              }
+            }
+          },
+          {
+            "id": "admit",
+            "revision": 1,
+            "flow": {
+              "inputSchema": {
+                "type": "object"
+              },
+              "outputSchema": {
+                "type": "array"
+              },
+              "steps": [],
+              "output": {
+                "$reduce": {
+                  "over": {
+                    "$filter": {
+                      "over": {
+                        "$unique": {
+                          "$ref": "$.input.urls"
+                        }
+                      },
+                      "as": "url",
+                      "when": {
+                        "$empty": {
+                          "$filter": {
+                            "over": {
+                              "$ref": "$.input.seen"
+                            },
+                            "as": "member",
+                            "when": {
+                              "$eq": [
+                                {
+                                  "$var": "member"
+                                },
+                                {
+                                  "$var": "url"
+                                }
+                              ]
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "as": "candidate",
+                  "acc": "kept",
+                  "init": [],
+                  "body": {
+                    "$case": {
+                      "branches": [
+                        {
+                          "when": {
+                            "$lt": [
+                              {
+                                "$length": {
+                                  "$var": "kept"
+                                }
+                              },
+                              {
+                                "$sub": [
+                                  {
+                                    "$ref": "$.input.maxPages"
+                                  },
+                                  {
+                                    "$length": {
+                                      "$ref": "$.input.visited"
+                                    }
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          "then": {
+                            "$flatten": [
+                              {
+                                "$var": "kept"
+                              },
+                              [
+                                {
+                                  "$var": "candidate"
+                                }
+                              ]
+                            ]
+                          }
+                        }
+                      ],
+                      "else": {
+                        "$var": "kept"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "id": "select",
+            "revision": 1,
+            "flow": {
+              "inputSchema": {
+                "type": "object",
+                "properties": {
+                  "policy": {
+                    "type": "object",
+                    "properties": {
+                      "allowLinkFollowing": {
+                        "type": "boolean"
+                      },
+                      "linkDepth": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "maxPages": {
+                        "type": "integer",
+                        "minimum": 1
+                      },
+                      "maxRedirects": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "stripFragments": {
+                        "type": "boolean"
+                      },
+                      "accept": {
+                        "type": "object",
+                        "properties": {
+                          "statuses": {
+                            "type": "array",
+                            "minItems": 1,
+                            "items": {
+                              "type": "integer",
+                              "minimum": 100,
+                              "maximum": 599
+                            }
+                          },
+                          "mediaTypes": {
+                            "anyOf": [
+                              {
+                                "type": "array",
+                                "items": {
+                                  "type": "string",
+                                  "minLength": 1
+                                }
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "statuses",
+                          "mediaTypes"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "required": [
+                      "allowLinkFollowing",
+                      "linkDepth",
+                      "maxPages",
+                      "maxRedirects",
+                      "stripFragments",
+                      "accept"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "source": {
+                    "type": "object"
+                  },
+                  "rule": {
+                    "type": "object"
+                  },
+                  "canFollow": {
+                    "type": "boolean"
+                  },
+                  "minimumResultMatches": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "source",
+                  "rule",
+                  "policy",
+                  "canFollow",
+                  "minimumResultMatches"
+                ]
+              },
+              "outputSchema": {
+                "type": "object"
+              },
+              "steps": [
+                {
+                  "id": "format",
+                  "call": {
+                    "flow": {
+                      "id": "require-format",
+                      "revision": 1
+                    }
+                  },
+                  "input": {
+                    "source": {
+                      "$ref": "$.input.source"
+                    },
+                    "formats": {
+                      "$ref": "$.data.formats"
+                    },
+                    "adapter": "html"
+                  }
+                },
+                {
+                  "id": "preconditions",
+                  "each": {
+                    "items": {
+                      "$unique": {
+                        "$map": {
+                          "over": {
+                            "$get": {
+                              "from": {
+                                "$ref": "$.input.rule"
+                              },
+                              "path": [
+                                "preconditions"
+                              ],
+                              "fallback": []
+                            }
+                          },
+                          "as": "condition",
+                          "body": {
+                            "selector": {
+                              "$get": {
+                                "from": {
+                                  "$var": "condition"
+                                },
+                                "path": [
+                                  "selector"
+                                ],
+                                "fallback": null
+                              }
+                            },
+                            "minimum": {
+                              "$get": {
+                                "from": {
+                                  "$var": "condition"
+                                },
+                                "path": [
+                                  "minimum"
+                                ],
+                                "fallback": null
+                              }
+                            },
+                            "maximum": {
+                              "$get": {
+                                "from": {
+                                  "$var": "condition"
+                                },
+                                "path": [
+                                  "maximum"
+                                ],
+                                "fallback": null
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "onFailure": "stop"
+                  },
+                  "checks": [
+                    {
+                      "id": {
+                        "$join": {
+                          "parts": [
+                            "discovery-required-precondition:",
+                            {
+                              "$toString": {
+                                "selector": {
+                                  "$ref": "$.item.selector"
+                                },
+                                "minimum": {
+                                  "$ref": "$.item.minimum"
+                                },
+                                "maximum": {
+                                  "$ref": "$.item.maximum"
+                                }
+                              }
+                            }
+                          ],
+                          "sep": ""
+                        }
+                      },
+                      "test": {
+                        "$and": [
+                          {
+                            "$gte": [
+                              {
+                                "$length": {
+                                  "$ref": "$.value.items"
+                                }
+                              },
+                              {
+                                "$ref": "$.item.minimum"
+                              }
+                            ]
+                          },
+                          {
+                            "$case": {
+                              "branches": [
+                                {
+                                  "when": {
+                                    "$eq": [
+                                      {
+                                        "$ref": "$.item.maximum"
+                                      },
+                                      null
+                                    ]
+                                  },
+                                  "then": true
+                                }
+                              ],
+                              "else": {
+                                "$lte": [
+                                  {
+                                    "$length": {
+                                      "$ref": "$.value.items"
+                                    }
+                                  },
+                                  {
+                                    "$ref": "$.item.maximum"
+                                  }
+                                ]
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  ],
+                  "output": null,
+                  "call": {
+                    "operation": "html.select"
+                  },
+                  "input": {
+                    "source": {
+                      "$ref": "$.input.source"
+                    },
+                    "selector": {
+                      "$ref": "$.item.selector"
+                    }
+                  }
+                },
+                {
+                  "id": "selection",
+                  "when": {
+                    "$neq": [
+                      {
+                        "$ref": "$.input.rule.selector"
+                      },
+                      null
+                    ]
+                  },
+                  "checks": [
+                    {
+                      "id": "minimum-result-matches",
+                      "test": {
+                        "$gte": [
+                          {
+                            "$length": {
+                              "$ref": "$.value.items"
+                            }
+                          },
+                          {
+                            "$ref": "$.input.minimumResultMatches"
+                          }
+                        ]
+                      }
+                    }
+                  ],
+                  "call": {
+                    "operation": "html.select"
+                  },
+                  "input": {
+                    "source": {
+                      "$ref": "$.input.source"
+                    },
+                    "selector": {
+                      "$ref": "$.input.rule.selector"
+                    },
+                    "fields": {
+                      "$get": {
+                        "from": {
+                          "$ref": "$.input.rule"
+                        },
+                        "path": [
+                          "fields"
+                        ],
+                        "fallback": null
+                      }
+                    }
+                  }
+                },
+                {
+                  "id": "links",
+                  "when": {
+                    "$and": [
+                      {
+                        "$ref": "$.input.canFollow"
+                      },
+                      {
+                        "$neq": [
+                          {
+                            "$ref": "$.input.rule.links"
+                          },
+                          null
+                        ]
+                      }
+                    ]
+                  },
+                  "call": {
+                    "operation": "html.select"
+                  },
+                  "input": {
+                    "source": {
+                      "$ref": "$.input.source"
+                    },
+                    "selector": {
+                      "$ref": "$.input.rule.links"
+                    }
+                  }
+                },
+                {
+                  "id": "urls",
+                  "when": {
+                    "$and": [
+                      {
+                        "$ref": "$.input.canFollow"
+                      },
+                      {
+                        "$neq": [
+                          {
+                            "$ref": "$.input.rule.links"
+                          },
+                          null
+                        ]
+                      },
+                      {
+                        "$gt": [
+                          {
+                            "$length": {
+                              "$get": {
+                                "from": {
+                                  "$ref": "$.steps.links.value"
+                                },
+                                "path": [
+                                  "items"
+                                ],
+                                "fallback": []
+                              }
+                            }
+                          },
+                          0
+                        ]
+                      }
+                    ]
+                  },
+                  "call": {
+                    "operation": "url.collect"
+                  },
+                  "input": {
+                    "values": {
+                      "$map": {
+                        "over": {
+                          "$get": {
+                            "from": {
+                              "$ref": "$.steps.links.value"
+                            },
+                            "path": [
+                              "items"
+                            ],
+                            "fallback": []
+                          }
+                        },
+                        "as": "link",
+                        "body": {
+                          "$get": {
+                            "from": {
+                              "$var": "link"
+                            },
+                            "path": [
+                              "attributes",
+                              "href"
+                            ],
+                            "fallback": null
+                          }
+                        }
+                      }
+                    },
+                    "base": {
+                      "$get": {
+                        "from": {
+                          "$ref": "$.steps.links.value"
+                        },
+                        "path": [
+                          "baseUrl"
+                        ],
+                        "fallback": null
+                      }
+                    },
+                    "encoding": {
+                      "$get": {
+                        "from": {
+                          "$ref": "$.steps.links.value"
+                        },
+                        "path": [
+                          "encoding"
+                        ],
+                        "fallback": null
+                      }
+                    },
+                    "limit": {
+                      "$ref": "$.input.policy.maxPages"
+                    },
+                    "stripFragments": {
+                      "$ref": "$.input.policy.stripFragments"
+                    },
+                    "exclude": {
+                      "$get": {
+                        "from": {
+                          "$ref": "$.input"
+                        },
+                        "path": [
+                          "seen"
+                        ],
+                        "fallback": []
+                      }
+                    }
+                  }
+                }
+              ],
+              "output": {
+                "source": {
+                  "$ref": "$.input.source"
+                },
+                "selection": {
+                  "$ref": "$.steps.selection.value"
+                },
+                "urls": {
+                  "$case": {
+                    "branches": [
+                      {
+                        "when": {
+                          "$neq": [
+                            {
+                              "$ref": "$.steps.urls.value"
+                            },
+                            null
+                          ]
+                        },
+                        "then": {
+                          "$ref": "$.steps.urls.value"
+                        }
+                      }
+                    ],
+                    "else": []
+                  }
+                },
+                "navigation": {
+                  "$case": {
+                    "branches": [
+                      {
+                        "when": {
+                          "$neq": [
+                            {
+                              "$ref": "$.steps.links.value"
+                            },
+                            null
+                          ]
+                        },
+                        "then": {
+                          "matchedElements": {
+                            "$length": {
+                              "$ref": "$.steps.links.value.items"
+                            }
+                          },
+                          "collectedUrls": {
+                            "$length": {
+                              "$coalesce": [
+                                {
+                                  "$ref": "$.steps.urls.value"
+                                },
+                                []
+                              ]
+                            }
+                          },
+                          "collectionLimit": {
+                            "$ref": "$.input.policy.maxPages"
+                          },
+                          "collectionAtLimit": {
+                            "$eq": [
+                              {
+                                "$length": {
+                                  "$coalesce": [
+                                    {
+                                      "$ref": "$.steps.urls.value"
+                                    },
+                                    []
+                                  ]
+                                }
+                              },
+                              {
+                                "$ref": "$.input.policy.maxPages"
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    ],
+                    "else": null
+                  }
+                }
+              }
+            }
+          },
+          {
+            "id": "stage",
+            "revision": 1,
+            "flow": {
+              "inputSchema": {
+                "type": "object",
+                "properties": {
+                  "policy": {
+                    "type": "object",
+                    "properties": {
+                      "allowLinkFollowing": {
+                        "type": "boolean"
+                      },
+                      "linkDepth": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "maxPages": {
+                        "type": "integer",
+                        "minimum": 1
+                      },
+                      "maxRedirects": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "stripFragments": {
+                        "type": "boolean"
+                      },
+                      "accept": {
+                        "type": "object",
+                        "properties": {
+                          "statuses": {
+                            "type": "array",
+                            "minItems": 1,
+                            "items": {
+                              "type": "integer",
+                              "minimum": 100,
+                              "maximum": 599
+                            }
+                          },
+                          "mediaTypes": {
+                            "anyOf": [
+                              {
+                                "type": "array",
+                                "items": {
+                                  "type": "string",
+                                  "minLength": 1
+                                }
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "statuses",
+                          "mediaTypes"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "required": [
+                      "allowLinkFollowing",
+                      "linkDepth",
+                      "maxPages",
+                      "maxRedirects",
+                      "stripFragments",
+                      "accept"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "url": {
+                    "type": "string"
+                  },
+                  "rule": {
+                    "type": "object"
+                  },
+                  "canFollow": {
+                    "type": "boolean"
+                  },
+                  "minimumResultMatches": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "seen": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "url",
+                  "rule",
+                  "policy",
+                  "canFollow",
+                  "minimumResultMatches",
+                  "seen"
+                ]
+              },
+              "outputSchema": {
+                "type": "object"
+              },
+              "steps": [
+                {
+                  "id": "source",
+                  "call": {
+                    "flow": {
+                      "id": "fetch",
+                      "revision": 2
+                    }
+                  },
+                  "input": {
+                    "url": {
+                      "$ref": "$.input.url"
+                    },
+                    "remaining": {
+                      "$ref": "$.input.policy.maxRedirects"
+                    },
+                    "seen": [],
+                    "accept": {
+                      "$ref": "$.input.policy.accept"
+                    }
+                  }
+                },
+                {
+                  "id": "selection",
+                  "call": {
+                    "flow": {
+                      "id": "select",
+                      "revision": 1
+                    }
+                  },
+                  "input": {
+                    "source": {
+                      "$ref": "$.steps.source.value.source"
+                    },
+                    "rule": {
+                      "$ref": "$.input.rule"
+                    },
+                    "policy": {
+                      "$ref": "$.input.policy"
+                    },
+                    "canFollow": {
+                      "$ref": "$.input.canFollow"
+                    },
+                    "seen": {
+                      "$ref": "$.input.seen"
+                    },
+                    "minimumResultMatches": {
+                      "$ref": "$.input.minimumResultMatches"
+                    }
+                  }
+                }
+              ],
+              "output": {
+                "$merge": [
+                  {
+                    "$ref": "$.steps.selection.value"
+                  },
+                  {
+                    "redirects": {
+                      "$ref": "$.steps.source.value.redirects"
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "id": "walk",
+            "revision": 1,
+            "flow": {
+              "inputSchema": {
+                "type": "object",
+                "properties": {
+                  "policy": {
+                    "type": "object",
+                    "properties": {
+                      "allowLinkFollowing": {
+                        "type": "boolean"
+                      },
+                      "linkDepth": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "maxPages": {
+                        "type": "integer",
+                        "minimum": 1
+                      },
+                      "maxRedirects": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "stripFragments": {
+                        "type": "boolean"
+                      },
+                      "accept": {
+                        "type": "object",
+                        "properties": {
+                          "statuses": {
+                            "type": "array",
+                            "minItems": 1,
+                            "items": {
+                              "type": "integer",
+                              "minimum": 100,
+                              "maximum": 599
+                            }
+                          },
+                          "mediaTypes": {
+                            "anyOf": [
+                              {
+                                "type": "array",
+                                "items": {
+                                  "type": "string",
+                                  "minLength": 1
+                                }
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "statuses",
+                          "mediaTypes"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "required": [
+                      "allowLinkFollowing",
+                      "linkDepth",
+                      "maxPages",
+                      "maxRedirects",
+                      "stripFragments",
+                      "accept"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "urls": {
+                    "type": "array"
+                  },
+                  "visited": {
+                    "type": "array"
+                  },
+                  "seen": {
+                    "type": "array"
+                  },
+                  "depth": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "stages": {
+                    "type": "array"
+                  },
+                  "minimumResultMatches": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "urls",
+                  "visited",
+                  "seen",
+                  "depth",
+                  "stages",
+                  "policy",
+                  "minimumResultMatches"
+                ]
+              },
+              "outputSchema": {
+                "type": "object",
+                "properties": {
+                  "pages": {
+                    "type": "array",
+                    "items": {
+                      "type": "object"
+                    }
+                  },
+                  "visited": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "redirects": {
+                    "type": "array",
+                    "items": {
+                      "type": "object"
+                    }
+                  },
+                  "limited": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "pages",
+                  "visited",
+                  "redirects",
+                  "limited"
+                ],
+                "additionalProperties": false
+              },
+              "steps": [
+                {
+                  "id": "admit",
+                  "checks": [
+                    {
+                      "id": "discovery-required-missing-stage",
+                      "test": {
+                        "$or": [
+                          {
+                            "$eq": [
+                              {
+                                "$length": {
+                                  "$ref": "$.value"
+                                }
+                              },
+                              0
+                            ]
+                          },
+                          {
+                            "$neq": [
+                              {
+                                "$get": {
+                                  "from": {
+                                    "$ref": "$.input.stages"
+                                  },
+                                  "path": [
+                                    0
+                                  ],
+                                  "fallback": null
+                                }
+                              },
+                              null
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  ],
+                  "call": {
+                    "flow": {
+                      "id": "admit",
+                      "revision": 1
+                    }
+                  },
+                  "input": {
+                    "urls": {
+                      "$ref": "$.input.urls"
+                    },
+                    "visited": {
+                      "$ref": "$.input.visited"
+                    },
+                    "seen": {
+                      "$ref": "$.input.seen"
+                    },
+                    "maxPages": {
+                      "$ref": "$.input.policy.maxPages"
+                    }
+                  }
+                },
+                {
+                  "id": "sources",
+                  "call": {
+                    "flow": {
+                      "id": "batch",
+                      "revision": 1
+                    }
+                  },
+                  "input": {
+                    "urls": {
+                      "$ref": "$.steps.admit.value"
+                    },
+                    "visited": {
+                      "$ref": "$.input.visited"
+                    },
+                    "seen": {
+                      "$ref": "$.input.seen"
+                    },
+                    "policy": {
+                      "$pick": {
+                        "from": {
+                          "$ref": "$.input.policy"
+                        },
+                        "keys": [
+                          "maxRedirects",
+                          "accept"
+                        ]
+                      }
+                    }
+                  }
+                },
+                {
+                  "id": "can-follow",
+                  "value": {
+                    "$and": [
+                      {
+                        "$ref": "$.input.policy.allowLinkFollowing"
+                      },
+                      {
+                        "$lt": [
+                          {
+                            "$ref": "$.input.depth"
+                          },
+                          {
+                            "$ref": "$.input.policy.linkDepth"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "id": "pages",
+                  "each": {
+                    "items": {
+                      "$ref": "$.steps.sources.value.sources"
+                    },
+                    "onFailure": "stop"
+                  },
+                  "call": {
+                    "flow": {
+                      "id": "select",
+                      "revision": 1
+                    }
+                  },
+                  "input": {
+                    "source": {
+                      "$ref": "$.item.source"
+                    },
+                    "rule": {
+                      "$get": {
+                        "from": {
+                          "$ref": "$.input.stages"
+                        },
+                        "path": [
+                          0
+                        ],
+                        "fallback": null
+                      }
+                    },
+                    "policy": {
+                      "$ref": "$.input.policy"
+                    },
+                    "canFollow": {
+                      "$ref": "$.steps.can-follow.value"
+                    },
+                    "seen": {
+                      "$ref": "$.steps.sources.value.seen"
+                    },
+                    "minimumResultMatches": {
+                      "$ref": "$.input.minimumResultMatches"
+                    }
+                  }
+                },
+                {
+                  "id": "urls",
+                  "value": {
+                    "$flatten": {
+                      "$map": {
+                        "over": {
+                          "$ref": "$.steps.pages.value"
+                        },
+                        "as": "page",
+                        "body": {
+                          "$get": {
+                            "from": {
+                              "$var": "page"
+                            },
+                            "path": [
+                              "value",
+                              "urls"
+                            ],
+                            "fallback": []
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "id": "next",
+                  "when": {
+                    "$and": [
+                      {
+                        "$ref": "$.steps.can-follow.value"
+                      },
+                      {
+                        "$gt": [
+                          {
+                            "$length": {
+                              "$ref": "$.steps.urls.value"
+                            }
+                          },
+                          0
+                        ]
+                      }
+                    ]
+                  },
+                  "call": {
+                    "flow": {
+                      "id": "walk",
+                      "revision": 1
+                    }
+                  },
+                  "input": {
+                    "urls": {
+                      "$ref": "$.steps.urls.value"
+                    },
+                    "visited": {
+                      "$ref": "$.steps.sources.value.visited"
+                    },
+                    "seen": {
+                      "$ref": "$.steps.sources.value.seen"
+                    },
+                    "depth": {
+                      "$add": [
+                        {
+                          "$ref": "$.input.depth"
+                        },
+                        1
+                      ]
+                    },
+                    "stages": {
+                      "$slice": {
+                        "from": {
+                          "$ref": "$.input.stages"
+                        },
+                        "start": 1
+                      }
+                    },
+                    "policy": {
+                      "$ref": "$.input.policy"
+                    },
+                    "minimumResultMatches": {
+                      "$ref": "$.input.minimumResultMatches"
+                    }
+                  }
+                }
+              ],
+              "output": {
+                "pages": {
+                  "$flatten": [
+                    {
+                      "$filter": {
+                        "over": {
+                          "$map": {
+                            "over": {
+                              "$ref": "$.steps.pages.value"
+                            },
+                            "as": "page",
+                            "body": {
+                              "$case": {
+                                "branches": [
+                                  {
+                                    "when": {
+                                      "$neq": [
+                                        {
+                                          "$get": {
+                                            "from": {
+                                              "$var": "page"
+                                            },
+                                            "path": [
+                                              "value",
+                                              "selection"
+                                            ],
+                                            "fallback": null
+                                          }
+                                        },
+                                        null
+                                      ]
+                                    },
+                                    "then": {
+                                      "$merge": [
+                                        {
+                                          "url": {
+                                            "$get": {
+                                              "from": {
+                                                "$var": "page"
+                                              },
+                                              "path": [
+                                                "value",
+                                                "source",
+                                                "url"
+                                              ],
+                                              "fallback": null
+                                            }
+                                          }
+                                        },
+                                        {
+                                          "$get": {
+                                            "from": {
+                                              "$var": "page"
+                                            },
+                                            "path": [
+                                              "value",
+                                              "selection"
+                                            ],
+                                            "fallback": null
+                                          }
+                                        },
+                                        {
+                                          "result": {
+                                            "$get": {
+                                              "from": {
+                                                "$get": {
+                                                  "from": {
+                                                    "$ref": "$.input.stages"
+                                                  },
+                                                  "path": [
+                                                    0
+                                                  ],
+                                                  "fallback": null
+                                                }
+                                              },
+                                              "path": [
+                                                "result"
+                                              ],
+                                              "fallback": null
+                                            }
+                                          }
+                                        }
+                                      ]
+                                    }
+                                  }
+                                ],
+                                "else": null
+                              }
+                            }
+                          }
+                        },
+                        "as": "page",
+                        "when": {
+                          "$and": [
+                            {
+                              "$neq": [
+                                {
+                                  "$var": "page"
+                                },
+                                null
+                              ]
+                            },
+                            {
+                              "$gt": [
+                                {
+                                  "$length": {
+                                    "$get": {
+                                      "from": {
+                                        "$var": "page"
+                                      },
+                                      "path": [
+                                        "items"
+                                      ],
+                                      "fallback": []
+                                    }
+                                  }
+                                },
+                                0
+                              ]
+                            }
+                          ]
+                        }
+                      }
+                    },
+                    {
+                      "$get": {
+                        "from": {
+                          "$ref": "$.steps.next.value"
+                        },
+                        "path": [
+                          "pages"
+                        ],
+                        "fallback": []
+                      }
+                    }
+                  ]
+                },
+                "visited": {
+                  "$coalesce": [
+                    {
+                      "$get": {
+                        "from": {
+                          "$ref": "$.steps.next.value"
+                        },
+                        "path": [
+                          "visited"
+                        ],
+                        "fallback": null
+                      }
+                    },
+                    {
+                      "$ref": "$.steps.sources.value.visited"
+                    }
+                  ]
+                },
+                "limited": {
+                  "$or": [
+                    {
+                      "$gt": [
+                        {
+                          "$length": {
+                            "$filter": {
+                              "over": {
+                                "$unique": {
+                                  "$ref": "$.input.urls"
+                                }
+                              },
+                              "as": "url",
+                              "when": {
+                                "$empty": {
+                                  "$filter": {
+                                    "over": {
+                                      "$ref": "$.input.seen"
+                                    },
+                                    "as": "member",
+                                    "when": {
+                                      "$eq": [
+                                        {
+                                          "$var": "member"
+                                        },
+                                        {
+                                          "$var": "url"
+                                        }
+                                      ]
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "$length": {
+                            "$ref": "$.steps.admit.value"
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "$get": {
+                        "from": {
+                          "$ref": "$.steps.next.value"
+                        },
+                        "path": [
+                          "limited"
+                        ],
+                        "fallback": false
+                      }
+                    }
+                  ]
+                },
+                "redirects": {
+                  "$flatten": [
+                    {
+                      "$ref": "$.steps.sources.value.redirects"
+                    },
+                    {
+                      "$get": {
+                        "from": {
+                          "$ref": "$.steps.next.value"
+                        },
+                        "path": [
+                          "redirects"
+                        ],
+                        "fallback": []
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "id": "redirect",
+            "revision": 1,
+            "flow": {
+              "inputSchema": {
+                "type": "object"
+              },
+              "outputSchema": {
+                "type": "boolean"
+              },
+              "steps": [],
+              "output": {
+                "$or": [
+                  {
+                    "$eq": [
+                      {
+                        "$ref": "$.input.status"
+                      },
+                      301
+                    ]
+                  },
+                  {
+                    "$eq": [
+                      {
+                        "$ref": "$.input.status"
+                      },
+                      302
+                    ]
+                  },
+                  {
+                    "$eq": [
+                      {
+                        "$ref": "$.input.status"
+                      },
+                      303
+                    ]
+                  },
+                  {
+                    "$eq": [
+                      {
+                        "$ref": "$.input.status"
+                      },
+                      307
+                    ]
+                  },
+                  {
+                    "$eq": [
+                      {
+                        "$ref": "$.input.status"
+                      },
+                      308
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "id": "batch",
+            "revision": 1,
+            "flow": {
+              "inputSchema": {
+                "type": "object",
+                "properties": {
+                  "policy": {
+                    "type": "object",
+                    "properties": {
+                      "maxRedirects": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "accept": {
+                        "type": "object",
+                        "properties": {
+                          "statuses": {
+                            "type": "array",
+                            "minItems": 1,
+                            "items": {
+                              "type": "integer",
+                              "minimum": 100,
+                              "maximum": 599
+                            }
+                          },
+                          "mediaTypes": {
+                            "anyOf": [
+                              {
+                                "type": "array",
+                                "items": {
+                                  "type": "string",
+                                  "minLength": 1
+                                }
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "statuses",
+                          "mediaTypes"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "required": [
+                      "maxRedirects",
+                      "accept"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "urls": {
+                    "type": "array"
+                  },
+                  "visited": {
+                    "type": "array"
+                  },
+                  "seen": {
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "urls",
+                  "visited",
+                  "seen",
+                  "policy"
+                ]
+              },
+              "outputSchema": {
+                "type": "object"
+              },
+              "steps": [
+                {
+                  "id": "source",
+                  "when": {
+                    "$and": [
+                      {
+                        "$gt": [
+                          {
+                            "$length": {
+                              "$ref": "$.input.urls"
+                            }
+                          },
+                          0
+                        ]
+                      },
+                      {
+                        "$empty": {
+                          "$filter": {
+                            "over": {
+                              "$ref": "$.input.seen"
+                            },
+                            "as": "member",
+                            "when": {
+                              "$eq": [
+                                {
+                                  "$var": "member"
+                                },
+                                {
+                                  "$get": {
+                                    "from": {
+                                      "$ref": "$.input.urls"
+                                    },
+                                    "path": [
+                                      0
+                                    ],
+                                    "fallback": null
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  "call": {
+                    "flow": {
+                      "id": "fetch",
+                      "revision": 2
+                    }
+                  },
+                  "input": {
+                    "url": {
+                      "$get": {
+                        "from": {
+                          "$ref": "$.input.urls"
+                        },
+                        "path": [
+                          0
+                        ],
+                        "fallback": null
+                      }
+                    },
+                    "remaining": {
+                      "$ref": "$.input.policy.maxRedirects"
+                    },
+                    "seen": {
+                      "$ref": "$.input.seen"
+                    },
+                    "accept": {
+                      "$ref": "$.input.policy.accept"
+                    }
+                  }
+                },
+                {
+                  "id": "next",
+                  "when": {
+                    "$gt": [
+                      {
+                        "$length": {
+                          "$ref": "$.input.urls"
+                        }
+                      },
+                      1
+                    ]
+                  },
+                  "call": {
+                    "flow": {
+                      "id": "batch",
+                      "revision": 1
+                    }
+                  },
+                  "input": {
+                    "urls": {
+                      "$slice": {
+                        "from": {
+                          "$ref": "$.input.urls"
+                        },
+                        "start": 1
+                      }
+                    },
+                    "visited": {
+                      "$case": {
+                        "branches": [
+                          {
+                            "when": {
+                              "$neq": [
+                                {
+                                  "$ref": "$.steps.source.value"
+                                },
+                                null
+                              ]
+                            },
+                            "then": {
+                              "$flatten": [
+                                {
+                                  "$ref": "$.input.visited"
+                                },
+                                [
+                                  {
+                                    "$get": {
+                                      "from": {
+                                        "$ref": "$.input.urls"
+                                      },
+                                      "path": [
+                                        0
+                                      ],
+                                      "fallback": null
+                                    }
+                                  }
+                                ]
+                              ]
+                            }
+                          }
+                        ],
+                        "else": {
+                          "$ref": "$.input.visited"
+                        }
+                      }
+                    },
+                    "seen": {
+                      "$case": {
+                        "branches": [
+                          {
+                            "when": {
+                              "$gt": [
+                                {
+                                  "$length": {
+                                    "$ref": "$.input.urls"
+                                  }
+                                },
+                                0
+                              ]
+                            },
+                            "then": {
+                              "$flatten": [
+                                {
+                                  "$ref": "$.input.seen"
+                                },
+                                [
+                                  {
+                                    "$get": {
+                                      "from": {
+                                        "$ref": "$.input.urls"
+                                      },
+                                      "path": [
+                                        0
+                                      ],
+                                      "fallback": null
+                                    }
+                                  }
+                                ],
+                                {
+                                  "$map": {
+                                    "over": {
+                                      "$get": {
+                                        "from": {
+                                          "$ref": "$.steps.source.value"
+                                        },
+                                        "path": [
+                                          "redirects"
+                                        ],
+                                        "fallback": []
+                                      }
+                                    },
+                                    "as": "redirect",
+                                    "body": {
+                                      "$get": {
+                                        "from": {
+                                          "$var": "redirect"
+                                        },
+                                        "path": [
+                                          "url"
+                                        ],
+                                        "fallback": null
+                                      }
+                                    }
+                                  }
+                                },
+                                {
+                                  "$case": {
+                                    "branches": [
+                                      {
+                                        "when": {
+                                          "$neq": [
+                                            {
+                                              "$get": {
+                                                "from": {
+                                                  "$ref": "$.steps.source.value"
+                                                },
+                                                "path": [
+                                                  "source"
+                                                ],
+                                                "fallback": null
+                                              }
+                                            },
+                                            null
+                                          ]
+                                        },
+                                        "then": [
+                                          {
+                                            "$get": {
+                                              "from": {
+                                                "$ref": "$.steps.source.value"
+                                              },
+                                              "path": [
+                                                "source",
+                                                "url"
+                                              ],
+                                              "fallback": null
+                                            }
+                                          }
+                                        ]
+                                      }
+                                    ],
+                                    "else": []
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        ],
+                        "else": {
+                          "$ref": "$.input.seen"
+                        }
+                      }
+                    },
+                    "policy": {
+                      "$pick": {
+                        "from": {
+                          "$ref": "$.input.policy"
+                        },
+                        "keys": [
+                          "maxRedirects",
+                          "accept"
+                        ]
+                      }
+                    }
+                  }
+                }
+              ],
+              "output": {
+                "sources": {
+                  "$flatten": [
+                    {
+                      "$case": {
+                        "branches": [
+                          {
+                            "when": {
+                              "$neq": [
+                                {
+                                  "$get": {
+                                    "from": {
+                                      "$ref": "$.steps.source.value"
+                                    },
+                                    "path": [
+                                      "source"
+                                    ],
+                                    "fallback": null
+                                  }
+                                },
+                                null
+                              ]
+                            },
+                            "then": [
+                              {
+                                "$ref": "$.steps.source.value"
+                              }
+                            ]
+                          }
+                        ],
+                        "else": []
+                      }
+                    },
+                    {
+                      "$get": {
+                        "from": {
+                          "$ref": "$.steps.next.value"
+                        },
+                        "path": [
+                          "sources"
+                        ],
+                        "fallback": []
+                      }
+                    }
+                  ]
+                },
+                "seen": {
+                  "$case": {
+                    "branches": [
+                      {
+                        "when": {
+                          "$neq": [
+                            {
+                              "$ref": "$.steps.next.value"
+                            },
+                            null
+                          ]
+                        },
+                        "then": {
+                          "$get": {
+                            "from": {
+                              "$ref": "$.steps.next.value"
+                            },
+                            "path": [
+                              "seen"
+                            ],
+                            "fallback": null
+                          }
+                        }
+                      }
+                    ],
+                    "else": {
+                      "$case": {
+                        "branches": [
+                          {
+                            "when": {
+                              "$gt": [
+                                {
+                                  "$length": {
+                                    "$ref": "$.input.urls"
+                                  }
+                                },
+                                0
+                              ]
+                            },
+                            "then": {
+                              "$flatten": [
+                                {
+                                  "$ref": "$.input.seen"
+                                },
+                                [
+                                  {
+                                    "$get": {
+                                      "from": {
+                                        "$ref": "$.input.urls"
+                                      },
+                                      "path": [
+                                        0
+                                      ],
+                                      "fallback": null
+                                    }
+                                  }
+                                ],
+                                {
+                                  "$map": {
+                                    "over": {
+                                      "$get": {
+                                        "from": {
+                                          "$ref": "$.steps.source.value"
+                                        },
+                                        "path": [
+                                          "redirects"
+                                        ],
+                                        "fallback": []
+                                      }
+                                    },
+                                    "as": "redirect",
+                                    "body": {
+                                      "$get": {
+                                        "from": {
+                                          "$var": "redirect"
+                                        },
+                                        "path": [
+                                          "url"
+                                        ],
+                                        "fallback": null
+                                      }
+                                    }
+                                  }
+                                },
+                                {
+                                  "$case": {
+                                    "branches": [
+                                      {
+                                        "when": {
+                                          "$neq": [
+                                            {
+                                              "$get": {
+                                                "from": {
+                                                  "$ref": "$.steps.source.value"
+                                                },
+                                                "path": [
+                                                  "source"
+                                                ],
+                                                "fallback": null
+                                              }
+                                            },
+                                            null
+                                          ]
+                                        },
+                                        "then": [
+                                          {
+                                            "$get": {
+                                              "from": {
+                                                "$ref": "$.steps.source.value"
+                                              },
+                                              "path": [
+                                                "source",
+                                                "url"
+                                              ],
+                                              "fallback": null
+                                            }
+                                          }
+                                        ]
+                                      }
+                                    ],
+                                    "else": []
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        ],
+                        "else": {
+                          "$ref": "$.input.seen"
+                        }
+                      }
+                    }
+                  }
+                },
+                "visited": {
+                  "$case": {
+                    "branches": [
+                      {
+                        "when": {
+                          "$neq": [
+                            {
+                              "$ref": "$.steps.next.value"
+                            },
+                            null
+                          ]
+                        },
+                        "then": {
+                          "$get": {
+                            "from": {
+                              "$ref": "$.steps.next.value"
+                            },
+                            "path": [
+                              "visited"
+                            ],
+                            "fallback": null
+                          }
+                        }
+                      }
+                    ],
+                    "else": {
+                      "$case": {
+                        "branches": [
+                          {
+                            "when": {
+                              "$neq": [
+                                {
+                                  "$ref": "$.steps.source.value"
+                                },
+                                null
+                              ]
+                            },
+                            "then": {
+                              "$flatten": [
+                                {
+                                  "$ref": "$.input.visited"
+                                },
+                                [
+                                  {
+                                    "$get": {
+                                      "from": {
+                                        "$ref": "$.input.urls"
+                                      },
+                                      "path": [
+                                        0
+                                      ],
+                                      "fallback": null
+                                    }
+                                  }
+                                ]
+                              ]
+                            }
+                          }
+                        ],
+                        "else": {
+                          "$ref": "$.input.visited"
+                        }
+                      }
+                    }
+                  }
+                },
+                "redirects": {
+                  "$flatten": [
+                    {
+                      "$get": {
+                        "from": {
+                          "$ref": "$.steps.source.value"
+                        },
+                        "path": [
+                          "redirects"
+                        ],
+                        "fallback": []
+                      }
+                    },
+                    {
+                      "$get": {
+                        "from": {
+                          "$ref": "$.steps.next.value"
+                        },
+                        "path": [
+                          "redirects"
+                        ],
+                        "fallback": []
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "id": "fetch-resources",
+            "revision": 1,
+            "flow": {
+              "inputSchema": {
+                "type": "object",
+                "properties": {
+                  "pages": {
+                    "type": "array"
+                  },
+                  "policy": {
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "pages",
+                  "policy"
+                ],
+                "additionalProperties": false
+              },
+              "outputSchema": {
+                "type": "object",
+                "properties": {
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "object"
+                    }
+                  },
+                  "visited": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "redirects": {
+                    "type": "array",
+                    "items": {
+                      "type": "object"
+                    }
+                  },
+                  "limited": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "items",
+                  "visited",
+                  "redirects",
+                  "limited"
+                ],
+                "additionalProperties": false
+              },
+              "steps": [
+                {
+                  "id": "references",
+                  "each": {
+                    "items": {
+                      "$filter": {
+                        "over": {
+                          "$ref": "$.input.pages"
+                        },
+                        "as": "page",
+                        "when": {
+                          "$and": [
+                            {
+                              "$neq": [
+                                {
+                                  "$get": {
+                                    "from": {
+                                      "$var": "page"
+                                    },
+                                    "path": [
+                                      "result"
+                                    ],
+                                    "fallback": null
+                                  }
+                                },
+                                null
+                              ]
+                            },
+                            {
+                              "$gt": [
+                                {
+                                  "$length": {
+                                    "$get": {
+                                      "from": {
+                                        "$var": "page"
+                                      },
+                                      "path": [
+                                        "items"
+                                      ],
+                                      "fallback": []
+                                    }
+                                  }
+                                },
+                                0
+                              ]
+                            }
+                          ]
+                        }
+                      }
+                    },
+                    "onFailure": "stop"
+                  },
+                  "checks": [
+                    {
+                      "id": "resource-fetch-permitted",
+                      "test": {
+                        "$ref": "$.input.policy.allowResourceFetching"
+                      }
+                    }
+                  ],
+                  "call": {
+                    "operation": "url.collect"
+                  },
+                  "input": {
+                    "values": {
+                      "$map": {
+                        "over": {
+                          "$ref": "$.item.items"
+                        },
+                        "as": "selected",
+                        "body": {
+                          "$reduce": {
+                            "over": {
+                              "$ref": "$.item.result.input.reference"
+                            },
+                            "as": "part",
+                            "acc": "reference",
+                            "body": {
+                              "$get": {
+                                "from": {
+                                  "$var": "reference"
+                                },
+                                "path": [
+                                  {
+                                    "$var": "part"
+                                  }
+                                ],
+                                "fallback": null
+                              }
+                            },
+                            "init": {
+                              "$var": "selected"
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "base": {
+                      "$ref": "$.item.baseUrl"
+                    },
+                    "encoding": {
+                      "$ref": "$.item.encoding"
+                    },
+                    "limit": {
+                      "$length": {
+                        "$ref": "$.item.items"
+                      }
+                    },
+                    "exclude": [],
+                    "stripFragments": {
+                      "$ref": "$.input.policy.stripFragments"
+                    }
+                  }
+                },
+                {
+                  "id": "urls",
+                  "value": {
+                    "$unique": {
+                      "$flatten": {
+                        "$map": {
+                          "over": {
+                            "$ref": "$.steps.references.value"
+                          },
+                          "as": "outcome",
+                          "body": {
+                            "$get": {
+                              "from": {
+                                "$var": "outcome"
+                              },
+                              "path": [
+                                "value"
+                              ],
+                              "fallback": []
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "id": "admit",
+                  "call": {
+                    "flow": {
+                      "id": "admit",
+                      "revision": 1
+                    }
+                  },
+                  "input": {
+                    "urls": {
+                      "$ref": "$.steps.urls.value"
+                    },
+                    "visited": [],
+                    "seen": [],
+                    "maxPages": {
+                      "$ref": "$.input.policy.maxResources"
+                    }
+                  }
+                },
+                {
+                  "id": "batch",
+                  "call": {
+                    "flow": {
+                      "id": "batch",
+                      "revision": 1
+                    }
+                  },
+                  "input": {
+                    "urls": {
+                      "$ref": "$.steps.admit.value"
+                    },
+                    "visited": [],
+                    "seen": [],
+                    "policy": {
+                      "$pick": {
+                        "from": {
+                          "$ref": "$.input.policy"
+                        },
+                        "keys": [
+                          "maxRedirects",
+                          "accept"
+                        ]
+                      }
+                    }
+                  }
+                }
+              ],
+              "output": {
+                "items": {
+                  "$ref": "$.steps.batch.value.sources"
+                },
+                "visited": {
+                  "$ref": "$.steps.batch.value.visited"
+                },
+                "redirects": {
+                  "$ref": "$.steps.batch.value.redirects"
+                },
+                "limited": {
+                  "$gt": [
+                    {
+                      "$length": {
+                        "$ref": "$.steps.urls.value"
+                      }
+                    },
+                    {
+                      "$length": {
+                        "$ref": "$.steps.admit.value"
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "id": "task-result",
+            "revision": 1,
+            "flow": {
+              "inputSchema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "task": {
+                        "$ref": "#/$defs/__schema0"
+                      },
+                      "rules": {
+                        "$ref": "#/$defs/__schema2"
+                      },
+                      "allowResourceFetching": {
+                        "$ref": "#/$defs/__schema17"
+                      }
+                    },
+                    "required": [
+                      "task",
+                      "rules",
+                      "allowResourceFetching"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "task": {
+                        "$ref": "#/$defs/__schema0"
+                      },
+                      "rules": {
+                        "$ref": "#/$defs/__schema2"
+                      },
+                      "allowResourceFetching": {
+                        "$ref": "#/$defs/__schema17"
+                      },
+                      "policy": {
+                        "type": "object",
+                        "properties": {
+                          "allowLinkFollowing": {
+                            "type": "boolean"
+                          },
+                          "linkDepth": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "maxPages": {
+                            "type": "integer",
+                            "exclusiveMinimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "maxRedirects": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "stripFragments": {
+                            "type": "boolean"
+                          },
+                          "accept": {
+                            "$ref": "#/$defs/__schema18"
+                          }
+                        },
+                        "required": [
+                          "allowLinkFollowing",
+                          "linkDepth",
+                          "maxPages",
+                          "maxRedirects",
+                          "stripFragments",
+                          "accept"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "canFollow": {
+                        "type": "boolean"
+                      },
+                      "minimumResultMatches": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      "seen": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "resources": {
+                        "type": "object",
+                        "properties": {
+                          "allowResourceFetching": {
+                            "type": "boolean"
+                          },
+                          "maxResources": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "maxRedirects": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "stripFragments": {
+                            "type": "boolean"
+                          },
+                          "accept": {
+                            "$ref": "#/$defs/__schema18"
+                          }
+                        },
+                        "required": [
+                          "allowResourceFetching",
+                          "maxResources",
+                          "maxRedirects",
+                          "stripFragments",
+                          "accept"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "formats": {
+                        "minItems": 1,
+                        "type": "array",
+                        "items": {
+                          "$ref": "#/$defs/__schema20"
+                        }
+                      },
+                      "resultFlow": {
+                        "anyOf": [
+                          {
+                            "$ref": "#/$defs/__schema1"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "mode": {
+                        "type": "string",
+                        "enum": [
+                          "stage",
+                          "walk"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "task",
+                      "rules",
+                      "allowResourceFetching",
+                      "policy",
+                      "canFollow",
+                      "minimumResultMatches",
+                      "seen",
+                      "resources",
+                      "formats",
+                      "resultFlow",
+                      "mode"
+                    ],
+                    "additionalProperties": false
+                  }
+                ],
+                "$defs": {
+                  "__schema0": {
+                    "type": "object",
+                    "properties": {
+                      "requiresNavigation": {
+                        "type": "boolean",
+                        "description": "Whether TASK requests additional document acquisition beyond this starting document."
+                      },
+                      "resultFlow": {
+                        "anyOf": [
+                          {
+                            "$ref": "#/$defs/__schema1"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "description": "Declared result-processing flow reference, or null for selected page data and references only."
+                      }
+                    },
+                    "required": [
+                      "requiresNavigation",
+                      "resultFlow"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "__schema1": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "An offered bundled result-flow ID."
+                      },
+                      "revision": {
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 9007199254740991,
+                        "description": "The exact offered flow revision."
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "revision"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "__schema2": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "preconditions": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/$defs/__schema3"
+                          },
+                          "description": "Context selector/count checks applied to every supplied page before result and navigation selection. An empty array adds no context checks."
+                        },
+                        "selector": {
+                          "anyOf": [
+                            {
+                              "$ref": "#/$defs/__schema5"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "description": "CSS selecting current-page result elements, or null for no result selection. Selecting an anchor returns its data; result controls resource fetching."
+                        },
+                        "links": {
+                          "anyOf": [
+                            {
+                              "$ref": "#/$defs/__schema6"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "description": "CSS selecting link elements for next-stage document acquisition, or null for no onward navigation. Independent from current-page result selection."
+                        },
+                        "fields": {
+                          "description": "Optional structured fields with arbitrary names, scoped to each selected result record. Null or omission returns ordinary native elements. Requires a non-null result selector.",
+                          "$ref": "#/$defs/__schema7"
+                        },
+                        "result": {
+                          "anyOf": [
+                            {
+                              "$ref": "#/$defs/__schema11"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "description": "Optional processing of selected results: a bundled flow reference and a property path to each resource URL. Null means no result-processing flow for this stage."
+                        },
+                        "reference": {
+                          "anyOf": [
+                            {
+                              "oneOf": [
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "id": {
+                                      "type": "string",
+                                      "minLength": 1
+                                    },
+                                    "format": {
+                                      "type": "string",
+                                      "const": "json"
+                                    },
+                                    "xml": {
+                                      "type": "null"
+                                    },
+                                    "mapping": {
+                                      "$ref": "#/$defs/__schema13"
+                                    }
+                                  },
+                                  "required": [
+                                    "id",
+                                    "format",
+                                    "xml"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "id": {
+                                      "type": "string",
+                                      "minLength": 1
+                                    },
+                                    "format": {
+                                      "type": "string",
+                                      "const": "xml"
+                                    },
+                                    "xml": {
+                                      "type": "object",
+                                      "properties": {
+                                        "selector": {
+                                          "type": "string",
+                                          "minLength": 1,
+                                          "description": "XPath 1.0 selecting the record elements in source order."
+                                        },
+                                        "namespaces": {
+                                          "description": "XPath prefix to namespace URI bindings. Use explicit bindings for namespaced elements, including a source default namespace; XPath prefixes need not match source prefixes. Use {} for unnamespaced XML. The reserved __proto__ record key is unsupported.",
+                                          "$ref": "#/$defs/__schema15"
+                                        },
+                                        "fields": {
+                                          "description": "Arbitrary field names mapped to XPath 1.0 expressions evaluated relative to each selected element. string(...) returns a scalar string, boolean(...) a boolean; node-set expressions return all their string values as an array. The reserved __proto__ record key is unsupported.",
+                                          "$ref": "#/$defs/__schema15"
+                                        }
+                                      },
+                                      "required": [
+                                        "selector",
+                                        "namespaces",
+                                        "fields"
+                                      ],
+                                      "additionalProperties": false
+                                    },
+                                    "mapping": {
+                                      "$ref": "#/$defs/__schema16"
+                                    }
+                                  },
+                                  "required": [
+                                    "id",
+                                    "format",
+                                    "xml"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "preconditions",
+                        "selector",
+                        "links",
+                        "result"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "__schema3": {
+                    "type": "object",
+                    "properties": {
+                      "selector": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "CSS identifying page context checked before result and navigation selection."
+                      },
+                      "minimum": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991,
+                        "description": "Inclusive minimum context matches."
+                      },
+                      "maximum": {
+                        "anyOf": [
+                          {
+                            "$ref": "#/$defs/__schema4"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "description": "Inclusive maximum context matches; null means unbounded. Must be at least minimum."
+                      }
+                    },
+                    "required": [
+                      "selector",
+                      "minimum",
+                      "maximum"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "__schema4": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "__schema5": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "__schema6": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "__schema7": {
+                    "anyOf": [
+                      {
+                        "description": "Arbitrary field names mapped to record-scoped CSS/read/bounds rules. Values remain arrays. The reserved __proto__ field key is unsupported.",
+                        "$ref": "#/$defs/__schema8"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "__schema8": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string",
+                      "minLength": 1,
+                      "pattern": "^(?!__proto__$)"
+                    },
+                    "additionalProperties": {
+                      "type": "object",
+                      "properties": {
+                        "selector": {
+                          "type": "string",
+                          "minLength": 1,
+                          "description": "CSS over this record and its descendants only, in document order. :scope explicitly selects the record itself."
+                        },
+                        "attribute": {
+                          "anyOf": [
+                            {
+                              "$ref": "#/$defs/__schema9"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "description": "Null reads native text; a name reads that exact parsed HTML attribute, not a JavaScript property name. Missing attributes produce null, not invented text."
+                        },
+                        "minimum": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991,
+                          "description": "Inclusive minimum selected elements per record. Zero permits no matches. This counts elements, not non-null or nonempty values."
+                        },
+                        "maximum": {
+                          "anyOf": [
+                            {
+                              "$ref": "#/$defs/__schema10"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "description": "Inclusive maximum selected elements per record; null is unbounded."
+                        }
+                      },
+                      "required": [
+                        "selector",
+                        "attribute",
+                        "minimum",
+                        "maximum"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "__schema9": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "__schema10": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "__schema11": {
+                    "type": "object",
+                    "properties": {
+                      "flow": {
+                        "$ref": "#/$defs/__schema1"
+                      },
+                      "input": {
+                        "type": "object",
+                        "properties": {
+                          "reference": {
+                            "minItems": 1,
+                            "type": "array",
+                            "items": {
+                              "$ref": "#/$defs/__schema12"
+                            },
+                            "description": "Property path within each selected item to its resource URL, for example [\"attributes\",\"href\"] for an anchor or [\"attributes\",\"content\"] for URL metadata."
+                          }
+                        },
+                        "required": [
+                          "reference"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "required": [
+                      "flow",
+                      "input"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "__schema12": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
+                      }
+                    ]
+                  },
+                  "__schema13": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "null"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "$ref": "#/$defs/__schema13"
+                        }
+                      },
+                      {
+                        "type": "object",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "additionalProperties": {
+                          "$ref": "#/$defs/__schema13"
+                        }
+                      }
+                    ]
+                  },
+                  "__schema14": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string",
+                      "minLength": 1,
+                      "pattern": "^(?!__proto__$)"
+                    },
+                    "additionalProperties": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "__schema15": {
+                    "$ref": "#/$defs/__schema14"
+                  },
+                  "__schema16": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "null"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "$ref": "#/$defs/__schema16"
+                        }
+                      },
+                      {
+                        "type": "object",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "additionalProperties": {
+                          "$ref": "#/$defs/__schema16"
+                        }
+                      }
+                    ]
+                  },
+                  "__schema17": {
+                    "type": "boolean"
+                  },
+                  "__schema18": {
+                    "type": "object",
+                    "properties": {
+                      "statuses": {
+                        "minItems": 1,
+                        "type": "array",
+                        "items": {
+                          "$ref": "#/$defs/__schema19"
+                        }
+                      },
+                      "mediaTypes": {
+                        "anyOf": [
+                          {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "minLength": 1
+                            }
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "statuses",
+                      "mediaTypes"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "__schema19": {
+                    "type": "integer",
+                    "minimum": 100,
+                    "maximum": 599
+                  },
+                  "__schema20": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "enum": [
+                          "html",
+                          "json",
+                          "xml"
+                        ]
+                      },
+                      "mediaTypes": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "mediaTypeSuffixes": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "excludedMediaTypes": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "mediaTypes",
+                      "mediaTypeSuffixes"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "outputSchema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "accepted": {
+                    "type": "boolean"
+                  },
+                  "task": {
+                    "type": "object",
+                    "properties": {
+                      "requiresNavigation": {
+                        "type": "boolean",
+                        "description": "Whether TASK requests additional document acquisition beyond this starting document."
+                      },
+                      "resultFlow": {
+                        "anyOf": [
+                          {
+                            "$ref": "#/$defs/__schema0"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "description": "Declared result-processing flow reference, or null for selected page data and references only."
+                      }
+                    },
+                    "required": [
+                      "requiresNavigation",
+                      "resultFlow"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "accepted",
+                  "task"
+                ],
+                "additionalProperties": false,
+                "$defs": {
+                  "__schema0": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "An offered bundled result-flow ID."
+                      },
+                      "revision": {
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 9007199254740991,
+                        "description": "The exact offered flow revision."
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "revision"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "steps": [],
+              "output": {
+                "accepted": {
+                  "$and": [
+                    {
+                      "$or": [
+                        {
+                          "$eq": [
+                            {
+                              "$ref": "$.input.task.resultFlow"
+                            },
+                            null
+                          ]
+                        },
+                        {
+                          "$ref": "$.input.allowResourceFetching"
+                        }
+                      ]
+                    },
+                    {
+                      "$empty": {
+                        "$filter": {
+                          "over": {
+                            "$ref": "$.input.rules"
+                          },
+                          "as": "rule",
+                          "when": {
+                            "$case": {
+                              "branches": [
+                                {
+                                  "when": {
+                                    "$and": [
+                                      {
+                                        "$eq": [
+                                          {
+                                            "$get": {
+                                              "from": {
+                                                "$var": "rule"
+                                              },
+                                              "path": [
+                                                "selector"
+                                              ],
+                                              "fallback": null
+                                            }
+                                          },
+                                          null
+                                        ]
+                                      },
+                                      {
+                                        "$eq": [
+                                          {
+                                            "$get": {
+                                              "from": {
+                                                "$var": "rule"
+                                              },
+                                              "path": [
+                                                "reference"
+                                              ],
+                                              "fallback": null
+                                            }
+                                          },
+                                          null
+                                        ]
+                                      }
+                                    ]
+                                  },
+                                  "then": {
+                                    "$neq": [
+                                      {
+                                        "$get": {
+                                          "from": {
+                                            "$var": "rule"
+                                          },
+                                          "path": [
+                                            "result"
+                                          ],
+                                          "fallback": null
+                                        }
+                                      },
+                                      null
+                                    ]
+                                  }
+                                }
+                              ],
+                              "else": {
+                                "$neq": [
+                                  {
+                                    "$get": {
+                                      "from": {
+                                        "$var": "rule"
+                                      },
+                                      "path": [
+                                        "result",
+                                        "flow"
+                                      ],
+                                      "fallback": null
+                                    }
+                                  },
+                                  {
+                                    "$ref": "$.input.task.resultFlow"
+                                  }
+                                ]
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                },
+                "task": {
+                  "$ref": "$.input.task"
+                }
+              }
+            }
+          },
+          {
+            "id": "output-source",
+            "revision": 1,
+            "flow": {
+              "inputSchema": {
+                "type": "object"
+              },
+              "outputSchema": {
+                "type": "object"
+              },
+              "steps": [],
+              "output": {
+                "data": {
+                  "pages": {
+                    "$map": {
+                      "over": {
+                        "$ref": "$.input.pages"
+                      },
+                      "as": "page",
+                      "body": {
+                        "$pick": {
+                          "from": {
+                            "$var": "page"
+                          },
+                          "keys": [
+                            "url",
+                            "baseUrl",
+                            "encoding",
+                            "items"
+                          ]
+                        }
+                      }
+                    }
+                  },
+                  "visited": {
+                    "$ref": "$.input.visited"
+                  },
+                  "limited": {
+                    "$ref": "$.input.limited"
+                  }
+                },
+                "meta": {
+                  "$omit": {
+                    "from": {
+                      "$ref": "$.input"
+                    },
+                    "keys": [
+                      "pages"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          {
+            "id": "source-format",
+            "revision": 1,
+            "flow": {
+              "inputSchema": {
+                "type": "object"
+              },
+              "outputSchema": {
+                "type": "object"
+              },
+              "steps": [],
+              "output": {
+                "$with": {
+                  "let": {
+                    "media": {
+                      "$trim": {
+                        "$get": {
+                          "from": {
+                            "$split": {
+                              "value": {
+                                "$lower": {
+                                  "$get": {
+                                    "from": {
+                                      "$ref": "$.input.source"
+                                    },
+                                    "path": [
+                                      "headers",
+                                      "content-type",
+                                      0
+                                    ],
+                                    "fallback": ""
+                                  }
+                                }
+                              },
+                              "sep": ";"
+                            }
+                          },
+                          "path": [
+                            0
+                          ],
+                          "fallback": ""
+                        }
+                      }
+                    }
+                  },
+                  "value": {
+                    "mediaType": {
+                      "$var": "media"
+                    },
+                    "adapters": {
+                      "$map": {
+                        "over": {
+                          "$filter": {
+                            "over": {
+                              "$ref": "$.input.formats"
+                            },
+                            "as": "format",
+                            "when": {
+                              "$and": [
+                                {
+                                  "$or": [
+                                    {
+                                      "$not": {
+                                        "$empty": {
+                                          "$filter": {
+                                            "over": {
+                                              "$get": {
+                                                "from": {
+                                                  "$var": "format"
+                                                },
+                                                "path": [
+                                                  "mediaTypes"
+                                                ],
+                                                "fallback": []
+                                              }
+                                            },
+                                            "as": "mime",
+                                            "when": {
+                                              "$eq": [
+                                                {
+                                                  "$var": "mime"
+                                                },
+                                                {
+                                                  "$var": "media"
+                                                }
+                                              ]
+                                            }
+                                          }
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "$not": {
+                                        "$empty": {
+                                          "$filter": {
+                                            "over": {
+                                              "$get": {
+                                                "from": {
+                                                  "$var": "format"
+                                                },
+                                                "path": [
+                                                  "mediaTypeSuffixes"
+                                                ],
+                                                "fallback": []
+                                              }
+                                            },
+                                            "as": "suffix",
+                                            "when": {
+                                              "$endsWith": {
+                                                "value": {
+                                                  "$var": "media"
+                                                },
+                                                "suffix": {
+                                                  "$var": "suffix"
+                                                }
+                                              }
+                                            }
+                                          }
+                                        }
+                                      }
+                                    }
+                                  ]
+                                },
+                                {
+                                  "$empty": {
+                                    "$filter": {
+                                      "over": {
+                                        "$get": {
+                                          "from": {
+                                            "$var": "format"
+                                          },
+                                          "path": [
+                                            "excludedMediaTypes"
+                                          ],
+                                          "fallback": []
+                                        }
+                                      },
+                                      "as": "excluded",
+                                      "when": {
+                                        "$eq": [
+                                          {
+                                            "$var": "excluded"
+                                          },
+                                          {
+                                            "$var": "media"
+                                          }
+                                        ]
+                                      }
+                                    }
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        },
+                        "as": "format",
+                        "body": {
+                          "$get": {
+                            "from": {
+                              "$var": "format"
+                            },
+                            "path": [
+                              "id"
+                            ],
+                            "fallback": null
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "id": "require-format",
+            "revision": 1,
+            "flow": {
+              "inputSchema": {
+                "type": "object"
+              },
+              "outputSchema": {
+                "type": "object"
+              },
+              "steps": [
+                {
+                  "id": "format",
+                  "checks": [
+                    {
+                      "id": "source-format-changed",
+                      "test": {
+                        "$eq": [
+                          {
+                            "$ref": "$.value.adapters"
+                          },
+                          [
+                            {
+                              "$ref": "$.input.adapter"
+                            }
+                          ]
+                        ]
+                      }
+                    }
+                  ],
+                  "call": {
+                    "flow": {
+                      "id": "source-format",
+                      "revision": 1
+                    }
+                  },
+                  "input": {
+                    "source": {
+                      "$ref": "$.input.source"
+                    },
+                    "formats": {
+                      "$ref": "$.input.formats"
+                    }
+                  }
+                }
+              ],
+              "output": {
+                "$ref": "$.steps.format.value"
+              }
+            }
+          }
+        ]
+      },
+      "status": "reviewed",
+      "trial": {
+        "id": "trial",
+        "status": "completed",
+        "value": {
+          "visited": [
+            "https://www.meetup.com/vienna-ai/"
+          ],
+          "limited": false,
+          "redirects": [],
+          "pages": [
+            {
+              "url": "https://www.meetup.com/vienna-ai/",
+              "baseUrl": "https://www.meetup.com/vienna-ai/",
+              "encoding": "utf-8",
+              "items": [
+                {
+                  "text": "AI Summit (Virtual) - Run AI and Data PipelinesWed, Nov 4 · 4:00 PM CET·OnlineOnlineImportant: Register on the event website to receive the joining link. (rsvp on meetup will NOT receive anything).\nBuilding the prototype is the easy part. Keeping it running, with fresh data, tested agents, and pipelines that don’t need babysitting, is where most teams get stuck.\nAirflow Summit Online Reconnect brings engineers from Waze, Notion, Uber and more to show how they actually do it. It’s free, 100% virtual, and built for developers, data engineers and AI practitioners.\nWhat you’ll see:\n\nWaze: one platform for data and MLOps, 400+ pipelines, and AI-driven optimizations that cut BigQuery workloads by up to 95%.\nNotion: how a small team runs a data platform across four regions and a fleet of agents.\nUber: shipping DAGs like microservices, with version pinning and automated rollback.\nWho judges the agents? An automated eval platform that took a team from monthly releases to two or more per week.\nRAG at scale: keeping millions of documents parsed, embedded and indexed with Airflow and Apache Beam.\n\n🎁 Attend and you’re in the draw for an official Airflow certification exam from Astronomer, gift cards and other prizes.\nFeatured Speakers:\n\nAbdul Majid Mohammed, Sr Specialist Solutions Architect @ AWS\nAlex Ohayon, Google - Engineering Manager, Data Infrastructure, Waze\nAshir Alam, Sr Data Engineer at Credit Karma\nPiyush Maheshwari, Sr Software Engineer at Uber\nRamzi Alashabi, Chapter Lead Data and Streaming @ ABNAMRO Bank\nSean Bjurstrom, Sr Specialist Solutions Architect, Analytics @ AWS\nSneha Rao, Senior Solutions Architect @ AWS\nYunhao Qing, Senior SWE @ Notion Data Platform\n\nVenue:\nVirtual, join from anywhere5 attendees",
+                  "attributes": {
+                    "data-recommendationid": "",
+                    "data-recommendationsource": "",
+                    "data-eventref": "317176243",
+                    "data-element-name": "event-card",
+                    "data-testid": "event-card",
+                    "class": "relative flex w-full flex-col overflow-hidden transition-all duration-200 hover:-translate-y-ds2-4 active:scale-98"
+                  },
+                  "path": [
+                    1,
+                    1,
+                    1,
+                    7,
+                    2,
+                    0,
+                    1,
+                    0,
+                    2,
+                    0,
+                    0,
+                    1,
+                    1,
+                    0,
+                    0
+                  ]
+                },
+                {
+                  "text": "Google AI Deep Dive (Ep 5) - Discriminative (Jev/DiffusionGemma) modelsWed, Nov 11 · 6:00 PM CET·OnlineOnlineImportant: Register on the event website to receive the joining link. (rsvp on meetup will NOT receive anything).\nThis is virtual event for our AI global community, please double-check your local time. Can't make it live? Register anyway to receive the webinar recording.\nThe AI Deep Dive Series is a hands-on virtual initiative designed to empower developers to architect the next generation of Agentic AI. Moving beyond basic prompting, this series guides you through the complete engineering lifecycle using Google’s advanced stack.\nYou will master the transition from local Gemini CLI environments to building intelligent agents with the Agent Development Kit (ADK) and Model Context Protocol (MCP), culminating in the deployment of secure, collaborative Agent-to-Agent (A2A) ecosystems on Google Cloud Run. Join us to build AI systems that can truly reason, act, and scale.\nWorkshop: Getting started with Discriminative (Jev/DiffusionGemma) models\nSpeaker: Christina Lin (Google)\nVenue:\nVirtual, join from anywhere\nMore virtual sessions:\n\nDec 4th: AI Deep Dive with Google Ep 6. RSVP\n3 attendees",
+                  "attributes": {
+                    "data-recommendationid": "",
+                    "data-recommendationsource": "",
+                    "data-eventref": "317104140",
+                    "data-element-name": "event-card",
+                    "data-testid": "event-card",
+                    "class": "relative flex w-full flex-col overflow-hidden transition-all duration-200 hover:-translate-y-ds2-4 active:scale-98"
+                  },
+                  "path": [
+                    1,
+                    1,
+                    1,
+                    7,
+                    2,
+                    0,
+                    1,
+                    0,
+                    2,
+                    0,
+                    0,
+                    1,
+                    1,
+                    1,
+                    0
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "error": null
+      },
+      "execution": {
+        "id": "trial",
+        "status": "completed",
+        "value": {
+          "visited": [
+            "https://www.meetup.com/vienna-ai/"
+          ],
+          "limited": false,
+          "redirects": [],
+          "pages": [
+            {
+              "url": "https://www.meetup.com/vienna-ai/",
+              "baseUrl": "https://www.meetup.com/vienna-ai/",
+              "encoding": "utf-8",
+              "items": [
+                {
+                  "text": "AI Summit (Virtual) - Run AI and Data PipelinesWed, Nov 4 · 4:00 PM CET·OnlineOnlineImportant: Register on the event website to receive the joining link. (rsvp on meetup will NOT receive anything).\nBuilding the prototype is the easy part. Keeping it running, with fresh data, tested agents, and pipelines that don’t need babysitting, is where most teams get stuck.\nAirflow Summit Online Reconnect brings engineers from Waze, Notion, Uber and more to show how they actually do it. It’s free, 100% virtual, and built for developers, data engineers and AI practitioners.\nWhat you’ll see:\n\nWaze: one platform for data and MLOps, 400+ pipelines, and AI-driven optimizations that cut BigQuery workloads by up to 95%.\nNotion: how a small team runs a data platform across four regions and a fleet of agents.\nUber: shipping DAGs like microservices, with version pinning and automated rollback.\nWho judges the agents? An automated eval platform that took a team from monthly releases to two or more per week.\nRAG at scale: keeping millions of documents parsed, embedded and indexed with Airflow and Apache Beam.\n\n🎁 Attend and you’re in the draw for an official Airflow certification exam from Astronomer, gift cards and other prizes.\nFeatured Speakers:\n\nAbdul Majid Mohammed, Sr Specialist Solutions Architect @ AWS\nAlex Ohayon, Google - Engineering Manager, Data Infrastructure, Waze\nAshir Alam, Sr Data Engineer at Credit Karma\nPiyush Maheshwari, Sr Software Engineer at Uber\nRamzi Alashabi, Chapter Lead Data and Streaming @ ABNAMRO Bank\nSean Bjurstrom, Sr Specialist Solutions Architect, Analytics @ AWS\nSneha Rao, Senior Solutions Architect @ AWS\nYunhao Qing, Senior SWE @ Notion Data Platform\n\nVenue:\nVirtual, join from anywhere5 attendees",
+                  "attributes": {
+                    "data-recommendationid": "",
+                    "data-recommendationsource": "",
+                    "data-eventref": "317176243",
+                    "data-element-name": "event-card",
+                    "data-testid": "event-card",
+                    "class": "relative flex w-full flex-col overflow-hidden transition-all duration-200 hover:-translate-y-ds2-4 active:scale-98"
+                  },
+                  "path": [
+                    1,
+                    1,
+                    1,
+                    7,
+                    2,
+                    0,
+                    1,
+                    0,
+                    2,
+                    0,
+                    0,
+                    1,
+                    1,
+                    0,
+                    0
+                  ]
+                },
+                {
+                  "text": "Google AI Deep Dive (Ep 5) - Discriminative (Jev/DiffusionGemma) modelsWed, Nov 11 · 6:00 PM CET·OnlineOnlineImportant: Register on the event website to receive the joining link. (rsvp on meetup will NOT receive anything).\nThis is virtual event for our AI global community, please double-check your local time. Can't make it live? Register anyway to receive the webinar recording.\nThe AI Deep Dive Series is a hands-on virtual initiative designed to empower developers to architect the next generation of Agentic AI. Moving beyond basic prompting, this series guides you through the complete engineering lifecycle using Google’s advanced stack.\nYou will master the transition from local Gemini CLI environments to building intelligent agents with the Agent Development Kit (ADK) and Model Context Protocol (MCP), culminating in the deployment of secure, collaborative Agent-to-Agent (A2A) ecosystems on Google Cloud Run. Join us to build AI systems that can truly reason, act, and scale.\nWorkshop: Getting started with Discriminative (Jev/DiffusionGemma) models\nSpeaker: Christina Lin (Google)\nVenue:\nVirtual, join from anywhere\nMore virtual sessions:\n\nDec 4th: AI Deep Dive with Google Ep 6. RSVP\n3 attendees",
+                  "attributes": {
+                    "data-recommendationid": "",
+                    "data-recommendationsource": "",
+                    "data-eventref": "317104140",
+                    "data-element-name": "event-card",
+                    "data-testid": "event-card",
+                    "class": "relative flex w-full flex-col overflow-hidden transition-all duration-200 hover:-translate-y-ds2-4 active:scale-98"
+                  },
+                  "path": [
+                    1,
+                    1,
+                    1,
+                    7,
+                    2,
+                    0,
+                    1,
+                    0,
+                    2,
+                    0,
+                    0,
+                    1,
+                    1,
+                    1,
+                    0
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "error": null
+      }
+    },
+    "error": null
+  }
+}

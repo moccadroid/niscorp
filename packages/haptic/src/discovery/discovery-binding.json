@@ -1,0 +1,1166 @@
+{
+  "stamp": { "eden.engine": 1, "nisc.prism": 2 },
+  "flows": [
+    {
+      "id": "bind",
+      "revision": 1,
+      "flow": {
+        "inputSchema": { "type": "object" },
+        "outputSchema": { "type": "object" },
+        "steps": [
+          {
+            "id": "rules",
+            "value": {
+              "$case": {
+                "branches": [
+                  {
+                    "when": { "$eq": [{ "$ref": "$.input.mode" }, "stage"] },
+                    "then": [{ "$ref": "$.input.rule" }]
+                  }
+                ],
+                "else": { "$ref": "$.input.stages" }
+              }
+            }
+          },
+          {
+            "id": "preconditions",
+            "call": { "flow": { "id": "precondition-admission", "revision": 1 } },
+            "input": { "rules": { "$ref": "$.steps.rules.value" } },
+            "checks": [{ "id": "invalid-preconditions", "test": { "$ref": "$.value.accepted" } }]
+          },
+          {
+            "id": "references",
+            "value": {
+              "$filter": {
+                "over": { "$ref": "$.steps.rules.value" },
+                "as": "rule",
+                "when": {
+                  "$neq": [
+                    {
+                      "$get": {
+                        "from": { "$var": "rule" },
+                        "path": ["reference"],
+                        "fallback": null
+                      }
+                    },
+                    null
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "id": "programs",
+            "each": { "items": { "$ref": "$.steps.references.value" }, "onFailure": "stop" },
+            "value": {
+              "flow": {
+                "id": {
+                  "$join": { "parts": [{ "$ref": "$.item.reference.id" }, ":values"], "sep": "" }
+                },
+                "revision": 1,
+                "flow": {
+                  "inputSchema": { "type": "object" },
+                  "outputSchema": {
+                    "$case": {
+                      "branches": [
+                        {
+                          "when": { "$eq": [{ "$ref": "$.item.result" }, null] },
+                          "then": {
+                            "$update": {
+                              "from": { "$ref": "$.input.blueprint.referenceSchema" },
+                              "path": ["properties", "resources", "maxItems"],
+                              "value": 0
+                            }
+                          }
+                        }
+                      ],
+                      "else": { "$ref": "$.input.blueprint.referenceSchema" }
+                    }
+                  },
+                  "steps": [],
+                  "output": { "$ref": "$.item.reference.mapping" }
+                }
+              },
+              "step": {
+                "id": { "$ref": "$.item.reference.id" },
+                "call": {
+                  "flow": {
+                    "id": {
+                      "$join": {
+                        "parts": [{ "$ref": "$.item.reference.id" }, ":values"],
+                        "sep": ""
+                      }
+                    },
+                    "revision": 1
+                  }
+                },
+                "input": { "$const": { "$ref": "$.input.value" } },
+                "when": {
+                  "$fromEntries": [
+                    [
+                      "$eq",
+                      [{ "$const": { "$ref": "$.input.id" } }, { "$ref": "$.item.reference.id" }]
+                    ]
+                  ]
+                }
+              },
+              "branch": {
+                "when": {
+                  "$fromEntries": [
+                    [
+                      "$eq",
+                      [{ "$const": { "$ref": "$.input.id" } }, { "$ref": "$.item.reference.id" }]
+                    ]
+                  ]
+                },
+                "then": {
+                  "$fromEntries": [
+                    [
+                      "$get",
+                      {
+                        "from": { "$const": { "$ref": "$.steps" } },
+                        "path": [{ "$ref": "$.item.reference.id" }, "value"]
+                      }
+                    ]
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "id": "result",
+            "value": {
+              "$get": {
+                "from": {
+                  "$get": {
+                    "from": {
+                      "$filter": {
+                        "over": { "$ref": "$.steps.rules.value" },
+                        "as": "rule",
+                        "when": {
+                          "$neq": [
+                            {
+                              "$get": {
+                                "from": { "$var": "rule" },
+                                "path": ["result"],
+                                "fallback": null
+                              }
+                            },
+                            null
+                          ]
+                        }
+                      }
+                    },
+                    "path": [0],
+                    "fallback": null
+                  }
+                },
+                "path": ["result", "flow"],
+                "fallback": null
+              }
+            }
+          },
+          { "id": "template", "value": { "$ref": "$.input.blueprint.execution.page" } }
+        ],
+        "output": {
+          "stamp": { "$ref": "$.input.blueprint.stamp" },
+          "data": {
+            "rules": {
+              "$map": {
+                "over": { "$ref": "$.steps.rules.value" },
+                "as": "rule",
+                "body": {
+                  "$case": {
+                    "branches": [
+                      {
+                        "when": {
+                          "$neq": [
+                            {
+                              "$get": {
+                                "from": { "$var": "rule" },
+                                "path": ["reference"],
+                                "fallback": null
+                              }
+                            },
+                            null
+                          ]
+                        },
+                        "then": {
+                          "$merge": [
+                            { "$var": "rule" },
+                            {
+                              "reference": {
+                                "$omit": {
+                                  "from": {
+                                    "$get": { "from": { "$var": "rule" }, "path": ["reference"] }
+                                  },
+                                  "keys": ["mapping"]
+                                }
+                              }
+                            }
+                          ]
+                        }
+                      }
+                    ],
+                    "else": { "$var": "rule" }
+                  }
+                }
+              }
+            },
+            "task": { "$ref": "$.input.task" },
+            "policy": { "$ref": "$.input.policy" },
+            "canFollow": {
+              "$get": { "from": { "$ref": "$.input" }, "path": ["canFollow"], "fallback": false }
+            },
+            "minimumResultMatches": { "$ref": "$.input.minimumResultMatches" },
+            "seen": { "$get": { "from": { "$ref": "$.input" }, "path": ["seen"], "fallback": [] } },
+            "resources": { "$ref": "$.input.resources" },
+            "formats": { "$ref": "$.input.formats" },
+            "resultFlow": { "$ref": "$.steps.result.value" },
+            "mode": { "$ref": "$.input.mode" }
+          },
+          "flow": {
+            "$merge": [
+              { "$ref": "$.steps.template.value" },
+              {
+                "steps": {
+                  "$map": {
+                    "over": { "$ref": "$.steps.template.value.steps" },
+                    "as": "step",
+                    "body": {
+                      "$case": {
+                        "branches": [
+                          {
+                            "when": {
+                              "$and": [
+                                {
+                                  "$eq": [
+                                    {
+                                      "$get": {
+                                        "from": { "$var": "step" },
+                                        "path": ["id"],
+                                        "fallback": null
+                                      }
+                                    },
+                                    "resources"
+                                  ]
+                                },
+                                { "$neq": [{ "$ref": "$.steps.result.value" }, null] }
+                              ]
+                            },
+                            "then": {
+                              "$merge": [
+                                { "$var": "step" },
+                                { "call": { "flow": { "$ref": "$.steps.result.value" } } }
+                              ]
+                            }
+                          }
+                        ],
+                        "else": { "$var": "step" }
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "flows": {
+            "$flatten": [
+              {
+                "$filter": {
+                  "over": { "$ref": "$.input.blueprint.flows" },
+                  "as": "helper",
+                  "when": {
+                    "$and": [
+                      {
+                        "$neq": [
+                          {
+                            "$get": {
+                              "from": { "$var": "helper" },
+                              "path": ["id"],
+                              "fallback": null
+                            }
+                          },
+                          "precondition-admission"
+                        ]
+                      },
+                      {
+                        "$not": {
+                          "$and": [
+                            { "$gt": [{ "$length": { "$ref": "$.steps.programs.value" } }, 0] },
+                            {
+                              "$eq": [
+                                {
+                                  "$get": {
+                                    "from": { "$var": "helper" },
+                                    "path": ["id"],
+                                    "fallback": null
+                                  }
+                                },
+                                "select"
+                              ]
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "$case": {
+                  "branches": [
+                    {
+                      "when": { "$gt": [{ "$length": { "$ref": "$.steps.programs.value" } }, 0] },
+                      "then": [
+                        {
+                          "id": "select-html",
+                          "revision": 1,
+                          "flow": {
+                            "$get": {
+                              "from": {
+                                "$filter": {
+                                  "over": { "$ref": "$.input.blueprint.flows" },
+                                  "as": "helper",
+                                  "when": {
+                                    "$eq": [
+                                      {
+                                        "$get": {
+                                          "from": { "$var": "helper" },
+                                          "path": ["id"],
+                                          "fallback": null
+                                        }
+                                      },
+                                      "select"
+                                    ]
+                                  }
+                                }
+                              },
+                              "path": [0, "flow"],
+                              "fallback": null
+                            }
+                          }
+                        },
+                        {
+                          "id": "reference-select",
+                          "revision": 1,
+                          "flow": { "$ref": "$.input.blueprint.referenceFlow" }
+                        },
+                        {
+                          "id": "reference-values",
+                          "revision": 1,
+                          "flow": {
+                            "inputSchema": {
+                              "type": "object",
+                              "properties": {
+                                "id": { "type": "string", "minLength": 1 },
+                                "value": { "type": "object" }
+                              },
+                              "required": ["id", "value"],
+                              "additionalProperties": false
+                            },
+                            "outputSchema": { "$ref": "$.input.blueprint.referenceSchema" },
+                            "steps": {
+                              "$pluck": {
+                                "over": {
+                                  "$pluck": {
+                                    "over": { "$ref": "$.steps.programs.value" },
+                                    "key": "value"
+                                  }
+                                },
+                                "key": "step"
+                              }
+                            },
+                            "output": {
+                              "$fromEntries": [
+                                [
+                                  "$case",
+                                  {
+                                    "branches": {
+                                      "$pluck": {
+                                        "over": {
+                                          "$pluck": {
+                                            "over": { "$ref": "$.steps.programs.value" },
+                                            "key": "value"
+                                          }
+                                        },
+                                        "key": "branch"
+                                      }
+                                    },
+                                    "else": null
+                                  }
+                                ]
+                              ]
+                            }
+                          }
+                        },
+                        {
+                          "id": "select",
+                          "revision": 1,
+                          "flow": {
+                            "inputSchema": {
+                              "$get": {
+                                "from": {
+                                  "$get": {
+                                    "from": {
+                                      "$filter": {
+                                        "over": { "$ref": "$.input.blueprint.flows" },
+                                        "as": "helper",
+                                        "when": {
+                                          "$eq": [
+                                            {
+                                              "$get": {
+                                                "from": { "$var": "helper" },
+                                                "path": ["id"],
+                                                "fallback": null
+                                              }
+                                            },
+                                            "select"
+                                          ]
+                                        }
+                                      }
+                                    },
+                                    "path": [0, "flow"],
+                                    "fallback": null
+                                  }
+                                },
+                                "path": ["inputSchema"],
+                                "fallback": null
+                              }
+                            },
+                            "outputSchema": {
+                              "$get": {
+                                "from": {
+                                  "$get": {
+                                    "from": {
+                                      "$filter": {
+                                        "over": { "$ref": "$.input.blueprint.flows" },
+                                        "as": "helper",
+                                        "when": {
+                                          "$eq": [
+                                            {
+                                              "$get": {
+                                                "from": { "$var": "helper" },
+                                                "path": ["id"],
+                                                "fallback": null
+                                              }
+                                            },
+                                            "select"
+                                          ]
+                                        }
+                                      }
+                                    },
+                                    "path": [0, "flow"],
+                                    "fallback": null
+                                  }
+                                },
+                                "path": ["outputSchema"],
+                                "fallback": null
+                              }
+                            },
+                            "steps": {
+                              "$const": [
+                                {
+                                  "id": "html",
+                                  "call": { "flow": { "id": "select-html", "revision": 1 } },
+                                  "input": { "$ref": "$.input" },
+                                  "when": {
+                                    "$eq": [
+                                      {
+                                        "$get": {
+                                          "from": { "$ref": "$.input.rule" },
+                                          "path": ["reference"],
+                                          "fallback": null
+                                        }
+                                      },
+                                      null
+                                    ]
+                                  }
+                                },
+                                {
+                                  "id": "reference",
+                                  "call": { "flow": { "id": "reference-select", "revision": 1 } },
+                                  "input": { "$ref": "$.input" },
+                                  "when": {
+                                    "$not": {
+                                      "$eq": [
+                                        {
+                                          "$get": {
+                                            "from": { "$ref": "$.input.rule" },
+                                            "path": ["reference"],
+                                            "fallback": null
+                                          }
+                                        },
+                                        null
+                                      ]
+                                    }
+                                  }
+                                }
+                              ]
+                            },
+                            "output": {
+                              "$const": {
+                                "$case": {
+                                  "branches": [
+                                    {
+                                      "when": {
+                                        "$eq": [
+                                          {
+                                            "$get": {
+                                              "from": { "$ref": "$.input.rule" },
+                                              "path": ["reference"],
+                                              "fallback": null
+                                            }
+                                          },
+                                          null
+                                        ]
+                                      },
+                                      "then": { "$ref": "$.steps.html.value" }
+                                    }
+                                  ],
+                                  "else": { "$ref": "$.steps.reference.value" }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  ],
+                  "else": []
+                }
+              },
+              {
+                "$pluck": {
+                  "over": {
+                    "$pluck": { "over": { "$ref": "$.steps.programs.value" }, "key": "value" }
+                  },
+                  "key": "flow"
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "bind-document",
+      "revision": 1,
+      "flow": {
+        "inputSchema": { "type": "object" },
+        "outputSchema": { "type": "object" },
+        "steps": [],
+        "output": {
+          "stamp": { "$ref": "$.input.blueprint.stamp" },
+          "data": { "readInput": { "$ref": "$.input.readInput" } },
+          "flow": { "$ref": "$.input.blueprint.execution.document" },
+          "flows": {
+            "$flatten": [
+              {
+                "$filter": {
+                  "over": { "$ref": "$.input.blueprint.flows" },
+                  "as": "helper",
+                  "when": {
+                    "$neq": [
+                      {
+                        "$get": { "from": { "$var": "helper" }, "path": ["id"], "fallback": null }
+                      },
+                      "precondition-admission"
+                    ]
+                  }
+                }
+              },
+              {
+                "$map": {
+                  "over": { "$ref": "$.input.runtimeFlows" },
+                  "as": "helper",
+                  "body": {
+                    "$case": {
+                      "branches": [
+                        {
+                          "when": {
+                            "$and": [
+                              {
+                                "$eq": [
+                                  { "$get": { "from": { "$var": "helper" }, "path": ["id"] } },
+                                  { "$ref": "$.input.readFlow.id" }
+                                ]
+                              },
+                              {
+                                "$eq": [
+                                  {
+                                    "$get": { "from": { "$var": "helper" }, "path": ["revision"] }
+                                  },
+                                  { "$ref": "$.input.readFlow.revision" }
+                                ]
+                              }
+                            ]
+                          },
+                          "then": {
+                            "$merge": [
+                              { "$var": "helper" },
+                              { "id": "document-read", "revision": 1 }
+                            ]
+                          }
+                        }
+                      ],
+                      "else": { "$var": "helper" }
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "bind-output",
+      "revision": 1,
+      "flow": {
+        "inputSchema": { "type": "object" },
+        "outputSchema": { "type": "object" },
+        "steps": [],
+        "output": {
+          "$merge": [
+            { "$ref": "$.input.artifact" },
+            {
+              "flow": { "$ref": "$.input.shapedFlow" },
+              "flows": {
+                "$flatten": [
+                  {
+                    "$filter": {
+                      "over": { "$ref": "$.input.artifact.flows" },
+                      "as": "helper",
+                      "when": {
+                        "$not": {
+                          "$and": [
+                            {
+                              "$eq": [
+                                {
+                                  "$get": {
+                                    "from": { "$var": "helper" },
+                                    "path": ["id"],
+                                    "fallback": null
+                                  }
+                                },
+                                { "$ref": "$.input.sourceFlow.id" }
+                              ]
+                            },
+                            {
+                              "$eq": [
+                                {
+                                  "$get": {
+                                    "from": { "$var": "helper" },
+                                    "path": ["revision"],
+                                    "fallback": null
+                                  }
+                                },
+                                { "$ref": "$.input.sourceFlow.revision" }
+                              ]
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  },
+                  [
+                    {
+                      "id": "output-extract",
+                      "revision": 1,
+                      "flow": { "$ref": "$.input.artifact.flow" }
+                    },
+                    {
+                      "id": "shaping-source",
+                      "revision": 1,
+                      "flow": {
+                        "$get": {
+                          "from": {
+                            "$filter": {
+                              "over": { "$ref": "$.input.artifact.flows" },
+                              "as": "flow",
+                              "when": {
+                                "$and": [
+                                  {
+                                    "$eq": [
+                                      {
+                                        "$get": {
+                                          "from": { "$var": "flow" },
+                                          "path": ["id"],
+                                          "fallback": null
+                                        }
+                                      },
+                                      { "$ref": "$.input.sourceFlow.id" }
+                                    ]
+                                  },
+                                  {
+                                    "$eq": [
+                                      {
+                                        "$get": {
+                                          "from": { "$var": "flow" },
+                                          "path": ["revision"],
+                                          "fallback": null
+                                        }
+                                      },
+                                      { "$ref": "$.input.sourceFlow.revision" }
+                                    ]
+                                  }
+                                ]
+                              }
+                            }
+                          },
+                          "path": [0, "flow"],
+                          "fallback": null
+                        }
+                      }
+                    },
+                    {
+                      "id": "output-data",
+                      "revision": 1,
+                      "flow": {
+                        "inputSchema": { "type": "object" },
+                        "outputSchema": { "$ref": "$.input.outputSchema" },
+                        "steps": [],
+                        "output": { "$ref": "$.input.mapping" }
+                      }
+                    }
+                  ]
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "html-candidate-admission",
+      "revision": 1,
+      "flow": {
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "rules": { "type": "object" },
+            "facts": { "type": "object" },
+            "context": { "type": "object" }
+          },
+          "required": ["rules", "facts", "context"],
+          "additionalProperties": false
+        },
+        "outputSchema": { "type": "object" },
+        "steps": [
+          {
+            "id": "task",
+            "call": { "flow": { "id": "task-result", "revision": 1 } },
+            "input": {
+              "task": { "$ref": "$.input.context.task" },
+              "rules": [{ "$ref": "$.input.rules" }],
+              "allowResourceFetching": { "$ref": "$.input.context.canFetch" }
+            }
+          },
+          {
+            "id": "queries",
+            "value": {
+              "$keyBy": {
+                "over": { "$ref": "$.input.facts.queries" },
+                "as": "query",
+                "key": { "$get": { "from": { "$var": "query" }, "path": ["id"], "fallback": null } }
+              }
+            }
+          },
+          {
+            "id": "pages",
+            "value": {
+              "$get": {
+                "from": { "$ref": "$.steps.queries.value" },
+                "path": ["selector", "pages"],
+                "fallback": []
+              }
+            }
+          },
+          {
+            "id": "errors",
+            "value": {
+              "$flatMap": {
+                "over": { "$ref": "$.input.facts.queries" },
+                "as": "query",
+                "body": {
+                  "$filter": {
+                    "over": {
+                      "$get": { "from": { "$var": "query" }, "path": ["pages"], "fallback": null }
+                    },
+                    "as": "page",
+                    "when": {
+                      "$neq": [
+                        {
+                          "$get": {
+                            "from": { "$var": "page" },
+                            "path": ["error"],
+                            "fallback": null
+                          }
+                        },
+                        null
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "id": "across",
+            "value": {
+              "$filter": {
+                "over": { "$ref": "$.input.facts.queries" },
+                "as": "query",
+                "when": {
+                  "$and": [
+                    {
+                      "$or": [
+                        {
+                          "$eq": [
+                            {
+                              "$get": {
+                                "from": { "$var": "query" },
+                                "path": ["id"],
+                                "fallback": null
+                              }
+                            },
+                            "selector"
+                          ]
+                        },
+                        {
+                          "$eq": [
+                            {
+                              "$get": {
+                                "from": { "$var": "query" },
+                                "path": ["id"],
+                                "fallback": null
+                              }
+                            },
+                            "links"
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "$neq": [
+                        {
+                          "$get": {
+                            "from": { "$var": "query" },
+                            "path": ["total"],
+                            "fallback": null
+                          }
+                        },
+                        null
+                      ]
+                    },
+                    {
+                      "$lt": [
+                        {
+                          "$get": {
+                            "from": { "$var": "query" },
+                            "path": ["total"],
+                            "fallback": null
+                          }
+                        },
+                        { "$ref": "$.input.context.authoring.minimumMatchesAcrossPages" }
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "id": "perPage",
+            "value": {
+              "$filter": {
+                "over": { "$ref": "$.steps.pages.value" },
+                "as": "page",
+                "when": {
+                  "$and": [
+                    {
+                      "$neq": [
+                        {
+                          "$get": {
+                            "from": { "$var": "page" },
+                            "path": ["report"],
+                            "fallback": null
+                          }
+                        },
+                        null
+                      ]
+                    },
+                    {
+                      "$lt": [
+                        {
+                          "$get": {
+                            "from": { "$var": "page" },
+                            "path": ["report", "total"],
+                            "fallback": 0
+                          }
+                        },
+                        { "$ref": "$.input.context.minimumResultMatches" }
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "id": "overlaps",
+            "value": {
+              "$filter": {
+                "over": { "$ref": "$.steps.pages.value" },
+                "as": "page",
+                "when": {
+                  "$and": [
+                    { "$not": { "$ref": "$.input.context.authoring.allowOverlappingResults" } },
+                    {
+                      "$neq": [
+                        {
+                          "$get": {
+                            "from": { "$var": "page" },
+                            "path": ["report", "overlap"],
+                            "fallback": null
+                          }
+                        },
+                        null
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "id": "feedback",
+            "value": {
+              "$case": {
+                "branches": [
+                  {
+                    "when": {
+                      "$and": [
+                        {
+                          "$neq": [
+                            {
+                              "$get": {
+                                "from": { "$ref": "$.input.rules" },
+                                "path": ["fields"],
+                                "fallback": null
+                              }
+                            },
+                            null
+                          ]
+                        },
+                        { "$eq": [{ "$ref": "$.input.rules.selector" }, null] }
+                      ]
+                    },
+                    "then": { "error": "FIELDS_REQUIRE_RESULT_SELECTOR" }
+                  },
+                  {
+                    "when": {
+                      "$and": [
+                        { "$eq": [{ "$ref": "$.input.rules.selector" }, null] },
+                        { "$eq": [{ "$ref": "$.input.rules.links" }, null] },
+                        { "$eq": [{ "$ref": "$.input.rules.result" }, null] }
+                      ]
+                    },
+                    "then": {
+                      "error": "SOURCE_RULE_EMPTY",
+                      "reason": "This proposal declares no extraction, navigation or resource action. Propose a reusable source rule or inspect the source; results written in prose are not a rule. A learned selector returning empty data is different from no selector."
+                    }
+                  },
+                  {
+                    "when": { "$not": { "$ref": "$.steps.task.value.accepted" } },
+                    "then": {
+                      "error": "TASK_RESULT_MISMATCH",
+                      "task": { "$ref": "$.input.context.task" },
+                      "actual": { "$ref": "$.input.rules.result" }
+                    }
+                  },
+                  {
+                    "when": {
+                      "$not": {
+                        "$or": [
+                          {
+                            "$eq": [
+                              {
+                                "$get": {
+                                  "from": { "$ref": "$.input.rules" },
+                                  "path": ["result", "flow"],
+                                  "fallback": null
+                                }
+                              },
+                              null
+                            ]
+                          },
+                          {
+                            "$not": {
+                              "$empty": {
+                                "$filter": {
+                                  "over": { "$ref": "$.input.context.resultFlows" },
+                                  "as": "offer",
+                                  "when": {
+                                    "$and": [
+                                      {
+                                        "$eq": [
+                                          {
+                                            "$get": {
+                                              "from": { "$var": "offer" },
+                                              "path": ["flow", "id"],
+                                              "fallback": null
+                                            }
+                                          },
+                                          {
+                                            "$get": {
+                                              "from": {
+                                                "$get": {
+                                                  "from": { "$ref": "$.input.rules" },
+                                                  "path": ["result", "flow"],
+                                                  "fallback": null
+                                                }
+                                              },
+                                              "path": ["id"],
+                                              "fallback": null
+                                            }
+                                          }
+                                        ]
+                                      },
+                                      {
+                                        "$eq": [
+                                          {
+                                            "$get": {
+                                              "from": { "$var": "offer" },
+                                              "path": ["flow", "revision"],
+                                              "fallback": null
+                                            }
+                                          },
+                                          {
+                                            "$get": {
+                                              "from": {
+                                                "$get": {
+                                                  "from": { "$ref": "$.input.rules" },
+                                                  "path": ["result", "flow"],
+                                                  "fallback": null
+                                                }
+                                              },
+                                              "path": ["revision"],
+                                              "fallback": null
+                                            }
+                                          }
+                                        ]
+                                      }
+                                    ]
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    "then": {
+                      "error": "RESULT_FLOW_UNAVAILABLE",
+                      "offered": { "$ref": "$.input.context.resultFlows" }
+                    }
+                  },
+                  {
+                    "when": {
+                      "$and": [
+                        { "$neq": [{ "$ref": "$.input.rules.links" }, null] },
+                        { "$not": { "$ref": "$.input.context.canFollow" } }
+                      ]
+                    },
+                    "then": { "error": "FOLLOW_UNAVAILABLE" }
+                  },
+                  {
+                    "when": { "$gt": [{ "$length": { "$ref": "$.steps.errors.value" } }, 0] },
+                    "then": {
+                      "$merge": [
+                        { "$ref": "$.steps.errors.value[0].error" },
+                        {
+                          "error": { "$ref": "$.steps.errors.value[0].error.code" },
+                          "url": { "$ref": "$.steps.errors.value[0].url" },
+                          "diagnostics": { "$ref": "$.steps.errors.value[0].diagnostics" }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "when": { "$gt": [{ "$length": { "$ref": "$.steps.across.value" } }, 0] },
+                    "then": {
+                      "error": "AUTHORING_MINIMUM_MATCHES",
+                      "role": { "$ref": "$.steps.across.value[0].id" },
+                      "selector": { "$ref": "$.steps.across.value[0].selector" },
+                      "actualMatches": { "$ref": "$.steps.across.value[0].total" },
+                      "minimumMatchesAcrossPages": {
+                        "$ref": "$.input.context.authoring.minimumMatchesAcrossPages"
+                      },
+                      "pages": {
+                        "$map": {
+                          "over": { "$ref": "$.steps.across.value[0].pages" },
+                          "as": "page",
+                          "body": {
+                            "url": {
+                              "$get": {
+                                "from": { "$var": "page" },
+                                "path": ["url"],
+                                "fallback": null
+                              }
+                            },
+                            "matches": {
+                              "$get": {
+                                "from": { "$var": "page" },
+                                "path": ["report", "total"],
+                                "fallback": 0
+                              }
+                            },
+                            "diagnostics": {
+                              "$get": {
+                                "from": { "$var": "page" },
+                                "path": ["diagnostics"],
+                                "fallback": null
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "when": { "$gt": [{ "$length": { "$ref": "$.steps.perPage.value" } }, 0] },
+                    "then": {
+                      "error": "MINIMUM_MATCHES",
+                      "url": { "$ref": "$.steps.perPage.value[0].url" },
+                      "selector": { "$ref": "$.input.rules.selector" },
+                      "actualMatches": { "$ref": "$.steps.perPage.value[0].report.total" },
+                      "minimumResultMatches": { "$ref": "$.input.context.minimumResultMatches" },
+                      "diagnostics": { "$ref": "$.steps.perPage.value[0].diagnostics" }
+                    }
+                  },
+                  {
+                    "when": { "$gt": [{ "$length": { "$ref": "$.steps.overlaps.value" } }, 0] },
+                    "then": {
+                      "$merge": [
+                        {
+                          "error": "OVERLAPPING_RESULTS",
+                          "url": { "$ref": "$.steps.overlaps.value[0].url" },
+                          "selector": { "$ref": "$.input.rules.selector" }
+                        },
+                        { "$ref": "$.steps.overlaps.value[0].report.overlap" }
+                      ]
+                    }
+                  }
+                ],
+                "else": null
+              }
+            }
+          }
+        ],
+        "output": { "feedback": { "$ref": "$.steps.feedback.value" } }
+      }
+    }
+  ]
+}

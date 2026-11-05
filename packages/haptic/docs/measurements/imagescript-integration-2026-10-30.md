@@ -1,0 +1,15 @@
+# ImageScript integration — 2026-10-30
+
+The actual optional CAPTCHA preparer now uses ImageScript 3.12.0, not a separate research implementation. It is one optional peer with no runtime package dependencies or native binaries. Only `search/image-choice/imagescript` imports it. The live recovery hook and research driver consume that same entry. Retired Sharp code, profile, exports, development/peer dependencies and active consumers were removed without aliases. Historical research/results remain unchanged.
+
+JSON owns supported input formats (PNG/JPEG), padding dimensions/background, input/output byte/pixel allowances and deterministic PNG encoding settings. Native code performs source/format admission, bounded decode, center padding, exact RGBA copying and encode. Transparent source pixels are copied rather than blended into the background. Sources/settings are owned before awaits; cancellation prevents publication. Normal execution/search/recovery contracts import without the optional codec.
+
+The correctness review found that broad ImageScript animation decoding treats a multi-page TIFF as one image. The adapter now explicitly admits only its configured PNG/JPEG formats before decode. TIFF/GIF are unsupported; multi-frame APNG is rejected. This is an explicit supported-format boundary, not silent page/frame selection.
+
+Offline evidence: the actual library factory prepared all nine original saved challenge JPEGs in 146.73 ms. Every output retained its decoded source pixels, correct dimensions and tile ID; sources remained unchanged. This timing includes the real adapter, not model inference or HTTP. The actual local HTTP recovery flow also passes with the new codec and a simulated vision response. There were no paid/model calls or live CAPTCHA submissions.
+
+Focused tests cover pixel identity, alpha preservation, padding, unchanged larger dimensions, JPEG conversion, deterministic bytes, malformed inputs, animations/unsupported formats, identity/status/body integrity, byte/pixel budgets, ownership, cancellation and a fresh-process optional-import probe. Full verification logs and actual nine-image assets/results are under `data/runs/captcha-codec-research-2026-10-30/` (`imagescript-integration.json`, `imagescript-assets.json`, `imagescript-final-check.txt`). These are integration/mechanics results, not new Jev classification accuracy.
+
+Final typecheck and complete offline suite pass: 128 pass groups plus 21 support/pacing tests, zero failures. Four checkpoint roles checked ownership/contracts/correctness/quality; the correctness format finding above was fixed and the focused/full checks rerun. No fresh semantic CAPTCHA or discovery accuracy score is inferred.
+
+The execution engine, discovery workflow and model operations were not changed in this codec replacement. The separate [current builder contract](../development/discovery-builder.md) documents the later builder work; those changes are not represented as implemented or verified by these codec tests.

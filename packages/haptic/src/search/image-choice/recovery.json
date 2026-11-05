@@ -1,0 +1,198 @@
+{
+  "stamp": { "eden.engine": 0, "nisc.prism": 2 },
+  "flow": {
+    "inputSchema": { "type": "object" },
+    "outputSchema": { "type": "object" },
+    "steps": [
+      {
+        "id": "challenge",
+        "call": { "operation": "image-choice.read" },
+        "input": { "$ref": "$.input.source" }
+      },
+      {
+        "id": "images",
+        "call": { "operation": "image-choice.get" },
+        "each": { "items": { "$ref": "$.steps.challenge.value.tiles" }, "onFailure": "stop" },
+        "input": {
+          "url": { "$ref": "$.item.url" },
+          "allowedOrigins": { "$ref": "$.input.profile.allowedImageOrigins" }
+        },
+        "checks": [{ "id": "image-status", "test": { "$eq": [{ "$ref": "$.value.status" }, 200] } }]
+      },
+      {
+        "id": "prepared",
+        "call": { "operation": "image-choice.prepare" },
+        "input": {
+          "challenge": { "$ref": "$.steps.challenge.value" },
+          "images": { "$pluck": { "over": { "$ref": "$.steps.images.value" }, "key": "value" } }
+        }
+      },
+      {
+        "id": "vision",
+        "call": { "operation": "image-choice.vision" },
+        "input": {
+          "challenge": { "$ref": "$.steps.challenge.value" },
+          "images": { "$ref": "$.steps.prepared.value" }
+        }
+      },
+      {
+        "id": "form",
+        "call": { "operation": "image-choice.submission" },
+        "input": {
+          "challenge": { "$ref": "$.steps.challenge.value" },
+          "response": { "$ref": "$.steps.vision.value" }
+        }
+      },
+      {
+        "id": "submitted",
+        "call": { "operation": "image-choice.post" },
+        "input": { "$ref": "$.steps.form.value" },
+        "checks": [
+          { "id": "submission-status", "test": { "$eq": [{ "$ref": "$.value.status" }, 200] } }
+        ]
+      },
+      {
+        "id": "continuation",
+        "call": { "operation": "image-choice.continuation" },
+        "input": { "$ref": "$.steps.submitted.value" }
+      },
+      {
+        "id": "resumed",
+        "call": { "operation": "image-choice.post" },
+        "input": { "$ref": "$.steps.continuation.value" }
+      },
+      {
+        "id": "page",
+        "call": { "flow": { "id": "image-choice.follow", "revision": 1 } },
+        "input": {
+          "source": { "$ref": "$.steps.resumed.value" },
+          "remaining": { "$ref": "$.input.profile.continuation.maxRedirects" },
+          "policy": { "$ref": "$.input.profile.continuation" }
+        }
+      }
+    ],
+    "output": { "$ref": "$.steps.page.value" }
+  },
+  "flows": [
+    {
+      "id": "image-choice.is-redirect",
+      "revision": 1,
+      "flow": {
+        "inputSchema": { "type": "object" },
+        "outputSchema": { "type": "boolean" },
+        "steps": [],
+        "output": {
+          "$gt": [
+            {
+              "$length": {
+                "$filter": {
+                  "over": { "$ref": "$.input.statuses" },
+                  "as": "status",
+                  "when": { "$eq": [{ "$var": "status" }, { "$ref": "$.input.status" }] }
+                }
+              }
+            },
+            0
+          ]
+        }
+      }
+    },
+    {
+      "id": "image-choice.follow",
+      "revision": 1,
+      "flow": {
+        "inputSchema": { "type": "object" },
+        "outputSchema": { "type": "object" },
+        "steps": [
+          {
+            "id": "redirect",
+            "call": { "flow": { "id": "image-choice.is-redirect", "revision": 1 } },
+            "input": {
+              "status": { "$ref": "$.input.source.status" },
+              "statuses": { "$ref": "$.input.policy.redirectStatuses" }
+            },
+            "checks": [
+              {
+                "id": "continuation-status",
+                "test": {
+                  "$or": [
+                    { "$ref": "$.value" },
+                    { "$eq": [{ "$ref": "$.input.source.status" }, 200] }
+                  ]
+                }
+              },
+              {
+                "id": "continuation-redirect-budget",
+                "test": {
+                  "$or": [
+                    { "$not": { "$ref": "$.value" } },
+                    { "$gt": [{ "$ref": "$.input.remaining" }, 0] }
+                  ]
+                }
+              },
+              {
+                "id": "continuation-location",
+                "test": {
+                  "$or": [
+                    { "$not": { "$ref": "$.value" } },
+                    {
+                      "$neq": [
+                        {
+                          "$trim": {
+                            "$get": {
+                              "from": { "$ref": "$.input.source" },
+                              "path": ["headers", "location", 0],
+                              "fallback": ""
+                            }
+                          }
+                        },
+                        ""
+                      ]
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "id": "url",
+            "call": { "operation": "url.resolve" },
+            "when": { "$ref": "$.steps.redirect.value" },
+            "input": {
+              "value": {
+                "$get": {
+                  "from": { "$ref": "$.input.source" },
+                  "path": ["headers", "location", 0],
+                  "fallback": ""
+                }
+              },
+              "base": { "$ref": "$.input.source.url" }
+            }
+          },
+          {
+            "id": "next",
+            "call": { "operation": "image-choice.get" },
+            "when": { "$ref": "$.steps.redirect.value" },
+            "input": {
+              "url": { "$ref": "$.steps.url.value" },
+              "allowedOrigins": { "$ref": "$.input.policy.allowedOrigins" }
+            }
+          },
+          {
+            "id": "follow",
+            "call": { "flow": { "id": "image-choice.follow", "revision": 1 } },
+            "when": { "$ref": "$.steps.redirect.value" },
+            "input": {
+              "source": { "$ref": "$.steps.next.value" },
+              "remaining": { "$sub": [{ "$ref": "$.input.remaining" }, 1] },
+              "policy": { "$ref": "$.input.policy" }
+            }
+          }
+        ],
+        "output": {
+          "$coalesce": [{ "$ref": "$.steps.follow.value" }, { "$ref": "$.input.source" }]
+        }
+      }
+    }
+  ]
+}

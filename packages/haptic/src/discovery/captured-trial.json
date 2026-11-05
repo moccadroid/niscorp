@@ -1,0 +1,355 @@
+{
+  "stamp": { "eden.engine": 1, "nisc.prism": 2 },
+  "flows": [
+    {
+      "id": "captured-trial",
+      "revision": 1,
+      "flow": {
+        "inputSchema": { "type": "object" },
+        "outputSchema": { "type": "object" },
+        "steps": [
+          {
+            "id": "fetch-helper",
+            "value": {
+              "$filter": {
+                "over": { "$ref": "$.input.artifact.flows" },
+                "as": "helper",
+                "when": {
+                  "$and": [
+                    {
+                      "$eq": [{ "$get": { "from": { "$var": "helper" }, "path": ["id"] } }, "fetch"]
+                    },
+                    {
+                      "$eq": [{ "$get": { "from": { "$var": "helper" }, "path": ["revision"] } }, 2]
+                    }
+                  ]
+                }
+              }
+            },
+            "checks": [
+              {
+                "id": "captured-trial-fetch-helper",
+                "test": { "$eq": [{ "$length": { "$ref": "$.value" } }, 1] }
+              }
+            ]
+          },
+          {
+            "id": "page-binding",
+            "value": {
+              "$filter": {
+                "over": {
+                  "$get": {
+                    "from": { "$ref": "$.steps.fetch-helper.value" },
+                    "path": [0, "flow", "steps"],
+                    "fallback": null
+                  }
+                },
+                "as": "step",
+                "when": {
+                  "$eq": [
+                    { "$get": { "from": { "$var": "step" }, "path": ["id"], "fallback": null } },
+                    "page"
+                  ]
+                }
+              }
+            },
+            "checks": [
+              {
+                "id": "captured-trial-one-page-step",
+                "test": { "$eq": [{ "$length": { "$ref": "$.value" } }, 1] }
+              },
+              {
+                "id": "captured-trial-http-get-binding",
+                "test": {
+                  "$eq": [
+                    {
+                      "$get": {
+                        "from": { "$ref": "$.value" },
+                        "path": [0, "call"],
+                        "fallback": null
+                      }
+                    },
+                    { "operation": "http.get" }
+                  ]
+                }
+              },
+              {
+                "id": "captured-trial-url-binding",
+                "test": {
+                  "$eq": [
+                    {
+                      "$get": {
+                        "from": { "$ref": "$.value" },
+                        "path": [0, "input"],
+                        "fallback": null
+                      }
+                    },
+                    { "$const": { "url": { "$ref": "$.input.url" } } }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "id": "url-admission",
+            "call": { "operation": "url.parse" },
+            "input": { "url": { "$ref": "$.input.url" } }
+          },
+          {
+            "id": "responses",
+            "value": {
+              "$flatMap": {
+                "over": { "$ref": "$.input.captures" },
+                "as": "capture",
+                "body": {
+                  "$flatten": [
+                    { "$get": { "from": { "$var": "capture" }, "path": ["redirects"] } },
+                    {
+                      "$case": {
+                        "branches": [
+                          {
+                            "when": {
+                              "$neq": [
+                                {
+                                  "$get": {
+                                    "from": { "$var": "capture" },
+                                    "path": ["source"],
+                                    "fallback": null
+                                  }
+                                },
+                                null
+                              ]
+                            },
+                            "then": [
+                              {
+                                "$get": {
+                                  "from": { "$var": "capture" },
+                                  "path": ["source"],
+                                  "fallback": null
+                                }
+                              }
+                            ]
+                          }
+                        ],
+                        "else": []
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "id": "bound",
+            "value": {
+              "$merge": [
+                { "$ref": "$.input.artifact" },
+                {
+                  "flows": {
+                    "$map": {
+                      "over": { "$ref": "$.input.artifact.flows" },
+                      "as": "helper",
+                      "body": {
+                        "$case": {
+                          "branches": [
+                            {
+                              "when": {
+                                "$and": [
+                                  {
+                                    "$eq": [
+                                      { "$get": { "from": { "$var": "helper" }, "path": ["id"] } },
+                                      "fetch"
+                                    ]
+                                  },
+                                  {
+                                    "$eq": [
+                                      {
+                                        "$get": {
+                                          "from": { "$var": "helper" },
+                                          "path": ["revision"]
+                                        }
+                                      },
+                                      2
+                                    ]
+                                  }
+                                ]
+                              },
+                              "then": {
+                                "id": {
+                                  "$get": {
+                                    "from": { "$var": "helper" },
+                                    "path": ["id"],
+                                    "fallback": null
+                                  }
+                                },
+                                "revision": {
+                                  "$get": {
+                                    "from": { "$var": "helper" },
+                                    "path": ["revision"],
+                                    "fallback": null
+                                  }
+                                },
+                                "flow": {
+                                  "inputSchema": {
+                                    "$get": {
+                                      "from": { "$var": "helper" },
+                                      "path": ["flow", "inputSchema"],
+                                      "fallback": null
+                                    }
+                                  },
+                                  "outputSchema": {
+                                    "$get": {
+                                      "from": { "$var": "helper" },
+                                      "path": ["flow", "outputSchema"],
+                                      "fallback": null
+                                    }
+                                  },
+                                  "steps": {
+                                    "$map": {
+                                      "over": {
+                                        "$get": {
+                                          "from": { "$var": "helper" },
+                                          "path": ["flow", "steps"],
+                                          "fallback": null
+                                        }
+                                      },
+                                      "as": "fetchStep",
+                                      "body": {
+                                        "$case": {
+                                          "branches": [
+                                            {
+                                              "when": {
+                                                "$eq": [
+                                                  {
+                                                    "$get": {
+                                                      "from": { "$var": "fetchStep" },
+                                                      "path": ["id"],
+                                                      "fallback": null
+                                                    }
+                                                  },
+                                                  "page"
+                                                ]
+                                              },
+                                              "then": {
+                                                "$merge": [
+                                                  {
+                                                    "$omit": {
+                                                      "from": { "$var": "fetchStep" },
+                                                      "keys": ["call", "input"]
+                                                    }
+                                                  },
+                                                  {
+                                                    "value": {
+                                                      "$fromEntries": [
+                                                        [
+                                                          "$get",
+                                                          {
+                                                            "from": {
+                                                              "$fromEntries": [
+                                                                [
+                                                                  "$filter",
+                                                                  {
+                                                                    "over": {
+                                                                      "$fromEntries": [
+                                                                        [
+                                                                          "$const",
+                                                                          {
+                                                                            "$ref": "$.steps.responses.value"
+                                                                          }
+                                                                        ]
+                                                                      ]
+                                                                    },
+                                                                    "as": "response",
+                                                                    "when": {
+                                                                      "$const": {
+                                                                        "$eq": [
+                                                                          {
+                                                                            "$get": {
+                                                                              "from": {
+                                                                                "$var": "response"
+                                                                              },
+                                                                              "path": ["url"]
+                                                                            }
+                                                                          },
+                                                                          { "$ref": "$.input.url" }
+                                                                        ]
+                                                                      }
+                                                                    }
+                                                                  }
+                                                                ]
+                                                              ]
+                                                            },
+                                                            "path": [0],
+                                                            "fallback": null
+                                                          }
+                                                        ]
+                                                      ]
+                                                    },
+                                                    "checks": {
+                                                      "$flatten": [
+                                                        {
+                                                          "$const": [
+                                                            {
+                                                              "id": "captured-source-available",
+                                                              "test": {
+                                                                "$neq": [
+                                                                  { "$ref": "$.value" },
+                                                                  null
+                                                                ]
+                                                              }
+                                                            }
+                                                          ]
+                                                        },
+                                                        {
+                                                          "$get": {
+                                                            "from": { "$var": "fetchStep" },
+                                                            "path": ["checks"],
+                                                            "fallback": []
+                                                          }
+                                                        }
+                                                      ]
+                                                    }
+                                                  }
+                                                ]
+                                              }
+                                            }
+                                          ],
+                                          "else": { "$var": "fetchStep" }
+                                        }
+                                      }
+                                    }
+                                  },
+                                  "output": {
+                                    "$get": {
+                                      "from": { "$var": "helper" },
+                                      "path": ["flow", "output"],
+                                      "fallback": null
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          ],
+                          "else": { "$var": "helper" }
+                        }
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "id": "trial",
+            "call": { "operation": "artifact.trial" },
+            "input": {
+              "artifact": { "$ref": "$.steps.bound.value" },
+              "cases": [{ "id": "captured", "input": { "url": { "$ref": "$.input.url" } } }]
+            }
+          }
+        ],
+        "output": { "$ref": "$.steps.trial.value" }
+      }
+    }
+  ]
+}

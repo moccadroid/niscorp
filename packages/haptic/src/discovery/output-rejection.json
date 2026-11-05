@@ -1,0 +1,28 @@
+{
+  "$get": {
+    "from": {
+      "$filter": {
+        "over": { "$ref": "$.input.rules" },
+        "as": "rule",
+        "when": {
+          "$and": [
+            {
+              "$eq": [
+                { "$get": { "from": { "$var": "rule" }, "path": ["code"] } },
+                { "$ref": "$.input.error.code" }
+              ]
+            },
+            {
+              "$eq": [
+                { "$get": { "from": { "$var": "rule" }, "path": ["status"] } },
+                { "$ref": "$.input.error.status" }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "path": [0, "evidence"],
+    "fallback": null
+  }
+}

@@ -1,0 +1,335 @@
+{
+  "concurrency": 1,
+  "repetitions": 1,
+  "cases": [
+    {
+      "id": "html-table-records",
+      "url": "https://www.postgresql.org/support/versioning/",
+      "instruction": "Return every release row in the version support table, in page order, including both supported and unsupported releases. For each return the major branch, current minor release, whether it is supported as a boolean, and the final release date exactly as displayed apart from surrounding whitespace.",
+      "outputSchema": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "branch": {
+              "type": "string",
+              "description": "Major version from this row."
+            },
+            "current": {
+              "type": "string",
+              "description": "Current minor release from the same row."
+            },
+            "supported": {
+              "type": "boolean",
+              "description": "True for Yes in this row’s Supported column, false for No."
+            },
+            "finalRelease": {
+              "type": "string",
+              "description": "Final Release date in this row, keeping its displayed wording."
+            }
+          },
+          "required": ["branch", "current", "supported", "finalRelease"],
+          "additionalProperties": false
+        }
+      },
+      "expectedSelector": "table tbody tr",
+      "expectedFields": {
+        "versionCell": {
+          "selector": "td:nth-child(1)",
+          "attribute": null,
+          "minimum": 1,
+          "maximum": 1
+        },
+        "minorCell": {
+          "selector": "td:nth-child(2)",
+          "attribute": null,
+          "minimum": 1,
+          "maximum": 1
+        },
+        "flagCell": {
+          "selector": "td:nth-child(3)",
+          "attribute": null,
+          "minimum": 1,
+          "maximum": 1
+        },
+        "endCell": {
+          "selector": "td:nth-child(5)",
+          "attribute": null,
+          "minimum": 1,
+          "maximum": 1
+        }
+      },
+      "expectedMapping": {
+        "$flatMap": {
+          "over": {
+            "$ref": "$.input.pages"
+          },
+          "as": "page",
+          "body": {
+            "$map": {
+              "over": {
+                "$get": {
+                  "from": {
+                    "$var": "page"
+                  },
+                  "path": ["items"]
+                }
+              },
+              "as": "row",
+              "body": {
+                "branch": {
+                  "$trim": {
+                    "$get": {
+                      "from": {
+                        "$var": "row"
+                      },
+                      "path": ["fields", "versionCell", 0]
+                    }
+                  }
+                },
+                "current": {
+                  "$trim": {
+                    "$get": {
+                      "from": {
+                        "$var": "row"
+                      },
+                      "path": ["fields", "minorCell", 0]
+                    }
+                  }
+                },
+                "supported": {
+                  "$eq": [
+                    {
+                      "$trim": {
+                        "$get": {
+                          "from": {
+                            "$var": "row"
+                          },
+                          "path": ["fields", "flagCell", 0]
+                        }
+                      }
+                    },
+                    "Yes"
+                  ]
+                },
+                "finalRelease": {
+                  "$trim": {
+                    "$get": {
+                      "from": {
+                        "$var": "row"
+                      },
+                      "path": ["fields", "endCell", 0]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "expectedMetadata": {
+        "visited": ["https://www.postgresql.org/support/versioning/"],
+        "limited": false
+      },
+      "variants": [
+        {
+          "id": "changed-record",
+          "html": {
+            "changes": [
+              {
+                "selector": "table tbody tr:first-child td:nth-child(1)",
+                "value": "42"
+              },
+              {
+                "selector": "table tbody tr:first-child td:nth-child(2)",
+                "value": "42.3"
+              },
+              {
+                "selector": "table tbody tr:first-child td:nth-child(3)",
+                "value": "No"
+              },
+              {
+                "selector": "table tbody tr:first-child td:nth-child(5)",
+                "value": "January 1, 2040"
+              }
+            ]
+          }
+        },
+        {
+          "id": "added-record",
+          "html": {
+            "prepend": [
+              {
+                "selector": "table tbody",
+                "html": "<tr><td>43</td><td>43.7</td><td>Yes</td><td>January 1, 2036</td><td>January 1, 2041</td></tr>"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "html-card-records",
+      "url": "https://www.djangoproject.com/weblog/",
+      "instruction": "Return every news entry shown in the main news list, in page order. Keep each entry together: its headline, credited author, article link href and all link href values anywhere within that entry. Preserve link order and duplicates. Exclude navigation, pagination and sidebar content. Trim surrounding text whitespace and preserve href values exactly as provided.",
+      "outputSchema": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "headline": {
+              "type": "string",
+              "description": "Entry headline."
+            },
+            "byline": {
+              "type": "string",
+              "description": "Credited author of that same entry."
+            },
+            "target": {
+              "type": "string",
+              "description": "Article href for that entry."
+            },
+            "references": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "All href values within this entry, retaining order and duplicates, with no fixed count."
+            }
+          },
+          "required": ["headline", "byline", "target", "references"],
+          "additionalProperties": false
+        }
+      },
+      "expectedSelector": "ul.list-news > li",
+      "expectedFields": {
+        "heading": {
+          "selector": "h2 a",
+          "attribute": null,
+          "minimum": 1,
+          "maximum": 1
+        },
+        "author": {
+          "selector": ".meta strong",
+          "attribute": null,
+          "minimum": 1,
+          "maximum": 1
+        },
+        "articleHref": {
+          "selector": "h2 a",
+          "attribute": "href",
+          "minimum": 1,
+          "maximum": 1
+        },
+        "entryLinks": {
+          "selector": "a[href]",
+          "attribute": "href",
+          "minimum": 0,
+          "maximum": null
+        }
+      },
+      "expectedMapping": {
+        "$flatMap": {
+          "over": {
+            "$ref": "$.input.pages"
+          },
+          "as": "page",
+          "body": {
+            "$map": {
+              "over": {
+                "$get": {
+                  "from": {
+                    "$var": "page"
+                  },
+                  "path": ["items"]
+                }
+              },
+              "as": "row",
+              "body": {
+                "headline": {
+                  "$trim": {
+                    "$get": {
+                      "from": {
+                        "$var": "row"
+                      },
+                      "path": ["fields", "heading", 0]
+                    }
+                  }
+                },
+                "byline": {
+                  "$trim": {
+                    "$get": {
+                      "from": {
+                        "$var": "row"
+                      },
+                      "path": ["fields", "author", 0]
+                    }
+                  }
+                },
+                "target": {
+                  "$get": {
+                    "from": {
+                      "$var": "row"
+                    },
+                    "path": ["fields", "articleHref", 0]
+                  }
+                },
+                "references": {
+                  "$get": {
+                    "from": {
+                      "$var": "row"
+                    },
+                    "path": ["fields", "entryLinks"]
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "expectedMetadata": {
+        "visited": ["https://www.djangoproject.com/weblog/"],
+        "limited": false
+      },
+      "variants": [
+        {
+          "id": "changed-record",
+          "html": {
+            "changes": [
+              {
+                "selector": "ul.list-news > li:first-child h2 a",
+                "value": "Changed headline"
+              },
+              {
+                "selector": "ul.list-news > li:first-child .meta strong",
+                "value": "Changed author"
+              },
+              {
+                "selector": "ul.list-news > li:first-child h2 a, ul.list-news > li:first-child a.link-readmore",
+                "attribute": "href",
+                "value": "/changed-article/"
+              }
+            ],
+            "prepend": [
+              {
+                "selector": "ul.list-news > li:first-child p",
+                "html": "<a href=\"/fresh-reference/\">Source</a> "
+              }
+            ]
+          }
+        },
+        {
+          "id": "added-record",
+          "html": {
+            "prepend": [
+              {
+                "selector": "ul.list-news",
+                "html": "<li><h2><a href=\"/added-article/\">Added headline</a></h2><span class=\"meta\">Posted by <strong>Added author</strong> on October 29, 2026</span><p>Details with <a href=\"/one/\">one source</a> and <a href=\"/two/\">another</a>.</p><a class=\"link-readmore\" href=\"/added-article/\">Read more</a></li>"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

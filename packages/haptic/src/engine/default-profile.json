@@ -1,0 +1,8 @@
+{
+  "maxSteps": 10000,
+  "maxItems": 10000,
+  "maxDepth": 128,
+  "maxJsonDepth": 256,
+  "maxActiveMs": 30000,
+  "prism": { "maxSteps": 1000000, "maxStringLength": 1000000, "maxValues": 1000000 }
+}

@@ -1,0 +1,8 @@
+{
+  "maxInputBytes": 8388608,
+  "maxNodes": 100000,
+  "maxDepth": 256,
+  "maxSelectedItems": 10000,
+  "maxFieldValues": 40000,
+  "maxFieldBytes": 4194304
+}

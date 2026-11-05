@@ -1,0 +1,16 @@
+[
+  {
+    "id": "django-news/1",
+    "taskId": "django-news",
+    "artifactPath": "django-news/artifact.json",
+    "artifactSha256": "ebc359659a8af51c89dfd779eb3c9640e4327f239a3d3f30273c18da51a3bc96",
+    "sourcesPath": "django-news/sources.json"
+  },
+  {
+    "id": "sqlite-release-notes/1",
+    "taskId": "sqlite-release-notes",
+    "artifactPath": "sqlite-release-notes/artifact.json",
+    "artifactSha256": "ba93f0527a667ad1b6bbb5d654756d3588fee2ce6d9a6c9b470e35d07f95b621",
+    "sourcesPath": "sqlite-release-notes/sources.json"
+  }
+]

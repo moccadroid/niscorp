@@ -1,0 +1,141 @@
+{
+  "results": [
+    {
+      "id": "django-news/1",
+      "grade": {
+        "exact": true,
+        "metadataExact": true,
+        "actual": [
+          {
+            "headline": "Quarterly contributor outreach",
+            "intro": "The Steering Council is reaching out to bring people's attention to a few areas. We have major features we'd like to test and review for 6.2, smaller changes that could use attention and then various New Feature ideas we'd like community input on."
+          },
+          {
+            "headline": "Natalia Bidart - Planned short-term leave",
+            "intro": "Natalia Bidart will take a three-month break from her Django Fellow duties from November 2026 through January 2027, returning in February."
+          },
+          {
+            "headline": "Django security reporting update",
+            "intro": "We are updating how security issues in Django are reported."
+          },
+          {
+            "headline": "Django security releases issued: 6.1.2, 6.0.9, and 5.2.18",
+            "intro": "Django 6.1.2, 6.0.9, and 5.2.18 fix 4 security issues and provide a fix for an insufficient security mitigation in the previous release"
+          },
+          {
+            "headline": "Nominate Someone for the 2026 Malcolm Tredinnick Memorial Prize",
+            "intro": "It is that time of year again when we recognize someone from our community in memory of our friend Malcolm. Please nominate those you believe embody the spirit of Malcolm's work for the Malcolm Tredinnick Memorial Prize."
+          },
+          {
+            "headline": "DSF member of the month - Ken Whitesell",
+            "intro": "Ken Whitesell is the DSF member of the month for September 2026. Explore the story of a longtime Django community member since February 2017. He has been a helper in the Django forum for many years."
+          },
+          {
+            "headline": "New Technical Governance Approved",
+            "intro": "Both the Steering Council and DSF Board have approved DEP 19, which implements our new technical governance. Thank you to everyone who read the document and participated in the process! This was the effort of two different DSF boards and dozens of community members."
+          },
+          {
+            "headline": "Proposed change to DSF voting membership",
+            "intro": "A proposed bylaw change to how we count voting members for quorum. Comments are open until October 7."
+          },
+          {
+            "headline": "Executive Director Search Extended to September 22",
+            "intro": "Executive Director applications now close at the end of Tuesday, September 22, 2026, anywhere on Earth."
+          },
+          {
+            "headline": "DjangoCon Europe 2027 is heading to Innsbruck, Austria! 🏔️⛷️🚠🇦🇹",
+            "intro": "Announcing DjangoCon Europe 2027, bringing the Django community together in Innsbruck, Austria, from February 17–21, 2027."
+          }
+        ],
+        "expected": [
+          {
+            "headline": "Quarterly contributor outreach",
+            "intro": "The Steering Council is reaching out to bring people's attention to a few areas. We have major features we'd like to test and review for 6.2, smaller changes that could use attention and then various New Feature ideas we'd like community input on."
+          },
+          {
+            "headline": "Natalia Bidart - Planned short-term leave",
+            "intro": "Natalia Bidart will take a three-month break from her Django Fellow duties from November 2026 through January 2027, returning in February."
+          },
+          {
+            "headline": "Django security reporting update",
+            "intro": "We are updating how security issues in Django are reported."
+          },
+          {
+            "headline": "Django security releases issued: 6.1.2, 6.0.9, and 5.2.18",
+            "intro": "Django 6.1.2, 6.0.9, and 5.2.18 fix 4 security issues and provide a fix for an insufficient security mitigation in the previous release"
+          },
+          {
+            "headline": "Nominate Someone for the 2026 Malcolm Tredinnick Memorial Prize",
+            "intro": "It is that time of year again when we recognize someone from our community in memory of our friend Malcolm. Please nominate those you believe embody the spirit of Malcolm's work for the Malcolm Tredinnick Memorial Prize."
+          },
+          {
+            "headline": "DSF member of the month - Ken Whitesell",
+            "intro": "Ken Whitesell is the DSF member of the month for September 2026. Explore the story of a longtime Django community member since February 2017. He has been a helper in the Django forum for many years."
+          },
+          {
+            "headline": "New Technical Governance Approved",
+            "intro": "Both the Steering Council and DSF Board have approved DEP 19, which implements our new technical governance. Thank you to everyone who read the document and participated in the process! This was the effort of two different DSF boards and dozens of community members."
+          },
+          {
+            "headline": "Proposed change to DSF voting membership",
+            "intro": "A proposed bylaw change to how we count voting members for quorum. Comments are open until October 7."
+          },
+          {
+            "headline": "Executive Director Search Extended to September 22",
+            "intro": "Executive Director applications now close at the end of Tuesday, September 22, 2026, anywhere on Earth."
+          },
+          {
+            "headline": "DjangoCon Europe 2027 is heading to Innsbruck, Austria! 🏔️⛷️🚠🇦🇹",
+            "intro": "Announcing DjangoCon Europe 2027, bringing the Django community together in Innsbruck, Austria, from February 17–21, 2027."
+          }
+        ],
+        "unexpectedResources": false
+      },
+      "capturedEvidencePath": "django-news/expected.json"
+    },
+    {
+      "id": "sqlite-release-notes/1",
+      "grade": {
+        "exact": true,
+        "unexpectedResources": false,
+        "actual": 3,
+        "expected": 3,
+        "actualUrls": [
+          "https://www.sqlite.org/releaselog/3_54_1.html",
+          "https://www.sqlite.org/releaselog/3_54_0.html",
+          "https://www.sqlite.org/releaselog/3_53_4.html"
+        ],
+        "pages": [
+          {
+            "url": "https://www.sqlite.org/releaselog/3_54_1.html",
+            "exact": true,
+            "actual": 3,
+            "expected": 3,
+            "extras": [],
+            "missing": [],
+            "contentMismatches": []
+          },
+          {
+            "url": "https://www.sqlite.org/releaselog/3_54_0.html",
+            "exact": true,
+            "actual": 2,
+            "expected": 2,
+            "extras": [],
+            "missing": [],
+            "contentMismatches": []
+          },
+          {
+            "url": "https://www.sqlite.org/releaselog/3_53_4.html",
+            "exact": true,
+            "actual": 3,
+            "expected": 3,
+            "extras": [],
+            "missing": [],
+            "contentMismatches": []
+          }
+        ]
+      },
+      "capturedEvidencePath": "sqlite-release-notes/expected.json"
+    }
+  ]
+}
