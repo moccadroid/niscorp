@@ -58,6 +58,22 @@ describe('routeResponse — the default ladder (every provider)', () => {
     expect(routed.wire.rung).toBe('close-truncated');
   });
 
+  it('an object missing only its closing brace → the whole object, not the array inside it', () => {
+    const AnyContainer = z.union([z.record(z.string(), z.unknown()), z.array(z.unknown())]);
+    const routed = routeResponse({
+      content: '{"reasoning": "r", "data": {"rows": [{"a": 1}, {"a": 2}]}',
+      toolCalls: [],
+      declared: DECLARED,
+      accept: AnyContainer,
+      responseStrategies: NO_STRATEGIES,
+    });
+    expect(routed.outcome).toEqual({
+      kind: 'output',
+      value: { reasoning: 'r', data: { rows: [{ a: 1 }, { a: 2 }] } },
+    });
+    expect(routed.wire.rung).toBe('close-truncated');
+  });
+
   it('declared tool calls pass through as tool_calls; pseudo calls in a mixed turn are dropped with a note', () => {
     const routed = route('', [
       { id: 'c1', name: 'query', args: { intent: 'x' } },

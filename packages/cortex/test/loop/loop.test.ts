@@ -113,6 +113,52 @@ describe('the loop — respond strategy', () => {
     if (result.ok) expect(result.output.data.answer).toBe(3);
   });
 
+  it('recovers an envelope missing only its closing brace, nested array and all', async () => {
+    const rowsAgent = defineAgent({
+      id: 'rows-agent',
+      instructions: 'Return rows.',
+      output: { schema: z.object({ rows: z.array(z.object({ a: z.number() })) }) },
+    });
+    const llm = stubSignal([{ text: ['{"reasoning":"r","data":{"rows":[{"a":1},{"a":2}]}'] }]);
+
+    const result = await rowsAgent.run('go', { llm }).result;
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.output.data.rows).toEqual([{ a: 1 }, { a: 2 }]);
+    expect(llm.requests).toHaveLength(1);
+  });
+
+  it('takes an array payload inside the envelope', async () => {
+    const listAgent = defineAgent({
+      id: 'list-agent',
+      instructions: 'Return a list.',
+      output: { schema: z.array(z.string()) },
+    });
+    const llm = stubSignal([{ text: ['{"data":["a","b"]}'] }]);
+
+    const result = await listAgent.run('go', { llm }).result;
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.output.data).toEqual(['a', 'b']);
+  });
+
+  it('a bare outer array costs an output retry and is told the envelope is an object', async () => {
+    const listAgent = defineAgent({
+      id: 'list-agent',
+      instructions: 'Return a list.',
+      output: { schema: z.array(z.string()) },
+    });
+    const llm = stubSignal([{ text: ['["a","b"]'] }, { text: ['{"data":["a","b"]}'] }]);
+
+    const events: CortexEvent[] = [];
+    const result = await listAgent.run('go', { llm, onEvent: (event) => events.push(event) }).result;
+    expect(result.ok).toBe(true);
+    expect(result.meta.outputRetries).toBe(1);
+    const retry = events.find((event) => event.type === 'retry');
+    expect(retry?.type === 'retry' && retry.kind).toBe('output');
+    const messages = llm.requests[1]?.messages ?? [];
+    const correction = messages[messages.length - 1];
+    expect(typeof correction?.content === 'string' ? correction.content : '').toContain('must be a JSON object');
+  });
+
   it('an invalid emitted envelope costs an output retry with a specific correction', async () => {
     const llm = stubSignal([
       { text: ['{"data":{"answer":"wrong"}}'] },
