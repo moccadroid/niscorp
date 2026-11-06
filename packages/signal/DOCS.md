@@ -543,6 +543,24 @@ On a chat provider `decide()` still works: the same questions run through struct
 if (signal.describe().kind === 'decisions') { /* sub-second */ }
 ```
 
+### Images
+
+`images` maps a uuid to an `ImageSource`, the same type `complete()` takes in content parts. A string in `state` equal to a uuid points at that image:
+
+```typescript
+const duck = randomUUID();
+const { decisions } = await jev.decide({
+  state: { instruction: 'Select all squares containing a duck', tiles: { tile1: duck } },
+  images: { [duck]: { type: 'base64', mediaType: 'image/png', data: pngBase64 } },
+  questions: { tile1: { type: 'noul', instructions: 'Does the picture in `tiles.tile1` show the requested object?' } },
+});
+```
+
+- **On `typesafe`** the images go as the request's `assets`, with the `TypeSafe-Danger-Zone-Images: true` header. TypeSafe takes PNG or JPEG data: a `url` image or another `mediaType` fails with `E_VALIDATION_FAILED` before the request. TypeSafe's image documentation gives a minimum of 280 pixels a side; signal does not check sizes.
+- **On a chat provider** each image follows the state in the message, after a label with its uuid. A model whose registry row says `multimodal: false` fails with `E_VALIDATION_FAILED` before the request; a model with no row is not checked. Emulation's correction retries send the images again.
+
+A key that is not a uuid fails with `E_VALIDATION_FAILED` on every provider. A request with no images, or `images: {}`, is sent exactly as one without the field.
+
 ### Abort
 
 ```typescript

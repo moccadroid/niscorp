@@ -237,6 +237,8 @@ export type CalibratedDecision<Q extends Question> =
 export type DecideRequest<Qs extends Questions> = {
   state: DecideState;
   questions: Qs;
+  // Keys are uuids; a string in `state` equal to a key points at that image.
+  images?: Record<string, ImageSource>;
   options?: { signal?: AbortSignal };
 };
 
@@ -326,6 +328,7 @@ export type DecisionRequest = {
   model: string;
   state: DecideState;
   questions: Questions;
+  images?: Record<string, ImageSource>;
 };
 
 export type DecisionResponse = {

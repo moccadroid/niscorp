@@ -75,6 +75,8 @@ export const bareSchemaCorrection = (issues: string): string =>
 export const decisionEmulationPrompt = (state: string): string =>
   `Answer every field of the OUTPUT SCHEMA about the STATE below. Each field's description is the question and lists everything you may answer with.\nSTATE:\n${state}`;
 
+export const decisionImageLabel = (id: string): string => `Image ${id}:`;
+
 export const decisionQuestionDescription = (question: Question): string => {
   if (question.type === 'choice') return `${question.instructions} Options: ${JSON.stringify(question.criteria)}`;
   if (question.type === 'score') {

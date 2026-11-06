@@ -1,8 +1,9 @@
+import { randomUUID } from 'node:crypto';
 import { createServer, type IncomingMessage, type Server } from 'node:http';
 import { describe, it, expect, expectTypeOf, afterEach } from 'vitest';
 import { createSignal, SignalError, ErrorCode, providerRegistry } from '../src';
 
-type Seen = { url: string | undefined; authorization: string | undefined; body: unknown };
+type Seen = { url: string | undefined; authorization: string | undefined; images: string | undefined; body: unknown };
 type Reply = { status?: number; body: unknown } | 'never';
 
 const servers: Server[] = [];
@@ -20,7 +21,8 @@ const fakeProvider = async (reply: Reply): Promise<{ baseUrl: string; seen: Seen
   const server = createServer((request, response) => {
     request.on('close', markClosed);
     void readBody(request).then((body) => {
-      seen.push({ url: request.url, authorization: request.headers.authorization, body });
+      const images = request.headers['typesafe-danger-zone-images'];
+      seen.push({ url: request.url, authorization: request.headers.authorization, images: typeof images === 'string' ? images : undefined, body });
       if (reply === 'never') return;
       response.writeHead(reply.status ?? 200, { 'content-type': 'application/json' });
       response.end(JSON.stringify(reply.body));
@@ -249,5 +251,158 @@ describe('decide() emulated on a chat provider', () => {
   it('holds the text model to the asked options', async () => {
     const signal = chatSignal(JSON.stringify({ intent: 'chargeback', needsHuman: true, urgency: 1 })).retries(0);
     await expect(signal.decide({ state: STATE, questions: QUESTIONS })).rejects.toBeInstanceOf(SignalError);
+  });
+});
+
+const PNG = { type: 'base64', mediaType: 'image/png', data: 'iVBORw0KGgo=' } as const;
+const JPEG = { type: 'base64', mediaType: 'image/jpeg', data: '/9j/4AAQ' } as const;
+const FIRST = '0b6b7a8e-3c1f-4f0e-9a52-6d1e2f3a4b5c';
+const SECOND = '5f2d9c41-8e7a-4b3c-a1d0-9e8f7c6b5a4d';
+
+const TILE_IDS = ['tile1', 'tile2', 'tile3', 'tile4', 'tile5', 'tile6', 'tile7', 'tile8', 'tile9'];
+const TILE_IMAGES = Object.fromEntries(TILE_IDS.map((tile) => [tile, randomUUID()]));
+const CHALLENGE_STATE = { instruction: 'Select all squares containing a duck', tiles: TILE_IMAGES };
+const CHALLENGE_IMAGES = Object.fromEntries(Object.values(TILE_IMAGES).map((id) => [id, PNG]));
+const CHALLENGE_QUESTIONS = Object.fromEntries(
+  TILE_IDS.map((tile) => [
+    tile,
+    {
+      type: 'noul' as const,
+      instructions: `Does the picture in \`tiles.${tile}\` contain the object requested by the challenge instruction?`,
+      criteria: { true: 'The requested object is visibly present in this tile.', false: 'The requested object is not visibly present in this tile.' },
+    },
+  ]),
+);
+const DUCKS = ['tile1', 'tile3', 'tile5'];
+const CHALLENGE_ANSWERS = Object.fromEntries(
+  TILE_IDS.map((tile) => [tile, { type: 'noul', noul: DUCKS.includes(tile) ? 0.99 : 0.03 }]),
+);
+
+describe('decide() with images on a decision provider', () => {
+  it('sends the images as assets under their ids, with the image header', async () => {
+    const provider = await fakeProvider({
+      body: { model: 'jev-1.14.0', answers: CHALLENGE_ANSWERS, usage: { input_tokens: 3873, output_tokens: 157 } },
+    });
+    const result = await decider(provider.baseUrl).decide({
+      state: CHALLENGE_STATE,
+      images: CHALLENGE_IMAGES,
+      questions: CHALLENGE_QUESTIONS,
+    });
+
+    expect(provider.seen).toEqual([
+      {
+        url: '/v1/systemone',
+        authorization: 'Bearer test-key',
+        images: 'true',
+        body: {
+          model: 'jev-test',
+          state: CHALLENGE_STATE,
+          questions: CHALLENGE_QUESTIONS,
+          assets: Object.fromEntries(
+            Object.values(TILE_IMAGES).map((id) => [id, { type: 'image', format: 'png', data_base64: PNG.data }]),
+          ),
+        },
+      },
+    ]);
+    expect(TILE_IDS.filter((tile) => result.decisions[tile]?.answer === true)).toEqual(DUCKS);
+    expect(result.meta.model).toBe('jev-1.14.0');
+  });
+
+  it('names a jpeg image jpeg', async () => {
+    const provider = await fakeProvider({ body: { answers: { needsHuman: { noul: 0.2 } } } });
+    await decider(provider.baseUrl).decide({
+      state: { photo: FIRST },
+      images: { [FIRST]: JPEG },
+      questions: { needsHuman: QUESTIONS.needsHuman },
+    });
+    expect(provider.seen[0]?.body).toMatchObject({ assets: { [FIRST]: { type: 'image', format: 'jpeg', data_base64: JPEG.data } } });
+  });
+
+  it.each([
+    ['no images', undefined],
+    ['an empty images object', {}],
+  ])('sends %s exactly as before', async (_case, images) => {
+    const provider = await fakeProvider({ body: { answers: ANSWERS } });
+    await decider(provider.baseUrl).decide({ state: STATE, questions: QUESTIONS, ...(images !== undefined && { images }) });
+    expect(provider.seen[0]?.body).toStrictEqual({ model: 'jev-test', state: STATE, questions: QUESTIONS });
+    expect(provider.seen[0]?.images).toBeUndefined();
+  });
+
+  it.each([
+    ['a key that is not a uuid', { tile1: PNG }],
+    ['an image by URL', { [FIRST]: { type: 'url', url: 'https://example.com/tile.png' } }],
+    ['an image that is neither PNG nor JPEG', { [FIRST]: { type: 'base64', mediaType: 'image/webp', data: 'UklGR' } }],
+  ] as const)('refuses %s before the network', async (_case, images) => {
+    const provider = await fakeProvider({ body: { answers: ANSWERS } });
+    const error = await rejection(decider(provider.baseUrl).decide({ state: STATE, images, questions: QUESTIONS }));
+    expect(error.code).toBe(ErrorCode.VALIDATION_FAILED);
+    expect(provider.seen).toEqual([]);
+  });
+});
+
+describe('decide() with images emulated on a chat provider', () => {
+  const recordingClient = (sent: unknown[]) => ({
+    chat: {
+      completions: {
+        create: async (params: { messages: unknown }) => {
+          sent.push(params.messages);
+          return (async function* () {
+            yield { choices: [{ delta: { content: JSON.stringify({ needsHuman: true }) } }] };
+            yield { choices: [{ finish_reason: 'stop' }] };
+          })();
+        },
+      },
+    },
+  });
+  const customChat = (sent: unknown[]) =>
+    createSignal(
+      { baseUrl: 'https://fake.api.com/v1', apiKey: 'test-key', model: 'vision-model', adapter: 'openai-compatible' },
+      { client: recordingClient(sent) },
+    );
+  const questions = { needsHuman: QUESTIONS.needsHuman };
+  const state = { first: FIRST, second: SECOND };
+
+  it('sends each image after its id, following the state', async () => {
+    const sent: unknown[] = [];
+    const result = await customChat(sent).decide({ state, images: { [FIRST]: PNG, [SECOND]: JPEG }, questions });
+
+    expect(result.calibrated).toBe(false);
+    expect(result.decisions).toEqual({ needsHuman: { answer: true } });
+    const [user] = sent[0] as Array<{ role: string; content: Array<{ type: string; text?: string; image_url?: { url: string } }> }>;
+    expect(user?.role).toBe('user');
+    expect(user?.content.map((part) => part.type)).toEqual(['text', 'text', 'image_url', 'text', 'image_url']);
+    expect(user?.content[0]?.text).toContain(JSON.stringify(state));
+    expect(user?.content[1]?.text).toContain(FIRST);
+    expect(user?.content[2]?.image_url?.url).toBe(`data:image/png;base64,${PNG.data}`);
+    expect(user?.content[3]?.text).toContain(SECOND);
+    expect(user?.content[4]?.image_url?.url).toBe(`data:image/jpeg;base64,${JPEG.data}`);
+  });
+
+  it.each([
+    ['no images', undefined],
+    ['an empty images object', {}],
+  ])('sends %s as one text message, as before', async (_case, images) => {
+    const sent: unknown[] = [];
+    await customChat(sent).decide({ state, questions, ...(images !== undefined && { images }) });
+    const [user] = sent[0] as Array<{ role: string; content: unknown }>;
+    expect(typeof user?.content).toBe('string');
+  });
+
+  it('refuses a key that is not a uuid before the network', async () => {
+    const sent: unknown[] = [];
+    const error = await rejection(customChat(sent).decide({ state, images: { tile1: PNG }, questions }));
+    expect(error.code).toBe(ErrorCode.VALIDATION_FAILED);
+    expect(sent).toEqual([]);
+  });
+
+  it('refuses images for a model measured to take none, before the network', async () => {
+    const sent: unknown[] = [];
+    const textModel = createSignal('groq', { apiKey: 'test-key', model: 'openai/gpt-oss-120b', client: recordingClient(sent) });
+    const error = await rejection(textModel.decide({ state, images: { [FIRST]: PNG }, questions }));
+    expect(error.code).toBe(ErrorCode.VALIDATION_FAILED);
+    expect(sent).toEqual([]);
+
+    await textModel.decide({ state, images: {}, questions });
+    expect(sent).toHaveLength(1);
   });
 });
