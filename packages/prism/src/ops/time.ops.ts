@@ -14,9 +14,7 @@ dayjs.extend(utc);
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 const isDateOnly = (value: JsonValue): boolean => typeof value === 'string' && DATE_ONLY.test(value);
 
-type Place = { node: object; op: string; field: string; written: unknown; contextOp: string };
-
-const parseDate = (value: JsonValue, { node, op, field, written, contextOp }: Place): dayjs.Dayjs => {
+const parseDate = (value: JsonValue, node: object, op: string, field: string, written: unknown, contextOp: string): dayjs.Dayjs => {
   if (typeof value !== 'string' && typeof value !== 'number')
     return refuseType({ node, op, field, needs: 'a date, as text or a number', got: value, written, contextOp });
   const d = isDateOnly(value) ? dayjs.utc(value) : dayjs(value);
@@ -27,7 +25,7 @@ const parseDate = (value: JsonValue, { node, op, field, written, contextOp }: Pl
 
 export const opDate = (node: DateNode, context: EvalContext, evaluate: EvaluateFn): JsonValue => {
   const value = evaluate(node.$date.value, context);
-  const d = parseDate(value, { node, op: '$date', field: 'value', written: node.$date.value, contextOp: '$date' });
+  const d = parseDate(value, node, '$date', 'value', node.$date.value, '$date');
   const instance = node.$date.utc ? d.utc() : d;
   if (node.$date.format) return instance.format(node.$date.format);
   return instance.toISOString();
@@ -35,7 +33,7 @@ export const opDate = (node: DateNode, context: EvalContext, evaluate: EvaluateF
 
 export const opDateAdd = (node: DateAddNode, context: EvalContext, evaluate: EvaluateFn): JsonValue => {
   const value = evaluate(node.$dateAdd.date, context);
-  const d = parseDate(value, { node, op: '$dateAdd', field: 'date', written: node.$dateAdd.date, contextOp: '$dateAdd' });
+  const d = parseDate(value, node, '$dateAdd', 'date', node.$dateAdd.date, '$dateAdd');
   const moved = d.add(node.$dateAdd.amount, node.$dateAdd.unit);
   return isDateOnly(value) ? moved.format('YYYY-MM-DD') : moved.toISOString();
 };
@@ -43,7 +41,7 @@ export const opDateAdd = (node: DateAddNode, context: EvalContext, evaluate: Eva
 export const opDateDiff = (node: DateDiffNode, context: EvalContext, evaluate: EvaluateFn): JsonValue => {
   const from = evaluate(node.$dateDiff.from, context);
   const to = evaluate(node.$dateDiff.to, context);
-  const fromDate = parseDate(from, { node, op: '$dateDiff', field: 'from', written: node.$dateDiff.from, contextOp: '$dateDiff.from' });
-  const toDate = parseDate(to, { node, op: '$dateDiff', field: 'to', written: node.$dateDiff.to, contextOp: '$dateDiff.to' });
+  const fromDate = parseDate(from, node, '$dateDiff', 'from', node.$dateDiff.from, '$dateDiff.from');
+  const toDate = parseDate(to, node, '$dateDiff', 'to', node.$dateDiff.to, '$dateDiff.to');
   return toDate.diff(fromDate, node.$dateDiff.unit);
 };

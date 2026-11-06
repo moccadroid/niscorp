@@ -20,7 +20,8 @@ export const opFromEntries = (node: FromEntriesNode, context: EvalContext, evalu
   const value = evaluate(node.$fromEntries, context);
   if (!isJsonArray(value)) return refuseType({ node, op: '$fromEntries', needs: 'a list of [key, value] pairs', got: value, written: node.$fromEntries });
   const result: JsonObject = {};
-  for (const [index, entry] of value.entries()) {
+  for (let index = 0; index < value.length; index++) {
+    const entry = value[index];
     if (!isJsonArray(entry) || entry.length < 2)
       return failAt(`$fromEntries needs a list of [key, value] pairs, but item ${index} is ${describeValue(entry)}.`, ErrorCode.TYPE, { op: '$fromEntries' }, { node, op: '$fromEntries', form: true });
     result[String(entry[0])] = entry[1]!;

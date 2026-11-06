@@ -46,37 +46,43 @@ export const opVar = (node: VarNode, context: EvalContext, _evaluate: EvaluateFn
   return value;
 };
 
-const getStopped = (root: JsonValue, steps: readonly Step[]): string =>
-  `$get.path ${JSON.stringify(steps)} ${whereStopped(root, steps, (count) => (count === 0 ? 'from' : JSON.stringify(steps.slice(0, count))), true)}`;
+// Worked out only for an error: a path's node segments are evaluated again,
+// outside the budget, which a pure program allows.
+const getStopped = (node: GetNode, root: JsonValue, count: number, context: EvalContext, evaluate: EvaluateFn): string => {
+  const unbudgeted = { ...context, budget: undefined };
+  const steps: Step[] = node.$get.path.slice(0, count).map((segment) => {
+    const evaluated = typeof segment === 'object' && segment !== null ? evaluate(segment, unbudgeted) : segment;
+    return typeof evaluated === 'number' ? evaluated : String(evaluated);
+  });
+  return `$get.path ${JSON.stringify(steps)} ${whereStopped(root, steps, (upTo) => (upTo === 0 ? 'from' : JSON.stringify(steps.slice(0, upTo))), true)}`;
+};
 
 export const opGet = (node: GetNode, context: EvalContext, evaluate: EvaluateFn): JsonValue => {
   const { from, path, fallback } = node.$get;
   const root = evaluate(from, context);
   let current: JsonValue | undefined = root;
-  const steps: Step[] = [];
 
-  for (const segment of path) {
+  for (let i = 0; i < path.length; i++) {
+    const segment = path[i];
     const evaluated = typeof segment === 'object' && segment !== null
       ? evaluate(segment, context)
       : segment;
 
     if (typeof evaluated === 'number') {
-      steps.push(evaluated);
       if (!isJsonArray(current)) {
         if (fallback !== undefined) return evaluate(fallback, context);
-        return failAt(getStopped(root, steps), ErrorCode.TYPE, { op: '$get' }, { node, op: '$get', field: 'path', form: true });
+        return failAt(getStopped(node, root, i + 1, context, evaluate), ErrorCode.TYPE, { op: '$get' }, { node, op: '$get', field: 'path', form: true });
       }
       current = current[evaluated];
     } else {
       const key = String(evaluated);
-      steps.push(key);
       if (isJsonArray(current) && INDEX_TEXT.test(key)) {
         current = current[Number(key)];
         continue;
       }
       if (!isJsonObject(current)) {
         if (fallback !== undefined) return evaluate(fallback, context);
-        return failAt(getStopped(root, steps), ErrorCode.TYPE, { op: '$get' }, { node, op: '$get', field: 'path', form: true });
+        return failAt(getStopped(node, root, i + 1, context, evaluate), ErrorCode.TYPE, { op: '$get' }, { node, op: '$get', field: 'path', form: true });
       }
       current = current[key];
     }
@@ -84,7 +90,7 @@ export const opGet = (node: GetNode, context: EvalContext, evaluate: EvaluateFn)
 
   if (current === undefined) {
     if (fallback !== undefined) return evaluate(fallback, context);
-    return failAt('Path not found.', ErrorCode.MISSING_PATH, { op: '$get' }, { node, op: '$get', field: 'path', form: true, detail: () => getStopped(root, steps) });
+    return failAt('Path not found.', ErrorCode.MISSING_PATH, { op: '$get' }, { node, op: '$get', field: 'path', form: true, detail: () => getStopped(node, root, path.length, context, evaluate) });
   }
 
   return current;

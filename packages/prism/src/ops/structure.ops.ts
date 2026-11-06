@@ -6,7 +6,8 @@ import { loopScope } from './scope';
 
 export const opMerge = (node: MergeNode, context: EvalContext, evaluate: EvaluateFn): JsonValue => {
   const result: JsonObject = {};
-  for (const [index, part] of node.$merge.entries()) {
+  for (let index = 0; index < node.$merge.length; index++) {
+    const part = node.$merge[index];
     const evaluated = evaluate(part, context);
     if (!isJsonObject(evaluated)) return refuseType({ node, op: '$merge', field: String(index), needs: 'an object', got: evaluated, written: part, contextOp: '$merge' });
     Object.assign(result, evaluated);

@@ -7,9 +7,7 @@ import { measure } from '../engine/budget';
 import { loopScope } from './scope';
 import { refuseType } from './refuse';
 
-type Place = { node: object; op: string; field?: string; written: unknown };
-
-const requireArray = (value: JsonValue, { node, op, field, written }: Place): JsonValue[] => {
+const requireArray = (value: JsonValue, node: object, op: string, field: string | undefined, written: unknown): JsonValue[] => {
   if (!isJsonArray(value))
     return refuseType({ node, op, ...(field === undefined ? {} : { field }), needs: 'a list', got: value, written, contextOp: field === undefined ? op : `${op}.${field}` });
   return value;
@@ -17,7 +15,7 @@ const requireArray = (value: JsonValue, { node, op, field, written }: Place): Js
 
 export const opMap = (node: MapNode, context: EvalContext, evaluate: EvaluateFn): JsonValue => {
   const { over, as, body } = node.$map;
-  const input = requireArray(evaluate(over, context), { node, op: '$map', field: 'over', written: over });
+  const input = requireArray(evaluate(over, context), node, '$map', 'over', over);
   const result: JsonValue[] = [];
   const { scope, vars } = loopScope(context);
   for (const item of input) {
@@ -29,7 +27,7 @@ export const opMap = (node: MapNode, context: EvalContext, evaluate: EvaluateFn)
 
 export const opFilter = (node: FilterNode, context: EvalContext, evaluate: EvaluateFn): JsonValue => {
   const { over, as, when } = node.$filter;
-  const input = requireArray(evaluate(over, context), { node, op: '$filter', field: 'over', written: over });
+  const input = requireArray(evaluate(over, context), node, '$filter', 'over', over);
   const result: JsonValue[] = [];
   const { scope, vars } = loopScope(context);
   for (const item of input) {
@@ -42,7 +40,7 @@ export const opFilter = (node: FilterNode, context: EvalContext, evaluate: Evalu
 
 export const opReduce = (node: ReduceNode, context: EvalContext, evaluate: EvaluateFn): JsonValue => {
   const { over, as, acc: accName = 'acc', init, body } = node.$reduce;
-  const input = requireArray(evaluate(over, context), { node, op: '$reduce', field: 'over', written: over });
+  const input = requireArray(evaluate(over, context), node, '$reduce', 'over', over);
   let accumulator = evaluate(init, context);
   const { scope, vars } = loopScope(context);
   for (const item of input) {
@@ -64,7 +62,7 @@ export const opSlice = (node: SliceNode, context: EvalContext, evaluate: Evaluat
 };
 
 export const opFlatten = (node: FlattenNode, context: EvalContext, evaluate: EvaluateFn): JsonValue => {
-  const input = requireArray(evaluate(node.$flatten, context), { node, op: '$flatten', written: node.$flatten });
+  const input = requireArray(evaluate(node.$flatten, context), node, '$flatten', undefined, node.$flatten);
   const result: JsonValue[] = [];
   for (const item of input) {
     if (isJsonArray(item)) result.push(...item);
@@ -74,7 +72,7 @@ export const opFlatten = (node: FlattenNode, context: EvalContext, evaluate: Eva
 };
 
 export const opUnique = (node: UniqueNode, context: EvalContext, evaluate: EvaluateFn): JsonValue => {
-  const input = requireArray(evaluate(node.$unique, context), { node, op: '$unique', written: node.$unique });
+  const input = requireArray(evaluate(node.$unique, context), node, '$unique', undefined, node.$unique);
   const seen = new Set<string>();
   const result: JsonValue[] = [];
   for (const item of input) {
@@ -107,7 +105,7 @@ const kindOf = (key: JsonValue): number => (key === null ? NULL_KIND : typeof ke
 
 export const opSortBy = (node: SortByNode, context: EvalContext, evaluate: EvaluateFn): JsonValue => {
   const { over, as, by, dir = 'asc' } = node.$sortBy;
-  const input = requireArray(evaluate(over, context), { node, op: '$sortBy', field: 'over', written: over });
+  const input = requireArray(evaluate(over, context), node, '$sortBy', 'over', over);
 
   const { scope, vars } = loopScope(context);
   const keyed = input.map((item) => {
