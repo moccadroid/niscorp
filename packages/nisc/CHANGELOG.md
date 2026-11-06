@@ -1,5 +1,13 @@
 # @niscorp/nisc
 
+## 0.8.9
+
+### Patch Changes
+
+- Updated dependencies [f4a3f04]
+  - @niscorp/signal@0.1.7
+  - @niscorp/cortex@0.1.4
+
 ## 0.8.8
 
 ### Patch Changes
