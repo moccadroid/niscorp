@@ -211,3 +211,12 @@ The wording is a draft; it is settled in the build, and every message is checked
 ## Outside Prism (not part of this proposal)
 
 - **cortex** — `flattenSchemaIssues` picks one branch of a failed union by its own rule and prints zod's outer `Invalid key in record` without the message nested under it. Step 8 takes Prism's node union out of that choice; any other union an agent's schema has keeps the problem. A change for a cortex session, if wanted.
+
+## Measured after the build
+
+Built on `claude/prism-errors-536485` (decisions 1, 2 and 3), against `main` at `ace4d7c0`.
+
+- **Speed: within budget.** Three runs of `main` and three of the branch, taken in turn (`npm run bench -- --only prism`, the `run` rows, each row's median over its three runs): the middle row 1.8% slower, the worst (`groups` over 100 orders) 5.2% slower, against a 9.3% spread between `main`'s own runs. 14 of 15 rows are a little slower. The first build missed the budget (middle row +4.7%): `$get` built its path steps on every call and the list helpers made an object on every call; both now happen only for an error.
+- **Bundle: over budget.** `evaluate` 504.3 → 513.2 kB (+8.9 kB), 110.2 → 113.2 kB gzip (+3.0 kB); `execute` only 499.5 → 509.5 kB, 108.7 → 111.9 kB gzip. The budget was +3 kB and +1 kB gzip. The bytes are the feature itself, spread over its parts: finding the position (`engine/place.ts`, 3.9 kB of source), printing forms and checking an op object as that op (`schemas/node.schema.ts`, +3.2 kB), the longer messages in the ops (+5.8 kB across them), saying where a path stopped (`utils/jsonpath.ts`, +1.8 kB) and forms for schema issues (`utils/issues.ts`, +1.7 kB). Nothing was cut to fit the number.
+- **Tests:** Prism 631 (a case for every refusal in `test/errors.test.ts`), and nova, loom, vex, moss and cli unchanged and passing. `check:packages`, `check:grammars` and `check:sources` pass. The source-scanning test that would have failed a new refusal without a case was dropped: Prism's tests have no Node types.
+- **Not run:** the pilot's three cases against the new build, eight runs each. It needs the Haptic pilot pointed at this build.
