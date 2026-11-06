@@ -85,6 +85,10 @@ const CASES: Case[] = [
   { name: '$localeNumber.locale', config: { s: { $localeNumber: { value: 1, locale: NUM } } }, code: 'E_TYPE', op: '$localeNumber', at: 's.$localeNumber.locale', got: 'the number 5' },
   { name: '$localeNumber.value', config: { s: { $localeNumber: { value: TEXT, locale: 'de-AT' } } }, code: 'E_TYPE', op: '$localeNumber', at: 's.$localeNumber.value', got: 'text "x"' },
   { name: '$renameKeys', config: { s: { $renameKeys: { from: LIST, map: { a: 'b' } } } }, code: 'E_TYPE', op: '$renameKeys', at: 's.$renameKeys.from', got: 'a list' },
+  { name: '$join item', config: { s: { $join: { parts: [TEXT, OBJ] } } }, code: 'E_TYPE', op: '$join', at: 's.$join.parts', got: 'item 1 is an object: {"a":1}' },
+  { name: '$interpolate value', config: { s: { $interpolate: { template: '{{a}}', values: { a: LIST } } } }, code: 'E_TYPE', op: '$interpolate', at: 's.$interpolate.values', got: '"a" is a list of 1 item: [1]' },
+  { name: '$keyBy key', config: { s: { $keyBy: { over: LIST, as: 'x', key: OBJ } } }, code: 'E_TYPE', op: '$keyBy', at: 's.$keyBy.key', got: 'an object: {"a":1}' },
+  { name: '$groupBy key', config: { s: { $groupBy: { over: LIST, as: 'x', key: LIST } } }, code: 'E_TYPE', op: '$groupBy', at: 's.$groupBy.key', got: 'a list of 1 item: [1]' },
   { name: '$update', config: { s: { $update: { from: LIST, path: [3], value: 1 } } }, code: 'E_MISSING_PATH', op: '$update', at: 's.$update.path', got: 'a list of 1 item' },
 ];
 

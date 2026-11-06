@@ -1,12 +1,21 @@
 import type { JsonValue, EvalContext, EvaluateFn } from '../types';
 import type { FillNode, JoinNode, ToStringNode, InterpolateNode, TrimNode, LowerNode, UpperNode, SplitNode, ReplaceNode } from '../schemas';
+import { ErrorCode, describeValue, failAt } from '../errors';
 import { isJsonObject } from '../schemas/guards';
-import { refuseType } from './refuse';
+import { TEXT_LIKE, isTextLike, refuseType, writtenNote } from './refuse';
 
 export const opJoin = (node: JoinNode, context: EvalContext, evaluate: EvaluateFn): JsonValue => {
   const { parts, sep = '' } = node.$join;
   const list = evaluate(parts, context);
   if (!Array.isArray(list)) return refuseType({ node, op: '$join', field: 'parts', needs: 'a list', got: list, written: parts });
+  const wrong = list.findIndex((part) => !isTextLike(part));
+  if (wrong !== -1)
+    return failAt(
+      `$join.parts needs items that are ${TEXT_LIKE}, but item ${wrong} is ${describeValue(list[wrong])}.${Array.isArray(parts) ? writtenNote(parts[wrong]) : ''}`,
+      ErrorCode.TYPE,
+      { op: '$join' },
+      { node, op: '$join', field: 'parts', form: true },
+    );
   return list.map((p) => String(p ?? '')).join(sep);
 };
 
@@ -21,9 +30,17 @@ export const opInterpolate = (node: InterpolateNode, context: EvalContext, evalu
   const { template, values: valuesNode } = node.$interpolate;
   const values = evaluate(valuesNode, context);
   if (!isJsonObject(values)) return refuseType({ node, op: '$interpolate', field: 'values', needs: 'an object', got: values, written: valuesNode });
-  return template.replace(/\{\{(\w+)\}\}/g, (_match, key: string) =>
-    String(values[key] ?? ''),
-  );
+  return template.replace(/\{\{(\w+)\}\}/g, (_match, key: string) => {
+    const value = values[key] ?? '';
+    if (!isTextLike(value))
+      return failAt(
+        `$interpolate.values needs ${TEXT_LIKE} for {{${key}}}, but "${key}" is ${describeValue(value)}.`,
+        ErrorCode.TYPE,
+        { op: '$interpolate' },
+        { node, op: '$interpolate', field: 'values', form: true },
+      );
+    return String(value);
+  });
 };
 
 const fillOne = (value: JsonValue): JsonValue => {

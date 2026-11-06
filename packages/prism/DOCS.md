@@ -278,7 +278,7 @@ A number is answered as it is. Text is read as a number when it is one written i
 ```json
 { "$join": { "parts": [{ "$ref": "$.first" }, { "$ref": "$.last" }], "sep": " " } }
 ```
-Parts are coerced to strings. `sep` defaults to `""`. `parts` may also be any
+Parts are coerced to strings; `null` is `""`. A part that is an object or a list is refused (`E_TYPE`): it has no text of its own. `sep` defaults to `""`. `parts` may also be any
 node that evaluates to an array — a mapped list, a `$var`:
 ```json
 { "$join": { "parts": { "$map": { "over": { "$ref": "$.tags" }, "as": "t", "body": { "$upper": { "$var": "t" } } } }, "sep": ", " } }
@@ -299,7 +299,7 @@ Numbers → `"42"`, null → `"null"`, objects → JSON string.
   }
 }
 ```
-Replaces `{{key}}` placeholders with values from the evaluated object. Missing keys become empty strings.
+Replaces `{{key}}` placeholders with values from the evaluated object. Missing keys become empty strings. A value that is an object or a list is refused (`E_TYPE`).
 
 ### `$fill` — Fill a counted phrase
 ```json
@@ -442,7 +442,7 @@ Evaluates branches in order, returns the `then` of the first truthy `when`. Fall
 ```
 `[{ "id": "u1", "name": "Alice" }]` → `{ "u1": { "id": "u1", "name": "Alice" } }`
 
-Last element wins on key collision.
+Last element wins on key collision. A key is text, a number, `true`, `false` or `null`, written as text; an object or a list is refused (`E_TYPE`).
 
 ### `$groupBy` — Array to grouped object
 ```json
@@ -454,7 +454,7 @@ Last element wins on key collision.
   }
 }
 ```
-Groups elements into arrays by computed key: `{ "fruit": [...], "vegetable": [...] }`
+Groups elements into arrays by computed key: `{ "fruit": [...], "vegetable": [...] }`. A key is text, a number, `true`, `false` or `null`, written as text; an object or a list is refused (`E_TYPE`).
 
 ---
 

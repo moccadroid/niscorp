@@ -1,6 +1,6 @@
 import type { JsonValue, JsonObject, EvalContext, EvaluateFn } from '../types';
 import type { MergeNode, CoalesceNode, CaseNode, EntriesOfNode, KeyByNode, GroupByNode } from '../schemas';
-import { refuseType } from './refuse';
+import { TEXT_LIKE, isTextLike, refuseType } from './refuse';
 import { isJsonObject, isJsonArray } from '../schemas/guards';
 import { loopScope } from './scope';
 
@@ -47,6 +47,7 @@ export const opKeyBy = (node: KeyByNode, context: EvalContext, evaluate: Evaluat
   for (const item of input) {
     vars[as] = item;
     const key = evaluate(keyExpr, scope);
+    if (!isTextLike(key)) return refuseType({ node, op: '$keyBy', field: 'key', needs: TEXT_LIKE, got: key, written: keyExpr, contextOp: '$keyBy' });
     result[String(key)] = item;
   }
   return result;
@@ -60,7 +61,9 @@ export const opGroupBy = (node: GroupByNode, context: EvalContext, evaluate: Eva
   const { scope, vars } = loopScope(context);
   for (const item of input) {
     vars[as] = item;
-    const key = String(evaluate(keyExpr, scope));
+    const value = evaluate(keyExpr, scope);
+    if (!isTextLike(value)) return refuseType({ node, op: '$groupBy', field: 'key', needs: TEXT_LIKE, got: value, written: keyExpr, contextOp: '$groupBy' });
+    const key = String(value);
     if (!result[key]) result[key] = [];
     result[key]!.push(item);
   }
