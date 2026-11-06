@@ -83,13 +83,16 @@ export const parseJsonPathCached = (path: string): JsonPathSegment[] => {
 
 export type Step = string | number;
 
+export const INDEX_TEXT = /^(0|[1-9][0-9]*)$/;
+
 const MAX_KEYS = 10;
 
-export const whereStopped = (root: JsonValue, steps: readonly Step[], nameUpTo: (count: number) => string): string => {
+export const whereStopped = (root: JsonValue, steps: readonly Step[], nameUpTo: (count: number) => string, digitsIndex = false): string => {
   let at: JsonValue | undefined = root;
-  for (const [i, step] of steps.entries()) {
+  for (const [i, raw] of steps.entries()) {
     const here = nameUpTo(i);
-    const shown = JSON.stringify(step);
+    const shown = JSON.stringify(raw);
+    const step: Step = digitsIndex && typeof raw === 'string' && isJsonArray(at) && INDEX_TEXT.test(raw) ? Number(raw) : raw;
     if (typeof step === 'number') {
       if (!isJsonArray(at)) return `stopped at ${shown}: the value at ${here} is ${describeValue(at)}, and only a list is read by index.`;
       if (at[step] === undefined) return `stopped at ${shown}: the list at ${here} has ${at.length} item${at.length === 1 ? '' : 's'}.`;

@@ -113,8 +113,8 @@ describe('an error says what was received, where, and the form of the op', () =>
   });
 
   it('a path says where it stopped and what is there', () => {
-    expect(failure(() => evaluate({ s: { $get: { from: { $ref: '$.f' }, path: ['link', '0'] } } }, { f: { link: ['/a'] } }, always)).message).toBe(
-      '$get.path ["link","0"] stopped at "0": the value at ["link"] is a list of 1 item: ["/a"], and a list is read by index, a number; for every item use $map. At s.$get.path. Form: {"$get": {"from": <node>, "path": [<text> or <number> or <node>, …], "fallback"?: <node>}}',
+    expect(failure(() => evaluate({ s: { $get: { from: { $ref: '$.f' }, path: ['link', 'href'] } } }, { f: { link: ['/a'] } }, always)).message).toBe(
+      '$get.path ["link","href"] stopped at "href": the value at ["link"] is a list of 1 item: ["/a"], and a list is read by index, a number; for every item use $map. At s.$get.path. Form: {"$get": {"from": <node>, "path": [<text> or <number> or <node>, …], "fallback"?: <node>}}',
     );
     expect(failure(() => evaluate({ s: { $ref: '$.rows.name' } }, { rows: [{ name: 'a' }] }, always)).message).toBe(
       'Path not found. $ref "$.rows.name" stopped at "name": the value at $.rows is a list of 1 item: [{"name":"a"}], and a list is read by index, a number; for every item use $map. At s.$ref.',

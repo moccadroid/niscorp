@@ -81,7 +81,7 @@ Throws `E_VAR_NOT_FOUND` if the variable doesn't exist in scope.
 
 ### `$get` — Dynamic path access
 
-Navigates into a value using an array of path segments. Segments can be strings (object keys), numbers (array indices), or node expressions (evaluated dynamically).
+Navigates into a value using an array of path segments. Segments can be strings (object keys), numbers (array indices), or node expressions (evaluated dynamically). On a list, a string of digits is an index too, as JavaScript and JSON Pointer read it: `["link", "0"]` and `["link", 0]` both read the first item of `link`. Only digits count: `"01"`, `"-1"` and `" 0"` are keys, and a list has none.
 
 ```json
 { "$get": { "from": { "$ref": "$.user" }, "path": ["address", "city"] } }

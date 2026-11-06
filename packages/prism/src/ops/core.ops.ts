@@ -1,7 +1,7 @@
 import type { JsonValue, EvalContext, EvaluateFn } from '../types';
 import type { RefNode, ConstNode, VarNode, GetNode, WithNode } from '../schemas';
 import { ErrorCode, failAt } from '../errors';
-import { parseJsonPathCached, getByPath, jsonPathUpTo, whereStopped, type JsonPathSegment, type Step } from '../utils/jsonpath';
+import { INDEX_TEXT, parseJsonPathCached, getByPath, jsonPathUpTo, whereStopped, type JsonPathSegment, type Step } from '../utils/jsonpath';
 import { isJsonObject, isJsonArray } from '../schemas/guards';
 import { measure } from '../engine/budget';
 
@@ -47,7 +47,7 @@ export const opVar = (node: VarNode, context: EvalContext, _evaluate: EvaluateFn
 };
 
 const getStopped = (root: JsonValue, steps: readonly Step[]): string =>
-  `$get.path ${JSON.stringify(steps)} ${whereStopped(root, steps, (count) => (count === 0 ? 'from' : JSON.stringify(steps.slice(0, count))))}`;
+  `$get.path ${JSON.stringify(steps)} ${whereStopped(root, steps, (count) => (count === 0 ? 'from' : JSON.stringify(steps.slice(0, count))), true)}`;
 
 export const opGet = (node: GetNode, context: EvalContext, evaluate: EvaluateFn): JsonValue => {
   const { from, path, fallback } = node.$get;
@@ -70,6 +70,10 @@ export const opGet = (node: GetNode, context: EvalContext, evaluate: EvaluateFn)
     } else {
       const key = String(evaluated);
       steps.push(key);
+      if (isJsonArray(current) && INDEX_TEXT.test(key)) {
+        current = current[Number(key)];
+        continue;
+      }
       if (!isJsonObject(current)) {
         if (fallback !== undefined) return evaluate(fallback, context);
         return failAt(getStopped(root, steps), ErrorCode.TYPE, { op: '$get' }, { node, op: '$get', field: 'path', form: true });
