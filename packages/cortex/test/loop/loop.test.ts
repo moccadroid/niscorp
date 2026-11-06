@@ -344,6 +344,33 @@ describe('the loop — respond strategy', () => {
     expect(toolMessage?.content).toBe('5');
   });
 
+  it('names the field when a tool input with a union is refused', async () => {
+    const chart = defineTool({
+      id: 'chart',
+      name: 'chart',
+      description: 'Draws a chart or a table.',
+      input: z.object({
+        view: z.union([
+          z.strictObject({ kind: z.literal('chart'), title: z.string() }),
+          z.strictObject({ kind: z.literal('table'), columns: z.array(z.string()) }),
+        ]),
+      }),
+      execute: () => 'drawn',
+    });
+    const agent = defineAgent({ id: 'charts', instructions: 'chart then respond', tools: [chart], output: { schema: CalcSchema } });
+    const llm = stubSignal([
+      { toolCalls: [{ id: 'c1', name: 'chart', args: { view: { kind: 'chart' } } }] },
+      { toolCalls: [{ id: 'c2', name: 'respond', args: { data: { answer: 1 } } }] },
+    ]);
+
+    const result = await agent.run('draw', { llm }).result;
+    expect(result.ok).toBe(true);
+    const toolMessage = llm.requests[1]?.messages.find((message) => message.role === 'tool');
+    expect(toolMessage?.content).toContain('input_invalid');
+    expect(toolMessage?.content).toContain('view.title: Invalid input: expected string, received undefined');
+    expect(toolMessage?.content).not.toContain('Invalid input;');
+  });
+
   it('tells the model when its args arrived as one string', async () => {
     const llm = stubSignal([
       { toolCalls: [{ id: 'c1', name: 'calc', args: 'add two and three' }] },
