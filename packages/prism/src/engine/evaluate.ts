@@ -1,13 +1,14 @@
-import { explainIssues } from '../utils/issues';
+import { explainIssues, issuesText } from '../utils/issues';
 import type { JsonValue, JsonObject, EvalContext, EvaluateFn, Result } from '../types';
 import type { Config } from '../schemas/config.schema';
 import { ConfigSchema } from '../schemas/config.schema';
 import { OPTIONAL_FIELDS_KEY } from '../schemas/node.schema';
-import { PrismError, ErrorCode } from '../errors';
+import { PrismError, ErrorCode, clip, failAt } from '../errors';
 import { depthRefusal, exceedsDepth } from '@niscorp/strata';
 import { desugar } from '../sugar/desugar';
 import { createBudget, measure, measureString, spendStep, type Limits } from './budget';
 import { optimize } from './optimize';
+import { placeError } from './place';
 
 import {
   isRefNode, isConstNode, isVarNode, isGetNode, isWithNode,
@@ -45,9 +46,9 @@ const isAttachedFn = (value: unknown): value is AttachedFn => typeof value === '
 export const evaluateNode: EvaluateFn = (node: unknown, context: EvalContext): JsonValue => {
   const { budget } = context;
   if (budget === undefined) return evaluateUnbudgeted(node, context);
-  spendStep(budget);
+  spendStep(budget, node);
   const out = evaluateUnbudgeted(node, context);
-  measureString(out, budget);
+  measureString(out, budget, node);
   return out;
 };
 
@@ -170,37 +171,61 @@ const evaluateUnbudgeted = (node: unknown, context: EvalContext): JsonValue => {
   if (isLocaleNumberNode(obj)) return opLocaleNumber(obj, context, evaluateNode);
 
   const unknownKeys = Object.keys(obj).filter((k) => k.startsWith('$'));
-  throw new PrismError('Unsupported node shape', ErrorCode.NODE_SHAPE, {
-    details: { keys: unknownKeys, preview: JSON.stringify(obj).slice(0, 100) },
-  });
+  const preview = JSON.stringify(obj).slice(0, 100);
+  return failAt(
+    `No op answers this node: ${clip(JSON.stringify(obj), 100)} (keys: ${unknownKeys.join(', ')}). The tree did not go through the schema.`,
+    ErrorCode.NODE_SHAPE,
+    { details: { keys: unknownKeys, preview } },
+    { node: obj, form: false },
+  );
 };
 
-const isJsonValue = (value: unknown): value is JsonValue => {
-  if (value === null || typeof value === 'string' || typeof value === 'boolean') return true;
-  if (typeof value === 'number') return Number.isFinite(value);
-  if (Array.isArray(value)) return value.every(isJsonValue);
-  if (typeof value !== 'object') return false;
+const notJson = (value: unknown, at: string): string | undefined => {
+  if (value === null || typeof value === 'string' || typeof value === 'boolean') return undefined;
+  if (typeof value === 'number') return Number.isFinite(value) ? undefined : `${at} is ${value}`;
+  if (Array.isArray(value)) {
+    for (const index of Object.keys(value)) {
+      const found = notJson(value[Number(index)], `${at}[${index}]`);
+      if (found !== undefined) return found;
+    }
+    return undefined;
+  }
+  if (typeof value !== 'object') return `${at} is ${value === undefined ? 'undefined' : `a ${typeof value}`}`;
   // A Date, a Map or an instance of a class has no fields to look at and would
   // pass for `{}`.
   const proto: unknown = Object.getPrototypeOf(value);
-  return (proto === Object.prototype || proto === null) && Object.values(value).every(isJsonValue);
+  if (proto !== Object.prototype && proto !== null) {
+    const tag = Object.prototype.toString.call(value).slice(8, -1);
+    return `${at} is ${tag === 'Object' ? 'an instance of a class' : `a ${tag}`}`;
+  }
+  for (const [key, inner] of Object.entries(value)) {
+    const found = notJson(inner, `${at}.${key}`);
+    if (found !== undefined) return found;
+  }
+  return undefined;
 };
 
 const checked = (config: unknown): unknown => {
-  if (exceedsDepth(config)) throw new PrismError('Invalid config', ErrorCode.SCHEMA, { details: { issues: [{ path: 'root', message: depthRefusal() }] } });
+  if (exceedsDepth(config)) throw new PrismError(`Invalid config: ${depthRefusal()}`, ErrorCode.SCHEMA, { details: { issues: [{ path: 'root', message: depthRefusal() }] } });
   const parsed = ConfigSchema.safeParse(config);
   if (!parsed.success) {
-    const issues = explainIssues(parsed.error.issues).map((i) => ({ path: i.path.join('.') || 'root', message: i.message }));
-    throw new PrismError('Invalid config', ErrorCode.SCHEMA, { details: { issues } });
+    const explained = explainIssues(parsed.error.issues, config);
+    const issues = explained.map((i) => ({ path: i.path.join('.') || 'root', message: i.message }));
+    throw new PrismError(`Invalid config: ${issuesText(explained)}`, ErrorCode.SCHEMA, { details: { issues } });
   }
   return desugar(parsed.data);
 };
 
-const run = (tree: unknown, source: JsonValue, limits: Partial<Limits> | undefined, kept: boolean): JsonValue => {
+const run = (tree: unknown, source: JsonValue, limits: Partial<Limits> | undefined, kept: boolean, authored: unknown): JsonValue => {
   const budget = createBudget(limits);
-  const result = evaluateNode(tree, kept ? { source, vars: {}, budget, kept } : { source, vars: {}, budget });
-  measure(result, budget);
-  return result;
+  try {
+    const result = evaluateNode(tree, kept ? { source, vars: {}, budget, kept } : { source, vars: {}, budget });
+    measure(result, budget);
+    return result;
+  } catch (error) {
+    placeError(error, tree, authored);
+    throw error;
+  }
 };
 
 export type EvaluateOptions = {
@@ -217,11 +242,12 @@ const keptTrees = new WeakMap<object, Kept>();
 // changed in place after its first call is not read again.
 export const evaluate = (config: Config, source: unknown, options?: EvaluateOptions): JsonValue => {
   if (options?.check === 'always') {
-    if (!isJsonValue(source)) throw new PrismError('The source must be plain JSON.', ErrorCode.TYPE);
-    return run(checked(config), source, options.limits, false);
+    const wrong = notJson(source, 'source');
+    if (wrong !== undefined) throw new PrismError(`The source must be plain JSON: ${wrong}.`, ErrorCode.TYPE);
+    return run(checked(config), source as JsonValue, options.limits, false, config);
   }
   const input = source as JsonValue;
-  if (typeof config !== 'object' || config === null) return run(checked(config), input, options?.limits, false);
+  if (typeof config !== 'object' || config === null) return run(checked(config), input, options?.limits, false, config);
   let kept = keptTrees.get(config);
   if (kept === undefined) {
     kept = { tree: checked(config), optimized: false };
@@ -230,7 +256,7 @@ export const evaluate = (config: Config, source: unknown, options?: EvaluateOpti
     kept.tree = optimize(kept.tree, evaluateNode).node;
     kept.optimized = true;
   }
-  return run(kept.tree, input, options?.limits, true);
+  return run(kept.tree, input, options?.limits, true, config);
 };
 
 export const evaluateSafe = (config: Config, source: unknown, options?: EvaluateOptions): Result<JsonValue> => {

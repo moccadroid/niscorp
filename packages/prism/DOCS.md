@@ -832,4 +832,17 @@ each time it appears, as it would be serialized: a `$reduce` whose body is
 
 All errors are instances of `PrismError` with `.code` and optional `.context`.
 
+**What a message says.** The message is written for the program's author, often a model that sees nothing else, so it carries everything needed to fix the program:
+
+- **what the op got:** `null`, `the number 5`, `text "…"` (up to 60 characters), `a list of 2 items: […]` or `an object: {…}` (up to 80 characters of JSON). Where the field was written in the program as an object without a `$` key, it says so: such an object builds an object.
+- **where:** `At $map.body.title.$trim.`, a position in the config as it was handed to `evaluate`. Inside a sugar op it is the sugar op's position (`At s.$sum, in the $add that $sum runs as.`). `execute` gives the position in the compiled tree.
+- **the op's form**, for a wrong type and for a `$get` path: `Form: {"$split": {"value": <node>, "sep": <text>}}`, printed from the schema.
+- for a path that found nothing, where it stopped and what is there (`stopped at "fields": the value at $.records is a list of 2 items`); for a variable that is not there, the ones in scope.
+
+A refused config says the same in `evaluate`'s and `compile`'s message: `Invalid config: <path>: <issue>; …`, with the form of the op the issue is on. `.context` is unchanged: `op`, `path` and `details` are as before.
+
+```
+$trim needs text, but got an object: {"value":"Quarterly contributor outreach"}. That object was written in the program as {"value":{"$get":…}}, and an object without a "$" key builds an object; put the node itself there. At $map.body.title.$trim. Form: {"$trim": <node>}
+```
+
 **Valid, and what it does not promise.** `validate`, `evaluate` and `compile` hold a config to the same schema, so a config that validates has no node the evaluator cannot dispatch: every object in it is an op Prism has or a plain object with no `$` key. It can still fail on the data it is given — a missing path, a wrong type, a budget. `E_NODE_SHAPE` is what is left for a tree the schema never saw: an IR handed to `execute`, which does not validate.

@@ -1,20 +1,23 @@
 import type { JsonValue, EvalContext, EvaluateFn } from '../types';
 import type { MapNode, FilterNode, ReduceNode, SliceNode, FlattenNode, UniqueNode, SortByNode } from '../schemas';
-import { PrismError, ErrorCode } from '../errors';
+import { ErrorCode, describeValue, failAt } from '../errors';
 import { isJsonArray } from '../schemas/guards';
 import { compare } from '../utils/compare';
 import { measure } from '../engine/budget';
 import { loopScope } from './scope';
+import { refuseType } from './refuse';
 
-const requireArray = (value: JsonValue, op: string): JsonValue[] => {
+type Place = { node: object; op: string; field?: string; written: unknown };
+
+const requireArray = (value: JsonValue, { node, op, field, written }: Place): JsonValue[] => {
   if (!isJsonArray(value))
-    throw new PrismError(`Expected array for ${op}`, ErrorCode.TYPE, { op });
+    return refuseType({ node, op, ...(field === undefined ? {} : { field }), needs: 'a list', got: value, written, contextOp: field === undefined ? op : `${op}.${field}` });
   return value;
 };
 
 export const opMap = (node: MapNode, context: EvalContext, evaluate: EvaluateFn): JsonValue => {
   const { over, as, body } = node.$map;
-  const input = requireArray(evaluate(over, context), '$map.over');
+  const input = requireArray(evaluate(over, context), { node, op: '$map', field: 'over', written: over });
   const result: JsonValue[] = [];
   const { scope, vars } = loopScope(context);
   for (const item of input) {
@@ -26,7 +29,7 @@ export const opMap = (node: MapNode, context: EvalContext, evaluate: EvaluateFn)
 
 export const opFilter = (node: FilterNode, context: EvalContext, evaluate: EvaluateFn): JsonValue => {
   const { over, as, when } = node.$filter;
-  const input = requireArray(evaluate(over, context), '$filter.over');
+  const input = requireArray(evaluate(over, context), { node, op: '$filter', field: 'over', written: over });
   const result: JsonValue[] = [];
   const { scope, vars } = loopScope(context);
   for (const item of input) {
@@ -39,7 +42,7 @@ export const opFilter = (node: FilterNode, context: EvalContext, evaluate: Evalu
 
 export const opReduce = (node: ReduceNode, context: EvalContext, evaluate: EvaluateFn): JsonValue => {
   const { over, as, acc: accName = 'acc', init, body } = node.$reduce;
-  const input = requireArray(evaluate(over, context), '$reduce.over');
+  const input = requireArray(evaluate(over, context), { node, op: '$reduce', field: 'over', written: over });
   let accumulator = evaluate(init, context);
   const { scope, vars } = loopScope(context);
   for (const item of input) {
@@ -47,7 +50,7 @@ export const opReduce = (node: ReduceNode, context: EvalContext, evaluate: Evalu
     vars[accName] = accumulator;
     accumulator = evaluate(body, scope);
     // Fed back each item: a body of [acc, acc] doubles it.
-    measure(accumulator, context.budget);
+    measure(accumulator, context.budget, node);
   }
   return accumulator;
 };
@@ -57,11 +60,11 @@ export const opSlice = (node: SliceNode, context: EvalContext, evaluate: Evaluat
   const input = evaluate(from, context);
   if (typeof input === 'string') return input.slice(start, end);
   if (isJsonArray(input)) return input.slice(start, end);
-  throw new PrismError('Expected array or string for $slice', ErrorCode.TYPE, { op: '$slice' });
+  return refuseType({ node, op: '$slice', field: 'from', needs: 'a list or text', got: input, written: from, contextOp: '$slice' });
 };
 
 export const opFlatten = (node: FlattenNode, context: EvalContext, evaluate: EvaluateFn): JsonValue => {
-  const input = requireArray(evaluate(node.$flatten, context), '$flatten');
+  const input = requireArray(evaluate(node.$flatten, context), { node, op: '$flatten', written: node.$flatten });
   const result: JsonValue[] = [];
   for (const item of input) {
     if (isJsonArray(item)) result.push(...item);
@@ -71,7 +74,7 @@ export const opFlatten = (node: FlattenNode, context: EvalContext, evaluate: Eva
 };
 
 export const opUnique = (node: UniqueNode, context: EvalContext, evaluate: EvaluateFn): JsonValue => {
-  const input = requireArray(evaluate(node.$unique, context), '$unique');
+  const input = requireArray(evaluate(node.$unique, context), { node, op: '$unique', written: node.$unique });
   const seen = new Set<string>();
   const result: JsonValue[] = [];
   for (const item of input) {
@@ -84,12 +87,13 @@ export const opUnique = (node: UniqueNode, context: EvalContext, evaluate: Evalu
   return result;
 };
 
-const sortKey = (key: JsonValue): JsonValue => {
+const sortKey = (key: JsonValue, node: SortByNode): JsonValue => {
   if (key !== null && typeof key === 'object') {
-    throw new PrismError(
-      `$sortBy.by answered ${Array.isArray(key) ? 'a list' : 'an object'}; a sort key is a string or a number. To sort by two keys, sort by the second and then by the first: the sort keeps the order of equal items.`,
+    return failAt(
+      `$sortBy.by answered ${describeValue(key)}; a sort key is a string or a number. To sort by two keys, sort by the second and then by the first: the sort keeps the order of equal items.`,
       ErrorCode.TYPE,
       { op: '$sortBy' },
+      { node, op: '$sortBy', field: 'by', form: true },
     );
   }
   return key;
@@ -103,12 +107,12 @@ const kindOf = (key: JsonValue): number => (key === null ? NULL_KIND : typeof ke
 
 export const opSortBy = (node: SortByNode, context: EvalContext, evaluate: EvaluateFn): JsonValue => {
   const { over, as, by, dir = 'asc' } = node.$sortBy;
-  const input = requireArray(evaluate(over, context), '$sortBy.over');
+  const input = requireArray(evaluate(over, context), { node, op: '$sortBy', field: 'over', written: over });
 
   const { scope, vars } = loopScope(context);
   const keyed = input.map((item) => {
     vars[as] = item;
-    return { item, key: sortKey(evaluate(by, scope)) };
+    return { item, key: sortKey(evaluate(by, scope), node) };
   });
 
   keyed.sort((a, b) => {

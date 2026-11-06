@@ -1,6 +1,6 @@
 import type { JsonValue } from '../types';
 import { isJsonArray, isJsonObject } from '../schemas/guards';
-import { PrismError, ErrorCode } from '../errors';
+import { PrismError, ErrorCode, describeValue } from '../errors';
 
 export type JsonPathSegment =
   | { type: 'key'; key: string }
@@ -80,6 +80,36 @@ export const parseJsonPathCached = (path: string): JsonPathSegment[] => {
   cache.set(path, parsed);
   return parsed;
 };
+
+export type Step = string | number;
+
+const MAX_KEYS = 10;
+
+export const whereStopped = (root: JsonValue, steps: readonly Step[], nameUpTo: (count: number) => string): string => {
+  let at: JsonValue | undefined = root;
+  for (const [i, step] of steps.entries()) {
+    const here = nameUpTo(i);
+    const shown = JSON.stringify(step);
+    if (typeof step === 'number') {
+      if (!isJsonArray(at)) return `stopped at ${shown}: the value at ${here} is ${describeValue(at)}, and only a list is read by index.`;
+      if (at[step] === undefined) return `stopped at ${shown}: the list at ${here} has ${at.length} item${at.length === 1 ? '' : 's'}.`;
+      at = at[step];
+    } else {
+      if (isJsonArray(at)) return `stopped at ${shown}: the value at ${here} is ${describeValue(at)}, and a list is read by index, a number; for every item use $map.`;
+      if (!isJsonObject(at)) return `stopped at ${shown}: the value at ${here} is ${describeValue(at)}, which has no keys.`;
+      if (at[step] === undefined) {
+        const keys = Object.keys(at);
+        const listed = keys.slice(0, MAX_KEYS).join(', ') + (keys.length > MAX_KEYS ? ', …' : '');
+        return `stopped at ${shown}: the object at ${here} has no key ${shown} (${keys.length === 0 ? 'it has no keys' : `its keys: ${listed}`}).`;
+      }
+      at = at[step];
+    }
+  }
+  return '';
+};
+
+export const jsonPathUpTo = (segments: readonly JsonPathSegment[], count: number): string =>
+  segments.slice(0, count).reduce((text, s) => (s.type === 'key' ? `${text}.${s.key}` : `${text}[${s.index}]`), '$');
 
 export const getByPath = (root: JsonValue, segments: JsonPathSegment[]): JsonValue | undefined => {
   let current: JsonValue | undefined = root;

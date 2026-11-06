@@ -123,19 +123,30 @@ const opMembersOf = (options: readonly Member[]): Map<string, Member> => {
   return members;
 };
 
-const memberOf = (value: unknown, ops: Map<string, Member>): Member | undefined => {
-  if (value === null || typeof value !== 'object') return JsonPrimitiveSchema;
-  if (Array.isArray(value)) return NodeArraySchema;
+const isPlainProto = (value: object): boolean => {
   const proto: unknown = Object.getPrototypeOf(value);
-  if (proto !== Object.prototype && proto !== null) return undefined;
-  let op: string | undefined;
+  return proto === Object.prototype || proto === null;
+};
+
+// Only that op's schema can take an object whose one key names it: each op's
+// schema is strict, and a template refuses `$` keys.
+const soleOpKey = (value: unknown): string | undefined => {
+  if (value === null || typeof value !== 'object' || Array.isArray(value) || !isPlainProto(value)) return undefined;
+  let sole: string | undefined;
   let count = 0;
   for (const key in value) {
     count += 1;
-    if (key.startsWith('$')) op = key;
+    sole = key;
   }
-  if (op === undefined) return TemplateSchema;
-  return count === 1 ? ops.get(op) : undefined;
+  return count === 1 && sole !== undefined && sole.startsWith('$') ? sole : undefined;
+};
+
+const memberOf = (value: unknown): Member | undefined => {
+  if (value === null || typeof value !== 'object') return JsonPrimitiveSchema;
+  if (Array.isArray(value)) return NodeArraySchema;
+  if (!isPlainProto(value)) return undefined;
+  for (const key in value) if (key.startsWith('$')) return undefined;
+  return TemplateSchema;
 };
 
 const quick = new WeakSet<object>();
@@ -146,8 +157,15 @@ const NodeUnion = z.core.$constructor<z.ZodUnion>('PrismNodeUnion', (inst, def) 
   const ops = opMembersOf(def.options);
   const walk = inst._zod.parse;
   inst._zod.parse = (payload, ctx) => {
+    const sole = soleOpKey(payload.value);
+    if (sole !== undefined) {
+      const op = ops.get(sole);
+      if (op !== undefined) return op._zod.run(payload, ctx);
+      payload.issues.push({ code: 'custom', input: payload.value, path: [sole], message: templateKeyRefusal(sole), inst });
+      return payload;
+    }
     if (ctx.async !== false || walking.has(ctx)) return walk(payload, ctx);
-    const member = memberOf(payload.value, ops);
+    const member = memberOf(payload.value);
     // Inside a quick pass: a failure is only a no, the walk will say why.
     if (quick.has(ctx)) {
       if (member !== undefined) return member._zod.run(payload, ctx);
@@ -171,33 +189,90 @@ const NodeUnion = z.core.$constructor<z.ZodUnion>('PrismNodeUnion', (inst, def) 
   };
 });
 
+export const OP_MEMBERS: Member[] = [
+  RefNodeSchema, ConstNodeSchema, VarNodeSchema, GetNodeSchema, WithNodeSchema,
+  MapNodeSchema, FilterNodeSchema, ReduceNodeSchema, SliceNodeSchema,
+  FlattenNodeSchema, UniqueNodeSchema, SortByNodeSchema,
+  AddNodeSchema, SubNodeSchema, MulNodeSchema, DivNodeSchema, ModNodeSchema, RoundNodeSchema, ToNumberNodeSchema,
+  FillNodeSchema, JoinNodeSchema, ToStringNodeSchema, InterpolateNodeSchema, TrimNodeSchema,
+  LowerNodeSchema, UpperNodeSchema, SplitNodeSchema, ReplaceNodeSchema,
+  EqNodeSchema, NeqNodeSchema, GtNodeSchema, GteNodeSchema,
+  LtNodeSchema, LteNodeSchema, EmptyNodeSchema,
+  StartsWithNodeSchema, EndsWithNodeSchema, ContainsNodeSchema,
+  NotNodeSchema, AndNodeSchema, OrNodeSchema,
+  MergeNodeSchema, CoalesceNodeSchema, CaseNodeSchema, EntriesOfNodeSchema,
+  KeyByNodeSchema, GroupByNodeSchema,
+  KeysNodeSchema, ValuesNodeSchema, FromEntriesNodeSchema,
+  PickNodeSchema, OmitNodeSchema, TypeNodeSchema, LengthNodeSchema,
+  DateNodeSchema, DateAddNodeSchema, DateDiffNodeSchema,
+  LocaleDateNodeSchema, LocaleMoneyNodeSchema, LocaleNumberNodeSchema,
+  SumNodeSchema, AvgNodeSchema, CountNodeSchema, MinNodeSchema, MaxNodeSchema,
+  PluckNodeSchema, TakeNodeSchema, DropNodeSchema, MatchNodeSchema, FlatMapNodeSchema,
+  HasNodeSchema, RenameKeysNodeSchema, UpdateNodeSchema, AssertNodeSchema, WalkNodeSchema,
+];
+
 export const NodeSchema: z.ZodType<unknown> = z.lazy(
   (): z.ZodTypeAny =>
     new NodeUnion({ type: 'union', options: [
-      RefNodeSchema, ConstNodeSchema, VarNodeSchema, GetNodeSchema, WithNodeSchema,
-      MapNodeSchema, FilterNodeSchema, ReduceNodeSchema, SliceNodeSchema,
-      FlattenNodeSchema, UniqueNodeSchema, SortByNodeSchema,
-      AddNodeSchema, SubNodeSchema, MulNodeSchema, DivNodeSchema, ModNodeSchema, RoundNodeSchema, ToNumberNodeSchema,
-      FillNodeSchema, JoinNodeSchema, ToStringNodeSchema, InterpolateNodeSchema, TrimNodeSchema,
-      LowerNodeSchema, UpperNodeSchema, SplitNodeSchema, ReplaceNodeSchema,
-      EqNodeSchema, NeqNodeSchema, GtNodeSchema, GteNodeSchema,
-      LtNodeSchema, LteNodeSchema, EmptyNodeSchema,
-      StartsWithNodeSchema, EndsWithNodeSchema, ContainsNodeSchema,
-      NotNodeSchema, AndNodeSchema, OrNodeSchema,
-      MergeNodeSchema, CoalesceNodeSchema, CaseNodeSchema, EntriesOfNodeSchema,
-      KeyByNodeSchema, GroupByNodeSchema,
-      KeysNodeSchema, ValuesNodeSchema, FromEntriesNodeSchema,
-      PickNodeSchema, OmitNodeSchema, TypeNodeSchema, LengthNodeSchema,
-      DateNodeSchema, DateAddNodeSchema, DateDiffNodeSchema,
-      LocaleDateNodeSchema, LocaleMoneyNodeSchema, LocaleNumberNodeSchema,
-      SumNodeSchema, AvgNodeSchema, CountNodeSchema, MinNodeSchema, MaxNodeSchema,
-      PluckNodeSchema, TakeNodeSchema, DropNodeSchema, MatchNodeSchema, FlatMapNodeSchema,
-      HasNodeSchema, RenameKeysNodeSchema, UpdateNodeSchema, AssertNodeSchema, WalkNodeSchema,
+      ...OP_MEMBERS,
       JsonPrimitiveSchema,
       NodeArraySchema,
       TemplateSchema,
     ] }).describe('A Prism node: an op, a plain JSON value, an array of nodes, or a plain object template.'),
 );
+
+const isMember = (value: unknown): value is Member => typeof value === 'object' && value !== null && '_zod' in value;
+
+const shapeOf = (schema: Member): string => {
+  const { def } = schema._zod;
+  const inner = (key: string): string => {
+    const value: unknown = Reflect.get(def, key);
+    return isMember(value) ? shapeOf(value) : '<any JSON>';
+  };
+  const list = (key: string): Member[] => {
+    const value: unknown = Reflect.get(def, key);
+    return Array.isArray(value) ? value.filter(isMember) : [];
+  };
+  switch (def.type) {
+    case 'lazy': {
+      const getter: unknown = Reflect.get(def, 'getter');
+      return typeof getter === 'function' && getter() === NodeSchema ? '<node>' : '<any JSON>';
+    }
+    case 'string': return '<text>';
+    case 'number': return '<number>';
+    case 'boolean': return 'true|false';
+    case 'null': return 'null';
+    case 'enum': {
+      const entries: unknown = Reflect.get(def, 'entries');
+      return typeof entries === 'object' && entries !== null ? Object.values(entries).map((v) => JSON.stringify(v)).join('|') : '<text>';
+    }
+    case 'optional': case 'default': case 'nullable': case 'readonly': case 'prefault': return inner('innerType');
+    case 'array': return `[${inner('element')}, …]`;
+    case 'tuple': return `[${list('items').map(shapeOf).join(', ')}]`;
+    case 'union': return list('options').map(shapeOf).join(' or ');
+    case 'record': return `{<name>: ${inner('valueType')}}`;
+    case 'object': {
+      const shape: unknown = Reflect.get(def, 'shape');
+      if (typeof shape !== 'object' || shape === null) return '{…}';
+      const fields = Object.entries(shape).filter((entry): entry is [string, Member] => isMember(entry[1])).map(([key, field]) => {
+        const optional = field._zod.def.type === 'optional' || field._zod.def.type === 'default';
+        return `"${key}"${optional ? '?' : ''}: ${shapeOf(field)}`;
+      });
+      return `{${fields.join(', ')}}`;
+    }
+    default: return `<${def.type}>`;
+  }
+};
+
+let forms: Map<string, Member> | undefined;
+
+export const formOf = (op: string): string | undefined => {
+  forms ??= opMembersOf(OP_MEMBERS);
+  const member = forms.get(op);
+  const shape: unknown = member === undefined ? undefined : Reflect.get(member._zod.def, 'shape');
+  const field: unknown = typeof shape === 'object' && shape !== null ? Reflect.get(shape, op) : undefined;
+  return isMember(field) ? `{"${op}": ${shapeOf(field)}}` : undefined;
+};
 
 setCoreNode(NodeSchema);
 setArrayNode(NodeSchema);
