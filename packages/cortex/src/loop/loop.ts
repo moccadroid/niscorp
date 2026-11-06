@@ -16,6 +16,7 @@ import {
 import { makeError, ok, err } from '../errors/cortex.errors';
 import type { CortexEvent, CortexEventBody } from '../events/types';
 import { validateEnvelope, type EnvelopeSpec } from '../schemas/envelope.schema';
+import { flattenSchemaIssues } from '../utils/schema-issues';
 import type { PartialTracker } from './partials';
 import type {
   PrepareStep,
@@ -258,7 +259,7 @@ export const runLoop = async <TData, TDeps>(
       if (repaired.success) parsedArgs = repaired;
     }
     if (!parsedArgs.success) {
-      const issues = parsedArgs.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ');
+      const issues = flattenSchemaIssues(parsedArgs.error.issues).map((i) => `${i.path.join('.')}: ${i.message}`).join('; ');
       const hint =
         typeof args === 'string'
           ? ' (your arguments arrived as ONE STRING — call again with a plain JSON object, e.g. {"key": "value"})'

@@ -1,5 +1,29 @@
 # @niscorp/signal
 
+## 0.1.7
+
+### Patch Changes
+
+- f4a3f04: `decide()` can ask about images: `images` maps a uuid to an `ImageSource`, and a string in `state` equal to a uuid points at that image.
+
+  On `typesafe` the images go as the request's `assets` with the `TypeSafe-Danger-Zone-Images: true` header, so Jev answers about them with calibrated probabilities. TypeSafe takes PNG or JPEG data; a `url` image or another `mediaType` fails with `E_VALIDATION_FAILED` before the request. On a chat provider each image follows the state in the emulation message, after a label with its uuid; a model whose registry row says `multimodal: false` is refused before the request. A key that is not a uuid is refused on every provider.
+
+  A request without `images`, or with `images: {}`, is unchanged: TypeSafe gets the same body and headers, and a chat provider the same single text message.
+
+  **What to change:** nothing. A caller that posts images to TypeSafe itself can pass them to `decide()` instead.
+
+## 0.1.6
+
+### Patch Changes
+
+- 6776f2d: A reply missing only its closing brace comes back whole, not as a piece of itself.
+
+  The repair ladder tried `extract` before `close-truncated`. On `{"reasoning":"…","data":{"rows":[…]}` — complete but for the last `}` — `extract` found the `rows` array inside it, and any acceptance schema that admits arrays (Cortex's does) took that array as the answer. Cortex then rejected it as not an envelope, and the model was asked again, up to its output-retry limit. The ladder now closes a cut-off reply before it looks for JSON inside it, so the whole object arrives at `wire.rung: 'close-truncated'`.
+
+  Only a reply that opens with `{` or `[` and is left unclosed takes a different path. A complete reply, a fenced or prose-wrapped one, and tool-call arguments go through the ladder as before.
+
+  **What to change:** nothing.
+
 ## 0.1.5
 
 ### Patch Changes

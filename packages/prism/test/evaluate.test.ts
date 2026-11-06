@@ -99,8 +99,15 @@ describe("evaluate — check: 'always'", () => {
   });
 
   it('refuses a source that is not plain JSON, and says so', () => {
-    for (const source of [{ note: undefined }, { at: () => 1 }, { n: Number.NaN }, [new Date(0)], undefined]) {
-      expect(() => evaluate({ $ref: '$' }, source, always)).toThrow(expect.objectContaining({ code: 'E_TYPE', message: 'The source must be plain JSON.' }));
+    const refused: [unknown, string][] = [
+      [{ note: undefined }, 'source.note is undefined'],
+      [{ at: () => 1 }, 'source.at is a function'],
+      [{ n: Number.NaN }, 'source.n is NaN'],
+      [[new Date(0)], 'source[0] is a Date'],
+      [undefined, 'source is undefined'],
+    ];
+    for (const [source, why] of refused) {
+      expect(() => evaluate({ $ref: '$' }, source, always)).toThrow(expect.objectContaining({ code: 'E_TYPE', message: `The source must be plain JSON: ${why}.` }));
     }
     expect(evaluate({ $length: { $ref: '$' } }, ['a', 'b'], always)).toBe(2);
   });

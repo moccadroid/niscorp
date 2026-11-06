@@ -1,4 +1,11 @@
-export type SchemaIssue = { code?: string; path: PropertyKey[]; message: string; errors?: SchemaIssue[][] };
+export type SchemaIssue = {
+  code?: string;
+  path: PropertyKey[];
+  message: string;
+  errors?: SchemaIssue[][];
+  issues?: SchemaIssue[];
+  origin?: string;
+};
 
 const rootScore = (branch: SchemaIssue[]): number => {
   let score = 0;
@@ -21,6 +28,11 @@ const pickBranch = (branches: SchemaIssue[][]): SchemaIssue[] =>
 export const flattenSchemaIssues = (issues: SchemaIssue[], prefix: PropertyKey[] = []): SchemaIssue[] =>
   issues.flatMap((issue) => {
     const path = [...prefix, ...issue.path];
+    // zod words a record key's failure as "Invalid key in record" and keeps the
+    // key schema's own reason inside it.
+    if (issue.code === 'invalid_key' && issue.origin === 'record' && issue.issues && issue.issues.length > 0) {
+      return flattenSchemaIssues(issue.issues, path);
+    }
     if (issue.code !== 'invalid_union' || !issue.errors || issue.errors.length === 0) return [{ ...issue, path }];
     return flattenSchemaIssues(pickBranch(issue.errors), path);
   });

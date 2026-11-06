@@ -1,5 +1,34 @@
 # @niscorp/prism
 
+## 0.3.2
+
+### Patch Changes
+
+- 7bcf306: An error says what the op got, where in the program, and the op's form, in its message. The message is what a caller passes on to a program's author, often a model that sees nothing else, and it said too little to fix anything: `Expected string for $trim`, `Path not found`, `Invalid config`.
+  - **A wrong type** names the value and where: `$trim needs text, but got an object: {"value":"Quarterly contributor outreach"}. … At $map.body.title.$trim. Form: {"$trim": <node>}`. Where the field was written as an object without a `$` key, it says such an object builds an object. The form is printed from the schema.
+  - **A path that found nothing** says where it stopped and what is there: `$ref "$.rows.name" stopped at "name": the value at $.rows is a list of 1 item: […], and a list is read by index, a number`. A missing key lists the keys there; a `$var` that is not there lists the variables in scope.
+  - **Inside a sugar op** the position is the author's: `At s.$sum, in the $add that $sum runs as.`
+  - **A refused config** puts its issues in `evaluate`'s message, as `compile` did, each with the form of the op it is on: `Invalid config: x: Unrecognized key: "fallback". Form: {"$trim": <node>}`. `validate`'s issue messages carry the same form.
+  - **An object whose only key names an op is checked as that op alone.** A reader of `ConfigSchema`'s issues that picks among a union's branches, as cortex's `flattenSchemaIssues` does, now gets the op's own issues (`$map/over: Unrecognized keys: "as", "body"`) instead of `$map: Invalid key in record`, and an op name that does not exist reads `Not a Prism op…`. Which configs are accepted is unchanged.
+  - The budget says where evaluation stopped; `E_NODE_SHAPE` puts the node in its message; `check: 'always'` names the first value of a source that is not plain JSON (`source.d is a Date`).
+
+  Codes, `PrismError`, `.context` (`op`, `path`, `details`) and every export are unchanged. `$assert`'s message is the program's own and is unchanged.
+
+  **What to change:** nothing. Code that compared a message's exact text gets the new text.
+
+- ee625f7: `$get` reads a path segment of digits as an index when the value there is a list: `["link", "0"]` reads the first item of `link`, as `["link", 0]` does, and as JavaScript and JSON Pointer read it. Only digits count: `"01"`, `"-1"` and `" 0"` stay keys, and a key asked of a list is refused as before (`E_TYPE`, or the fallback).
+
+  Before, `"0"` on a list was a key, which a list does not have: without a `fallback` it threw `E_TYPE`, and with one it answered the fallback for every item, which is easy to miss. A model writing a mapping wrote `["link", "0"]` with a `null` fallback and got `null` for all twelve records; lyra's people roll reads its page cursor with `["0", field]` and has answered `""` every time.
+
+  **What to change:** nothing. A config that used a digit key on a list and relied on getting its fallback now gets the item.
+
+- ef23b8e: `$join`, `$interpolate`, `$keyBy` and `$groupBy` refuse an object or a list where they need text, with `E_TYPE` and a message that says which item or key and what it was. They turned it into text with `String()`: an object became `"[object Object]"` and a list its items joined by commas, and nothing said so.
+  - `$join`: a part that is an object or a list (`$join.parts needs items that are text, a number, true, false or null, but item 1 is an object: {"a":1}.`). `null` is still `""`.
+  - `$interpolate`: a value for a `{{key}}` in the template that is an object or a list. A value the template does not use is not looked at, and a missing one is still `""`.
+  - `$keyBy` and `$groupBy`: a key that is an object or a list. Text, numbers, `true`, `false` and `null` are keys as before.
+
+  **What to change:** a config that joined or interpolated an object or a list, or grouped by one, now fails instead of answering `"[object Object]"` or `"a,b"`. Pick the field you meant (`$get`), or join the list first (`$join`).
+
 ## 0.3.1
 
 ### Patch Changes

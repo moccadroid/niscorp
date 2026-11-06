@@ -1,5 +1,5 @@
 import type { JsonValue } from '../types';
-import { PrismError, ErrorCode } from '../errors';
+import { PrismError, ErrorCode, failAt } from '../errors';
 
 // Three limits, each for a shape the others cannot see. Steps are nodes
 // evaluated: nested maps. String length: a `$reduce` that joins its accumulator
@@ -21,13 +21,15 @@ export type Budget = {
 
 export const createBudget = (limits?: Partial<Limits>): Budget => ({ limits: { ...DEFAULT_LIMITS, ...limits }, steps: 0, sizes: new WeakMap() });
 
-const refuse = (what: string, limit: number): never => {
-  throw new PrismError(`Evaluation stopped: ${what} (limit ${limit})`, ErrorCode.BUDGET, { details: { limit } });
+const refuse = (what: string, limit: number, node: unknown): never => {
+  const message = `Evaluation stopped: ${what} (limit ${limit}).`;
+  if (typeof node === 'object' && node !== null) return failAt(message, ErrorCode.BUDGET, { details: { limit } }, { node, form: false });
+  throw new PrismError(message, ErrorCode.BUDGET, { details: { limit } });
 };
 
-export const spendStep = (budget: Budget): void => {
+export const spendStep = (budget: Budget, node: unknown): void => {
   budget.steps += 1;
-  if (budget.steps > budget.limits.maxSteps) refuse('it evaluated too many nodes', budget.limits.maxSteps);
+  if (budget.steps > budget.limits.maxSteps) refuse('it evaluated too many nodes', budget.limits.maxSteps, node);
 };
 
 const sizeOf = (value: JsonValue, budget: Budget): number => {
@@ -43,14 +45,14 @@ const sizeOf = (value: JsonValue, budget: Budget): number => {
   return size;
 };
 
-export const measureString = (value: JsonValue, budget: Budget): void => {
-  if (typeof value === 'string' && value.length > budget.limits.maxStringLength) refuse(`a string of ${value.length} characters`, budget.limits.maxStringLength);
+export const measureString = (value: JsonValue, budget: Budget, node?: unknown): void => {
+  if (typeof value === 'string' && value.length > budget.limits.maxStringLength) refuse(`a string of ${value.length} characters`, budget.limits.maxStringLength, node);
 };
 
-export const measure = (value: JsonValue, budget: Budget | undefined): void => {
+export const measure = (value: JsonValue, budget: Budget | undefined, node?: unknown): void => {
   if (budget === undefined) return;
-  measureString(value, budget);
+  measureString(value, budget, node);
   if (value !== null && typeof value === 'object' && sizeOf(value, budget) > budget.limits.maxValues) {
-    refuse('a result holding too many values', budget.limits.maxValues);
+    refuse('a result with too many values', budget.limits.maxValues, node);
   }
 };

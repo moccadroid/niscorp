@@ -113,6 +113,20 @@ describe('$get', () => {
     const config = { $get: { from: { $ref: '$.user' }, path: ['nonexistent'] } };
     expect(() => evaluate(config, source)).toThrow(PrismError);
   });
+
+  it('reads a string of digits as an index on a list', () => {
+    const links = { fields: { link: ['/books/beginning-perl/', '/books/modern-perl/'] } };
+    const at = (path: (string | number)[], fallback?: unknown) =>
+      evaluate({ $get: { from: { $ref: '$.fields' }, path, ...(fallback === undefined ? {} : { fallback: { $const: fallback } }) } }, links);
+    expect(at(['link', '0'], null)).toBe('/books/beginning-perl/');
+    expect(at(['link', '1'])).toBe('/books/modern-perl/');
+    expect(at(['link', '5'], 'none')).toBe('none');
+    expect(() => at(['link', '5'])).toThrow(expect.objectContaining({ code: 'E_MISSING_PATH', message: expect.stringContaining('stopped at "5": the list at ["link"] has 2 items.') }));
+    for (const key of ['01', '-1', ' 0', '1.0']) {
+      expect(() => at(['link', key])).toThrow(expect.objectContaining({ code: 'E_TYPE', message: expect.stringContaining(`stopped at ${JSON.stringify(key)}`) }));
+    }
+    expect(evaluate({ $get: { from: { $const: { '0': 'zero' } }, path: ['0'] } }, {})).toBe('zero');
+  });
 });
 
 describe('plain objects', () => {

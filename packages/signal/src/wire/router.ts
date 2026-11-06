@@ -57,6 +57,13 @@ function* ladder(text: string, strategies: ReadonlyArray<ResponseWireStrategy>):
   const direct = tryParse(trimmed);
   if (direct.ok) yield { value: direct.value, rung: 'parse' };
 
+  // Ahead of extract: on a reply cut short, extract finds only a piece of it.
+  const closed = closeTruncated(trimmed);
+  if (closed !== undefined) {
+    const parsed = tryParse(closed);
+    if (parsed.ok) yield { value: parsed.value, rung: 'close-truncated' };
+  }
+
   const extracted = extractJson(trimmed);
   if (extracted.ok) yield { value: extracted.value, rung: 'extract' };
 
@@ -70,12 +77,6 @@ function* ladder(text: string, strategies: ReadonlyArray<ResponseWireStrategy>):
       const parsed = tryParse(candidateText);
       if (parsed.ok) yield { value: parsed.value, rung: strategy.id };
     }
-  }
-
-  const closed = closeTruncated(trimmed);
-  if (closed !== undefined) {
-    const parsed = tryParse(closed);
-    if (parsed.ok) yield { value: parsed.value, rung: 'close-truncated' };
   }
 }
 

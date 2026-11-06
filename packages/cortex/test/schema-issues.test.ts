@@ -29,6 +29,11 @@ describe('flattenSchemaIssues', () => {
     expect(evidence).not.toContain('expected string, received object');
   });
 
+  it('a record key that breaks its rule reports the rule, not "Invalid key in record"', () => {
+    const Scores = z.record(z.string().regex(/^[a-z]+$/, 'keys are lower-case letters'), z.number());
+    expect(format(z.object({ scores: Scores }), { scores: { good: 1, Bad: 2 } })).toBe('scores.Bad: keys are lower-case letters');
+  });
+
   it('nested union paths keep their prefixes', () => {
     const Inner = z.union([z.object({ a: z.number() }), z.object({ b: z.string() })]);
     const evidence = format(z.object({ data: z.object({ item: Inner }) }), { data: { item: { a: 'x' } } });

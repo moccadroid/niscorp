@@ -1,5 +1,21 @@
 # create-nisc
 
+## 0.8.10
+
+No changes in this release.
+
+## 0.8.9
+
+No changes in this release.
+
+## 0.8.8
+
+No changes in this release.
+
+## 0.8.7
+
+No changes in this release.
+
 ## 0.8.6
 
 No changes in this release.

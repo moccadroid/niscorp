@@ -1,6 +1,6 @@
-import { type ZodType } from 'zod';
+import { z, type ZodType } from 'zod';
 import type {
-  Message, ContentPart, Tool, SignalOptions, Capabilities, ReasoningEffort,
+  Message, ContentPart, ImageSource, Tool, SignalOptions, Capabilities, ReasoningEffort,
   SignalResult, StreamEvent, StepStreamEvent, StreamOptions,
   ProviderAdapter, ChatAdapter, DecisionAdapter, ProviderRequest, ProviderResponse, Rejection,
   StepRequest, StepResult, StepToolCall, CountInput,
@@ -15,7 +15,7 @@ import { createAnthropicAdapter } from './adapters/anthropic.adapter';
 import { createGoogleAdapter } from './adapters/google.adapter';
 import { createSystemOneAdapter } from './adapters/systemone.adapter';
 import { assertQuestions, acceptCalibrated, acceptUncalibrated, uncalibratedSchemaOf } from './decide/gate';
-import { decisionEmulationPrompt } from './transport/protocol';
+import { decisionEmulationPrompt, decisionImageLabel } from './transport/protocol';
 import { executeStepStream } from './stream/execute-step-stream';
 import { runComplete, runStream } from './run';
 import { resolveWireStrategies, responseStrategies, recoverRejection, type WireStrategy } from './wire/strategies';
@@ -142,6 +142,39 @@ const assertEffort = (config: SignalConfig, effort: ReasoningEffort | undefined)
     `reasoningEffort "${effort}" is not accepted by ${resolved.provider} ${resolved.model} (accepts: ${accepted}; measured ${row.verified})`,
     ErrorCode.VALIDATION_FAILED,
   );
+};
+
+const imageId = z.uuid();
+
+const assertImageIds = (images: Record<string, ImageSource> | undefined): void => {
+  for (const id of Object.keys(images ?? {})) {
+    if (!imageId.safeParse(id).success) {
+      throw new SignalError(`Image key "${id}" is not a uuid`, ErrorCode.VALIDATION_FAILED, { image: id });
+    }
+  }
+};
+
+const assertTakesImages = (config: SignalConfig): void => {
+  const resolved = modelRowOf(config);
+  const row = resolved?.row;
+  if (resolved === undefined || row === undefined || row.capabilities.multimodal) return;
+  throw new SignalError(
+    `${resolved.provider} ${resolved.model} takes no images (measured ${row.verified})`,
+    ErrorCode.VALIDATION_FAILED,
+  );
+};
+
+const emulationContent = (state: string, images: Record<string, ImageSource> | undefined): string | ContentPart[] => {
+  const prompt = decisionEmulationPrompt(state);
+  const entries = Object.entries(images ?? {});
+  if (entries.length === 0) return prompt;
+  return [
+    { type: 'text', text: prompt },
+    ...entries.flatMap(([id, source]): ContentPart[] => [
+      { type: 'text', text: decisionImageLabel(id) },
+      { type: 'image', source },
+    ]),
+  ];
 };
 
 const wireIdsOf = (config: SignalConfig): string[] => {
@@ -352,7 +385,12 @@ const createSignalFromConfig = <T = string>(config: SignalConfig): Signal<T> => 
     started: number,
   ): Promise<DecideResult<Qs>> => {
     const response = await adapter.decide(
-      { model, state: request.state, questions: request.questions },
+      {
+        model,
+        state: request.state,
+        questions: request.questions,
+        ...(request.images !== undefined && { images: request.images }),
+      },
       request.options?.signal !== undefined ? { signal: request.options.signal } : undefined,
     );
     const decisions = acceptCalibrated(request.questions, response.answers, response.raw);
@@ -375,10 +413,11 @@ const createSignalFromConfig = <T = string>(config: SignalConfig): Signal<T> => 
     request: DecideRequest<Qs>,
     started: number,
   ): Promise<DecideResult<Qs>> => {
+    if (Object.keys(request.images ?? {}).length > 0) assertTakesImages(config);
     const state = typeof request.state === 'string' ? request.state : JSON.stringify(request.state);
     const result = await runComplete<unknown>(
       {
-        messages: [{ role: 'user', content: decisionEmulationPrompt(state) }],
+        messages: [{ role: 'user', content: emulationContent(state, request.images) }],
         schema: uncalibratedSchemaOf(request.questions),
         tools: undefined,
         retries: config.retries ?? 2,
@@ -486,6 +525,7 @@ const createSignalFromConfig = <T = string>(config: SignalConfig): Signal<T> => 
 
     decide: async <const Qs extends Questions>(request: DecideRequest<Qs>): Promise<DecideResult<Qs>> => {
       assertQuestions(request.questions);
+      assertImageIds(request.images);
       const started = Date.now();
       const adapter = await getAdapter();
       const model = resolveProvider(config).model;

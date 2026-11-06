@@ -119,6 +119,10 @@ sides is two changes.
     to repair. The questions are the schema: the result type and the
     gate (`decide/gate.ts`) both derive from them, which is the package's
     one sentence applied to a model that answers instead of writing.
+    Images ride beside `state`, keyed by the uuid `state` uses for them —
+    TypeSafe's own wire structure — so the adapter translates fields,
+    refuses what TypeSafe's wire cannot carry, and never walks or
+    rewrites the caller's state.
 12. **Emulation is honest or absent.** On a chat adapter `decide()`
     runs the derived schema through `complete()` and returns picks with
     `calibrated: false` — the discriminant of `DecideResult`, so the

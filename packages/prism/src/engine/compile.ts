@@ -1,4 +1,4 @@
-import { explainIssues } from '../utils/issues';
+import { explainIssues, issuesText } from '../utils/issues';
 import { ConfigSchema } from '../schemas/config.schema';
 import { PrismError, ErrorCode } from '../errors';
 import { depthRefusal, exceedsDepth } from '@niscorp/strata';
@@ -67,8 +67,7 @@ export const compile = async (
   if (exceedsDepth(config)) throw new PrismError(`Invalid config: ${depthRefusal()}`, ErrorCode.SCHEMA);
   const parsed = ConfigSchema.safeParse(config);
   if (!parsed.success) {
-    const issues = explainIssues(parsed.error.issues).map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`).join('; ');
-    throw new PrismError(`Invalid config: ${issues}`, ErrorCode.SCHEMA);
+    throw new PrismError(`Invalid config: ${issuesText(explainIssues(parsed.error.issues, config))}`, ErrorCode.SCHEMA);
   }
 
   const desugared = desugar(parsed.data);

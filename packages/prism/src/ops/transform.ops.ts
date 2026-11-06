@@ -1,6 +1,7 @@
 import type { JsonValue, JsonObject, EvalContext, EvaluateFn } from '../types';
 import type { HasNode, RenameKeysNode, UpdateNode, AssertNode, WalkNode } from '../schemas';
-import { PrismError, ErrorCode } from '../errors';
+import { PrismError, ErrorCode, describeValue, failAt } from '../errors';
+import { refuseType } from './refuse';
 import { isJsonObject, isJsonArray } from '../schemas/guards';
 
 type Segment = string | number;
@@ -24,7 +25,7 @@ export const opHas = (node: HasNode, context: EvalContext, evaluate: EvaluateFn)
 
 export const opRenameKeys = (node: RenameKeysNode, context: EvalContext, evaluate: EvaluateFn): JsonValue => {
   const value = evaluate(node.$renameKeys.from, context);
-  if (!isJsonObject(value)) throw new PrismError('Expected object for $renameKeys', ErrorCode.TYPE, { op: '$renameKeys' });
+  if (!isJsonObject(value)) return refuseType({ node, op: '$renameKeys', field: 'from', needs: 'an object', got: value, written: node.$renameKeys.from, contextOp: '$renameKeys' });
   const { map } = node.$renameKeys;
   const renamedTo = new Set(Object.entries(map).filter(([from]) => Object.prototype.hasOwnProperty.call(value, from)).map(([, to]) => to));
   const result: JsonObject = {};
@@ -45,24 +46,24 @@ const current = (value: JsonValue, path: readonly Segment[]): JsonValue => {
   return at;
 };
 
-const setIn = (value: JsonValue, path: readonly Segment[], next: JsonValue, full: readonly Segment[]): JsonValue => {
+const setIn = (value: JsonValue, path: readonly Segment[], next: JsonValue, full: readonly Segment[], node: UpdateNode): JsonValue => {
   const [head, ...rest] = path;
   if (head === undefined) return next;
   if (typeof head === 'number') {
     if (!isJsonArray(value) || head >= value.length) {
-      throw new PrismError(`No array item at ${full.join('.')}`, ErrorCode.MISSING_PATH, { op: '$update', path: full.join('.') });
+      return failAt(`No array item at ${full.join('.')}: the value there is ${describeValue(value)}.`, ErrorCode.MISSING_PATH, { op: '$update', path: full.join('.') }, { node, op: '$update', field: 'path', form: false });
     }
-    return value.map((item, i) => (i === head ? setIn(item, rest, next, full) : item));
+    return value.map((item, i) => (i === head ? setIn(item, rest, next, full, node) : item));
   }
   const base: JsonObject = isJsonObject(value) ? value : {};
-  return { ...base, [head]: setIn(base[head] ?? null, rest, next, full) };
+  return { ...base, [head]: setIn(base[head] ?? null, rest, next, full, node) };
 };
 
 export const opUpdate = (node: UpdateNode, context: EvalContext, evaluate: EvaluateFn): JsonValue => {
   const { from, path, value, as } = node.$update;
   const source = evaluate(from, context);
   const next = evaluate(value, { ...context, vars: { ...context.vars, [as ?? 'current']: current(source, path) } });
-  return setIn(source, path, next, path);
+  return setIn(source, path, next, path, node);
 };
 
 export const opAssert = (node: AssertNode, context: EvalContext, evaluate: EvaluateFn): JsonValue => {

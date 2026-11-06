@@ -1,5 +1,37 @@
 # @niscorp/nisc
 
+## 0.8.10
+
+### Patch Changes
+
+- Updated dependencies [7bcf306]
+- Updated dependencies [ee625f7]
+- Updated dependencies [ef23b8e]
+  - @niscorp/prism@0.3.2
+
+## 0.8.9
+
+### Patch Changes
+
+- Updated dependencies [f4a3f04]
+  - @niscorp/signal@0.1.7
+  - @niscorp/cortex@0.1.4
+
+## 0.8.8
+
+### Patch Changes
+
+- Updated dependencies [6776f2d]
+  - @niscorp/signal@0.1.6
+  - @niscorp/cortex@0.1.4
+
+## 0.8.7
+
+### Patch Changes
+
+- Updated dependencies [4e1a905]
+  - @niscorp/tide@0.1.9
+
 ## 0.8.6
 
 ### Patch Changes

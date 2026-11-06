@@ -81,7 +81,7 @@ Throws `E_VAR_NOT_FOUND` if the variable doesn't exist in scope.
 
 ### `$get` — Dynamic path access
 
-Navigates into a value using an array of path segments. Segments can be strings (object keys), numbers (array indices), or node expressions (evaluated dynamically).
+Navigates into a value using an array of path segments. Segments can be strings (object keys), numbers (array indices), or node expressions (evaluated dynamically). On a list, a string of digits is an index too, as JavaScript and JSON Pointer read it: `["link", "0"]` and `["link", 0]` both read the first item of `link`. Only digits count: `"01"`, `"-1"` and `" 0"` are keys, and a list has none.
 
 ```json
 { "$get": { "from": { "$ref": "$.user" }, "path": ["address", "city"] } }
@@ -278,7 +278,7 @@ A number is answered as it is. Text is read as a number when it is one written i
 ```json
 { "$join": { "parts": [{ "$ref": "$.first" }, { "$ref": "$.last" }], "sep": " " } }
 ```
-Parts are coerced to strings. `sep` defaults to `""`. `parts` may also be any
+Parts are coerced to strings; `null` is `""`. A part that is an object or a list is refused (`E_TYPE`): it has no text of its own. `sep` defaults to `""`. `parts` may also be any
 node that evaluates to an array — a mapped list, a `$var`:
 ```json
 { "$join": { "parts": { "$map": { "over": { "$ref": "$.tags" }, "as": "t", "body": { "$upper": { "$var": "t" } } } }, "sep": ", " } }
@@ -299,7 +299,7 @@ Numbers → `"42"`, null → `"null"`, objects → JSON string.
   }
 }
 ```
-Replaces `{{key}}` placeholders with values from the evaluated object. Missing keys become empty strings.
+Replaces `{{key}}` placeholders with values from the evaluated object. Missing keys become empty strings. A value that is an object or a list is refused (`E_TYPE`).
 
 ### `$fill` — Fill a counted phrase
 ```json
@@ -442,7 +442,7 @@ Evaluates branches in order, returns the `then` of the first truthy `when`. Fall
 ```
 `[{ "id": "u1", "name": "Alice" }]` → `{ "u1": { "id": "u1", "name": "Alice" } }`
 
-Last element wins on key collision.
+Last element wins on key collision. A key is text, a number, `true`, `false` or `null`, written as text; an object or a list is refused (`E_TYPE`).
 
 ### `$groupBy` — Array to grouped object
 ```json
@@ -454,7 +454,7 @@ Last element wins on key collision.
   }
 }
 ```
-Groups elements into arrays by computed key: `{ "fruit": [...], "vegetable": [...] }`
+Groups elements into arrays by computed key: `{ "fruit": [...], "vegetable": [...] }`. A key is text, a number, `true`, `false` or `null`, written as text; an object or a list is refused (`E_TYPE`).
 
 ---
 
@@ -831,5 +831,18 @@ each time it appears, as it would be serialized: a `$reduce` whose body is
 | `E_BUDGET` | Evaluation went past a limit (see Limits) |
 
 All errors are instances of `PrismError` with `.code` and optional `.context`.
+
+**What a message says.** The message is written for the program's author, often a model that sees nothing else, so it carries everything needed to fix the program:
+
+- **what the op got:** `null`, `the number 5`, `text "…"` (up to 60 characters), `a list of 2 items: […]` or `an object: {…}` (up to 80 characters of JSON). Where the field was written in the program as an object without a `$` key, it says so: such an object builds an object.
+- **where:** `At $map.body.title.$trim.`, a position in the config as it was handed to `evaluate`. Inside a sugar op it is the sugar op's position (`At s.$sum, in the $add that $sum runs as.`). `execute` gives the position in the compiled tree.
+- **the op's form**, for a wrong type and for a `$get` path: `Form: {"$split": {"value": <node>, "sep": <text>}}`, printed from the schema.
+- for a path that found nothing, where it stopped and what is there (`stopped at "fields": the value at $.records is a list of 2 items`); for a variable that is not there, the ones in scope.
+
+A refused config says the same in `evaluate`'s and `compile`'s message: `Invalid config: <path>: <issue>; …`, with the form of the op the issue is on. `.context` is unchanged: `op`, `path` and `details` are as before.
+
+```
+$trim needs text, but got an object: {"value":"Quarterly contributor outreach"}. That object was written in the program as {"value":{"$get":…}}, and an object without a "$" key builds an object; put the node itself there. At $map.body.title.$trim. Form: {"$trim": <node>}
+```
 
 **Valid, and what it does not promise.** `validate`, `evaluate` and `compile` hold a config to the same schema, so a config that validates has no node the evaluator cannot dispatch: every object in it is an op Prism has or a plain object with no `$` key. It can still fail on the data it is given — a missing path, a wrong type, a budget. `E_NODE_SHAPE` is what is left for a tree the schema never saw: an IR handed to `execute`, which does not validate.

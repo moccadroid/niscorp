@@ -1,40 +1,51 @@
 import type { JsonValue, EvalContext, EvaluateFn } from '../types';
 import type { AddNode, SubNode, MulNode, DivNode, ModNode, RoundNode, ToNumberNode } from '../schemas';
-import { PrismError, ErrorCode } from '../errors';
+import { ErrorCode, describeValue, failAt } from '../errors';
+import { refuseType, writtenNote } from './refuse';
 
-const requireNumbers = (node: [unknown, unknown], context: EvalContext, evaluate: EvaluateFn, op: string): [number, number] => {
-  const a = evaluate(node[0], context);
-  const b = evaluate(node[1], context);
-  if (typeof a !== 'number' || typeof b !== 'number')
-    throw new PrismError(`Expected numbers for ${op}`, ErrorCode.TYPE, { op });
+const requireNumbers = (node: object, pair: [unknown, unknown], context: EvalContext, evaluate: EvaluateFn, op: string): [number, number] => {
+  const a = evaluate(pair[0], context);
+  const b = evaluate(pair[1], context);
+  if (typeof a !== 'number' || typeof b !== 'number') {
+    const wrong = typeof a === 'number' ? 1 : 0;
+    return failAt(
+      `${op} needs two numbers, but got ${describeValue(a)} and ${describeValue(b)}.${writtenNote(pair[wrong])}`,
+      ErrorCode.TYPE,
+      { op },
+      { node, op, field: String(wrong), form: true },
+    );
+  }
   return [a, b];
 };
 
+const refuseZero = (node: object, op: string): never =>
+  failAt(`Division by zero: the second value of ${op} is 0.`, ErrorCode.DIVISION_BY_ZERO, { op }, { node, op, field: '1', form: false });
+
 export const opAdd = (node: AddNode, context: EvalContext, evaluate: EvaluateFn): JsonValue => {
-  const [a, b] = requireNumbers(node.$add, context, evaluate, '$add');
+  const [a, b] = requireNumbers(node, node.$add, context, evaluate, '$add');
   return a + b;
 };
 
 export const opSub = (node: SubNode, context: EvalContext, evaluate: EvaluateFn): JsonValue => {
-  const [a, b] = requireNumbers(node.$sub, context, evaluate, '$sub');
+  const [a, b] = requireNumbers(node, node.$sub, context, evaluate, '$sub');
   return a - b;
 };
 
 export const opMul = (node: MulNode, context: EvalContext, evaluate: EvaluateFn): JsonValue => {
-  const [a, b] = requireNumbers(node.$mul, context, evaluate, '$mul');
+  const [a, b] = requireNumbers(node, node.$mul, context, evaluate, '$mul');
   return a * b;
 };
 
 export const opDiv = (node: DivNode, context: EvalContext, evaluate: EvaluateFn): JsonValue => {
-  const [a, b] = requireNumbers(node.$div, context, evaluate, '$div');
-  if (b === 0) throw new PrismError('Division by zero', ErrorCode.DIVISION_BY_ZERO, { op: '$div' });
+  const [a, b] = requireNumbers(node, node.$div, context, evaluate, '$div');
+  if (b === 0) return refuseZero(node, '$div');
   return a / b;
 };
 
 // The remainder with the sign of the divisor, not of the dividend as `%` gives it.
 export const opMod = (node: ModNode, context: EvalContext, evaluate: EvaluateFn): JsonValue => {
-  const [a, b] = requireNumbers(node.$mod, context, evaluate, '$mod');
-  if (b === 0) throw new PrismError('Division by zero', ErrorCode.DIVISION_BY_ZERO, { op: '$mod' });
+  const [a, b] = requireNumbers(node, node.$mod, context, evaluate, '$mod');
+  if (b === 0) return refuseZero(node, '$mod');
   const remainder = a % b;
   // `-5 % 5` is -0; JSON has no such number.
   if (remainder === 0) return 0;
@@ -45,8 +56,7 @@ const ROUNDING = { nearest: Math.round, floor: Math.floor, ceil: Math.ceil };
 
 export const opRound = (node: RoundNode, context: EvalContext, evaluate: EvaluateFn): JsonValue => {
   const value = evaluate(node.$round.value, context);
-  if (typeof value !== 'number')
-    throw new PrismError('Expected number for $round', ErrorCode.TYPE, { op: '$round' });
+  if (typeof value !== 'number') return refuseType({ node, op: '$round', field: 'value', needs: 'a number', got: value, written: node.$round.value });
   const digits = node.$round.digits ?? 0;
   const factor = Math.pow(10, digits);
   return ROUNDING[node.$round.mode ?? 'nearest'](value * factor) / factor;
@@ -55,13 +65,6 @@ export const opRound = (node: RoundNode, context: EvalContext, evaluate: Evaluat
 // A number as it is written in digits, not all that Number() takes: not '',
 // not '0x10', not 'Infinity'.
 const NUMERIC_TEXT = /^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/;
-
-const whatIs = (value: JsonValue): string => {
-  if (typeof value === 'string') return JSON.stringify(value.slice(0, 40));
-  if (value === null) return 'null';
-  if (Array.isArray(value)) return 'a list';
-  return typeof value === 'object' ? 'an object' : String(value);
-};
 
 export const opToNumber = (node: ToNumberNode, context: EvalContext, evaluate: EvaluateFn): JsonValue => {
   const value = evaluate(node.$toNumber.value, context);
@@ -72,5 +75,5 @@ export const opToNumber = (node: ToNumberNode, context: EvalContext, evaluate: E
     if (Number.isFinite(parsed)) return parsed;
   }
   if (node.$toNumber.fallback !== undefined) return evaluate(node.$toNumber.fallback, context);
-  throw new PrismError(`Expected a number or numeric text for $toNumber, got ${whatIs(value)}`, ErrorCode.TYPE, { op: '$toNumber' });
+  return refuseType({ node, op: '$toNumber', field: 'value', needs: 'a number or numeric text', got: value, written: node.$toNumber.value, contextOp: '$toNumber' });
 };

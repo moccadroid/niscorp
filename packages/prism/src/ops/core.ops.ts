@@ -1,7 +1,7 @@
 import type { JsonValue, EvalContext, EvaluateFn } from '../types';
 import type { RefNode, ConstNode, VarNode, GetNode, WithNode } from '../schemas';
-import { PrismError, ErrorCode } from '../errors';
-import { parseJsonPathCached, getByPath, type JsonPathSegment } from '../utils/jsonpath';
+import { ErrorCode, failAt } from '../errors';
+import { INDEX_TEXT, parseJsonPathCached, getByPath, jsonPathUpTo, whereStopped, type JsonPathSegment, type Step } from '../utils/jsonpath';
 import { isJsonObject, isJsonArray } from '../schemas/guards';
 import { measure } from '../engine/budget';
 
@@ -13,8 +13,15 @@ export const opRef = (node: RefNode, context: EvalContext, _evaluate: EvaluateFn
   const attached = Reflect.get(node, SEGMENTS_KEY);
   const segments = isSegmentsArray(attached) ? attached : parseJsonPathCached(node.$ref);
   const resolved = getByPath(context.source, segments);
-  if (resolved === undefined)
-    throw new PrismError('Path not found', ErrorCode.MISSING_PATH, { op: '$ref', path: node.$ref });
+  if (resolved === undefined) {
+    const steps = segments.map((s) => (s.type === 'key' ? s.key : s.index));
+    return failAt('Path not found.', ErrorCode.MISSING_PATH, { op: '$ref', path: node.$ref }, {
+      node,
+      op: '$ref',
+      form: false,
+      detail: () => `$ref ${JSON.stringify(node.$ref)} ${whereStopped(context.source, steps, (count) => jsonPathUpTo(segments, count))}`,
+    });
+  }
   return resolved;
 };
 
@@ -31,16 +38,32 @@ export const opConst = (node: ConstNode, context: EvalContext, _evaluate: Evalua
 
 export const opVar = (node: VarNode, context: EvalContext, _evaluate: EvaluateFn): JsonValue => {
   const value = context.vars[node.$var];
-  if (value === undefined)
-    throw new PrismError(`Variable not found: ${node.$var}`, ErrorCode.VAR_NOT_FOUND, { op: '$var', path: node.$var });
+  if (value === undefined) {
+    const names = Object.keys(context.vars).filter((name) => !name.startsWith('__'));
+    const scope = names.length === 0 ? 'No variable is in scope here.' : `In scope: ${names.join(', ')}.`;
+    return failAt(`Variable not found: ${node.$var}. ${scope}`, ErrorCode.VAR_NOT_FOUND, { op: '$var', path: node.$var }, { node, op: '$var', form: false });
+  }
   return value;
+};
+
+// Worked out only for an error: a path's node segments are evaluated again,
+// outside the budget, which a pure program allows.
+const getStopped = (node: GetNode, root: JsonValue, count: number, context: EvalContext, evaluate: EvaluateFn): string => {
+  const unbudgeted = { ...context, budget: undefined };
+  const steps: Step[] = node.$get.path.slice(0, count).map((segment) => {
+    const evaluated = typeof segment === 'object' && segment !== null ? evaluate(segment, unbudgeted) : segment;
+    return typeof evaluated === 'number' ? evaluated : String(evaluated);
+  });
+  return `$get.path ${JSON.stringify(steps)} ${whereStopped(root, steps, (upTo) => (upTo === 0 ? 'from' : JSON.stringify(steps.slice(0, upTo))), true)}`;
 };
 
 export const opGet = (node: GetNode, context: EvalContext, evaluate: EvaluateFn): JsonValue => {
   const { from, path, fallback } = node.$get;
-  let current: JsonValue | undefined = evaluate(from, context);
+  const root = evaluate(from, context);
+  let current: JsonValue | undefined = root;
 
-  for (const segment of path) {
+  for (let i = 0; i < path.length; i++) {
+    const segment = path[i];
     const evaluated = typeof segment === 'object' && segment !== null
       ? evaluate(segment, context)
       : segment;
@@ -48,14 +71,18 @@ export const opGet = (node: GetNode, context: EvalContext, evaluate: EvaluateFn)
     if (typeof evaluated === 'number') {
       if (!isJsonArray(current)) {
         if (fallback !== undefined) return evaluate(fallback, context);
-        throw new PrismError('Expected array for index access', ErrorCode.TYPE, { op: '$get' });
+        return failAt(getStopped(node, root, i + 1, context, evaluate), ErrorCode.TYPE, { op: '$get' }, { node, op: '$get', field: 'path', form: true });
       }
       current = current[evaluated];
     } else {
       const key = String(evaluated);
+      if (isJsonArray(current) && INDEX_TEXT.test(key)) {
+        current = current[Number(key)];
+        continue;
+      }
       if (!isJsonObject(current)) {
         if (fallback !== undefined) return evaluate(fallback, context);
-        throw new PrismError('Expected object for key access', ErrorCode.TYPE, { op: '$get' });
+        return failAt(getStopped(node, root, i + 1, context, evaluate), ErrorCode.TYPE, { op: '$get' }, { node, op: '$get', field: 'path', form: true });
       }
       current = current[key];
     }
@@ -63,7 +90,7 @@ export const opGet = (node: GetNode, context: EvalContext, evaluate: EvaluateFn)
 
   if (current === undefined) {
     if (fallback !== undefined) return evaluate(fallback, context);
-    throw new PrismError('Path not found', ErrorCode.MISSING_PATH, { op: '$get' });
+    return failAt('Path not found.', ErrorCode.MISSING_PATH, { op: '$get' }, { node, op: '$get', field: 'path', form: true, detail: () => getStopped(node, root, path.length, context, evaluate) });
   }
 
   return current;
@@ -75,7 +102,7 @@ export const opWith = (node: WithNode, context: EvalContext, evaluate: EvaluateF
   for (const [name, expr] of Object.entries(declarations)) {
     extendedVars[name] = evaluate(expr, context);
     // Read any number of times below: nested, a binding of [x, x] doubles.
-    measure(extendedVars[name] ?? null, context.budget);
+    measure(extendedVars[name] ?? null, context.budget, node);
   }
   return evaluate(value, { ...context, vars: extendedVars });
 };

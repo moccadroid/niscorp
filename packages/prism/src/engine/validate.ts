@@ -9,7 +9,7 @@ export const validate = (config: unknown): ValidationResult => {
   if (!parsed.success) {
     return {
       ok: false,
-      issues: explainIssues(parsed.error.issues),
+      issues: explainIssues(parsed.error.issues, config),
     };
   }
   return { ok: true, data: parsed.data };

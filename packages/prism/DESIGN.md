@@ -138,6 +138,8 @@ All errors are `PrismError` instances with a `.code` string and optional `.conte
 | `E_ASSERT` | A config's own `$assert` refused its input |
 | `E_BUDGET` | An evaluation went past its budget (`engine/budget.ts`) |
 
+The message is the one thing a caller passes on to the author, so it carries what the op got, the position in the program and, for a wrong type, the op's form (DOCS.md, "What a message says"). An op refuses through `failAt` (`errors.ts`), which keeps the node beside the error; `evaluate` and `execute` catch it once on the way out and `placeError` (`engine/place.ts`) finds the node and writes the position. Describing, finding and printing happen only for an error, never while a program succeeds.
+
 ---
 
 ## File Structure
@@ -145,7 +147,7 @@ All errors are `PrismError` instances with a `.code` string and optional `.conte
 ```
 src/
 ├── index.ts                       # Public API barrel
-├── errors.ts                      # PrismError + error codes
+├── errors.ts                      # PrismError + error codes; failAt keeps the node an error came from
 ├── types.ts                       # JsonValue, EvalContext, CompiledIr, etc.
 ├── schemas/
 │   ├── index.ts                   # Schema barrel
@@ -173,9 +175,11 @@ src/
 │   ├── optimize.ts                # Compile-time passes (ref segments, handlers, constant folding)
 │   ├── budget.ts                  # Limits: steps, string length, result size
 │   ├── execute.ts                 # CompiledIr + source → result
+│   ├── place.ts                   # On the way out: an error's position, in the author's config, and the op's form
 │   ├── validate.ts                # Config validation
 │   └── documentation.ts           # JSON Schema generation
 ├── ops/                           # One implementation file per category
+│   ├── refuse.ts                  # The sentence for an op given the wrong kind of value
 │   ├── core.ops.ts
 │   ├── array.ops.ts
 │   ├── math.ops.ts
@@ -224,7 +228,7 @@ and a mapping over a thousand rows would otherwise build a thousand of them.
 
 1. **Linear if-chain over Map dispatch.** Type narrowing. Each guard narrows the node type. A Map would need casts.
 
-2. **Desugar before execution, not during.** One canonical representation. Compiler stores desugared form. Error messages reference core ops only.
+2. **Desugar before execution, not during.** One canonical representation. Compiler stores desugared form. An error inside a sugar op names the core op that refused and the sugar op the author wrote: `engine/place.ts` follows the position back into the author's config, and where a sugar op's keys stop matching, rewrites a copy of it with a marker in each field to see where each field went. Nothing records the rewrite while it runs; the work is done only for an error.
 
 3. **JSONPath subset, not full spec.** Filters, recursive descent, and unions overlap with `$filter`, `$map`, and `$merge`. The subset covers path access; ops cover everything else.
 
