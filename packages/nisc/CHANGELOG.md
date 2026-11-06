@@ -1,5 +1,12 @@
 # @niscorp/nisc
 
+## 0.8.11
+
+### Patch Changes
+
+- Updated dependencies [e7c45c3]
+  - @niscorp/cortex@0.1.5
+
 ## 0.8.10
 
 ### Patch Changes
