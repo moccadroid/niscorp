@@ -4,6 +4,8 @@
 
 > **Changing nisc itself — a package, not an app built on it?** The `@niscorp` packages are live on npm and may be in use by third parties. No change may break an app that works today, and a breaking change is never yours to decide: it is a last resort that needs the maintainer's explicit approval *before* it is written. Read `/STYLE_GUIDE.md`, "The packages are live", first, and then the last part of this file, "Changing a package": where a new thing goes, and the builds that fail when it goes somewhere else.
 
+> **Build with this file; review with `REVIEW.md`, beside it.** A review checks the app's shape — reads replayed as entries, words in Prism, the charter gating what a person reaches — which the app's own checks do not see. Run one after each step of the order of work, not only at the end: drift found early is one file, found late it is everything built on it.
+
 For agents generating or reviewing a nisc application. This file states the application-level rules, and it presumes no app that came before it — but it is not the whole specification. The **grammars** live in the package docs, and they are required reading, not background: a layout node, an `ActionDefinition`, a Prism config, a charter document and a Vex DSL are each defined in their own package's `README.md` and `DESIGN.md`. Read the doc for a package before authoring that package's artifact. This file governs how they compose into an application.
 
 ## The thesis
@@ -444,29 +446,15 @@ Say this out loud in the interview, because it is the part a user cannot infer: 
 6. **Writes** — per D4, with change channels; prove one round-trip: create → announce → re-read.
 7. **Checks and polish** — a dev check per feature; empty states, skeletons, transitions last.
 
+Each step ends with its checks green and a review (`REVIEW.md`).
+
 ## Verification
 
 Every feature ships a headless check: a standalone script under `dev/` that boots the real app — for a moss app, the manifest through `createServer` with a dev runtime; for a degrade app, the shell factory — dispatches events against the shell, asserts on runtime data and the render tree (`@niscorp/nova/reflect` reads a live tree), prints one `[pass]`/`[fail]` line per assertion, and exits non-zero on any failure. No browser, no mocks.
 
 A `dev/all-checks.ts` runs the suite and is the app's `check` script. It spawns **each check as its own process over its own fresh database** — checks ship the app different histories, and a shared database would make the order of the suite part of its meaning.
 
-A review pass checks, in order:
-
-1. Typecheck passes; every dev check passes; the manifest boots — moss refuses an incoherent charter, and a boot refusal is a finding, not an environment problem.
-2. No renderer code (JSX, a tty kit) outside `ui/` and the entry point. `server/document.ts` hands the kit's registry to moss to draw a page with; it imports the kit and contains no renderer code of its own. No `fetch` outside the endpoint layer, except to send a file (rule 9a). No formatting (`Intl`, `toLocaleString`, date libs) outside Prism transforms.
-3. Every action an opener loads with input declares it in the definition's `input`, and the declared fields are a subset of the action's `data` keys.
-4. Every displayer of an entity stays current after a write: its read is `refresh: 'reactive'`, or the write's success path emits a change channel the displayer listens to.
-5. No component name contains a domain noun; no component imports shell, action, or data code.
-6. No layout or component branches on roles or capability data (rule 11) — per-principal difference is existence or a served variant.
-6a. Every artifact the manifest carries is pure JSON and parses its schema — a function, a `Date`, an `undefined`, or a class instance in an artifact is a code file masquerading as data. The manifest's declared code fields (`scope`, `identity`, `phrases`, `functions`, `onSession`, `runs`, `reconcilers`, a reaction's `run`, `features`, and the shell's `inputs` and `seeds` hooks) are the only exceptions; they live outside the artifact tree and are validated by running, not by this check. Moss reads the manifest by a schema when it is handed to `createServer` and refuses to boot on one that does not parse, a code field that is not a function included; this check finds it before a boot does.
-6b. Session code sits in the seam that describes it (rule 7a): no handler registered on `functions` that nothing calls. Tenancy resolves through `scope` and engine-side behaviors, never from a request field.
-6c. No role holding a data wildcard reaches the engine's tables, and the charter check resolves against the universe boot does (rule 10a).
-6d. Where pages are drawn on the server: a check opens the drawn page with the real wire and target and the terminal adopts it with nothing said (rule 2a), at every window width the kit distinguishes; a page drawn for somebody goes out `private, no-store`; and every sign-in the app answers over HTTP sets the session cookie on its response and hands the page nothing (rule 12).
-7. Style guide bans (rule 16): `any`, `enum`, classes, default exports, `function` declarations by grep; type assertions and non-null `!` at the lint/typecheck level — grep can't tell negation from assertion. Declared shim exceptions are honored.
-8. Decision points: each of D1–D5 is recorded in the app's `PLAN.md` with its tier — answered, delegated by name, or derived — never assumed silently.
-9. Versions (rules 17–20): `pnpm check:grammars` and `pnpm check:sources` pass; no DDL outside a sequence; no edited migration, snapshot, early-stamp corpus file or hand-moved lock.
-
-Report violations by rule number. A change that makes the app less declarative, less validated, or less observable is wrong even if it works.
+**Reviewing** is `REVIEW.md`, beside this file: how to run a review, the checklist, what to look for, and how to report — by rule number. Run one after each step of the order of work. A change that makes the app less declarative, less validated, or less observable is wrong even if it works.
 
 ## Changing a package
 
