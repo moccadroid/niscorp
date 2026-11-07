@@ -9,7 +9,7 @@ const scratch = mkdtempSync(join(import.meta.dirname, '.shape-'));
 afterAll(() => rmSync(scratch, { recursive: true, force: true }));
 
 const TSCONFIG = {
-  compilerOptions: { strict: true, target: 'ES2022', module: 'ESNext', moduleResolution: 'Bundler', jsx: 'react-jsx', noEmit: true, types: [], baseUrl: '.', paths: { '@app/*': ['src/*'] } },
+  compilerOptions: { strict: true, target: 'ES2022', lib: ['ES2022'], module: 'ESNext', moduleResolution: 'Bundler', jsx: 'react-jsx', noEmit: true, types: [], baseUrl: '.', paths: { '@app/*': ['src/*'] } },
   include: ['src'],
 };
 
@@ -91,10 +91,14 @@ describe('runShapeCheck — what the shape of an app’s source says', () => {
     expect(line).not.toContain('buildApp');
   });
 
-  it('an allowance names a file, why, and something it allows; anything else fails', () => {
-    const files = { 'src/server/today.ts': "export const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Vienna' }).format(new Date());" };
-    expect(run(files, { allow: { formatting: { 'src/server/today.ts': 'the studio’s day, put in every read’s scope' } } }).code).toBe(0);
-    const { failed } = run(files, { allow: { formatting: { 'src/server/today.ts': ' ', 'src/server/gone.ts': 'x' }, roles: { 'src/server/today.ts': 'x' } } });
+  const today = { 'src/server/today.ts': "export const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Vienna' }).format(new Date());" };
+
+  it('a file allowed a rule, with why, passes it', () => {
+    expect(run(today, { allow: { formatting: { 'src/server/today.ts': 'the studio’s day, put in every read’s scope' } } }).code).toBe(0);
+  });
+
+  it('an allowance with no reason, for a file that is not there, or allowing nothing, fails', () => {
+    const { failed } = run(today, { allow: { formatting: { 'src/server/today.ts': ' ', 'src/server/gone.ts': 'x' }, roles: { 'src/server/today.ts': 'x' } } });
     const line = failed('every allowance') ?? '';
     expect(line).toContain('formatting: src/server/today.ts gives no reason');
     expect(line).toContain('formatting: src/server/gone.ts does not exist');
