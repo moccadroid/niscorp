@@ -23,7 +23,7 @@ type CustomProviderBase = {
 };
 
 export type CustomChatProviderConfig = CustomProviderBase & {
-  adapter?: 'openai-compatible' | 'anthropic' | 'google';
+  adapter?: 'openai-compatible' | 'openai-responses' | 'anthropic' | 'google';
   capabilities?: Partial<Capabilities>;
   wire?: string[];
 };

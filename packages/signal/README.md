@@ -105,6 +105,7 @@ decisions.intent.choice;                                               // 'refun
 |----------|--------|------|-----|-----------|
 | Groq | `'groq'` | chat | `openai` | No |
 | OpenAI | `'openai'` | chat | `openai` | Yes |
+| OpenAI (Responses API) | `'openai-responses'` | chat | `openai` | Yes |
 | OpenRouter | `'openrouter'` | chat | `openai` | No |
 | Anthropic | `'anthropic'` | chat | stub (use OpenRouter) | No |
 | Google | `'google'` | chat | stub (use OpenRouter) | No |

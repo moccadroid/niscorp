@@ -53,18 +53,21 @@ You don't need to think about this unless you're overriding defaults.
 const signal = createSignal('groq');
 ```
 
-Reads `GROQ_API_KEY` from environment automatically. Known providers: `'groq'`, `'openai'`, `'openrouter'`, `'anthropic'`, `'google'`, `'typesafe'`.
+Reads `GROQ_API_KEY` from environment automatically. Known providers: `'groq'`, `'openai'`, `'openai-responses'`, `'openrouter'`, `'anthropic'`, `'google'`, `'typesafe'`.
 
 | Provider | Env var | Default model |
 |----------|---------|---------------|
 | `'groq'` | `GROQ_API_KEY` | `qwen/qwen3.8-27b` |
 | `'openai'` | `OPENAI_API_KEY` | `gpt-4o` |
+| `'openai-responses'` | `OPENAI_API_KEY` | `gpt-4o` |
 | `'openrouter'` | `OPENROUTER_API_KEY` | `openai/gpt-4o` |
 | `'anthropic'` | `ANTHROPIC_API_KEY` | `claude-sonnet-4-20250514` |
 | `'google'` | `GOOGLE_API_KEY` | `gemini-2.0-flash` |
 | `'typesafe'` | `TYPESAFE_API_KEY` | `jev-latest` |
 
 `'anthropic'` and `'google'` are registry rows whose adapters are not implemented yet: the client builds and `describe()` answers, but every execution method throws `E_PROVIDER_ERROR` (`E_MISSING_API_KEY` first when no key is set; `count()`, which never reaches the adapter, still works). Reach those models through `'openrouter'`.
+
+`'openai-responses'` is OpenAI over its Responses API (`/v1/responses`) instead of chat completions. Use it for a model chat completions does not serve, such as `gpt-5.3-codex`. Signal keeps the history, as on every provider: each request carries the whole conversation and is sent with `store: false`, so nothing stays on OpenAI's side. A reasoning model's reasoning is not carried from one tool turn to the next. The Responses API takes no `stopSequences` and no `seed`: a request that sets either fails with `E_VALIDATION_FAILED` before anything is sent. No model on it has a registry row yet (`scripts/probe-model.ts` speaks chat completions only), so every model gets `UNMEASURED_MODEL`: its output rides the prompt (`emit`) unless the caller picks the transport or sets `forceTool`.
 
 ### Known Provider with Options
 
@@ -87,7 +90,7 @@ const signal = createSignal({
 });
 ```
 
-Any OpenAI-compatible API works. A custom provider is outside the registry, so it states what it does itself — `capabilities` (a `Partial<Capabilities>`; unstated fields are `false`) and, optionally, `wire` strategy ids. `adapter` defaults to `'openai-compatible'`.
+Any OpenAI-compatible API works. A custom provider is outside the registry, so it states what it does itself — `capabilities` (a `Partial<Capabilities>`; unstated fields are `false`) and, optionally, `wire` strategy ids. `adapter` defaults to `'openai-compatible'`; `'openai-responses'` is for an endpoint that speaks OpenAI's Responses API.
 
 ---
 
@@ -141,7 +144,7 @@ signal.apiKey('gsk_...')
 ```
 
 ### `.options(opts)`
-Set LLM options: `temperature`, `maxTokens`, `topP`, `stopSequences`, `seed`, `signal` (an `AbortSignal`), `reasoningEffort`. Merged over any options already set. These are rarely needed.
+Set LLM options: `temperature`, `maxTokens`, `topP`, `stopSequences`, `seed`, `signal` (an `AbortSignal`), `reasoningEffort`. Merged over any options already set. These are rarely needed. `'openai-responses'` refuses `stopSequences` and `seed`.
 ```typescript
 signal.options({ temperature: 0 })
 ```
@@ -474,7 +477,7 @@ const similarity = cosine(a, b);
 
 ### Provider Support
 
-`embed()` does not check `supportsEmbedding`: the flag is what `describe()` reports, and the request goes to the provider's embeddings endpoint either way. Of the known providers only **OpenAI** is marked as having one (`text-embedding-3-small`, `text-embedding-3-large`). An endpoint that refuses the request surfaces as `E_PROVIDER_ERROR` (`Embedding error: …`, the provider's own error under `context.raw`). A decision provider and the two adapters that are not implemented fail before any request is made.
+`embed()` does not check `supportsEmbedding`: the flag is what `describe()` reports, and the request goes to the provider's embeddings endpoint either way. Of the known providers only **OpenAI** is marked as having one (`text-embedding-3-small`, `text-embedding-3-large`), on both `'openai'` and `'openai-responses'`. An endpoint that refuses the request surfaces as `E_PROVIDER_ERROR` (`Embedding error: …`, the provider's own error under `context.raw`). A decision provider and the two adapters that are not implemented fail before any request is made.
 
 Use a separate Signal client for embedding — embedding models are different from chat models:
 

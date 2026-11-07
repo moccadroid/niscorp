@@ -140,3 +140,5 @@ sides is two changes.
   `adapters/`.
 - `step`/`stepStream` share ~30 lines of routing glue in signal.ts.
 - `count()` is a chars/4 heuristic.
+- `scripts/probe-model.ts` speaks chat completions only, so no model on
+  `openai-responses` has a row and all of them run at the unmeasured floor.

@@ -11,6 +11,7 @@ import { estimateUsage } from './utils/estimate-usage';
 import { SignalError, ErrorCode } from './errors';
 import { providerRegistry, modelDefaults, modelEntry, modelKey, resolveApiKey, UNMEASURED_MODEL, type ModelDefaults, type ModelEntry, type ProviderEntry } from './registry';
 import { createOpenAICompatibleAdapter } from './adapters/openai-compatible.adapter';
+import { createOpenAIResponsesAdapter } from './adapters/openai-responses.adapter';
 import { createAnthropicAdapter } from './adapters/anthropic.adapter';
 import { createGoogleAdapter } from './adapters/google.adapter';
 import { createSystemOneAdapter } from './adapters/systemone.adapter';
@@ -186,6 +187,8 @@ const createAdapter = async (resolved: ResolvedProvider, client: unknown): Promi
   switch (resolved.adapterType) {
     case 'openai-compatible':
       return createOpenAICompatibleAdapter({ apiKey: resolved.apiKey, baseUrl: resolved.baseUrl, client, ...(resolved.reasoningRequest !== undefined && { reasoningRequest: resolved.reasoningRequest }) });
+    case 'openai-responses':
+      return createOpenAIResponsesAdapter({ apiKey: resolved.apiKey, baseUrl: resolved.baseUrl, client });
     case 'anthropic':
       return createAnthropicAdapter({ apiKey: resolved.apiKey, client });
     case 'google':
