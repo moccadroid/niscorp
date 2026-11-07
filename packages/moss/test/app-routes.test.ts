@@ -22,7 +22,7 @@ const quietly = async <T>(run: () => Promise<T>): Promise<T> => {
 const boot = async () => {
   const pool = createPglitePool(freshDatabase());
   const app = defineApp({ charter: { public: [], staff: [] }, assignments: { usr_staff: ['staff'] }, actions: {} });
-  const server = await quietly(() => createServer(app, { pool, db: pool, session: 'dev-open' }));
+  const server = await quietly(() => createServer(app, { pool, db: pool, session: 'dev-open', migrations: 'apply' }));
   const reached = { times: 0 };
   server.get('/who', (c) => {
     reached.times += 1;

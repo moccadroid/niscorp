@@ -50,7 +50,7 @@ describe('boot — every owner through one ledger', () => {
 
   it('a fresh database is migrated once and recorded; the next boot finds nothing to do', async () => {
     const pool = createPglitePool(freshDatabase());
-    const booted = await quietly(() => createServer(app, { pool, db: pool, session: 'sessions' }));
+    const booted = await quietly(() => createServer(app, { pool, db: pool, session: 'sessions', migrations: 'apply' }));
     const ledger = await readLedger(pool);
     expect(ledger.map((r) => `${r.sequence}/${r.n}`)).toEqual(['nisc.moss/1', 'nisc.moss/2', 'nisc.moss/3', 'nisc.moss/4', 'nisc.moss/5', 'nisc.moss/6', 'nisc.moss.sessions/1', 'nisc.vex.cache/1', 'nisc.vex.cache/2']);
 
@@ -192,11 +192,14 @@ describe('boot — every owner through one ledger', () => {
     expect(new Set(many.map((version) => version.id)).size).toBe(501);
   });
 
-  it("migrations: 'verify' refuses a database nobody migrated — and creates nothing", async () => {
+  it('a boot that sets nothing only checks: a database nobody migrated is refused, with what to run — and nothing is created', async () => {
     const pool = createPglitePool(freshDatabase());
-    const error = await quietly(() => createServer(app, { pool, db: pool, session: 'dev-open', migrations: 'verify' })).catch((e: unknown) => e);
+    const error = await quietly(() => createServer(app, { pool, db: pool, session: 'dev-open' })).catch((e: unknown) => e);
     expect(error).toMatchObject({ code: 'PENDING' });
     expect(String(error)).toContain('nisc.moss/1');
+    expect(String(error)).toContain('`npx nisc migrate --check`, then apply them with `npx nisc migrate`');
+    const { rows: ledger } = await pool.query(`SELECT to_regclass('strata_ledger') IS NULL AS absent`);
+    expect(ledger[0]?.['absent']).toBe(true);
     const { rows } = await pool.query(`SELECT to_regclass('integrations') IS NULL AS absent`);
     expect(rows[0]?.['absent']).toBe(true);
   });
@@ -205,7 +208,7 @@ describe('boot — every owner through one ledger', () => {
     const pool = createPglitePool(freshDatabase());
     await pool.query(`CREATE TABLE integrations (id text PRIMARY KEY, url text NOT NULL, key_hash text, status text NOT NULL DEFAULT 'pending')`);
     await pool.query(`INSERT INTO integrations (id, url) VALUES ('acme', 'https://acme.example')`);
-    await quietly(() => createServer(app, { pool, db: pool, session: 'dev-open' }));
+    await quietly(() => createServer(app, { pool, db: pool, session: 'dev-open', migrations: 'apply' }));
     const { rows } = await pool.query(`SELECT id, reach, phrasebook, extension FROM integrations`);
     expect(rows).toEqual([{ id: 'acme', reach: [], phrasebook: {}, extension: null }]);
   });

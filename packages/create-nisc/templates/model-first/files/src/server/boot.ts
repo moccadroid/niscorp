@@ -1,13 +1,13 @@
 import { existsSync } from 'node:fs';
 import { createServer } from '@niscorp/moss';
-import type { MossServer, RunSink } from '@niscorp/moss';
+import type { MossServer, NiscRuntime, RunSink } from '@niscorp/moss';
 import { buildApp } from '../app/app';
 import { APP_SEQUENCE } from '../db/schema';
 import { composer } from './compose';
 import type { Models } from './compose';
 import { modelsFromEnv } from './models';
 import { logRun } from './runs';
-import { runtime } from './runtime';
+import { runtime as database } from './runtime';
 
 const fromEnvFile = (): Models => {
   if (existsSync('.env')) process.loadEnvFile('.env');
@@ -19,6 +19,11 @@ const fromEnvFile = (): Models => {
 
 export type BootConfig = { models?: Models; runs?: RunSink };
 
+export const runtime = async (): Promise<NiscRuntime> => ({ ...(await database()), tables: [APP_SEQUENCE] });
+
+// What `nisc migrate` checks against the tables: the entries and the features, which no model changes.
+export const app = buildApp({ functions: () => [], runs: logRun });
+
 export const boot = async (config: BootConfig = {}): Promise<{ server: MossServer }> => ({
-  server: await createServer(buildApp({ functions: composer(config.models ?? fromEnvFile()), runs: config.runs ?? logRun }), { ...(await runtime()), tables: [APP_SEQUENCE] }),
+  server: await createServer(buildApp({ functions: composer(config.models ?? fromEnvFile()), runs: config.runs ?? logRun }), await runtime()),
 });

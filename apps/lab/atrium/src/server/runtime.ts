@@ -15,7 +15,6 @@ export const devRuntime = async (): Promise<DevRuntime> => {
   // Two pools over one database: app queries get raw date strings (Prism formats
   // them), and the cache keeps Dates because it calls getTime() on its timestamps.
   const cache = createPostgresCache({ pool: createPglitePool(db) });
-  await cache.init();
 
   // `operatorKey` has to be on the runtime, not only in the environment: moss mounts its own
   // gate on `/operator/*` ahead of the app's and answers 404 to every path when it is unset.
@@ -25,6 +24,7 @@ export const devRuntime = async (): Promise<DevRuntime> => {
     cache,
     // A dev floor over an in-memory database: every token is trusted.
     session: 'dev-open',
+    migrations: 'apply',
     ...(process.env['OPERATOR_KEY'] !== undefined && process.env['OPERATOR_KEY'] !== ''
       ? { operatorKey: process.env['OPERATOR_KEY'] }
       : {}),
