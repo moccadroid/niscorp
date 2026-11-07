@@ -85,6 +85,8 @@ describe('generate — every app the questions can make', () => {
     expect(text).toContain('"@niscorp/nova":"^0.4.4"');
     expect(text).toContain('"@niscorp/nisc":"^0.4.0"');
     expect(read(dir, 'AGENTS.md')).toContain('node_modules/@niscorp/nisc/AGENTS.md');
+    expect(read(dir, 'AGENTS.md')).toContain('node_modules/@niscorp/nisc/REVIEW.md');
+    expect(read(dir, '.claude/agents/nisc-reviewer.md')).toContain('node_modules/@niscorp/nisc/REVIEW.md');
     expect(read(dir, 'index.html')).toContain(`<title>${name}</title>`);
     expect(read(dir, 'README.md')).toContain(`# ${name}`);
     for (const file of made.files) expect(read(dir, file), file).not.toContain('nisc-template-');

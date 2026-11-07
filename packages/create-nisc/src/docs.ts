@@ -36,6 +36,7 @@ ${all(facts.parts, 'where').join('\n')}
 \`\`\`
 
 - **How it runs:** ${all(facts.parts, 'runs').join(', ')} — all of them the \`nisc\` command — and \`npm run strata status\` for the grammars.
+- **How it is reviewed:** by the \`nisc-reviewer\` agent (\`.claude/agents/nisc-reviewer.md\`), which follows \`node_modules/@niscorp/nisc/REVIEW.md\` — after each step of PLAN.md's order of work, not only at the end. \`npm run check\` passing says the app does what it should; a review says it is still built the nisc way.
 ${sections(facts.agents)}`;
 };
 
