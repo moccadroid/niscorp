@@ -87,7 +87,12 @@ export const orderPending = (
   return { pending, stuck: waiting.flat() };
 };
 
-export const planMigrations = (sequences: readonly PreparedSequence[], ledger: readonly LedgerRow[]): Plan => {
+export type PlanOptions = {
+  // The sequences given are every sequence the ledger may record.
+  complete?: boolean;
+};
+
+export const planMigrations = (sequences: readonly PreparedSequence[], ledger: readonly LedgerRow[], options: PlanOptions = {}): Plan => {
   const problems: Problem[] = [];
   const applied: Record<string, number> = {};
   const done = new Set(ledger.map((row) => refOf(row.sequence, row.n)));
@@ -123,6 +128,21 @@ export const planMigrations = (sequences: readonly PreparedSequence[], ledger: r
       problems.push({ code: 'EDITED', detail: `${sequence.id}: ${firstWaiting.ref} never ran, but a later migration of the sequence did.` });
     }
     queues.push({ id: sequence.id, waiting });
+  }
+
+  if (options.complete === true) {
+    const named = new Set(sequences.map((s) => s.id));
+    const unknown = [...new Set(ledger.map((row) => row.sequence))].filter((id) => !named.has(id));
+    for (const id of unknown) {
+      const count = ledger.filter((row) => row.sequence === id).length;
+      problems.push({
+        code: 'UNKNOWN_SEQUENCE',
+        detail:
+          `${id}: the database records ${count} of its migration${count === 1 ? '' : 's'} and no code names it. ` +
+          'A sequence that has run stays in the code — to remove its tables, append a migration that drops them. ' +
+          'One app per database schema: two apps sharing a schema share one ledger.',
+      });
+    }
   }
 
   const provided = new Set(sequences.flatMap((s) => s.migrations.map((m) => m.ref)));

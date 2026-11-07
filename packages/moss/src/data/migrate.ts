@@ -1,8 +1,8 @@
 import { createPostgresAdapter, createPostgresCache, mutationMisfits, pruneOptional, resolve } from '@niscorp/vex';
 import type { CacheBackend, DatabaseSchema, PgPool, SeedEntry, SeedMutation } from '@niscorp/vex';
-import { migrate } from '@niscorp/strata/postgres';
+import { migrate, status } from '@niscorp/strata/postgres';
 import type { MigrateReport } from '@niscorp/strata/postgres';
-import type { Sequence } from '@niscorp/strata';
+import type { Plan, Sequence } from '@niscorp/strata';
 import { entriesOf } from '../manifest';
 import type { NiscApp } from '../manifest';
 import type { NiscRuntime } from '../runtime';
@@ -102,10 +102,28 @@ export type TablesReport = MigrateReport & {
   alreadyBroken: readonly string[];
 };
 
+type TablesRuntime = Pick<NiscRuntime, 'pool' | 'cache' | 'session' | 'tables'>;
+
+const ownersOf = (runtime: TablesRuntime, app: Pick<NiscApp, 'features'>): TableOwners => ({
+  pool: runtime.pool,
+  cache: runtime.cache,
+  storesSessions: runtime.session === 'sessions',
+  featureTables: featureTablesOf(app),
+  tables: runtime.tables,
+});
+
+export const tableStatus = async (runtime: TablesRuntime, app: Pick<NiscApp, 'features'>): Promise<Plan> =>
+  status(runtime.pool, tableSequencesOf(ownersOf(runtime, app)), { complete: true });
+
+const removalsRefused = (found: { removed: readonly string[]; retyped: readonly string[] }): string[] => [
+  ...found.removed.map((what) => `this run removes ${what}`),
+  ...found.retyped.map((what) => `this run changes the type of ${what}`),
+].map((sentence) => `${sentence} — nothing removed or retyped is applied unless it is allowed (\`allowRemoval\`; \`nisc migrate --allow-removal\`)`);
+
 export const migrateTables = async (
-  runtime: Pick<NiscRuntime, 'pool' | 'cache' | 'session' | 'tables'>,
+  runtime: TablesRuntime,
   app: Pick<NiscApp, 'entries' | 'features'>,
-  options: { dryRun?: boolean } = {},
+  options: { dryRun?: boolean; allowRemoval?: boolean } = {},
 ): Promise<TablesReport> => {
   const entries = entriesOf(app);
   const cache = runtime.cache ?? createPostgresCache({ pool: runtime.pool });
@@ -121,10 +139,10 @@ export const migrateTables = async (
   }
 
   let found: Pick<TablesReport, 'removed' | 'retyped' | 'alreadyBroken'> = { removed: [], retyped: [], alreadyBroken: [] };
-  const owners: TableOwners = { pool: runtime.pool, cache: runtime.cache, storesSessions: runtime.session === 'sessions', featureTables: featureTablesOf(app), tables: runtime.tables };
-  const report = await migrate(runtime.pool, tableSequencesOf(owners), {
+  const report = await migrate(runtime.pool, tableSequencesOf(ownersOf(runtime, app)), {
+    complete: true,
     ...(options.dryRun === true ? { dryRun: true } : {}),
-    guard: async (tx) => {
+    guard: async (tx, run) => {
       const after = await createPostgresAdapter({ pool: { query: oneAtATime((text, values) => tx.query(text, values)) } }).introspect();
       const refused: string[] = [];
       const alreadyBroken: string[] = [];
@@ -132,13 +150,14 @@ export const migrateTables = async (
         if (excused.has(fingerprint)) alreadyBroken.push(`${fingerprint}: ${why}`);
         else refused.push(`${fingerprint}: ${why}`);
       }
-      found = { ...changesBetween(before, after), alreadyBroken };
-      return refused;
+      // A run that applied nothing took nothing away: what differs from
+      // `before` landed from another run while this one waited for the lock.
+      const changes = run.applied.length === 0 ? { removed: [], retyped: [] } : changesBetween(before, after);
+      found = { ...changes, alreadyBroken };
+      return options.allowRemoval === true ? refused : [...refused, ...removalsRefused(changes)];
     },
   });
-  // A run that applied nothing took nothing away: what differs from `before`
-  // landed from another run while this one waited for the lock.
-  return { ...report, ...found, ...(report.applied.length === 0 ? { removed: [], retyped: [] } : {}) };
+  return { ...report, ...found };
 };
 
 export type FeatureTables = {

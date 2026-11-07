@@ -8,6 +8,6 @@ export const runtime = async (): Promise<NiscRuntime> => {
   // Two pools over one database: app queries get raw date strings (Prism
   // formats them), the cache keeps Dates.
   const cache = createPostgresCache({ pool: createPglitePool(db) });
-  await cache.init();
-  return { db, pool: createPglitePool(db, RAW_DATE_PARSERS), cache, session: 'sessions' };
+  // Empty at every start, so migrated at boot. A real database is migrated by `nisc migrate` and only checked at boot.
+  return { db, pool: createPglitePool(db, RAW_DATE_PARSERS), cache, session: 'sessions', migrations: 'apply' };
 };

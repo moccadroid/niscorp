@@ -1,6 +1,7 @@
 # Lyceum, the same here and on the server: the app and its Postgres.
 #
-#   docker compose up --build -d          stand it up (http://localhost:8796)
+#   docker compose up --build -d          stand it up (http://localhost:8796): the app runs
+#                                         `nisc migrate` on the database, then serves
 #   docker compose exec app pnpm mint speaker   a one-time sign-in link
 #   docker compose exec app pnpm mint stage
 #   docker compose down                   stop (the database volume stays)
@@ -33,6 +34,8 @@ services:
     build:
       context: ../../..
       dockerfile: apps/lab/lyceum/Dockerfile
+    # The tables change only through `nisc migrate`; the server checks them when it boots.
+    command: ['sh', '-c', 'pnpm exec nisc migrate && pnpm serve']
     environment:
       DATABASE_URL: postgres://lyceum:lyceum@db:5432/lyceum
       # What `pnpm mint` prints links against — the address people open.

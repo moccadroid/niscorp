@@ -175,9 +175,28 @@ describe('migrateTables — the step', () => {
         }),
       ),
       app,
+      { allowRemoval: true },
     );
     expect(report.removed).toEqual(['tags']);
     expect(report.retyped).toEqual(['notes.stars (integer → bigint)']);
+  });
+
+  it('refuses a run that removes or retypes, unless it is allowed — naming each, applying nothing', async () => {
+    const { runtimeOf, columns, ledger } = database();
+    const app = appOf(read('notes/all', 'id', 'body'), add('body'));
+    await migrateTables(runtimeOf(tables(NOTES)), app);
+
+    const narrowed = { description: 'stars go wider and then go', steps: [sql('ALTER TABLE notes ALTER COLUMN stars TYPE bigint'), sql('ALTER TABLE notes DROP COLUMN stars')] };
+    const error = await migrateTables(runtimeOf(tables(NOTES, narrowed)), app).catch((e: unknown) => e);
+    expect(error).toMatchObject({ code: 'DOES_NOT_FIT' });
+    expect(String(error)).toContain('this run removes notes.stars');
+    expect(String(error)).toContain('nisc migrate --allow-removal');
+    expect(await columns()).toEqual(['id', 'body', 'stars']);
+    expect(await ledger()).toEqual(['walk.app/1']);
+
+    await expect(migrateTables(runtimeOf(tables(NOTES, narrowed)), app, { dryRun: true })).rejects.toMatchObject({ code: 'DOES_NOT_FIT' });
+    await migrateTables(runtimeOf(tables(NOTES, narrowed)), app, { allowRemoval: true });
+    expect(await columns()).toEqual(['id', 'body']);
   });
 
   it('a run that waited for another, and so applied nothing, says it took nothing away', async () => {
@@ -193,7 +212,7 @@ describe('migrateTables — the step', () => {
       pool: {
         ...runtime.pool,
         transaction: async (fn) => {
-          expect((await migrateTables(runtime, app)).removed).toEqual(['notes.stars']);
+          expect((await migrateTables(runtime, app, { allowRemoval: true })).removed).toEqual(['notes.stars']);
           if (runtime.pool.transaction === undefined) throw new Error('the test pool transacts');
           return runtime.pool.transaction(fn);
         },
@@ -208,7 +227,7 @@ describe('migrateTables — the step', () => {
     await migrateTables(runtimeOf(tables(NOTES)), app);
 
     const dropped = { description: 'stars go', steps: [sql('ALTER TABLE notes DROP COLUMN stars')] };
-    const report = await migrateTables(runtimeOf(tables(NOTES, dropped)), app, { dryRun: true });
+    const report = await migrateTables(runtimeOf(tables(NOTES, dropped)), app, { dryRun: true, allowRemoval: true });
     expect(report.applied.map((migration) => migration.ref)).toEqual(['walk.app/2']);
     expect(report.removed).toEqual(['notes.stars']);
     expect(await columns()).toEqual(['id', 'body', 'stars']);

@@ -32,8 +32,9 @@ await migrate(pool, [appSequence]);            // applies what is pending, recor
 await migrate(pool, [appSequence], { mode: 'verify' }); // refuses if anything is pending
 ```
 
-Under moss you rarely call it: the server runs every owner's sequence — moss's
-own tables, the sessions table, the vex cache — in one ledgered run at boot.
+Under moss you rarely call it: `nisc migrate` runs every owner's sequence —
+moss's own tables, the sessions table, the vex cache, the app's — in one
+ledgered run, and the server checks them at boot.
 
 ## The rules
 
@@ -52,10 +53,23 @@ own tables, the sessions table, the vex cache — in one ledgered run at boot.
   function body, a `/* */` comment or a trailing `--` comment cuts there too,
   and two statements on one line, or a `;` followed by a trailing comment, stay
   one step. Write those as their own steps.
+- **A run reads before it writes.** The ledger is read first; a database with
+  nothing pending is answered from that read — no lock, no DDL, no transaction —
+  so an app whose database role cannot change tables can still check them.
 - **A run is one transaction** under an advisory lock. A step throws, nothing
-  from the run happened — Postgres DDL is transactional. Two processes booting
+  from the run happened — Postgres DDL is transactional. Two processes migrating
   at once serialize; the second finds the work done.
+- **A run sets its own timeouts**, for its transaction only: a statement
+  timeout (1 hour) that also bounds the wait for another run, then a lock
+  timeout (10 s) so a step queued behind a busy table gives up instead of
+  queueing every later query on that table behind it. A step that times out
+  fails the run like any other (`STEP_FAILED`); nothing is retried.
 - **A database migrated by newer code is refused** (`TOO_NEW`), never guessed at.
+- **A sequence that has run stays in the code.** Given `complete: true`, a
+  ledger sequence nobody names is refused (`UNKNOWN_SEQUENCE`) — a renamed
+  sequence would otherwise run its first migration again. To remove a
+  sequence's tables, append a migration that drops them. One app per database
+  schema: two apps sharing a schema share one ledger.
 - **Sequence ids are namespaced**: `nisc.vex.cache`, `nisc.moss`, `acme.app`.
   An id is lowercase, in at least two dot-separated parts (`<owner>.<name>`),
   each a letter followed by letters, digits or hyphens.
@@ -70,7 +84,7 @@ own tables, the sessions table, the vex cache — in one ledgered run at boot.
 |---|---|
 | `defineSequence(seq)` | Type-checks a sequence where it is written. |
 | `prepare(sequences)` | Parses (Zod, at the boundary), numbers and checksums. Throws `INVALID_SEQUENCE`. Two sequences with the same id are refused the same way. |
-| `planMigrations(prepared, ledger)` | Pure: what is pending, in order, and every problem (`EDITED`, `TOO_NEW`, `UNKNOWN_DEPENDENCY`, `CYCLE`). Returns `{ applied, pending, problems }`; `applied` is, per sequence given, how many of its migrations the ledger records. `UNKNOWN_DEPENDENCY` is a `dependsOn` naming a migration that no sequence given provides and the ledger does not record. |
+| `planMigrations(prepared, ledger, { complete })` | Pure: what is pending, in order, and every problem (`EDITED`, `TOO_NEW`, `UNKNOWN_DEPENDENCY`, `CYCLE`, and with `complete` `UNKNOWN_SEQUENCE`). Returns `{ applied, pending, problems }`; `applied` is, per sequence given, how many of its migrations the ledger records. `UNKNOWN_DEPENDENCY` is a `dependsOn` naming a migration that no sequence given provides and the ledger does not record. |
 | `refuseProblems(plan)` | Throws a plan's problems as one `StrataError`: its `code` is the first problem's, its `details` list them all. Returns when the plan has none. `migrate` refuses a plan this way. |
 | `checksumOf(migration)` | SHA-256 over the steps (WebCrypto — Node ≥ 22 and every browser). |
 | `sqlSteps(ddl)` | A DDL file as one step per statement, for a file where every statement ends its line with `;`. Cuts at each line that ends in `;`, full-line `--` comments excepted. Not a SQL parser. |
@@ -81,20 +95,35 @@ own tables, the sessions table, the vex cache — in one ledgered run at boot.
 
 | | |
 |---|---|
-| `migrate(pool, sequences, { mode, guard, dryRun, table, schema })` | The run. `mode: 'apply'` (default) or `'verify'`. Returns `{ applied, plan }`. `guard(tx)` is asked inside the run, after the last pending step — when nothing was pending too: every sentence it returns refuses the run (`DOES_NOT_FIT`), and nothing was applied. `dryRun` does all of it, guard included, then rolls it back — the report says what would be applied, and it takes the locks a real run takes. `applied` is what this run applied, in order; `plan` is the plan it acted on, so `plan.applied` holds each sequence's position before the run. `'verify'` refuses with `PENDING` when anything is pending, and a step that throws refuses the run with `STEP_FAILED`. |
-| `status(pool, sequences, options)` | The plan, read-only — creates nothing, not even the ledger. |
+| `migrate(pool, sequences, { mode, complete, guard, dryRun, lockTimeoutMs, statementTimeoutMs, table, schema })` | The run. `mode: 'apply'` (default) or `'verify'` — which only reads: it needs `SELECT` on the ledger and nothing else, not even `transaction`. Returns `{ applied, plan }`. `lockTimeoutMs` (default 10 000) and `statementTimeoutMs` (default 3 600 000) hold for the run's transaction only. `guard(tx, { applied })` is asked inside the run, after the last pending step — when nothing was pending too, with `applied` empty: every sentence it returns refuses the run (`DOES_NOT_FIT`), and nothing was applied. `dryRun` does all of it, guard included, then rolls it back — the report says what would be applied, and it takes the locks a real run takes. `applied` is what this run applied, in order; `plan` is the plan it acted on, so `plan.applied` holds each sequence's position before the run. `'verify'` refuses with `PENDING` when anything is pending, and a step that throws refuses the run with `STEP_FAILED`. |
+| `status(pool, sequences, { complete, table, schema })` | The plan, read-only — creates nothing, not even the ledger. |
 | `readLedger(pool, options)` | The ledger's rows; empty for a database never migrated. |
 | `ledgerDdl(options)` | The ledger table's DDL — the one statement strata runs outside a ledger. |
 
 The pool is structural — `{ query, transaction }`, the shape vex's PGlite pool
 and a wrapped `pg` pool already have. A pool without `transaction` is refused
-(`NO_TRANSACTION`): a run must land whole or not at all. `query` and
+(`NO_TRANSACTION`) when it has something to apply: a run must land whole or
+not at all. `query` and
 `transaction` are called on the object that has them, so a driver's own object
 whose methods reach for `this` — a PGlite, a `pg` client handed through as the
 transaction — works as it is.
 
 The ledger defaults to `strata_ledger` in the connection's schema, beside the
 app's tables; `table` and `schema` move it.
+
+Because a check only reads, the database can enforce who changes tables: the
+app connects as a role that may not, and the step that migrates connects as
+one that may. The app's role needs `USAGE` on the schema, `SELECT` on the
+ledger, and its rights on the tables the migrating role creates (`ALTER DEFAULT
+PRIVILEGES FOR ROLE <migrator> IN SCHEMA <schema> GRANT … TO <app role>`). The
+migrating step is given its own connection string — on Railway, a pre-deploy
+command such as `DATABASE_URL=$MIGRATION_DATABASE_URL pnpm exec nisc migrate`.
+A run that has to apply something as the app's role is refused by Postgres
+("permission denied for schema").
+
+The wait for another run is bounded by the statement timeout: the run clears
+any `lock_timeout` the pool set before it takes the lock. A timeout during that
+wait is Postgres's own error, not `STEP_FAILED`; nothing was applied.
 
 ## Adopting a database from before strata
 

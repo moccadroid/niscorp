@@ -155,7 +155,7 @@ export const startTiming = async (server: MossServer, runtime: LyceumRuntime): P
   const savedBy = new Map<string, string>();
 
   const tide = createTide({
-    store: createTideStore(runtime.pool),
+    store: createTideStore(runtime.pool, { migrate: false }),
     storeUnwatchedWrites: false,
     transform: evaluate,
     select: async () => {
