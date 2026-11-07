@@ -15,7 +15,7 @@ nisc build     # bundle the app, draw every path, and check what was drawn
 nisc export    # build, then write every path as a file — the site as a folder
 nisc start     # serve the built app, each path's first screen drawn
 nisc check     # the app's check suite
-nisc migrate   # apply the tables' pending migrations, if the app's entries fit the result
+nisc migrate   # apply the tables' pending migrations, if the app's entries fit the result — the only command that changes a real database
 ```
 
 An app is one of two things, and the command runs both. **Behind moss**, the
@@ -350,8 +350,13 @@ with the app's own `tsx`. Its exit code is the suite's.
 ## `nisc migrate`
 
 For an app behind moss whose config hands over `app` and `runtime`. It is the
-step a deployment runs before the new version starts, when its runtime says
-`migrations: 'verify'`.
+only command that changes a real database's tables: `nisc dev`, `nisc build`
+and `nisc start` boot the app, and a boot only checks the tables — with a
+migration pending it refuses to start and names it — unless the runtime says
+`migrations: 'apply'`, which a database that starts empty every time (PGlite in
+memory) does. A deployment runs it before the new version starts; on Railway,
+as the service's pre-deploy command (`pnpm exec nisc migrate`): a failure stops
+the deploy, and the running version keeps serving.
 
 In one transaction it applies every pending table migration — moss's, and the
 app's own (`runtime.tables`) — then checks that every entry of the manifest
@@ -366,19 +371,39 @@ nisc: applied 1
 nisc: this run removes notes.stars
 ```
 
-A run that lands says what it took away (tables and columns removed, column
-types changed). An entry that already did not fit before the run, and is
-already seeded as it is, is listed and does not refuse the run.
+A run that takes something away — a table or a column removed, a column's
+type changed — is refused, each named, unless `--allow-removal` is given; then
+it lands and says what it took away. It sees tables and columns, not rows a
+step deletes. An entry that already did not fit before the run, and is already
+seeded as it is, is listed and does not refuse the run.
 
 `--check` does all of it and rolls it back. It takes the locks the real run
 will take, for as long.
 
+`--status` reads and changes nothing: how many migrations of each sequence the
+database records and what is pending (exit 0), and anything that would refuse
+a run — an edited migration, a database migrated by newer code, a sequence
+nobody names (exit 1).
+
+```
+nisc: applied nisc.moss 6, nisc.moss.sessions 1, nisc.vex.cache 2, acme.app 2
+nisc: 1 pending
+  acme.app/3  notes lose their stars
+```
+
+A run waits for another one running at the same time, up to an hour, and a
+step that waits more than 10 s for a table another query holds gives up — the
+run is rolled back, and running it again is safe.
+
 `runtime` only opens the environment. It migrates nothing and seeds nothing:
 tables it changes itself are changed before the step can check them, and
-`--check` would then change the database. Every table an entry reads or writes
-comes from a sequence in the run — the app's own go in `runtime.tables`, and so
-does tide's (`TIDE_SEQUENCE`, from `@niscorp/tide/postgres`) when the app keeps
-tide's tables.
+`--check` would then change the database. So it calls no `cache.init()` (the
+server does, after its check), and a tide store under moss is made
+`migrate: false`. Every table an entry reads or writes comes from a sequence in
+the run — the app's own go in `runtime.tables`, and so does tide's
+(`TIDE_SEQUENCE`, from `@niscorp/tide/postgres`) when the app keeps tide's
+tables. A sequence that has run stays there: the run refuses a database that
+records one nobody names.
 
 It checks entries. It does not see SQL written by hand, and it does not know
 what a value means.
@@ -392,6 +417,8 @@ what a value means.
 | `--allow-live` | `export`: write even though some path wants a server |
 | `--skip-bundle` | `build`, `export`: the terminal is already built — it is neither bundled nor has its stylesheet written into its page |
 | `--check` | `migrate`: do all of it, then roll it back |
+| `--status` | `migrate`: what is applied and pending — reads, changes nothing |
+| `--allow-removal` | `migrate`: apply a run that removes a table or column, or changes a column's type |
 | `--port <n>` | `dev`, `start`: the port (`start`: `$PORT`, then 8787) |
 
 ## License

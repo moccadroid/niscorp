@@ -20,7 +20,6 @@ export const devRuntime = async (): Promise<DevRuntime> => {
 
   // The cache gets its own pool: it needs Dates, where app queries get raw date strings.
   const cache = createPostgresCache({ pool: createPglitePool(db) });
-  await cache.init();
 
   return {
     db,
@@ -28,5 +27,6 @@ export const devRuntime = async (): Promise<DevRuntime> => {
     cache,
     // Every well-formed token is trusted: a dev floor over an in-memory database.
     session: 'dev-open',
+    migrations: 'apply',
   };
 };

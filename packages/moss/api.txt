@@ -28,6 +28,7 @@
 . renderDocument
 . revokeAllFor
 . sessionCookies
+. tableStatus
 . verifyApp
 ./client DocumentSnapshot
 ./client Wire

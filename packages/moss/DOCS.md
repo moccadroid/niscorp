@@ -786,7 +786,7 @@ type NiscRuntime = {
   vexConfig?: QueryEngineConfig['config'];  // the query engine's settings (limits, read timeout); default vex's own
   session: SessionVerifier | 'sessions' | 'dev-open';  // REQUIRED — no default
   origins?: readonly string[];     // origins that are the app's own page, beside the host a request names (a proxy that rewrites `Host`)
-  migrations?: 'apply' | 'verify'; // the boot's ledgered run; default 'apply'
+  migrations?: 'apply' | 'verify'; // the boot's ledgered run; default 'verify'
   tables?: readonly Sequence[];    // the app's own table sequences, in that same run
   shellIdleMs?: number;            // idle shell eviction; default 30 min, `0` disables
   artifactsUnusedMs?: number;      // delete what a person generated once nobody has loaded it for this long; default never
@@ -953,11 +953,16 @@ await revokeAllFor(runtime.pool, 'usr_ada');
 integrations, their actions, the generation pointer, the two tables of what
 was saved) and the sessions table's
 (`nisc.moss.sessions`; the sequence itself is not exported) — and
-`createServer` applies them with the vex cache's sequence in
-one ledgered run before introspection: once, recorded in `strata_ledger`, and
-refused if the ledger was edited or written by newer code. `migrations` on the
-runtime picks the posture: `'apply'` (default) runs what is pending; `'verify'`
-refuses to boot if anything is, for a deployment that migrates as a deploy step.
+`createServer` checks them with the vex cache's sequence in
+one ledgered run before introspection: refused if the ledger was edited, written
+by newer code, or records a sequence the run does not name (strata's
+`complete`). `migrations` on the runtime picks the posture: `'verify'` (default)
+refuses to boot while anything is pending, naming each migration and the two
+commands that apply it (`npx nisc migrate --check`, then `npx nisc migrate`) —
+a real database's tables change only through `nisc migrate`; `'apply'` runs what
+is pending, for a database that starts empty every time (PGlite in memory).
+On a database that is up to date the check only reads the ledger, so the app's
+database role needs no right to change tables.
 
 The run's order is: `MOSS_SEQUENCE`, the sessions table's under
 `session: 'sessions'`, the vex cache's, the tables the app's features keep (in
@@ -965,12 +970,15 @@ the order the app named the features), then `runtime.tables`.
 
 `tables` on the runtime hands over the app's own table sequences. They join
 that run last — one transaction, one lock, one posture, so `'verify'`
-covers them. Absent, the app migrates its own tables itself, as before. Another
-owner's tables the app keeps go in the same list (tide's: `TIDE_SEQUENCE`,
-from `@niscorp/tide/postgres`), and a
-runtime that hands tables over does not also migrate them itself.
+covers them. Every sequence that has run on the database is named there:
+another owner's tables the app keeps (tide's: `TIDE_SEQUENCE`, from
+`@niscorp/tide/postgres`, with the store made `migrate: false`), and a sequence
+the app no longer uses — a removed feature's, or the sessions table's after the
+app stopped storing sessions. To remove a sequence's tables, append a migration
+that drops them. The runtime migrates nothing itself and calls no
+`cache.init()`: the server does both, in that order.
 
-#### `migrateTables(runtime, app, { dryRun? })`
+#### `migrateTables(runtime, app, { dryRun?, allowRemoval? })`
 
 The step that changes tables, for a deployment that migrates before it starts
 (`nisc migrate` calls it). It applies everything pending in the one run,
@@ -998,6 +1006,21 @@ What it answers is strata's `{ applied, plan }` plus `removed` (tables and
 columns the run takes away), `retyped` (columns whose type it changes, as
 `table.column (was → now)`) and `alreadyBroken`. `dryRun` does all of it and
 rolls it back.
+
+A run that removes a table or a column, or changes a column's type, is refused
+(`DOES_NOT_FIT`, a sentence each) unless `allowRemoval` is given. It sees what
+vex reads off the schema: not rows a step deletes, not keys a step takes out of
+a document. The picture before the run is read before the run's lock, so a
+removal another run made meanwhile can be refused here too; running again
+passes. moss's own sequence removes columns (`nisc.moss/4`): a database that
+has not run it needs `allowRemoval` once.
+
+#### `tableStatus(runtime, app) : Plan`
+
+What `migrateTables` would act on, read and nothing else — no lock, no
+transaction, nothing created: strata's plan (`applied` per sequence, `pending`
+in order, `problems`) over the same sequences. `nisc migrate --status` prints
+it.
 
 It sees entries and nothing else: not SQL written by hand, not a column a scope
 rule stamps, not what a value means.
@@ -1739,9 +1762,10 @@ it answers `undefined`, nothing is minted.
 `createTideStore(pool, options?)`, `TIDE_SEQUENCE`, `TIDE_TABLES` and
 `TIDE_DDL` are exported by `@niscorp/tide/postgres`. They were moss's, and do
 what they did: see tide's [DOCS.md](../tide/DOCS.md), "The driver" and "The
-Postgres store". `createTideStore(runtime.pool)` takes the pool the runtime
-holds, and its tables are ordinary tables to moss: introspected, grantable,
-and scoped by a behavior like any other.
+Postgres store". `createTideStore(runtime.pool, { migrate: false })` takes the
+pool the runtime holds, with `TIDE_SEQUENCE` in `runtime.tables`, and its tables
+are ordinary tables to moss: migrated by `nisc migrate`, introspected,
+grantable, and scoped by a behavior like any other.
 
 ### Features
 

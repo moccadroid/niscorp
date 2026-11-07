@@ -35,6 +35,17 @@ describe('nisc migrate', () => {
     expect(run.stdout).not.toContain('fixture: committed');
   }, SLOW);
 
+  it('--status reads what is applied and what is pending, and opens no transaction', () => {
+    const run = migrate('migrates', ['--status']);
+    expect(run.status).toBe(0);
+    expect(run.stdout).toContain('nisc: applied nisc.moss 0, nisc.moss.sessions 0, nisc.vex.cache 0, fixture.app 0');
+    expect(run.stdout).toMatch(/nisc: \d+ pending\n/);
+    expect(run.stdout).toContain('  fixture.app/1  things');
+    expect(run.stdout).not.toContain('fixture: committed');
+    expect(run.stdout).not.toContain('fixture: rolled back');
+    expect(run.stdout).toContain('fixture: let go');
+  }, SLOW);
+
   it('a refusal exits 1 and names the entry; nothing is committed, and the environment is still let go', () => {
     const run = migrate('migrates', [], { NISC_FIXTURE_FAULT: 'misfit' });
     expect(run.status).toBe(1);

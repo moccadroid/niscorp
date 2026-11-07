@@ -25,6 +25,7 @@
     "@electric-sql/pglite": "^0.5.1",
     "@hono/node-server": "^2.0.4",
     "@niscorp/charter": "workspace:^",
+    "@niscorp/cli": "workspace:^",
     "@niscorp/cortex": "workspace:^",
     "@niscorp/moss": "workspace:^",
     "@niscorp/nova": "workspace:^",
