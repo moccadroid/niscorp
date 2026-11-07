@@ -2,6 +2,7 @@ import { spawnSync } from 'node:child_process';
 
 const CHECKS: readonly (readonly [name: string, what: string, args?: readonly string[]])[] = [
   ['artifacts-check', 'src/app is data: pure JSON, and every artifact parses its schema'],
+  ['shape-check', 'the app keeps nisc’s shape: no style-guide breaks, words in Prism, every server function an action calls named with its reason, src/app data, the kit within its own elements'],
   ['strata', 'the source is written at the installed grammars (strata.lock.json)', ['status', '--check']],
   ['welcome-check', 'the welcome screen: whole, and pressed'],
 ];

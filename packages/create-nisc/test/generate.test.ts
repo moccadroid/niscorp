@@ -90,7 +90,7 @@ describe('generate — every app the questions can make', () => {
     expect(read(dir, 'index.html')).toContain(`<title>${name}</title>`);
     expect(read(dir, 'README.md')).toContain(`# ${name}`);
     for (const file of made.files) expect(read(dir, file), file).not.toContain('nisc-template-');
-    expect(made.files).toEqual(expect.arrayContaining(['AGENTS.md', 'PLAN.md', '.gitignore', 'nisc.config.ts', 'strata.lock.json', 'src/dev/strata.ts', 'src/dev/all-checks.ts']));
+    expect(made.files).toEqual(expect.arrayContaining(['AGENTS.md', 'PLAN.md', '.gitignore', 'nisc.config.ts', 'strata.lock.json', 'src/dev/strata.ts', 'src/dev/all-checks.ts', 'src/dev/shape-check.ts']));
     expect(read(dir, 'PLAN.md')).toContain('on nisc 0.4.0');
     expect(made.files.some((file) => file.startsWith('node_modules') || file.startsWith('dist/') || file.startsWith('out/'))).toBe(false);
   });

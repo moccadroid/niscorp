@@ -454,6 +454,8 @@ Every feature ships a headless check: a standalone script under `dev/` that boot
 
 A `dev/all-checks.ts` runs the suite and is the app's `check` script. It spawns **each check as its own process over its own fresh database** — checks ship the app different histories, and a shared database would make the order of the suite part of its meaning.
 
+The suite runs a **shape check** too, `src/dev/shape-check.ts`, which hands the app's actions and entries to `runShapeCheck` (`@niscorp/cli/shape`). It reads what behaviour checks cannot see: rule 16 by the compiler, formatting outside Prism, roles read in server code, the kit reaching past its own elements, code in `src/app` called while the app runs, and every server function an action calls, named with what it does that a vex read or write cannot. What the app allows, it names in that file, file by file, with why.
+
 **Reviewing** is `REVIEW.md`, beside this file: how to run a review, the checklist, what to look for, and how to report — by rule number. Run one after each step of the order of work. A change that makes the app less declarative, less validated, or less observable is wrong even if it works.
 
 ## Changing a package

@@ -8,7 +8,7 @@ A review answers one question: **does the app do what it does as data, or did co
 
 ## How to run it
 
-1. **The gates.** The app's typecheck and its check suite (`npm run typecheck`, `npm run check`). A red gate is the first finding; a boot refusal is a finding, not an environment problem. Then take the counts in "Measure first": they say where to read.
+1. **The gates.** The app's typecheck and its check suite (`npm run typecheck`, `npm run check`), which runs its shape check (`src/dev/shape-check.ts`) beside its own checks. An app without one is a finding: copy it from a new app (`npm create nisc`). Read what its `functions` and `allow` say, too: an allowance with a weak reason is a finding the gate cannot see. A red gate is the first finding; a boot refusal is a finding, not an environment problem. Then take the counts in "Measure first": they say where to read.
 2. **Read in this order:** the charter, the entries, three actions of different kinds (a list, a form, a screen only some roles hold), the server's functions, the kit. The order follows where a fault costs most.
 3. **Go through the checklist,** then **what to look for**.
 4. **Verify before you report.** A finding is a hypothesis until the code shows it: open the file and quote the line.
@@ -16,7 +16,7 @@ A review answers one question: **does the app do what it does as data, or did co
 
 ## Measure first
 
-These numbers are not rules. They say where a design has drifted. In the lab apps vex replays outnumber function calls: lyceum 55 to 37, lyra 149 to 24, atrium 103 to 11.
+These numbers are not rules. They say where a design has drifted. In the lab apps vex replays outnumber function calls: lyceum 55 to 37, lyra 149 to 24, atrium 103 to 11. The shape check prints the first two.
 
 | Count | How | Drift when |
 |---|---|---|
