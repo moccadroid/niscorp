@@ -67,6 +67,12 @@ try {
   check('a screen gone back to is as the person left it', on('b').data['count'] === 2 && rows('d', 'done').join() === 'Press the counter' && on('c').data['picked'] === 1, `${JSON.stringify(on('b').data)} ${JSON.stringify(on('d').data)}`);
   await app.openScreen('asking');
   check('another quick check where an answered one was opens unanswered', on('c').action === 'guide.quiz' && on('c').data['picked'] === -1, JSON.stringify(on('c').data));
+  await app.openScreen('rules');
+  check(
+    'the packages card replays its read: every row of the table, in order, worded by the read’s mapping',
+    on('d').action === 'guide.packages' && (await until(() => rows('d', 'points').length === 12)) && JSON.stringify(rows('d', 'points')[0]) === JSON.stringify({ title: '@niscorp/nova', text: 'The screen: shells, canvases, actions and their layouts.' }),
+    JSON.stringify(on('d').data).slice(0, 300),
+  );
   await app.openScreen('start');
 
   const counterId = on('b').id;

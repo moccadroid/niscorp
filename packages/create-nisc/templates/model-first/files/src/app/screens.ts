@@ -61,12 +61,13 @@ export const SCREENS: readonly [Screen, ...Screen[]] = [
   {
     id: 'rules',
     label: 'Rules',
-    description: 'Lesson 3: the charter, the shell on the server, reads and writes, and a quick check.',
+    description: 'Lesson 3: the charter, the shell on the server, reads and writes, a read from a table, and a quick check.',
     arrangement: 'grid',
     canvases: [
       card('guide.charter', 'what the charter decides'),
       card('guide.shell', 'what the shell and moss are'),
       card('guide.data', 'how reads and writes work'),
+      card('guide.packages', 'a read from a table: nisc’s packages'),
       quiz('Where is it decided what you may do?', ['In the browser', 'On the server, by the charter', 'In each card'], 1, 'Your browser only draws; the charter decides, on the server, what a role may reach.'),
     ],
   },

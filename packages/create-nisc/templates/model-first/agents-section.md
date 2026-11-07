@@ -12,7 +12,7 @@ There is no chat history: the screen open when a message arrives is the conversa
 - **A message that gets no screen leaves the screen as it is,** and the line says why: the model's reply did not fit, it could not be reached, or there is no key.
 - **Jev may take 2 s and the model 8 s.** A Jev pass given up leaves the model to answer alone.
 - **Every message is recorded as a run for each model it went to,** through moss (`session.recordRun`): `nisc-template-app.jev` and `nisc-template-app.compose`, each with its provider and model, the tokens it spent (`reported: false` where signal estimated them), its steps and how long it took — for the composer, cortex's run meta — and whether it ended in an answer. The server logs a line for each (`src/server/runs/`).
-- **The app starts as a tour of nisc** (`src/app/actions/guide/`): five screens in the dock — a start, three lessons, and how to make it yours. Cards to read — points, an example in code, or steps, the text in the action's own data, no input — and cards to use: a counter, a checklist and a quick check, each with an input the model can fill. A card's link opens another screen at once, as the dock's buttons do; only what is typed, or a thing to ask pressed, goes to the model. What a person presses, ticks and picks stays on the screen; the model sees it, and can change it: "tick off the first step", "a counter that starts at 100", "quiz me on the charter". Its check is `src/dev/guide-check.ts`.
+- **The app starts as a tour of nisc** (`src/app/actions/guide/`): five screens in the dock — a start, three lessons, and how to make it yours. Cards to read — points, an example in code, or steps, the text in the action's own data, no input; and one whose rows are read from a table, `guide.packages`, the shape your own reads take: a table whose rows a migration step writes (`src/db/schema.ts`), an entry whose Prism `mapping` words them (`src/app/vex/guide.entries.ts`), replayed by the action that shows them, granted in the charter — and cards to use: a counter, a checklist and a quick check, each with an input the model can fill. A card's link opens another screen at once, as the dock's buttons do; only what is typed, or a thing to ask pressed, goes to the model. What a person presses, ticks and picks stays on the screen; the model sees it, and can change it: "tick off the first step", "a counter that starts at 100", "quiz me on the charter". Its check is `src/dev/guide-check.ts`.
 - **An action you add is small, with one purpose:** it says what it shows (`description`), and declares what the model may open it with as a JSON Schema written with zod, every field described; the model's answers are checked against that same schema (`z.fromJSONSchema`). A read or a write it names must be one the app ships, asked with the values it takes. The ones the model may place are `placeable`, in `src/app/action-catalog.ts`.
 - **The model never presses anything.** It opens cards with an input — a form filled in — and only the person saves.
 - **The keys are in `.env`:** `GROQ_API_KEY` (gpt-oss-120b; without it, a message is answered with a notice saying so), and `TYPESAFE_API_KEY` (Jev; without it there is no Jev pass).
@@ -22,20 +22,21 @@ There is no chat history: the screen open when a message arrives is the conversa
 
 The tour is a starting point, there to be deleted. First the interview: PLAN.md's open items, each answered or delegated by name (the rulebook's "Before any code").
 
-**Remove the tour.** It lives in two places and is named in five:
+**Remove the tour.** It lives in four places and is named in six:
 
-1. Delete `src/app/actions/guide/` and `src/dev/guide-check.ts`.
+1. Delete `src/app/actions/guide/`, `src/dev/guide-check.ts` and `src/app/vex/guide.entries.ts`; in `src/db/schema.ts`, the tour's migration. Deleting a migration is safe only because no database that lasts has run it — the app runs on PGlite, which starts empty every boot. Once one has, the migration is history, and a table goes by appending a migration that drops it (rule 17).
 2. `src/app/action-catalog.ts`: drop the `GUIDE` import; `placeable` is `[]` until your own actions are in it.
-3. `src/app/charter/charter.ts`: drop `'guide.*'`.
-4. `src/dev/all-checks.ts`: drop the `guide-check` line.
-5. `src/app/screens.ts`: everything below its two types — your screens instead of the tour's. Until there are actions, one screen of words will do:
+3. `src/app/charter/charter.ts`: drop `'guide.*'` and `'packages.read'`.
+4. `src/app/vex/index.ts`: drop the `guidePackages` import; `ENTRIES` is `[]` until your own entries are in it.
+5. `src/dev/all-checks.ts`: drop the `guide-check` line.
+6. `src/app/screens.ts`: everything below its two types — your screens instead of the tour's. Until there are actions, one screen of words will do:
    ```ts
    export const SCREENS: readonly [Screen, ...Screen[]] = [
      { id: 'start', label: 'Start', description: 'What this app is.', arrangement: 'single', canvases: [{ action: 'answer.text', input: { title: 'The app', text: 'What it is, in a sentence.' }, intent: 'what this app is' }] },
    ];
    ```
-6. `src/dev/live-ask.ts`: your cases in `RUN` instead of the tour's, and the helpers only its cases use (`at`, `listOf`, `tour`).
-7. This file: the tour's rows under "Where things go", its paragraph above, and this list; PLAN.md: the tour in D3 and in the order of work. `npm run check` passes again.
+7. `src/dev/live-ask.ts`: your cases in `RUN` instead of the tour's, and the helpers only its cases use (`at`, `listOf`, `tour`).
+8. This file: the tour's rows under "Where things go", its paragraph above, and this list; PLAN.md: the tour in D3 and in the order of work. `npm run check` passes again.
 
 What stays is the app: the message loop, the dock, the arrangements, the kit, and `compose-check`, which needs nothing of the tour.
 

@@ -4,7 +4,7 @@ import type { Charter } from '@niscorp/charter';
 export const charter: Charter = {
   public: {
     actions: ['ask.*', 'answer.*', 'guide.*'],
-    data: [],
+    data: ['packages.read'],
     functions: ['ask', 'screens.open', 'answers.back', 'answers.forward', 'answers.go', 'answers.current'],
   },
 };

@@ -2,6 +2,7 @@ import type { ActionDefinition, LayoutNode, TriggerConfig } from '@niscorp/nova'
 import { checklistAction } from './checklist.action';
 import { counterAction } from './counter.action';
 import { askLayout, exampleLayout, pointsLayout, stepsLayout, welcomeLayout } from './guide.layouts';
+import { packagesAction } from './packages.action';
 import { quizAction } from './quiz.action';
 
 type Link = { label: string; screen: string };
@@ -92,21 +93,23 @@ export const GUIDE: readonly ActionDefinition[] = [
       { title: 'Rules on the server', text: 'What you may do is decided there, never in the browser.' },
     ],
   }),
-  card('guide.data', 'Reads and writes: vex queries and mutations written as JSON, replayed by their fingerprint and run under the person’s policy; an example read.', exampleLayout, {
+  card('guide.data', 'Reads and writes: vex queries and mutations written as JSON, replayed by their fingerprint and run under the person’s policy; the read behind the packages card as the example.', exampleLayout, {
     title: 'Reads and writes',
     lead: 'Data comes through vex: a read is a query written as JSON, replayed by its fingerprint.',
     example: [
       '{',
-      '  "fingerprint": "notes/list",',
-      '  "intent": "Every note, newest first",',
+      '  "fingerprint": "guide/packages",',
+      '  "intent": "Every nisc package with what it is for",',
       '  "dsl": {',
-      '    "from": ["notes"],',
-      '    "sort": [{ "field": "notes.created_at", "dir": "desc" }],',
-      '    "limit": 100',
-      '  }',
+      '    "from": ["packages"],',
+      '    "fields": ["packages.name", "packages.purpose"],',
+      '    "sort": [{ "field": "packages.position", "dir": "asc" }],',
+      '    "limit": 20',
+      '  },',
+      '  "mapping": { "$map": { … "@niscorp/{{name}}" … } }',
       '}',
     ].join('\n'),
-    text: 'A write is the same, as a mutation. Both run under the person’s policy; yours go in src/app/vex/.',
+    text: 'That is the read behind the packages card, in src/app/vex/; its mapping, in Prism, words each row. A write is the same, as a mutation. Both run under the person’s policy.',
   }),
   card('guide.charter', 'The charter: which actions, data and server functions each role may reach, decided on the server; this app’s own charter as the example.', exampleLayout, {
     title: 'The charter',
@@ -115,7 +118,7 @@ export const GUIDE: readonly ActionDefinition[] = [
       '{',
       '  "public": {',
       '    "actions": ["ask.*", "answer.*", "guide.*"],',
-      '    "data": [],',
+      '    "data": ["packages.read"],',
       '    "functions": [',
       '      "ask", "screens.open", "answers.current",',
       '      "answers.back", "answers.forward", "answers.go"',
@@ -138,6 +141,7 @@ export const GUIDE: readonly ActionDefinition[] = [
     ],
     links: [{ label: 'Back to the start →', screen: 'start' }],
   }),
+  packagesAction,
   counterAction,
   checklistAction,
   quizAction,
