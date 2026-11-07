@@ -24,6 +24,16 @@
         "default": "./dist/index.cjs"
       }
     },
+    "./shape": {
+      "import": {
+        "types": "./dist/shape.d.ts",
+        "default": "./dist/shape.js"
+      },
+      "require": {
+        "types": "./dist/shape.d.cts",
+        "default": "./dist/shape.cjs"
+      }
+    },
     "./package.json": "./package.json"
   },
   "files": [

@@ -347,6 +347,65 @@ server. An app with its own shell is a vite app and nothing more.
 The app's check suite (`src/dev/all-checks.ts`, or `checks` in the config), run
 with the app's own `tsx`. Its exit code is the suite's.
 
+## The shape check — `@niscorp/cli/shape`
+
+An app's own checks test what it does. The shape check reads how it does it:
+its source and its actions, for what nisc's rulebook (`AGENTS.md` in
+`@niscorp/nisc`) says an app is made of. An app runs it from its suite, as
+`src/dev/shape-check.ts`; `npm create nisc` writes that file. An app that does
+not call it is not checked.
+
+```ts
+import { fileURLToPath } from 'node:url';
+import { runShapeCheck } from '@niscorp/cli/shape';
+import { actions } from '../app/action-catalog';
+import { ENTRIES } from '../app/vex';
+
+process.exit(
+  runShapeCheck({
+    root: fileURLToPath(new URL('../..', import.meta.url)),
+    actions: Object.values(actions),
+    entries: ENTRIES,
+    functions: { ask: 'the model composes the answer to a message' },
+    allow: { formatting: { 'src/server/today.ts': 'the studio’s day, put in every read’s scope' } },
+  }),
+);
+```
+
+It prints one `[pass]` or `[fail]` line per rule and answers the exit code, 0
+or 1. It fails when:
+
+| Rule | It fails on |
+|---|---|
+| `style` (rule 16) | in `src/`: an `as` or `<T>` assertion other than `as const`, a non-null `!`, a `function` declaration, a class, an enum, `any`, a default export. `.d.ts` files are not read |
+| `formatting` (rule 9) | `Intl.` or a `.toLocale…()` call in `src/`, but `src/dev/` |
+| `roles` (rule 11) | `session.roles` or `principal.roles` in `src/server/` |
+| `files` (rule 9a) | `FileReader` or a `readAs…` call in `src/ui/` |
+| `address` (rule 4) | `location.…`, `history.pushState` or `history.replaceState` in `src/ui/` |
+| `dom` (rule 2) | `document.querySelector` and its kin in `src/ui/` |
+| `data` | a file in `src/` outside `src/app/` and `src/dev/` imports a function from `src/app/` — resolved by the app's `tsconfig.json`, so a path alias counts. A function that answers the manifest (`NiscApp`) is setup, and passes |
+
+Each is read off the syntax tree, so a word in a comment or a string is never a
+finding.
+
+`allow` names, per rule, the files that may do what the rule refuses, each with
+why: the file that finds the app's day, the identity seam that reads roles, a
+routing adapter, a shim. An allowance fails when it gives no reason, names a
+file that is not there, or allows nothing in that file.
+
+`functions` names every server function an action calls (an endpoint with
+`fn`), each with what it does that a vex read or write replayed by the action
+cannot: mail, a model, files, what lives in the person's shell. A function an
+action calls that is not named fails, and so does a name no action calls.
+
+It also prints, failing on nothing, how often the actions call functions
+against how often they replay vex, how many reads word their rows with a Prism
+`mapping`, and the `refresh: 'reactive'` reads no action replays by name.
+
+It reads the source with the app's own TypeScript, 6.x, found from `root`, and
+the app as its `tsconfig.json` there says. On lyceum it takes under three
+seconds.
+
 ## `nisc migrate`
 
 For an app behind moss whose config hands over `app` and `runtime`. It is the
