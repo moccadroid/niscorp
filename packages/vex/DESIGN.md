@@ -30,10 +30,11 @@ execute.
    that still serves any already-cached shape. Cortex (and Signal behind it) is
    an optional peer dependency, not a hard one; Prism is required, because a
    stored mapping is Prism IR and the engine executes it.
-3. **Shape-only caching.** The positive cache key is a hash of the request's
-   *shape* with all values replaced by type tokens. Two requests with the same
-   structure but different values share a cache entry. Intent is deliberately
-   excluded from this key.
+3. **Fingerprint caching.** The positive cache is keyed by a fingerprint,
+   minted by the engine (`fp_…`) or named by the caller. A request reuses an
+   entry while it matches the stored one: the same intent, the same *shape* with
+   all values replaced by type tokens, the same context key names. Context
+   values never count, so one entry serves every value. (See *Cache v2*.)
 4. **Scope is server-side and LLM-invisible.** Access control is injected into
    the DSL *after* generation, as ordinary filter clauses bound to server
    `$scope` values. The model cannot see or forge them, so prompt injection
@@ -135,12 +136,13 @@ queries. Top level (`QuerySchema`):
 - `filter` — a recursive `FilterSchema` union.
 - `compute` — record of `alias → ComputeExpression` (arithmetic, `concat`,
   `coalesce`, `case`).
-- `aggregate` — record of `alias → AggregateExpression` (`count`/`sum`/`avg`/
-  `min`/`max`).
+- `aggregate` — record of `alias → AggregateExpression` (`count`/`countDistinct`/
+  `sum`/`avg`/`min`/`max`).
 - `groupBy`, `sort`, `limit`, `distinct`.
 
 Filter operators: `eq`/`neq`/`gt`/`gte`/`lt`/`lte`, `in`/`notIn`, `like`/
-`ilike`, `isNull`/`isNotNull`, `and`/`or`/`not`, plus `semantic` (vector
+`ilike`, `isNull`/`isNotNull`, `and`/`or`/`not`, `exists` (a correlated subquery),
+`optional` (a condition the caller turns on by supplying context keys), plus `semantic` (vector
 similarity) and `fuzzy` (string distance). Values are literals, `{ $context }`
 (caller-provided) or `{ $scope }` (server-injected).
 
@@ -295,9 +297,9 @@ never change it.
 
 - A request WITHOUT a fingerprint generates and caches; the server mints a
   fingerprint (`fp_…`) and returns it in `meta.cache.fingerprint`.
-- A minted fingerprint is an **immutable pin** — embed it and replay the exact
-  generation forever. Changing the query means proving again and embedding the
-  new fingerprint. (git: a commit hash.)
+- A minted fingerprint replays its generation for as long as it is sent
+  alone. Sent with a request that differs, it is regenerated and replaced like
+  a named slot, unless protected.
 - A caller-chosen fingerprint (any string) is a **mutable named slot** — the
   name is yours, its content follows your request. (git: a branch.)
 - Intent NEVER keys anything: natural language is fake identity in both
@@ -609,9 +611,10 @@ exported from the `@niscorp/vex/agent` subpath — `createQueryDsl` (fills
   `createQueryDsl` wraps it into the `generateDsl` hook.
 - The **mapping agent** is Prism's exported `mappingAgent`; `createShapeMapper`
   builds the same envelope the runtime replays against — `{ result: rows }` for an
-  array shape, `{ result: rows[0] ?? null }` for an object shape — runs the agent
-  once, with the intent as its `notes`, to get a transform config, compiles it to IR, and applies the IR once over
-  that envelope. A flat shape whose fields the rows carry is mapped by Prism with no model call, its declared
+  array shape, `{ result: rows[0] ?? null }` for an object shape — runs the agent,
+  with the intent as its `notes`, to get a transform config, compiles it to IR, and applies the IR once over
+  that envelope. A config that fails to compile or run on the rows sends the agent round again with the error in
+  its notes, up to three attempts (`MAPPING_ATTEMPTS`). A flat shape whose fields the rows carry is mapped by Prism with no model call, its declared
   fields computed from the stored ones; the agent writes the mapping for any other.
 
 > The reference agents are a separate concern from the deterministic core: they
@@ -718,7 +721,12 @@ src/
   agent/                         Reference Cortex agents (exported via ./agent)
     query.agent.ts               defineAgent: vexQueryDslAgent (vex.query → Query)
     tools.ts                     the six query tools
+    compact.ts                   compactSchema, compactSpec — the schema and DSL spec as compact text
+    declared.ts                  declaredMapping, storedShape — fields a shape declares as prism expressions
     index.ts                     createQueryDsl, createShapeMapper, vexQueryDslAgent
+
+  migrations/
+    index.ts                     VEX_SEQUENCE, VEX_SCHEMAS — an entry as a stored document (./migrations)
 
   utils/
     context.ts                   buildValidationContext, resolveParams
@@ -737,7 +745,7 @@ scripts/                         Dev-only: docker, seed, dev server, fixtures
 | `zod` | peer (required) | Schema validation + JSON Schema generation |
 | `pg` | peer (optional) | A Postgres pool for the adapter and the cache; `@niscorp/vex/pg` imports it |
 | `hono` | peer (optional) | Hono framework adapter |
-| `express` | peer (optional) | Express framework adapter |
+| `express` | none | `@niscorp/vex/express` imports nothing from Express; it types the request and response it uses |
 | `@niscorp/cortex` | peer (optional) | Reference query agent (`defineAgent`/`defineTool`, standalone runtime) |
 | `@niscorp/signal` | via Cortex (its peer) | LLM calls + embeddings |
 | `@niscorp/prism` | peer (required) | Result mapping (IR compile/execute; `mappingAgent` for the reference mapper) |
