@@ -1,5 +1,16 @@
 # @niscorp/cortex
 
+## 0.1.6
+
+### Patch Changes
+
+- 41ac0c7: DESIGN.md and the README say what the code does: the loop streams unless `transport: 'step'`, no event carries per-step usage, the schema check is conversion, no `$ref` and at most 8,192 characters (native also needs `nativeJsonSchema` and is sent with `strict: false`), `onRun` is an option of `createManifold`, and `agent.run` takes `agentPath`.
+
+  **What to change:** nothing. Documentation only.
+
+- Updated dependencies [a2d2df0]
+  - @niscorp/solid@0.1.3
+
 ## 0.1.5
 
 ### Patch Changes

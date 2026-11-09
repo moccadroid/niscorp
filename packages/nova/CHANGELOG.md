@@ -1,5 +1,13 @@
 # @niscorp/nova
 
+## 0.5.2
+
+### Patch Changes
+
+- 501e355: DESIGN.md says how `useCanvas` and `useRenderTree` cache: `useCanvas` keeps the state `onCanvasChange` hands it (the shell compares states with `sameCanvasState`), and `useRenderTree` compares the shell's phrases as well as its data.
+
+  **What to change:** nothing. Documentation only.
+
 ## 0.5.1
 
 ### Patch Changes

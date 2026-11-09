@@ -1,5 +1,34 @@
 # @niscorp/nisc
 
+## 0.9.2
+
+### Patch Changes
+
+- efd576c: The rulebook catches up: `REVIEW.md`'s versions item names the check an app runs (`strata status --check`), not this repository's scripts; `AGENTS.md` lists moss's `artifacts` and `artifact_saves` among the engine's tables and vex's entries among the document kinds, and no longer speaks of exemplars; the README lists `REVIEW.md`.
+
+  **What to change:** nothing. Documentation only.
+
+- Updated dependencies [febd8b7]
+- Updated dependencies [41ac0c7]
+- Updated dependencies [efd5d03]
+- Updated dependencies [501e355]
+- Updated dependencies [e4dfb25]
+- Updated dependencies [4e76fe8]
+- Updated dependencies [a2d2df0]
+- Updated dependencies [2a44642]
+- Updated dependencies [2fc1bf0]
+- Updated dependencies [d70f22c]
+  - @niscorp/charter@0.1.5
+  - @niscorp/cortex@0.1.6
+  - @niscorp/moss@0.9.1
+  - @niscorp/nova@0.5.2
+  - @niscorp/prism@0.3.3
+  - @niscorp/signal@0.1.9
+  - @niscorp/solid@0.1.3
+  - @niscorp/strata@0.1.9
+  - @niscorp/tide@0.1.10
+  - @niscorp/vex@0.4.4
+
 ## 0.9.1
 
 ### Patch Changes
