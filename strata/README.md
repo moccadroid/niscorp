@@ -1,6 +1,6 @@
 # strata/ — the grammar gate's records
 
-What `pnpm check:grammars` holds nisc's grammars (nova's and Prism's) to.
+What `pnpm check:grammars` checks nisc's grammars (nova's, Prism's and vex's) against.
 
 **`snapshots/<grammar>/<version>.json`** — what each document kind's schema
 was at that version of the grammar, as JSON Schema (descriptions stripped:
@@ -9,7 +9,8 @@ schema differs from the snapshot of the grammar's current version: something
 changed that older readers were never told about.
 
 - Changed a schema? Append a migration to the grammar's sequence
-  (`packages/nova/src/migrations`, `packages/prism/src/migrations`). An
+  (`packages/nova/src/migrations`, `packages/prism/src/migrations`,
+  `packages/vex/src/migrations`). An
   addition needs only an empty marker — strict readers at the old version must
   still refuse the newer documents. A rename or removal needs the steps that
   rewrite old documents. Then `pnpm strata:snapshot` records the new version.

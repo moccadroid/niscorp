@@ -1,5 +1,10 @@
 # The screen builder: what was wrong, what changed, where it stands
 
+**Status: Built (2026-10-20), on main.** Every commit named below is on main, round 6's moves into
+signal and vex included; "Not pushed" was true when it was written. The items under "Open" were
+not re-checked one by one; the two looked at (`rowsFitShape`, vex's `schemaJson` / `dslSpecJson`)
+are unchanged.
+
 2026-10-18, branch `worktree-artifactory`, commits `4763bed4` … `fb64f7b9` (18 commits,
 33 files, +417 −128). Not pushed; CI has not run on them.
 

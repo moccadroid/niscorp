@@ -1,5 +1,8 @@
 # The screen harness: how hotfixed it is, and what a nisc harness looks like
 
+**Status: Proposed (2026-10-18), not built.** None of the five steps in "Costs and order" is in the
+packages: nova has no `checkAction` or `screenAgent`, vex no `ScreenData`.
+
 2026-10-18, after the work recorded in [screen-builder.md](screen-builder.md). This is a review
 and a proposal. Built the same evening inside relay, without the package changes: see "The module"
 in [screen-builder.md](screen-builder.md).

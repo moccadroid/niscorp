@@ -1,6 +1,6 @@
 # Table migrations: only `nisc migrate` changes a real database
 
-Status: proposed, 2026-11-07. Nothing built. One independent review round; its findings are folded in below.
+Status: proposed and built, 2026-11-07, in `2780c565`, on main. One independent review round; its findings are folded in below.
 
 Started from Mira's report: `nisc dev` / `build` / `start` boot the app, and boot applied pending migrations to the
 owner's Postgres (Mira `docs/lessons.md` #24). Widened to: strata's table migrations should meet what current tools

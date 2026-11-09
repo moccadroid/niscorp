@@ -66,7 +66,7 @@ No component. No handler. No route. No `fetch`. `npm run dev`, and:
 
 - the first screen **arrives as markup**, drawn on the server by your own kit, and the page picks it up;
 - the press is counted **in a shell on the server**. The browser draws what the socket sends and sends back what was pressed. Once people sign in, that shell is durable: one per person, across every tab they have open;
-- a database is already there (Postgres compiled to WebAssembly in dev; hand it a real pool to deploy, and nothing else changes);
+- a database is already there (Postgres compiled to WebAssembly in dev; hand it a real pool to deploy, migrated first by `nisc migrate`: the server only checks its tables, and will not start while a migration is pending);
 - `npm run check` boots the real server, serves the screen, draws the page and presses the button — headless, no browser, no mocks.
 
 Then it grows the same way. A read is data:
@@ -132,7 +132,7 @@ A language model is bad at unbounded code and very good at a constrained grammar
 
 So the agent gets grammars, and it gets the rules with them:
 
-- **The rulebook ships in the package.** Every app carries an `AGENTS.md` pointing at `node_modules/@niscorp/nisc/AGENTS.md` — the rules for exactly the version installed: what is data and what may be code, the five decisions that are yours and never the agent's, the order of work, what a review checks. [Read it](AGENTS.md); it is the best description of Nisc there is.
+- **The rulebook ships in the package.** Every app carries an `AGENTS.md` pointing at `node_modules/@niscorp/nisc/AGENTS.md` — the rules for exactly the version installed: what is data and what may be code, the five decisions that are yours and never the agent's, the order of work. [Read it](AGENTS.md); it is the best description of Nisc there is. What a review checks is [`REVIEW.md`](packages/nisc/REVIEW.md), beside it.
 - **Decisions are asked, not guessed.** A new app comes with a `PLAN.md`: what was decided when it was made, and everything still open written down as open. Nothing gets built on an open decision.
 - **Wrong is refused, not rendered.** A layout that does not parse does not draw. A charter whose deny matches nothing does not boot — a silent deny is an unprotected table. A grammar change without a migration does not pass CI.
 - **Every feature ships its proof.** A check boots the real app, dispatches real events and asserts on the live tree, one `[pass]`/`[fail]` line at a time. The agent runs it in a loop; you read the lines.
@@ -156,7 +156,7 @@ npm run dev
 | `npm run export` | an app in the page only: the site as a folder for any static host |
 | `npm run check` | the app's checks, headless |
 
-`create-nisc` asks where the shell runs — **on a server** ([moss](packages/moss): one shell per person, the charter enforced there) or **in the page** (offline, static hosting, no backend; the charter is then honest UI and not a security boundary) — and whether **React** or **plain DOM** draws the screen. Flags answer the questions: `npm create nisc my-app -- --page --dom`.
+`create-nisc` asks who leads — **you** (classic: you build the screens) or **a model** (model-first: each message is answered with a screen composed from the app's actions, behind moss) — then where the shell runs — **on a server** ([moss](packages/moss): one shell per person, the charter enforced there) or **in the page** (offline, static hosting, no backend; the charter is then honest UI and not a security boundary) — and whether **React** or **plain DOM** draws the screen. Flags answer the questions: `npm create nisc my-app -- --page --dom`.
 
 Then open `PLAN.md`, and hand the folder to your agent.
 
@@ -177,21 +177,21 @@ Eleven libraries, a command, a release that pins them together, and the thing th
 | 🧵 | [**`@niscorp/loom`**](packages/loom) | Schema → editing UI. Compiles a Zod schema into a Nova form that views, creates and edits valid JSON. |
 | 🌊 | [**`@niscorp/tide`**](packages/tide) | Automation. A reflex turns the clock and a fact into one named effect, through a durable ledger. No run body, no wall clock. |
 | 🧠 | [**`@niscorp/cortex`**](packages/cortex) | The agent runtime. One tool loop, typed envelopes, gates, human-in-the-loop confirmation, streamed events. |
-| 📡 | [**`@niscorp/signal`**](packages/signal) | The LLM client. Stateless, immutable, provider-agnostic. Today that means OpenAI, Groq and OpenRouter through one OpenAI-compatible adapter; native Anthropic and Google adapters are not built yet. Structured output through Zod, tool calling, validation-retry. |
+| 📡 | [**`@niscorp/signal`**](packages/signal) | The LLM client. Stateless, immutable, provider-agnostic. Today that means OpenAI, Groq and OpenRouter through one OpenAI-compatible adapter, OpenAI's Responses API through its own, and TypeSafe (Jev) for decisions; native Anthropic and Google adapters are not built yet. Structured output through Zod, tool calling, validation-retry. |
 | 🧊 | [**`@niscorp/solid`**](packages/solid) | Structured output, streamed. An always-valid, schema-backed object over partial JSON, so a model's answer can be drawn while it is still arriving. |
-| ⌨️ | [**`@niscorp/cli`**](packages/cli) | The `nisc` command: `dev`, `build`, `export`, `start`, `check`. One config file says how the app boots and how a screen is drawn; the rest is read off the app. |
+| ⌨️ | [**`@niscorp/cli`**](packages/cli) | The `nisc` command: `dev`, `build`, `export`, `start`, `check`, `migrate`. One config file says how the app boots and how a screen is drawn; the rest is read off the app. |
 | 📦 | [**`@niscorp/nisc`**](packages/nisc) | The release. Ships no code: pins every package above to the exact version it was tested with, and carries the rulebook for that set. |
-| ✨ | [**`create-nisc`**](packages/create-nisc) | `npm create nisc`. Four templates that are themselves real, checked apps. |
+| ✨ | [**`create-nisc`**](packages/create-nisc) | `npm create nisc`. Six kinds of app, put together from template pieces, each one made and checked in CI. |
 
 > Each library has a `README.md` and a `DESIGN.md`. **Read the design doc before the source.**
 
 ## Built with it
 
-The reference apps in [`apps/lab`](apps/lab), each built by the rulebook and each proving something different:
+The reference apps in [`apps/lab`](apps/lab), each built by the rulebook and each proving something different. lyceum is the one to read; atrium, lyra and relay are older ([AGENTS.md](AGENTS.md), "Layout of an app"):
 
 | App | What it is | What it proves |
 |---|---|---|
-| [**atrium**](apps/lab/atrium) | A guest-and-staff platform for hotels: two hotels on two different PMS backends, five audiences, one URL. | Shipping is a row write. Integrations arrive over HTTP from the vendor's own service and become actions, queries and menus as rows. The exemplar. |
+| [**atrium**](apps/lab/atrium) | A guest-and-staff platform for hotels: two hotels on two different PMS backends, five audiences, one URL. | Shipping is a row write. Integrations arrive over HTTP from the vendor's own service and become actions, queries and menus as rows. |
 | [**lyra**](apps/lab/lyra) | A membership platform for studios and gyms. One deployment, many studios. | Actions are the product and layouts are disposable: a studio's whole look is rows, replaced by action id, revertibly. |
 | [**lyceum**](apps/lab/lyceum) | The app a talk about Nisc runs on — slides, projector, the speaker's controller, the audience's phones and terminals. | One shell per person, live, in a room full of them. |
 | [**encore**](apps/lab/encore) | A festival's operations room with no navigation: the operator types what is happening, and the room assembles around the sentence while it is being typed. | A fast model that selects among the actions a person already has. It picks, it never invents, and it never presses the button. |
@@ -237,8 +237,13 @@ pnpm format        # prettier
 # the gates CI runs (after pnpm build) — `pnpm verify` runs all but the last, which CI runs on pull requests
 pnpm check:packages    # every package packed and installed OUTSIDE the workspace: publint, attw, every subpath imported
 pnpm check:create      # each kind of app made with the built create-nisc, installed, typechecked, checked and built
-pnpm check:grammars    # nova's and Prism's schemas vs their snapshots; 157 real documents must upgrade and parse
+pnpm check:grammars    # nova's, Prism's and vex's schemas vs their snapshots; 157 real documents must upgrade and parse
 pnpm check:sources     # each lab app's source is written at the grammars it runs on (strata.lock.json)
+pnpm check:fact-door   # tide writes a fact through one door, engine/facts.ts, and nowhere else
+pnpm check:raw-sql     # no package but vex and strata runs SQL beyond what the script's ledger counts
+pnpm check:modules     # each package is modules, each imported by its door and only where declared
+pnpm check:api         # every name a package exports is listed in its api.txt
+pnpm lint              # eslint, no warning allowed: the style guide's bans, stricter rules for moss and tide
 pnpm check:changesets  # no release breaks an app: a breaking bump is refused unless its changeset carries its approval
 ```
 
@@ -255,11 +260,11 @@ pnpm --filter @niscorp/nova dev      # tsup --watch
 
 **The rulebook.** [AGENTS.md](AGENTS.md) and [STYLE_GUIDE.md](STYLE_GUIDE.md) at the root are links to `packages/nisc/`, where they live because they ship. Changing a rule is a change to that package: it takes a changeset, and reaches apps as a release.
 
-**Tables and grammars.** No package runs DDL outside a [strata](packages/strata) sequence, and changing a schema behind a document kind (nova's actions and layouts, Prism's config) is a migration on that grammar — the gate refuses it otherwise. Applied migrations, recorded snapshots and early-stamp corpus files are history: append, never edit. The rules for apps are [AGENTS.md](AGENTS.md) 17–20.
+**Tables and grammars.** No package runs DDL outside a [strata](packages/strata) sequence, and changing a schema behind a document kind (nova's actions and layouts, Prism's config, vex's entries) is a migration on that grammar — the gate refuses it otherwise. Applied migrations, recorded snapshots and early-stamp corpus files are history: append, never edit. The rules for apps are [AGENTS.md](AGENTS.md) 17–20.
 
 ```
 niscorp/
-├── packages/        the eleven libraries, cli, nisc (the release), create-nisc (and its four templates)
+├── packages/        the eleven libraries, cli, nisc (the release), create-nisc (and its template pieces)
 ├── apps/
 │   ├── showroom/    live demo + inspector, a module per library
 │   └── lab/         the reference apps
