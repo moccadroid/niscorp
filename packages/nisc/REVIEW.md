@@ -42,7 +42,7 @@ These numbers are not rules. They say where a design has drifted. In the lab app
    - **d.** Where pages are drawn on the server: a check opens the drawn page with the real wire and target and the terminal adopts it with nothing said (rule 2a), at every window width the kit distinguishes; a page drawn for somebody goes out `private, no-store`; and every sign-in the app answers over HTTP sets the session cookie on its response and hands the page nothing (rule 12).
 7. Style guide bans (rule 16): `any`, `enum`, classes, default exports, `function` declarations, type assertions and non-null `!` — read by the compiler, not by grep, which cannot tell negation from assertion. Declared shim exceptions are honored.
 8. Decision points: each of D1–D5 is recorded in the app's `PLAN.md` with its tier — answered, delegated by name, or derived — never assumed silently.
-9. Versions (rules 17–20): `pnpm check:grammars` and `pnpm check:sources` pass; no DDL outside a sequence; no edited migration, snapshot, early-stamp corpus file or hand-moved lock.
+9. Versions (rules 17–20): the check suite's `strata status --check` passes (the source is written at the installed grammars, `strata.lock.json`); no DDL outside a sequence; no edited migration, snapshot, early-stamp corpus file or hand-moved lock.
 
 ## What to look for
 
