@@ -313,7 +313,9 @@ type FactInput = {
 
 **The union is enforced end to end.** A `write` needs an `entity`, a `signal` a
 `name`, a `manual` a `target`, a `run` both `reflex` and `runId` — and each
-refuses the fields belonging to the others. `{ kind: 'write' }` with no entity
+refuses the key fields of the others (`entity`, `name`, `target`, `runId`; a
+`signal` also refuses `op`). The rest are not checked by kind: a `write`
+accepts `payload`, `reflex`, `stats` and `by`. `{ kind: 'write' }` with no entity
 used to parse, store, match nothing, get marked delivered and vanish, with no
 way for the producer to learn its fact was never going to wake anything.
 
@@ -442,7 +444,7 @@ the same `now` may create no run. `fired` is `false`, with a `reason`, when
 throws, a unit key repeats); `true` does not say a run is due.
 
 ```typescript
-graph(): GraphReport      // { edges: { from, to, via }[], cycles, blind, errors, warnings } over what is loaded
+graph(): GraphReport      // { edges: { from, to, via }[], cycles, blind, errors, refusals, warnings } over what is loaded
 sweep(now, retention): Promise<number>   // { facts?, runs?, tasks? } horizons in ms
 ```
 

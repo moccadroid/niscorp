@@ -64,7 +64,7 @@ of those properties. Tide exists so that piece never has to be written.
 
 5. **Identity-blind.** Tide never learns what a principal is. Every reflex names an
    `as`; the host resolves it to whatever authority means there (under moss: a
-   charter-resolved, engine-enforced `ActorContext`) and tide threads it through to
+   charter-resolved, engine-enforced principal) and tide threads it through to
    effects untouched. It is also *written down* on every run, so a host can scope its
    own ledger by it without tide knowing what it scoped. The same blindness charter
    has toward universes, tide has toward identity — and for the same reason:
@@ -281,7 +281,9 @@ drive tide; nothing else about the producer is tide's business.
 ```
 
 **The union is enforced, and ⟲ it was not.** Each kind requires the fields that make it
-addressable and refuses the fields belonging to the others. `{ kind: 'write' }` with no
+addressable and refuses the key fields of the others (`entity`, `name`, `target`,
+`runId`; a `signal` also refuses `op`). The rest are not checked by kind: a `write`
+accepts `payload`, `reflex`, `stats` and `by`. `{ kind: 'write' }` with no
 entity used to parse, store, match nothing, get marked delivered, and vanish — a
 producer with no way to learn its fact was never going to wake anything. An
 unenforced union is worse than none, because it is documented.
@@ -671,8 +673,9 @@ cannot count it:
   Releasing a parked fact **records** the override; **⟲** clearing the park alone was a
   ping-pong, because the depth that parked it had not changed and never would.
 
-Load **refuses** outright: an unguarded cycle, a reflex naming an unregistered
-effect, a `when` on a non-fact trigger. The verification is only as good as the
+Load **refuses** outright: a reflex that does not parse, a duplicate id, a reflex
+naming an unregistered effect, a `when` on a non-fact trigger, `each` mode with no
+`unitKey`, a run subscription to a reflex that is not loaded, an unguarded cycle. The verification is only as good as the
 effects' `writes`: under moss they are *derived* (from `mutationEffect` on the vex
 mutation behind each effect), so an edge is never guessed; a plain host declares
 them or forgoes the check, and an effect with none is reported as a **blind** edge,
@@ -746,7 +749,7 @@ the argument that tide is a *nisc* library and not a scheduler with JSON config:
 | `transform` | `(config, source) => value` | Prism's `evaluate`, or anything | **nova's exact socket** — nova doesn't know Prism; neither does tide |
 | `select` | `(query, ctx) => AsyncIterable<row>` — the query blob is opaque | vex replay under the actor's policy; or raw SQL; or an array | vex's `generateDsl` / `mapToShape` |
 | `effects` | `name → { run(input, ctx), writes?, preview? }` | vex mutation replays, fns, cortex agents; or plain functions | moss's `functions` seam |
-| `ctx` | opaque, threaded through to `select` and `effects`; carries `taskKey`, `emit`, `now` | moss: `ActorContext` (principal, policy, wire) | charter's universe-blindness, applied to identity |
+| `actor` | `(as) => unknown`; its answer is threaded opaque into `select` and `effects` as `ctx.actor` | moss: the principal `as` names (policy, wire) | charter's universe-blindness, applied to identity |
 
 Plus the driver-facing edges, contracts rather than injections: **`ingest(fact)`**
 in, **`advance({ now, limit })`** to run one committed increment, and
@@ -822,7 +825,7 @@ Moss fills every seam but the store, which is tide's own:
 | `select` | vex replay **through the actor's own wire** — selection inherits replay-only, scoped, cached, inspectable; the tenant filter is in the SQL, engine-injected, unforgeable |
 | `effects` | every seeded vex **mutation** auto-registered under its fingerprint (with `writes` *derived* from `mutationEffect`) + the app's `effects(actor)` |
 | `transform` | prism — the same wiring the shell's transform socket already gets |
-| `ctx` | `ActorContext`: the charter-resolved, engine-enforced, no-shell principal |
+| `actor` | the principal a run's `as` names: charter-resolved, engine-enforced, no shell |
 | the ledger | ordinary vex entries over `tide_run`, scoped by the host on the identity the run declared |
 
 **The engine's writes do not go through vex's mutation pipeline, and the reason is
@@ -886,6 +889,9 @@ src/
   types.ts                 ledger rows, seam types, TideStore, UNIQUE_BY, reports
   errors.ts                TideError (code + details)
 
+  migrations/
+    index.ts               TIDE_GRAMMAR, TIDE_SCHEMAS — a reflex or a draft as a stored document (the ./migrations entry)
+
   schemas/
     reflex.schema.ts       ReflexSchema — trigger, select, effect, policy, enabled; the draft schemas and the timer
     trigger.schema.ts      clock | fact | manual, with narrowing helpers
@@ -909,7 +915,7 @@ src/
 
   store/
     memory.ts              createMemoryStore — the reference implementation + snapshot()
-    postgres/              the Postgres store — the ./postgres entry; the only directory that imports strata
+    postgres/              the Postgres store — the ./postgres entry; with migrations/, the only code that imports strata
       index.ts             the door: createTideStore, TIDE_SEQUENCE, TIDE_TABLES, TIDE_DDL, TidePool
       pool.ts              the pool the store runs on, as much of one as it uses
       tables.ts            the four tables, and the strata sequence that makes them
@@ -1031,7 +1037,7 @@ a host can do: turning its own writes into facts.
     truthiness rather than a second reading of it.
 
 13. **Identity is the host's, entirely — and written down.** Tide threads an opaque
-    `ctx`; moss's `ActorContext` supplies principal, compiled policy and tenancy. An
+    `actor`, what the host's `actor(as)` returns: principal, compiled policy and tenancy. An
     automation that "runs as root" is unbuildable through this seam, because tide has
     no root to offer. Recording `as` on the run is what lets a host scope the ledger
     without tide learning what it scoped.
@@ -1063,7 +1069,7 @@ The wishlist, answered — including its own open questions:
 | Idempotency before the effect | task insert refused by `UNIQUE(runId, unit)`; task key in `ctx` for downstream |
 | Retry vs terminal | throw vs return (§ decision 6); `retry()` for the parked, and it rewinds the run |
 | Concurrency, overlap, ordering, partial failure, timeout, catch-up | leased claims + fencing, `overlap`, `order: 'serial'` inside the claim, task-per-unit, `timeoutMs`, `catchUp` |
-| Scoped no-session identity, tenant-bounded | `ctx` seam ← moss's `ActorContext`; engine-side enforcement, unchanged |
+| Scoped no-session identity, tenant-bounded | `actor` seam ← the host's `actor(as)`; engine-side enforcement, unchanged |
 | Run ledger, dry run, preview with names, silence alerting, ledger-as-data | facts/runs/tasks; `preview()`; materialized-ahead pending rows; host-readable tables with a retention policy |
 | Per-tenant config, instant disarm, versioning across runs | reflexes are tenant rows; disarming is the host's row write + `load` (§ decision 11); content-hash versions (§ decision 14) |
 | Host-agnostic wake-up; serverless and local both | `advance({ now })` + `nextDue(now)`: the driver wakes on ingest and sleeps until the next due instant; its janitor beat is recovery, not pacing |
@@ -1071,7 +1077,7 @@ The wishlist, answered — including its own open questions:
 | Durable across restarts | `createTideStore(pool)`, `@niscorp/tide/postgres`; the memory store remains the reference and the check harness |
 | Wishlist: dependency between automations | run facts — `on: { fact: { run: 'A' } }` with `when` on the stats |
 | **Open: one library or two?** | one, standalone — "react to a change" is a fact reflex; same machine |
-| **Open: does the identity belong here?** | no — moss's `ActorContext`, consumed through an opaque seam |
+| **Open: does the identity belong here?** | no — the host's, consumed through the opaque `actor` seam |
 | **Open: how much effect vocabulary is closed?** | the seam is closed (one shape), the vocabulary is open (registered handlers) |
 | **Open: what does versioning mean?** | content hash pinned by the ledger; `enabled` is the host's field, so pausing isn't a version |
 | **Open: do notifications belong here?** | no — an automation writes rows; whatever notifies is another consumer of rows |
