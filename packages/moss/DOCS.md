@@ -921,9 +921,9 @@ the row.
   this is for signing out somebody else (an owner removes a member).
   No exported call deletes one token and leaves the principal's others.
 - Who a token is, is asked of the server: `server.principalOf(token)`. The
-  table is made by `createServer`, and by `migrateTables`, under
-  `session: 'sessions'` and only then. Nothing else is exported of the stored
-  credential.
+  table is made by `migrateTables` (`nisc migrate`), and by `createServer`
+  under `migrations: 'apply'`, under `session: 'sessions'` and only then.
+  Nothing else is exported of the stored credential.
 - **They are for a deployment whose `session` is `'sessions'`, and for no
   other.** The stored sessions are what that verifier reads, and nothing else
   reads them.
@@ -1036,7 +1036,8 @@ parsing them, stores them stamped current, and refuses a bundle built on newer
 grammars than the host (*the host must be updated first*). Reads upgrade too:
 a row another process wrote since boot is read current, and one it cannot read
 is left out with a logged sentence. Migration 1 of each sequence is the DDL
-boots used to run, so a database from before the ledger adopts on its next boot.
+boots used to run, so a database from before the ledger adopts on its next
+`nisc migrate`.
 
 `shellFrameDelta` and `socketCompression` are the two wire-size knobs. They are
 environment settings, not manifest ones — an operational decision about a
@@ -1076,7 +1077,8 @@ does nothing. Returns a Hono app extended with the `MossServer` members below.
 `createServer` wires, and answers no question of its own (`src/server/`). In
 order: the manifest is read and frozen; who a token is is resolved
 (`runtime.session`; unset, the boot is refused here, before a table exists);
-the tables are migrated and the data module stands; the running manifest is
+the tables are checked (migrated under `migrations: 'apply'`) and the data
+module stands; the running manifest is
 created, which is the boot check, and the data module is told to ask it for an
 entry (it compiles the ones it holds, and one vex cannot run refuses the boot);
 identity; the server's own routes (the
@@ -1785,8 +1787,9 @@ app share a name. What a feature routes, keeps and serves is documented under
 its entry point.
 
 A feature names the tables that are its own and the strata sequences that make
-them. The sequences are migrated in the one ledgered run, before the feature
-starts, and `migrateTables` runs them too. A feature reads and writes those
+them. The sequences are checked in the one ledgered run, before the feature
+starts (migrated there under `migrations: 'apply'`), and `migrateTables`
+applies them. A feature reads and writes those
 tables through vex, as an app does, with entries of its own: they are seeded into a
 cache of their own, held by an engine no route is handed, so `/api/vex`
 answers `cache_miss` for one of them whatever the charter grants whoever asks,
