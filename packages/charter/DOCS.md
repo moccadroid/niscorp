@@ -170,7 +170,8 @@ at boot/CI; refuse to serve if `report.errors` is non-empty.
   `layouts` universe is optional: absent, the section is inert (a charter's
   `layouts` keys resolve against nothing and are not verified); handed in, its
   dead-deny/dead-allow/orphan/leaves-only checks run like any other section.
-  So is `functions`, with the same checks.
+  So is `functions`, with the dead-deny, dead-allow and orphan checks;
+  leaves-only runs only on `actions` and `layouts`.
 - `wearable?: readonly (readonly string[])[]` — the role combinations a principal
   may wear, one entry per combination (not one per person). Defaults to `[]`.
   Read only by the `subtractive-assigned` check. A composer that has an
@@ -208,11 +209,11 @@ type RoleClosure = { role: string; actions: string[]; data: string[]; layouts: s
 | rule | level | meaning |
 |---|---|---|
 | `resolution` | error | a cycle or unknown-role reference (per section) |
-| `leaves-only` | error | an id is a namespace of another id — namespaces are never actions (checked in the `actions` universe, and in `layouts` when handed in; not in `data`) |
+| `leaves-only` | error | an id is a namespace of another id — namespaces are never actions (checked in the `actions` universe, and in `layouts` when handed in; not in `data` or `functions`) |
 | `ambiguous-selection` | error | a role has both top-level `allow`/`deny` and an explicit `actions:` |
 | `dead-deny` | error | a deny glob matches nothing — silent means unprotected |
 | `dead-allow` | warning | an allow glob matches nothing — noise |
-| `orphan` | warning | an action (or, when `layouts` is handed in, a layout variant) granted by no role — deployed but unreachable. An ungranted `data` id is not reported |
+| `orphan` | warning | an action (or, when handed in, a layout variant or a function) granted by no role — deployed but unreachable. An ungranted `data` id is not reported |
 | `re-allow` | warning | a role re-allows an id an ancestor denied |
 | `subtractive-assigned` | warning | a role used in `without` also appears in a `wearable` combination |
 | *(closure)* | via `RoleClosure.issues` | cross-action wiring problems from the injected auditor |

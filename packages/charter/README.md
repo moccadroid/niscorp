@@ -42,7 +42,7 @@ if (report.errors.length > 0) throw new Error('charter is incoherent');
 
 ## What it is
 
-- **Universe-blind.** `resolvePrincipal(charter, universe, roles, section)` runs the same resolution against any universe. `actions` selects Nova action ids; `data` selects `table.verb` capabilities (the vex-policy dialect); `layouts` selects layout-variant ids (ring 2 — moss's dialect: which variant of an action's layout a principal is served). Adding a governed domain is adding a universe, never new grammar.
+- **Universe-blind.** `resolvePrincipal(charter, universe, roles, section)` runs the same resolution against any universe. `actions` selects Nova action ids; `data` selects `table.verb` capabilities (the vex-policy dialect); `layouts` selects layout-variant ids (ring 2 — moss's dialect: which variant of an action's layout a principal is served); `functions` selects the names of the app's functions a principal may call. Adding a governed domain is adding a universe, never new grammar.
 - **A small algebra.** `resolved(role) = (∪ extends ∪ match(allow)) − match(deny) − ∪ without`. Order-independent, deny wins within a role, denies don't inherit. Roles compose whole roles; each section resolves independently.
 - **Reach is named, not composed.** A role may carry `scoping` — a name the governed target resolves (vex: which scope behaviors apply). Unlike every section it is not inherited through `extends`: `resolveScoping(charter, role)` is that role's own answer or none, and a principal with several roles is resolved one role at a time.
 - **One glob rule.** `*` matches any run of characters including dots — `crm.*` matches `crm.deal.form`. No `**`, no braces, no regex. When a pattern can't be expressed, the fix is a better id.
@@ -50,6 +50,6 @@ if (report.errors.length > 0) throw new Error('charter is incoherent');
 
 ## What it is not
 
-It does not enforce, store documents, or know about HTTP, databases, or your app. The charter and the assignment rows are the **app's** artifacts. Enforcement is the governed target's job — vex compiles the resolved `data` set into a scope policy; a shell mounts only the resolved `actions`. Charter resolves and refuses; it never runs at request time.
+It does not enforce, store documents, or know about HTTP, databases, or your app. The charter and the assignment rows are the **app's** artifacts. Enforcement is the governed target's job — vex compiles the resolved `data` set into a scope policy; a shell mounts only the resolved `actions`; moss lets a principal call only the resolved `functions`. Charter resolves and refuses; it never runs at request time.
 
 See [DESIGN.md](DESIGN.md) for the thesis and [DOCS.md](DOCS.md) for the full API.
