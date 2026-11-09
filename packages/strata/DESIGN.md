@@ -43,7 +43,7 @@ production boot can require that a deploy step migrated first.
 
 **Read first, then one transaction, one lock.** A run reads the ledger before
 anything else; with problems it refuses, in verify mode or with nothing pending
-it ends there — a read that a role without DDL rights can make. Otherwise it
+and no guard or dry run it ends there — a read that a role without DDL rights can make. Otherwise it
 opens one transaction, sets its own statement timeout, takes
 `pg_advisory_xact_lock` on the ledger's name, sets its lock timeout, creates
 the ledger if needed, reads it again, plans and applies. Postgres DDL is
@@ -71,7 +71,10 @@ caught in CI rather than by a refusing production boot.
 moss's server now runs `nisc.moss` (integrations, their actions, the generation
 pointer), `nisc.moss.sessions` (when the deployment uses moss's credential) and
 the vex cache's sequence in one run, **before** introspection — as the tables
-it replaced were. Two consequences, named rather than discovered later:
+it replaced were. (Since then that run only checks them, refusing the boot
+while anything is pending, unless the runtime sets `migrations: 'apply'`;
+`nisc migrate` applies them.) Two consequences, named rather than discovered
+later:
 
 - The generation table used to be created *after* introspection; it is now
   created before, and `strata_ledger` is a new table. Both enter the
@@ -88,7 +91,7 @@ it replaced were. Two consequences, named rather than discovered later:
   `initIntegrations` and `initSessions` have gone from what moss exports: the
   integration tables are part of `MOSS_SEQUENCE`, and the sessions table is
   made where a deployment keeps moss's stored sessions (`session:
-  'sessions'`); `createServer` and `migrateTables` run both. The other two
+  'sessions'`); `migrateTables` applies both and `createServer` checks them. The other two
   are as they were, and the tide store is tide's own,
   `@niscorp/tide/postgres`.)
 

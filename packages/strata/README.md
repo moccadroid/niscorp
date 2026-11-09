@@ -54,8 +54,9 @@ ledgered run, and the server checks them at boot.
   and two statements on one line, or a `;` followed by a trailing comment, stay
   one step. Write those as their own steps.
 - **A run reads before it writes.** The ledger is read first; a database with
-  nothing pending is answered from that read — no lock, no DDL, no transaction —
-  so an app whose database role cannot change tables can still check them.
+  nothing pending, run without `guard` or `dryRun`, is answered from that read
+  — no lock, no DDL, no transaction — so an app whose database role cannot
+  change tables can still check them.
 - **A run is one transaction** under an advisory lock. A step throws, nothing
   from the run happened — Postgres DDL is transactional. Two processes migrating
   at once serialize; the second finds the work done.
@@ -102,8 +103,8 @@ ledgered run, and the server checks them at boot.
 
 The pool is structural — `{ query, transaction }`, the shape vex's PGlite pool
 and a wrapped `pg` pool already have. A pool without `transaction` is refused
-(`NO_TRANSACTION`) when it has something to apply: a run must land whole or
-not at all. `query` and
+(`NO_TRANSACTION`) when it has something to apply, or a `guard` or `dryRun`:
+a run must land whole or not at all. `query` and
 `transaction` are called on the object that has them, so a driver's own object
 whose methods reach for `this` — a PGlite, a `pg` client handed through as the
 transaction — works as it is.
