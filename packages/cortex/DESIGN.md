@@ -88,7 +88,7 @@ type RunResult<TData> =
   | { ok: false; error: CortexError; meta: RunMeta };
 
 type RunMeta = {
-  usage: Usage;              // aggregated; per-step usage rides on events
+  usage: Usage;              // the run's total; no event carries per-step usage
   strategy: OutputStrategy;  // what actually ran
   steps: number;
   outputRetries: number;
@@ -134,9 +134,9 @@ at most syntax; cortex enforces the contract.
 
 Cortex registers one synthetic tool per run:
 
-- **Params, auto-detailed.** If the serialized `data` schema is
-  strict-compatible (no recursion, no open records, no refinements)
-  and small (≤ ~8 KB serialized), it is inlined into the tool params.
+- **Params, auto-detailed.** If the envelope schema with `data`
+  converts to JSON Schema, contains no `$ref` and serializes to at
+  most 8,192 characters, it is inlined into the tool params.
   Otherwise params are loose (`data: object, see OUTPUT SCHEMA in the
   system prompt`) and the schema documentation is injected into
   context (§3.4). This is what makes Prism's `NodeSchema` and Nova's
@@ -196,11 +196,13 @@ Cortex registers one synthetic tool per run:
 
 ### 3.2 `native`
 
-`auto` picks it only when the provider capability
-`toolsWithStructuredOutput` is true (or the agent has no tools) AND
-the envelope schema passes the strict-compatibility walk. Small
-extractors and classifiers on OpenAI-class providers land here and
-get grammar-level enforcement for free.
+`auto` picks it only when the agent has an output schema, the model
+capability `nativeJsonSchema` is true, `toolsWithStructuredOutput` is
+true (or the agent has no tools) AND the envelope schema passes the
+same check as `respond`'s inlined params (converts, no `$ref`, ≤ 8,192
+characters). The schema is sent as `response_format` with
+`strict: false`. Small extractors and classifiers on OpenAI-class
+providers land here.
 
 ### 3.3 `emit`
 
@@ -281,9 +283,10 @@ Rules the loop lives by:
   collision-free per run, and nothing may claim `respond`. (v1 sent
   ids on the wire while documenting names — a prompt-literal model
   exposed the lie.)
-- **Streaming is not a mode.** The loop always consumes
-  `signal.stepStream`; `await run.result` is the opt-out. There is no
-  `stream: true` bifurcation to test twice.
+- **Streaming is the default.** The loop consumes `signal.stepStream`
+  unless the agent sets `transport: 'step'`, which calls `llm.step()`
+  and emits no deltas or partials (§11); `await run.result` is the
+  consumer's opt-out.
 
 Bounds are `stopWhen` predicates — one vocabulary instead of v1's
 maxToolIterations / maxTicks / maxDurationMs / budget tangle:
@@ -445,8 +448,9 @@ type StopCondition = (s: RunProgress) => StopVerdict;   // { stop: StopReason; m
   hand-rolled verify-once harness bolt-on.)
 
 What hooks deliberately can't do: react to *other* runs (cross-run
-choreography is app code around `manifold.onRun`), mutate past
-transcript (append-only is load-bearing), veto text mid-generation
+choreography is app code in the `onRun` option of
+`createManifold`), mutate past transcript (append-only is
+load-bearing), veto text mid-generation
 (validation happens at boundaries: tool call, step end, output). If
 remotely-configured steering is ever needed, it lands as a compiler
 from a config shape *to* a gate function — on top, not underneath.
@@ -479,8 +483,9 @@ const result = await run.result;
 Every event carries `{ runId, agentPath, seq, ts }`. When an agent
 runs inside another (`asTool`), the child's events forward into the
 parent stream with the extended `agentPath` — one subscription sees
-the whole tree. Per-step usage rides on step events and aggregates
-into `RunMeta.usage`; that is the whole ledger.
+the whole tree. No event carries usage: the run's total is
+`RunMeta.usage`, which `run-end` carries in its `meta`; that is the
+whole ledger.
 
 Process-level watching is the manifold's tap: `onRun(run => …)` hands
 you every run created through it. That is the one legitimate job the
@@ -553,7 +558,8 @@ principle as every other tool denial.
 
 ## 10. Streaming
 
-Always on (§4). Solid is a dependency and powers
+On unless the agent sets `transport: 'step'` (§4). Solid is a
+dependency and powers
 `output-partial`: `respond` arg deltas (or content deltas under
 `native`/`emit`) stream through solid's partial parser into
 progressively-typed envelopes — a chat `response` string streams
@@ -572,7 +578,7 @@ defineTool(config): ToolDefinition                     // v1 shape, kept
 schemaDoc(schema, opts?): string
 
 // execution
-agent.run(input, { deps, llm?, tools?, producers?, gates?, onToolResult?, onEvent?, signal? }): RunHandle<TData>
+agent.run(input, { deps, llm?, tools?, producers?, gates?, onToolResult?, onEvent?, signal?, agentPath? }): RunHandle<TData>
 //   tools: per-run tools whose execute closes over per-invocation
 //   dependencies (vex builds its query tools around the caller's
 //   adapter + schema); appended to the agent's static tools.
@@ -715,7 +721,7 @@ src/
 ├── loop/
 │   ├── loop.ts                   # the loop (§4) — all three transports
 │   └── partials.ts               # solid partial-output tracking
-│                                 # (auto resolution, the strict-compat walk, the respond
+│                                 # (auto resolution, the schema size/`$ref` check, the respond
 │                                 #  descriptor and corrections are signal's: src/transport/)
 │
 ├── context/
