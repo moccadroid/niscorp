@@ -52,9 +52,10 @@ The structure the rulebook describes, and a first screen that works:
 - `npm run dev`, `build`, `check` and `start` — and, with the shell in the
   page, `export` — all the `nisc` command; `nisc dev` runs a moss app's server inside vite, so its
   `vite.config.ts` holds nothing but the framework's plugin;
-- three checks: the artifacts are pure, schema-valid JSON; the source is at the
-  installed grammars (`strata.lock.json`); the welcome screen is served, drawn
-  and pressed;
+- four checks: the artifacts are pure, schema-valid JSON; the app keeps nisc's
+  shape (`shape-check`); the source is at the installed grammars
+  (`strata.lock.json`); the welcome screen is served, drawn and pressed — with
+  the shell in the page, whole and pressed;
 - every `@niscorp` package at **the release this create-nisc was built and
   checked against** — a caret range from each one's version (such as `^0.2.0`), not
   whatever is newest — and `@niscorp/nisc` itself, which pins that set
@@ -76,18 +77,23 @@ A model-first app has, instead of the welcome screen:
   counter, a checklist and a quick check to use, which the model can fill in
   too. A card's link opens a screen at once; only what is typed, or a thing to
   ask pressed, goes to the model. Its `AGENTS.md` says how to remove the tour —
-  a folder, a check, and edits in five files — and what to build next;
+  a folder, a check, its vex entries and its migration, and edits in six files
+  and the two documents — and what to build next;
 - checks that run the loop offline with a scripted decision model and chat
   model, one for the loop and one for the tour, and `src/dev/live-ask.ts`,
   which asks the real models a run of cases.
 
-And two documents:
+And the documents:
 
+- **`README.md`** — the app's commands, and what to read before building.
 - **`PLAN.md`** — what was decided when it was made (the posture with its
   consequences, the renderer), and everything else the rulebook's interview
   asks, written down as **open**. Nothing gets built on an open decision.
 - **`AGENTS.md`** — where the rules are: `node_modules/@niscorp/nisc/AGENTS.md`,
   the rulebook for the version installed. It does not copy them.
+- **`.claude/agents/nisc-reviewer.md`** — an agent that reviews the app against
+  nisc's rules and reports findings by rule number, changing nothing; for after
+  each step of PLAN.md's order of work.
 
 ## A folder that already exists
 

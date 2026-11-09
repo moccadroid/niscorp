@@ -21,7 +21,7 @@
     ],
     "order": [
       "**The interview** — every open item above, answered or delegated by name. ← here",
-      "**Scaffold** — done: the files `npm create nisc` wrote, one action rendering, and its checks (the artifacts, the grammar lock, the welcome screen).",
+      "**Scaffold** — done: the files `npm create nisc` wrote, one action rendering, and its checks (the artifacts, the shape, the grammar lock, the welcome screen).",
       "**Kit** — the primitives, against a kitchen-sink action; lock the look before any feature.",
       "**Data layer** — per D2/D3: schema, seed, entries; one read end to end.",
       "**Actions** — domain by domain: list → detail → form.",
