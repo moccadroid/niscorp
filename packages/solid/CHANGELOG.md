@@ -1,5 +1,13 @@
 # @niscorp/solid
 
+## 0.1.3
+
+### Patch Changes
+
+- a2d2df0: The README and DESIGN.md state the speed-up their own table shows (about 3x at 10 KB, growing with size) instead of 44x, and `current()` is described as kind-checked rather than always valid.
+
+  **What to change:** nothing. Documentation only.
+
 ## 0.1.2
 
 ### Patch Changes

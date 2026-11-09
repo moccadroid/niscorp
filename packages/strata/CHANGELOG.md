@@ -1,5 +1,13 @@
 # @niscorp/strata
 
+## 0.1.9
+
+### Patch Changes
+
+- 2a44642: The docs say a run with nothing pending ends at its first read only without a `guard` or `dryRun`, that a pool without `transaction` is refused for those too, and that moss's boot now checks its sequences rather than running them.
+
+  **What to change:** nothing. Documentation only.
+
 ## 0.1.8
 
 ### Patch Changes

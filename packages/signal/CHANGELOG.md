@@ -1,5 +1,13 @@
 # @niscorp/signal
 
+## 0.1.9
+
+### Patch Changes
+
+- 4e76fe8: DESIGN.md's file map lists `stream/` and says `adapters/openai-sdk.ts` is the shared OpenAI SDK loader, not a protocol.
+
+  **What to change:** nothing. Documentation only.
+
 ## 0.1.8
 
 ### Patch Changes
