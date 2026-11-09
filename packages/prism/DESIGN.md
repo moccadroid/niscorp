@@ -30,7 +30,7 @@ Input Config (JSON)
 
 ### Four Layers
 
-**Schema** — Every op is a Zod schema with `.strict()` and `.describe()`. The top-level `NodeSchema` is a recursive union of ~70 op schemas plus primitives, arrays, and plain objects. Schemas are the source of truth for validation and JSON Schema generation (for LLM consumption).
+**Schema** — Every op is a Zod schema with `.strict()` and `.describe()`. The top-level `NodeSchema` is a recursive union of 75 op schemas plus primitives, arrays, and plain objects. Schemas are the source of truth for validation and JSON Schema generation (for LLM consumption).
 
 **Sugar** — Convenience ops (`$sum`, `$avg`, `$pluck`, etc.) are rewritten to core ops in a single recursive pass before evaluation or compilation. This means the evaluator and compiler only need to handle core ops. Sugar rewriters receive a `recurse` function to transform their sub-expressions.
 
@@ -69,7 +69,7 @@ The evaluator uses a linear if-chain with type guards:
 ```typescript
 if (isRefNode(obj)) return opRef(obj, context, evaluateNode);
 if (isMapNode(obj)) return opMap(obj, context, evaluateNode);
-// ... ~60 more
+// ... 63 more
 ```
 
 A Map-based dispatch would be shorter but loses type narrowing — each guard narrows the node to its specific type, so the handler receives a correctly typed argument without casts.
@@ -90,7 +90,7 @@ The schema and the evaluator hold one rule: a `$` name is an op's. The template 
 
 Prism supports `$.key.nested[0].deep` — dot notation for object keys, bracket notation for array indices. No filters, recursive descent, or unions. These omissions are intentional: `$filter`, `$map`, and `$merge` cover those use cases through the op system, which is composable and type-safe.
 
-Parsed paths are cached in a `Map`. The compiled IR primes this cache.
+Parsed paths are cached in a `Map`. Compiled IR does not use it: `rehydrate` attaches each `$ref` node's parsed path to the node.
 
 ---
 
@@ -131,7 +131,7 @@ All errors are `PrismError` instances with a `.code` string and optional `.conte
 | `E_SCHEMA` | Config fails Zod validation |
 | `E_MISSING_PATH` | `$ref` / `$get` path doesn't exist (no fallback) |
 | `E_TYPE` | Wrong type for op (e.g. `$map.over` is not array) |
-| `E_DIVISION_BY_ZERO` | `$div` with divisor 0 |
+| `E_DIVISION_BY_ZERO` | `$div` or `$mod` with divisor 0 |
 | `E_DATE_INVALID` | Unparseable date value |
 | `E_VAR_NOT_FOUND` | `$var` references undefined variable |
 | `E_NODE_SHAPE` | A node no op answers to, in a tree that skipped the schema (an IR given to `execute`) |
@@ -180,6 +180,7 @@ src/
 │   └── documentation.ts           # JSON Schema generation
 ├── ops/                           # One implementation file per category
 │   ├── refuse.ts                  # The sentence for an op given the wrong kind of value
+│   ├── scope.ts                   # loopScope — one scope for a whole loop
 │   ├── core.ops.ts
 │   ├── array.ops.ts
 │   ├── math.ops.ts
@@ -199,6 +200,11 @@ src/
 │   └── mapping-agent.ts           # mappingAgent (Cortex agent definition)
 ├── migrations/
 │   └── index.ts                   # @niscorp/prism/migrations — PRISM_SEQUENCE, PRISM_SCHEMAS
+├── examples/                      # @niscorp/prism/examples
+│   ├── index.ts                   # PRISM_EXAMPLES, PRISM_EXAMPLE_GROUPS
+│   ├── example.types.ts           # PrismExample, PrismExampleGroup
+│   ├── groups.ts                  # PRISM_EXAMPLE_GROUPS — id, title and description of each group
+│   └── operators.ts, sugar.ts, composition.ts, real-world.ts   # the examples
 └── utils/
     ├── jsonpath.ts                # JSONPath parser + cache
     ├── compare.ts                 # Deep equality, ordered comparison
@@ -240,10 +246,10 @@ and a mapping over a thousand rows would otherwise build a thousand of them.
 
 7. **`$with` uses `let`/`value`.** Reads like scoped bindings in most languages. `in` is a JS keyword.
 
-8. **Math ops take `[node, node]` arrays.** Less verbose than `{ a, b }` objects. Consistent with predicates.
+8. **Binary math ops take `[node, node]` arrays.** Less verbose than `{ a, b }` objects. Consistent with predicates.
 
 9. **`$case` uses `{ branches, else }`.** Clearer than a flat array mixing `{when,then}` and `{else}` objects. Simpler Zod schema.
 
 10. **`compile()` is async.** Uses `crypto.subtle.digest` for SHA256, which is async in all runtimes. `evaluate()` stays sync because it doesn't need the fingerprint.
 
-11. **The node union is tried by key before it is walked.** zod tries a union's 76 members in order, and a plain object is the last. One `$` key and nothing else can only be that op, and no `$` key can only be a template, so that member is tried first and a valid config never walks the union. An invalid one is walked as before, from the top, so a refusal is the union's own. The union stays a union: the JSON Schema, the profiles and loom read it as one.
+11. **The node union is tried by key before it is walked.** zod tries a union's 78 members (75 ops, then primitive, array and template) in order, and a plain object is the last. One `$` key and nothing else can only be that op, and no `$` key can only be a template, so that member is tried first and a valid config never walks the union. An invalid one is walked as before, from the top, so a refusal is the union's own. The union stays a union: the JSON Schema, the profiles and loom read it as one.

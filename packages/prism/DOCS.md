@@ -224,7 +224,7 @@ Source: `{ "tags": ["a", "b", "a", "c", "b"] }` → `["a", "b", "c"]`
 
 ## Math Operations
 
-All math ops take a `[left, right]` pair. Both operands are evaluated and must be numbers.
+`$add`, `$sub`, `$mul`, `$div` and `$mod` take a `[left, right]` pair. Both operands are evaluated and must be numbers. `$round` and `$toNumber` take an object.
 
 ### `$add`
 ```json
@@ -823,7 +823,7 @@ each time it appears, as it would be serialized: a `$reduce` whose body is
 | `E_SCHEMA` | Config failed Zod validation — a malformed op, or a `$` key that is not an op |
 | `E_MISSING_PATH` | `$ref` or `$get` path doesn't exist (and no fallback) |
 | `E_TYPE` | Wrong type for operation (e.g. `$map.over` is not an array) |
-| `E_DIVISION_BY_ZERO` | `$div` with divisor 0 |
+| `E_DIVISION_BY_ZERO` | `$div` or `$mod` with divisor 0 |
 | `E_DATE_INVALID` | Invalid date value |
 | `E_VAR_NOT_FOUND` | `$var` references undefined variable |
 | `E_NODE_SHAPE` | A node no op answers to, in a tree that never went through the schema |
