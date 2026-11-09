@@ -15,10 +15,12 @@ types.ts       the public contract (incl. StepOutcome / Rejection / WireReport)
 registry.ts    provider DATA (baseUrl, endpoint capabilities, adapter id, wire strategy ids)
                + model DATA (model capabilities, reasoning efforts) — measured rows
 scripts/       probe-model.ts: measures one model on one provider, prints its registry row
-adapters/      byte movers, one per WIRE PROTOCOL (not per vendor) — throw-and-wrap, zero policy
+adapters/      byte movers, one per WIRE PROTOCOL (not per vendor) — throw-and-wrap, zero policy;
+               openai-sdk.ts is the shared OpenAI SDK loader and embedding call, not a protocol
 decide/        gate.ts: the acceptance gate DERIVED from a decide() call's questions
 wire/          RESPONSE side: repair.ts (mechanisms) → router.ts (classify) → strategies/ (provider quirks)
 transport/     REQUEST side: resolve.ts (respond | native | emit) + protocol.ts (ALL prompt prose)
+stream/        execute-step-stream.ts: one streamed call → StepStreamEvents (tool-call assembly, usage)
 signal.ts      the client: step/stepStream = the ONE execution core, builders, embed, decide, count
 run.ts         complete()/stream(): one loop over step — runStream is the core, runComplete drains it
 ```
