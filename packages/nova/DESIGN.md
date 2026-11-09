@@ -636,18 +636,20 @@ so `useSyncExternalStore`'s `getSnapshot` returns a stable reference
 when nothing has changed. This is mandatory for tearing-safety in
 React's concurrent rendering.
 
-- **`useRenderTree`** caches by **data identity**. The runtime exposes
-  the current data object; if the cached data reference is `===` to the
-  current one, the cached `RenderNode[]` is returned unchanged. When
-  the runtime mutates data, the new data object replaces the old, the
-  cache misses, the layout is re-rendered, and the new `RenderNode[]`
-  becomes the cached snapshot. A missing instance returns a singleton
-  `EMPTY` constant so re-renders are also stable in that case.
-- **`useCanvas`** caches via a structural comparison helper
-  (`sameActive`) over the canvas's stack length, active id, and per-
-  frame `(id, status)` tuples. If two consecutive `getCanvasState`
-  results compare equal under that helper, the cached value is reused;
-  otherwise the new state is captured and the React store is notified.
+- **`useRenderTree`** caches by **data identity** and the shell's
+  phrases. The runtime exposes the current data object; if the cached
+  data reference is `===` to the current one, and the shell's phrases
+  are `===` to the cached ones, the cached `RenderNode[]` is returned
+  unchanged. When the runtime mutates data, or `setPhrases` changes the
+  phrases, the cache misses, the layout is re-rendered, and the new
+  `RenderNode[]` becomes the cached snapshot. A missing instance returns
+  a singleton `EMPTY` constant so re-renders are also stable in that case.
+- **`useCanvas`** caches the state `onCanvasChange` hands it, and calls
+  `getCanvasState` only when nothing is cached for that shell and canvas. The shell's
+  `onCanvasChange` compares consecutive states (`sameCanvasState`, over
+  the stack length, active id, and per-frame `(id, status)` tuples) and
+  calls its handler only when they differ; the handler stores the new
+  state and notifies the React store.
 
 Both contracts are verified by `test/react/snapshot-stability.test.tsx`,
 which asserts referential equality across re-renders without state
