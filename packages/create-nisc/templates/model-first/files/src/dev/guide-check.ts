@@ -3,18 +3,13 @@ import { SCREENS } from '../app/screens';
 import { recordOf } from '../server/compose/record';
 import { checks } from './checks';
 import { scriptedModels, settle, startApp, until } from './scripted';
-import type { Script } from './scripted';
-
-const card = (action: string) => ({ action, input: {}, intent: action });
-const counter = (title: string, count: number) => ({ action: 'guide.counter', input: { title, count }, intent: 'a counter' });
-const checklist = (title: string, todo: string[]) => ({ action: 'guide.checklist', input: { title, todo }, intent: 'a checklist' });
+import type { Script, Shown } from './scripted';
 
 const SCRIPT: Script = {
-  'What is the charter?': [{ response: 'Put the charter where the nisc card was; the rest stays.', title: 'The charter', areas: [{ area: 'e', ...card('guide.charter') }] }],
-  'A counter that starts at 100': [{ areas: [{ area: 'b', ...counter('From 100', 100) }] }],
-  'A checklist with no steps': [{ areas: [{ area: 'd', ...checklist('Empty', []) }] }, { areas: [{ area: 'd', ...checklist('Mine', ['One step']) }] }],
-  'the nisc card at the top too': [{ areas: [{ area: 'a', ...card('guide.nisc') }] }, { areas: [] }],
-  'a counter at 5, no title': [{ areas: [{ area: 'b', action: 'guide.counter', input: { title: null, count: 5 }, intent: 'a counter' }] }],
+  'What is the charter?': [{ response: 'The charter says who may do what.', cards: [{ action: 'guide.charter', input: {} }] }],
+  'A counter that starts at 100': [{ cards: [{ action: 'guide.counter', input: { title: 'From 100', count: 100 } }] }],
+  'A counter at 5, no title': [{ cards: [{ action: 'guide.counter', input: { title: null, count: 5 } }] }],
+  'A checklist with no steps': [{ cards: [{ action: 'guide.checklist', input: { title: 'Empty', todo: [] } }] }, { cards: [{ action: 'guide.checklist', input: { title: 'Mine', todo: ['One step'] } }] }],
 };
 
 const { check, finish } = checks('guide');
@@ -24,71 +19,59 @@ check('every link on a card opens a screen there is', nowhere.length === 0, nowh
 
 const scripted = scriptedModels(SCRIPT);
 const { prompts } = scripted;
-const lastPrompt = (): string => prompts[prompts.length - 1] ?? '';
 const app = await startApp(scripted.models);
-const { on, rows, ids, without, current, drawn, areas, ask, session } = app;
+const { on, ask, session } = app;
+const card = (canvas: 'screen' | 'talk', action: string): Shown | undefined => [...on(canvas)].reverse().find((one) => one.action === action);
+const press = (canvas: 'screen' | 'talk', shown: Shown | undefined, event: Record<string, unknown>): void => session.dispatch(canvas, { ...event, origin: shown?.id ?? '' });
+const rows = (shown: Shown | undefined, key: string): unknown[] => {
+  const value = shown?.data[key];
+  return Array.isArray(value) ? value : [];
+};
 try {
-  app.draw();
-  session.dispatch('b', { type: 'ui:click', ref: 'up' });
-  session.dispatch('b', { type: 'ui:click', ref: 'up' });
-  session.dispatch('b', { type: 'ui:click', ref: 'down' });
-  session.dispatch('b', { type: 'ui:click', ref: 'up' });
-  check('the counter counts what is pressed, up and down', await until(() => on('b').data['count'] === 2), JSON.stringify(on('b').data));
-  session.dispatch('c', { type: 'ui:click', ref: 'pick', payload: 1 });
-  check('the quick check, picked right, says so and why', await until(() => drawn().includes('Right. Links act at once')), JSON.stringify(on('c').data));
-  session.dispatch('d', { type: 'ui:click', ref: 'tick', payload: 0 });
-  check('a step ticked off moves from the steps to do to the ones done', await until(() => rows('d', 'done').join() === 'Press the counter' && rows('d', 'todo').length === 4), JSON.stringify(on('d').data));
-  app.draw();
-  session.dispatch('d', { type: 'ui:model', ref: 'adding', payload: 'Read the charter' });
-  session.dispatch('d', { type: 'ui:click', ref: 'add' });
-  check('a step typed and added goes last among the steps to do, and the line empties', await until(() => rows('d', 'todo').at(-1) === 'Read the charter' && on('d').data['adding'] === ''), JSON.stringify(on('d').data));
+  app.drawn();
+  press('screen', card('screen', 'guide.counter'), { type: 'ui:click', ref: 'up' });
+  press('screen', card('screen', 'guide.counter'), { type: 'ui:click', ref: 'up' });
+  press('screen', card('screen', 'guide.counter'), { type: 'ui:click', ref: 'down' });
+  press('screen', card('screen', 'guide.counter'), { type: 'ui:click', ref: 'up' });
+  check('the counter counts what is pressed, up and down', await until(() => card('screen', 'guide.counter')?.data['count'] === 2), JSON.stringify(card('screen', 'guide.counter')?.data));
+  press('screen', card('screen', 'guide.quiz'), { type: 'ui:click', ref: 'pick', payload: 1 });
+  check('the quick check, picked right, says so and why', await until(() => app.drawn().includes('Right. Links act at once')), JSON.stringify(card('screen', 'guide.quiz')?.data));
+  press('screen', card('screen', 'guide.checklist'), { type: 'ui:click', ref: 'tick', payload: 0 });
+  check('a step ticked off moves from the steps to do to the ones done', await until(() => rows(card('screen', 'guide.checklist'), 'done').join() === 'Press the counter'), JSON.stringify(card('screen', 'guide.checklist')?.data));
 
-  const startIds = ids();
   await ask('What is the charter?');
-  check(
-    'the model is given each card as the person left it: the count pressed, the steps ticked and added, the pick made',
-    lastPrompt().includes('input {"title":"Press me","count":2}') && lastPrompt().includes('"done":["Press the counter"]') && lastPrompt().includes('"Ask the model to change a card","Read the charter"]') && lastPrompt().includes('"picked":1}'),
-    lastPrompt().slice(0, 1600),
-  );
-  check('a card the model puts on the screen goes where it says, and nothing else moves', without('e', ids()) === without('e', startIds) && on('e').action === 'guide.charter', `${ids()} vs ${startIds}`);
-  check('a card the answer leaves alone keeps what the person did to it', on('b').data['count'] === 2 && rows('d', 'done').length === 1 && on('c').data['picked'] === 1, JSON.stringify(on('b').data));
-  check('a guide card holds its own text: its lead, its example, and where it leads', on('e').data['title'] === 'The charter' && String(on('e').data['example']).includes('"public"') && rows('e', 'links').length === 1, JSON.stringify(on('e').data).slice(0, 200));
+  const charter = card('talk', 'guide.charter');
+  check('a card the model shows goes under its turn, with its own text', charter !== undefined && charter.data['title'] === 'The charter' && String(charter.data['example']).includes('"public"'), JSON.stringify(charter?.data).slice(0, 200));
+  check('the screen behind keeps what the person did to it', card('screen', 'guide.counter')?.data['count'] === 2 && rows(card('screen', 'guide.checklist'), 'done').length === 1, JSON.stringify(card('screen', 'guide.counter')?.data));
 
-  const link = recordOf(rows('e', 'links')[0]);
+  const link = recordOf(rows(charter, 'links')[0]);
   const promptsBeforeLink = prompts.length;
-  session.dispatch('e', { type: 'ui:click', ref: 'link', payload: link['screen'] });
+  press('talk', charter, { type: 'ui:click', ref: 'link', payload: link['screen'] });
+  const linked = SCREENS.find((screen) => screen.id === link['screen']);
   check(
-    'a card’s link opens its screen at once, and asks nothing of the model',
-    (await until(() => current().screen === link['screen'])) && prompts.length === promptsBeforeLink && areas() === 'guide.yours guide.checklist',
-    `${String(current().screen)} — ${areas()}`,
+    'a link on a card in the conversation opens its screen at once, and asks nothing of the model',
+    (await until(() => on('screen').map((one) => one.action).join(' ') === linked?.cards.map((one) => one.action).join(' '))) && prompts.length === promptsBeforeLink,
+    on('screen').map((one) => one.action).join(' '),
   );
   await settle();
-  await app.openScreen('start');
-  check('a screen gone back to is as the person left it', on('b').data['count'] === 2 && rows('d', 'done').join() === 'Press the counter' && on('c').data['picked'] === 1, `${JSON.stringify(on('b').data)} ${JSON.stringify(on('d').data)}`);
-  await app.openScreen('asking');
-  check('another quick check where an answered one was opens unanswered', on('c').action === 'guide.quiz' && on('c').data['picked'] === -1, JSON.stringify(on('c').data));
+
   await app.openScreen('rules');
   check(
     'the packages card replays its read: every row of the table, in order, worded by the read’s mapping',
-    on('d').action === 'guide.packages' && (await until(() => rows('d', 'points').length === 12)) && JSON.stringify(rows('d', 'points')[0]) === JSON.stringify({ title: '@niscorp/nova', text: 'The screen: shells, canvases, actions and their layouts.' }),
-    JSON.stringify(on('d').data).slice(0, 300),
+    (await until(() => rows(card('screen', 'guide.packages'), 'points').length === 12)) && JSON.stringify(rows(card('screen', 'guide.packages'), 'points')[0]) === JSON.stringify({ title: '@niscorp/nova', text: 'The screen: shells, canvases, actions and their layouts.' }),
+    JSON.stringify(card('screen', 'guide.packages')?.data).slice(0, 300),
   );
-  await app.openScreen('start');
 
-  const counterId = on('b').id;
   await ask('A counter that starts at 100');
-  check('a card the model opens again with another input keeps its place and its instance, and takes the input', on('b').id === counterId && on('b').data['count'] === 100 && on('b').data['title'] === 'From 100', JSON.stringify(on('b').data));
-  session.dispatch('b', { type: 'ui:click', ref: 'reset' });
-  check('Reset sets the counter back to zero, whatever it was opened with', await until(() => on('b').data['count'] === 0), JSON.stringify(on('b').data));
+  check('a card the model fills in is opened with what it was given', card('talk', 'guide.counter')?.data['count'] === 100 && card('talk', 'guide.counter')?.data['title'] === 'From 100', JSON.stringify(card('talk', 'guide.counter')?.data));
+  const counter = card('talk', 'guide.counter');
+  press('talk', counter, { type: 'ui:click', ref: 'reset' });
+  check('a card in the conversation works as it does on a screen', await until(() => on('talk').find((one) => one.id === counter?.id)?.data['count'] === 0), JSON.stringify(on('talk').find((one) => one.id === counter?.id)?.data));
+  await ask('A counter at 5, no title');
+  check('a value the model says is null is its card’s default', card('talk', 'guide.counter')?.data['count'] === 5 && card('talk', 'guide.counter')?.data['title'] === 'Press me', JSON.stringify(card('talk', 'guide.counter')?.data));
   prompts.length = 0;
   await ask('A checklist with no steps');
-  check('a checklist with no steps is sent back saying so', (prompts[1] ?? '').includes('input.todo') && on('d').data['title'] === 'Mine', prompts[1]?.slice(-300) ?? '');
-  check('a checklist the model writes where another was keeps none of its ticks', rows('d', 'done').length === 0 && rows('d', 'todo').join() === 'One step', JSON.stringify(on('d').data));
-  prompts.length = 0;
-  await ask('the nisc card at the top too');
-  check('the same card in two areas is sent back saying so', (prompts[1] ?? '').includes('areas a and e would show the same thing; show it once'), prompts[1]?.slice(-300) ?? '');
-  await ask('a counter at 5, no title');
-  check('a value the model says is null is its card’s default', on('b').data['count'] === 5 && on('b').data['title'] === 'Press me', JSON.stringify(on('b').data));
+  check('a checklist with no steps is sent back saying so', (prompts[1] ?? '').includes('input.todo') && card('talk', 'guide.checklist')?.data['title'] === 'Mine', prompts[1]?.slice(-300) ?? '');
 } finally {
   app.server.close();
 }

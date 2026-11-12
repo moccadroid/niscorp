@@ -44,10 +44,10 @@ Text.meta = { description: 'A paragraph.', propsSchema: TextProps };
 const ButtonProps = z.object({
   label: z.string().optional().describe('What the button says; falls back to its children.'),
   tone: z
-    .enum(['primary', 'suggestion', 'link', 'choice', 'chosen', 'right', 'wrong', 'summary', 'step'])
+    .enum(['primary', 'suggestion', 'link', 'choice', 'chosen', 'right', 'wrong', 'step'])
     .optional()
     .describe(
-      'primary: what the action does | suggestion: a thing to ask | link: opens another screen | choice: one of a set to choose from | chosen: the one of the set that is chosen | right: the right one of a set, once picked | wrong: a wrong one, picked | summary: names what is shown, and opens to more | step: back, forward, or start over',
+      'primary: what the action does | suggestion: a thing to ask | link: opens another screen | choice: one of a set to choose from | chosen: the one of the set that is chosen | right: the right one of a set, once picked | wrong: a wrong one, picked | step: start over, or try again',
     ),
   value: z.unknown().optional().describe('Sent with the click as its payload.'),
 });
@@ -66,19 +66,23 @@ export const Button: NovaComponent = ({ children, novaRef, novaModel: _model, ..
 };
 Button.meta = { description: 'A button; dispatches ui:click with its ref, and its value as the payload.', propsSchema: ButtonProps };
 
-const FrameProps = z.object({}).describe('The whole app: the answer, and the dock under it.');
+const FrameProps = z.object({}).describe('The whole app: the screen, and the dock under it.');
 export const Frame: NovaComponent = ({ children }) => <div className="k-frame">{children}</div>;
 Frame.meta = { description: 'The whole app, top to bottom.', propsSchema: FrameProps };
 
-const DockProps = z.object({}).describe('What stays at the bottom while the answer scrolls above it.');
+const DockProps = z.object({}).describe('What stays at the bottom while the screen scrolls above it.');
 export const Dock: NovaComponent = ({ children }) => <footer className="k-dock">{children}</footer>;
-Dock.meta = { description: 'What stays at the bottom while the answer scrolls above it.', propsSchema: DockProps };
+Dock.meta = { description: 'What stays at the bottom while the screen scrolls above it.', propsSchema: DockProps };
 
-const MenuProps = z.object({}).describe('A list that opens above the dock: one choice a line.');
-export const Menu: NovaComponent = ({ children }) => <nav className="k-menu">{children}</nav>;
-Menu.meta = { description: 'A list that opens above the dock.', propsSchema: MenuProps };
+const TalkProps = z.object({}).describe('The conversation, in the dock: it scrolls, and shows its newest turn.');
+export const Talk: NovaComponent = ({ children }) => (
+  <section className="k-talk">
+    <div>{children}</div>
+  </section>
+);
+Talk.meta = { description: 'The conversation, in the dock: it scrolls, and shows its newest turn.', propsSchema: TalkProps };
 
-const GridProps = z.object({ columns: z.number().int().min(1).max(3).optional().describe('How many columns its areas are laid out in: 1 to 3.') });
+const GridProps = z.object({ columns: z.number().int().min(1).max(3).optional().describe('How many columns its cards are laid out in: 1 to 3.') });
 export const Grid: NovaComponent = ({ children, novaRef: _ref, novaModel: _model, ...props }) => {
   const { columns } = parsed(GridProps, props, {});
   return (
@@ -87,22 +91,7 @@ export const Grid: NovaComponent = ({ children, novaRef: _ref, novaModel: _model
     </main>
   );
 };
-Grid.meta = { description: 'Areas in columns, row by row.', propsSchema: GridProps };
-
-const AreaProps = z.object({
-  name: z.string().describe('Which canvas it holds.'),
-  span: z.number().int().min(1).max(3).optional().describe('How many columns it takes.'),
-  changed: z.boolean().optional().describe('Whether the last answer changed what it holds.'),
-});
-export const Area: NovaComponent = ({ children, novaRef: _ref, novaModel: _model, ...props }) => {
-  const { span, changed } = parsed(AreaProps, props, { name: '' });
-  return (
-    <section className={`k-area k-span-${span ?? 1}${changed === true ? ' k-area-changed' : ''}`}>
-      {children}
-    </section>
-  );
-};
-Area.meta = { description: 'One area of an answer.', propsSchema: AreaProps };
+Grid.meta = { description: 'Cards in columns, row by row.', propsSchema: GridProps };
 
 const CardProps = z.object({
   title: z.string().optional().describe('What the card shows, in a few words.'),

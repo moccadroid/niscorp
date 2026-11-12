@@ -156,7 +156,7 @@ npm run dev
 | `npm run export` | an app in the page only: the site as a folder for any static host |
 | `npm run check` | the app's checks, headless |
 
-`create-nisc` asks who leads — **you** (classic: you build the screens) or **a model** (model-first: each message is answered with a screen composed from the app's actions, behind moss) — then where the shell runs — **on a server** ([moss](packages/moss): one shell per person, the charter enforced there) or **in the page** (offline, static hosting, no backend; the charter is then honest UI and not a security boundary) — and whether **React** or **plain DOM** draws the screen. Flags answer the questions: `npm create nisc my-app -- --page --dom`.
+`create-nisc` asks who leads — **you** (classic: you build the screens) or **a model** (model-first: each message is answered with a sentence and the app's own cards, in a conversation, behind moss) — then where the shell runs — **on a server** ([moss](packages/moss): one shell per person, the charter enforced there) or **in the page** (offline, static hosting, no backend; the charter is then honest UI and not a security boundary) — and whether **React** or **plain DOM** draws the screen. Flags answer the questions: `npm create nisc my-app -- --page --dom`.
 
 Then open `PLAN.md`, and hand the folder to your agent.
 

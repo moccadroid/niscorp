@@ -1,18 +1,20 @@
-import { defineAgent } from '@niscorp/cortex';
+import { defineAgent, outputRetries, stepCount } from '@niscorp/cortex';
 import type { AgentDefinition, OutputValidator } from '@niscorp/cortex';
-import { actionCatalog, arrangementCatalog, INSTRUCTIONS, readCatalog, screenCatalog, writeCatalog } from './knowledge';
+import { cardCatalog, INSTRUCTIONS } from './knowledge';
 import type { ComposerDeps } from './knowledge';
-import { ReplySchema } from './reply.schema';
-import type { Reply } from './reply.schema';
+import { TurnSchema } from './turn.schema';
+import type { Turn } from './turn.schema';
 
-// Defined for each message: what refuses an answer depends on the screen the message was asked on.
-export const composerAgent = (validate: OutputValidator<Reply>): AgentDefinition<Reply, ComposerDeps> =>
-  defineAgent<Reply, ComposerDeps>({
+export const composerAgent = (validate: OutputValidator<Turn>): AgentDefinition<Turn, ComposerDeps> =>
+  defineAgent<Turn, ComposerDeps>({
     id: 'nisc-template-app.compose',
-    description: 'Answers a message with a screen composed from the app’s actions.',
+    description: 'Answers a message with a turn of the conversation: a sentence, and the app’s own cards that show the answer.',
     instructions: INSTRUCTIONS,
-    context: [actionCatalog, readCatalog, writeCatalog, screenCatalog, arrangementCatalog],
+    context: [cardCatalog],
     // An agent with no tools on Groq would be sent the envelope as Groq's loose JSON schema, and gpt-oss answers this one
-    // worse there: emit carries the contract in the prompt, as every Groq agent with tools gets it.
-    output: { schema: ReplySchema, response: 'required', strategy: 'emit', validate },
+    // worse there: emit carries the contract in the prompt.
+    output: { schema: TurnSchema, response: 'required', strategy: 'emit', validate },
+    // gpt-oss now and then answers with its reasoning alone, which counts as a refused answer: five tries, each about a
+    // second, inside the chat model's budget.
+    stopWhen: [stepCount(8), outputRetries(5)],
   });

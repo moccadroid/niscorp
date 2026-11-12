@@ -5,6 +5,6 @@ export const charter: Charter = {
   public: {
     actions: ['ask.*', 'answer.*', 'guide.*'],
     data: ['packages.read'],
-    functions: ['ask', 'screens.open', 'answers.back', 'answers.forward', 'answers.go', 'answers.current'],
+    functions: ['ask', 'screens.open'],
   },
 };

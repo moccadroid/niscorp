@@ -56,15 +56,16 @@ describe('generate — every app the questions can make', () => {
     expect(() => generate({ dir: join(scratch, 'model-page'), name: 'model-page', picks: { kind: 'model-first', shell: 'page', kit: 'react' }, versions: SET, today: TODAY })).toThrow(/"model-first" needs "moss"/);
   });
 
-  it('a model-first app has its keys in .env, the names in .env.example, and its own sections in AGENTS.md and PLAN.md', () => {
-    const { dir } = make(completed(catalog, { kind: 'model-first' }), 'model-keys', { env: { GROQ_API_KEY: 'gsk-test', TYPESAFE_API_KEY: 'ts-test' } });
+  it('a model-first app has its key in .env, the name in .env.example, and its own sections in AGENTS.md and PLAN.md', () => {
+    const { dir } = make(completed(catalog, { kind: 'model-first' }), 'model-keys', { env: { GROQ_API_KEY: 'gsk-test' } });
     expect(read(dir, '.env')).toContain('GROQ_API_KEY=gsk-test\n');
-    expect(read(dir, '.env')).toContain('TYPESAFE_API_KEY=ts-test\n');
     expect(read(dir, '.env.example')).toContain('GROQ_API_KEY=\n');
+    expect(read(dir, '.env.example')).not.toContain('TYPESAFE_API_KEY');
     expect(read(dir, '.env.example')).not.toContain('gsk-test');
-    expect(read(dir, 'AGENTS.md')).toContain('## How the model leads');
+    expect(read(dir, 'AGENTS.md')).toContain('## How the assistant answers');
     expect(read(dir, 'AGENTS.md')).toContain('## How to proceed from here');
-    expect(read(dir, 'AGENTS.md')).toContain('`model-keys.jev` and `model-keys.compose`');
+    expect(read(dir, 'AGENTS.md')).toContain('## From here to a full app');
+    expect(read(dir, 'AGENTS.md')).toContain('`model-keys.compose`');
     expect(read(dir, 'PLAN.md')).toContain('| D6 Who answers a message | answered |');
     expect(read(dir, 'PLAN.md')).toContain('| D3 Reads | answered | **Vex entries**');
     expect(read(dir, 'src/db/schema.ts')).toContain("id: 'model-keys.app'");

@@ -3,7 +3,7 @@ import { createServer } from '@niscorp/moss';
 import type { MossServer, NiscRuntime, RunSink } from '@niscorp/moss';
 import { buildApp } from '../app/app';
 import { APP_SEQUENCE } from '../db/schema';
-import { composer } from './compose';
+import { composer, firstScreen } from './compose';
 import type { Models } from './compose';
 import { modelsFromEnv } from './models';
 import { logRun } from './runs';
@@ -25,5 +25,5 @@ export const runtime = async (): Promise<NiscRuntime> => ({ ...(await database()
 export const app = buildApp({ functions: () => [], runs: logRun });
 
 export const boot = async (config: BootConfig = {}): Promise<{ server: MossServer }> => ({
-  server: await createServer(buildApp({ functions: composer(config.models ?? fromEnvFile()), runs: config.runs ?? logRun }), await runtime()),
+  server: await createServer(buildApp({ functions: composer(config.models ?? fromEnvFile()), runs: config.runs ?? logRun, seeds: firstScreen }), await runtime()),
 });

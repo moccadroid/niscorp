@@ -2,8 +2,8 @@
   "id": "model-first",
   "answers": "kind",
   "label": "A model — model-first",
-  "hint": "every message is answered with a screen composed from the app's actions",
-  "usage": "a model leads: each message is answered with a screen composed from the app's actions",
+  "hint": "every message is answered with a sentence and the app's own cards",
+  "usage": "a model leads: each message is answered with a sentence and the app's own cards, in a conversation",
   "summary": "model-first",
   "requires": {
     "shell": "moss"
@@ -18,68 +18,58 @@
   "env": [
     {
       "name": "GROQ_API_KEY",
-      "message": "Groq API key — gpt-oss-120b composes each answer",
+      "message": "Groq API key — gpt-oss-120b answers each message",
       "required": true
-    },
-    {
-      "name": "TYPESAFE_API_KEY",
-      "message": "TypeSafe API key — Jev's pass over the message and the open screen, in about 200 ms; without it the chat model answers alone"
     }
   ],
   "docs": {
-    "is": "led by a model: every message is answered with a screen composed from the app's actions",
+    "is": "led by a model: every message is answered with a sentence and the app's own cards",
     "where": [
       "src/app/actions/guide/  the tour of nisc the app starts with: cards to read, and a counter, a checklist and a quick check to use — it goes first (below, \"How to proceed from here\")",
-      "src/app/action-catalog.ts  every action, and `placeable`: the ones the model may put on a screen",
-      "src/app/screens.ts  the screens in the dock — the tour's lessons: canvases shown together; the first is the one the app opens on",
-      "src/app/arrangements.ts  how an answer is laid out: layouts for the frame’s `answers` region, and what each is for",
-      "src/server/compose/ the message loop: the open screen read, Jev's pass, gpt-oss-120b composes, the plan is placed",
-      "                    catalog.ts       what the model is given to place: the `placeable` actions, the reads, the writes",
-      "                    screen.ts        the open screen, read",
-      "                    pick.ts          Jev's pass",
-      "                    composer.agent.ts  the composer: a cortex agent",
-      "                    knowledge.ts     what it is told: its instructions, the catalog as producers, the run’s input",
-      "                    reply.schema.ts  what it replies, each field described",
-      "                    answer.ts        what refuses a reply, and the answer a reply is turned into",
-      "                    layout.ts        arrangements and the grids the model writes, as layouts",
-      "                    plan.ts, history.ts  the answer as a plan, and the stack of them",
-      "                    index.ts         the functions the dock calls",
-      "src/server/models/  the models, from .env",
-      "src/server/runs/    each model's part in a message recorded as a run, and the line the server logs for it",
+      "src/app/action-catalog.ts  every action, and `placeable`: the ones the model may show",
+      "src/app/actions/ask/   the dock: the conversation, the screens, and the line to ask in",
+      "src/app/actions/answer/  a turn of the conversation, and words as a card",
+      "src/app/screens.ts  the screens in the dock — the tour's lessons: cards shown one under another; the first is the one the app opens on",
+      "src/server/compose/ the message loop: gpt-oss-120b answers, the answer is checked, the turn goes into the conversation",
+      "                    catalog.ts       the cards the model may show: the `placeable` actions, each with its input schema",
+      "                    knowledge.ts     what it is told: its instructions (the first paragraph is the app's own), the cards, the conversation so far",
+      "                    turn.schema.ts   what it answers with, each field described; what refuses an answer",
+      "                    composer.agent.ts  the model, as a cortex agent",
+      "                    index.ts         the functions the dock calls: `ask`, `screens.open`",
+      "src/server/models/  the model, from .env",
+      "src/server/runs/    each message recorded as a run, and the line the server logs for it",
       "src/app/vex/    your reads and writes, one file of entries per entity — the tour's read, `guide/packages`, until the tour goes",
       "src/db/         your tables, as a strata sequence — the tour's `packages` until the tour goes"
     ],
     "decisions": [
       "| D3 Reads | answered | **Vex entries**, read by an action by its fingerprint (`/api/vex`), under the person's policy. One so far: the tour's packages card replays `guide/packages`, its rows worded by the entry's Prism mapping (`src/app/vex/guide.entries.ts`). |",
       "| D4 Writes | answered | **Vex mutation entries**, posted to `/api/vex` by a form the person saves, never by the model. None yet. |",
-      "| D6 Who answers a message | answered | Jev reads the message and the open screen (`TYPESAFE_API_KEY`), then gpt-oss-120b on Groq composes the screen as a cortex agent (`GROQ_API_KEY`), with what Jev picked as a hint. Without a TypeSafe key there is no Jev pass. Jev may take 2 s and the model 8 s; past that, the model answers alone, or the line says it could not be reached and the screen stays as it is. Measured on the tour's cases (`src/dev/live-ask.ts --runs=2`): 30/32 right with Jev, 31/32 without, and about 200 ms slower with it. |",
-      "| D7 What a screen is made of | answered | Canvases: an action the model may place (`placeable`, in `src/app/action-catalog.ts`), opened with an input its schema takes, and why it is there; or words. Up to six, on the areas `a`–`f`; the screens in the dock are canvases too (`src/app/screens.ts`). |",
-      "| D8 History | derived · **open** | The answers one shell was given, kept while it lives; a reload starts again. An answer keeps what the person did on it when it is left — a count, a step ticked, a pick — as a browser keeps a page's form, so going back shows it as they left it. Open: whether a person's answers outlive the shell, and memory beyond that. |",
-      "| D9 Layout swaps | derived · **open: sign-in** | An answer’s arrangement is swapped into the frame’s `answers` region through moss’s unverified shell (`@niscorp/moss/unverified`, in `src/server/compose/index.ts`), because moss lets a session change a layout only through a draft, and a draft needs a signed-in person. **When the app has sign-in, the swap moves to `session.draft`, where moss checks it.** |",
-      "| D10 What keeps a canvas in place | answered | **The model answers by area.** It names only the areas that change — a canvas moved from another area, a new one, words, or nothing — and an area it leaves out stays as it is, the same canvas: a card filled in never moves the others. |",
-      "| D11 Jev's \"still wanted?\" | answered | **Not asked.** On ten follow-ups Jev was right 8 of 14 times, and with its answer the model dropped what was open. |",
-      "| D12 What a card written onto a screen keeps | derived | **Nothing of what was there.** A canvas the model or a screen writes holds its whole input: what it leaves out is its action's default, so a checklist written where another was shows none of its ticks, and a new quick check opens unpicked. A canvas an answer leaves alone keeps what the person did to it. |"
+      "| D6 Who answers a message | answered | **gpt-oss-120b on Groq, as a cortex agent** (`GROQ_API_KEY`), effort low, one run a message — one call, and another for each answer sent back. It has 8 s; past that, the turn says it could not be reached. |",
+      "| D7 What an answer is | answered | **A turn of the conversation:** one sentence it is told to keep to 120 characters, and under it up to three cards — one of the app's `placeable` actions the person's roles reach, opened with an input its schema takes, or words. The answer is checked (the card exists, its input fits, nothing shown twice); one that fails is sent back with what is wrong, five tries in all. The screen behind is never changed by an answer. |",
+      "| D8 The conversation | derived · **open** | **It lasts as long as the person's shell:** for somebody not signed in, one connection — a reload, or a phone that reconnects, starts it again. The model is told its last four turns. Open: whether it outlives the shell. That needs sign-in, and then the turns are rows the person owns. |",
+      "| D9 Screens | derived | **Cards one under another,** opened from the dock or by a card's link, never by the model. A screen opened again is opened fresh: what was pressed on it before is not kept. |"
     ],
     "answered": [
-      "**Who leads:** a model. A message is answered with a screen: Jev reads the message and the open screen, gpt-oss-120b composes the screen from the app's actions, and the dock places it on the six areas. The keys are in `.env`."
+      "**Who leads:** a model. A message is answered with a turn of the conversation: gpt-oss-120b writes a sentence and picks up to three of the app's cards, filled in. The key is in `.env`."
     ],
     "open": [
       "The entities, and how they relate — and what a person will ask about them.",
       "Expected scale.",
       "Who uses it: one person, or roles. More than one principal sketches its roles and charter now, not later.",
-      "Memory: what the app keeps of a person between messages.",
+      "Memory: what the app keeps of a person between messages (D8).",
       "Look and feel.",
       "Where it is deployed.",
       "What happens to the data long-term."
     ],
     "order": [
       "**The interview** — every open item above, answered or delegated by name. ← here",
-      "**Scaffold** — done: the frame, the message loop, the dock, a tour of nisc in five screens — cards to read, one of them a read of a table through vex, and a counter, a checklist and a quick check to use, which the model can fill in too — and their checks.",
+      "**Scaffold** — done: the frame, the message loop, the dock with the conversation, a tour of nisc in five screens — cards to read, one of them a read of a table through vex, and a counter, a checklist and a quick check to use, which the model can fill in too — and their checks.",
       "**Data** — the tour goes first (AGENTS.md, \"How to proceed from here\"); then, per D2/D3, your tables in `src/db/schema.ts`, your reads in `src/app/vex/`, each replayed by the action that shows it, its words in the entry's `mapping` — as the tour's packages card does.",
-      "**Actions** — your own, small: one purpose each, a description that says what it shows, an `input` schema for what the model fills in; the ones the model may place in `placeable`, each granted in the charter.",
-      "**Screens** — the ones a person will want in the dock, each its canvases; the first the one the app opens on.",
-      "**Writes** — per D4; a form an answer opens, filled in by the model, saved by the person.",
-      "**Checks** — a check for each feature in `src/dev/`, beside `compose-check.ts`, which runs the loop offline; and `live-ask` cases for what people will ask, run against the real models before a change to an action's description or to the instructions is kept."
+      "**Actions** — your own, small: one purpose each, a description that says what it shows, an `input` schema for what the model fills in; the ones the model may show in `placeable`, each granted in the charter.",
+      "**The assistant** — its paragraph in `src/server/compose/knowledge.ts`: who it is, and what it answers about.",
+      "**Screens** — the ones a person will want in the dock, each its cards; the first the one the app opens on.",
+      "**Writes** — per D4; a form the model opens, filled in, saved by the person.",
+      "**Checks** — a check for each feature in `src/dev/`, beside `compose-check.ts`, which runs the loop offline; and `live-ask` cases for what people will ask, run against the real model before a change to an action's description or to the instructions is kept."
     ]
   }
 }

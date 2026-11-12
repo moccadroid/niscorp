@@ -1,11 +1,11 @@
 import { spawnSync } from 'node:child_process';
 
 const CHECKS: readonly (readonly [name: string, what: string, args?: readonly string[]])[] = [
-  ['artifacts-check', 'src/app is data: pure JSON, every artifact parses its schema, every screen canvas opens an action with an input it takes'],
+  ['artifacts-check', 'src/app is data: pure JSON, every artifact parses its schema, every card on a screen opens an action with an input it takes'],
   ['shape-check', 'the app keeps nisc’s shape: no style-guide breaks, words in Prism, every server function an action calls named with its reason, src/app data, the kit within its own elements'],
   ['strata', 'the source is written at the installed grammars (strata.lock.json)', ['status', '--check']],
-  ['compose-check', 'a message is answered with a screen: the open screen read, picked, composed, checked, placed, written, and back again'],
-  ['guide-check', 'the tour: its cards pressed, ticked and picked, its links, and what the model sees and changes of them'],
+  ['compose-check', 'a message is answered with a turn: a sentence and the cards under it, checked, put on the conversation; screens opened'],
+  ['guide-check', 'the tour: its cards pressed, ticked and picked, its links, and its cards shown and filled in by the model'],
 ];
 
 let failed = 0;
