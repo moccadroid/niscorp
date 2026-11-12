@@ -874,6 +874,14 @@ it does nothing else:
   has every place, and every other visitor with nobody signed in is sent
   `at_capacity` until one of those closes. People who are signed in go on
   being served.
+- A connection whose other end went away without closing — a phone killed, out
+  of battery, out of signal — keeps its place for at most a minute. The Node
+  transport sends every connection the WebSocket protocol's own ping every 30
+  seconds, and closes one that has not answered the last one. A browser that is
+  awake answers it by itself, whatever its moss; one that is asleep (a phone
+  that has put the page away) does not, and its connection is closed too. That
+  close is like any other: the place is given back, a shell for nobody is
+  disposed, and a signed-in person's shell starts its idle time.
 - It is counted by the process that takes the connection. A deployment of N
   processes holds up to N times the limit.
 - Moss builds no limit for each address, because the address is not moss's
@@ -2160,8 +2168,8 @@ server.nudge('usr_ada', 'notes-changed');
   has `upgrade` (below) and `seal`. `seal` is set by the socket, on a
   connection whose browser holds a seal: a transport leaves it out.
 - `ServerMessage` (`@niscorp/moss/protocol`) — what the server sends: `hello | catalog | frame | render |
-  render-delta | session | error`.
-- What a terminal sends is `event | publish | resync | reset | back | popTo`,
+  render-delta | session | pong | error`.
+- What a terminal sends is `event | publish | resync | reset | back | popTo | ping`,
   each with exactly the fields the protocol names (`src/protocol/messages.ts`;
   the type of these is not exported, a terminal written by hand sends the
   object).
@@ -2186,6 +2194,10 @@ server.nudge('usr_ada', 'notes-changed');
   with whole frames, the state both ends can always agree on. Distinct from
   `reset`: the shell is fine, only this connection's copy drifted, so nothing
   is torn down and no other terminal notices.
+- `ping` is answered `pong`, with a shell or without one, and reaches no shell:
+  it is how a terminal finds out whether a socket that has gone quiet is still
+  there. It came without a protocol of its own: a server from before it answers
+  `invalid_message`, which a terminal takes as an answer all the same.
 - `reset` names no canvas, deliberately: it is the recovery for a session whose
   canvases are the broken thing, so it must not travel through one. It is
   protocol-level, not app-level — no action declares it and no charter grants
@@ -2224,7 +2236,9 @@ server.nudge('usr_ada', 'notes-changed');
     for as long as it is refused.
   - `4426`: the two ends speak protocols the other cannot (below).
 - `error` codes: `invalid_token`, `session_failed`, `at_capacity`,
-  `client_too_old`, `server_too_old`, `no_shell` (the app serves no shell),
+  `client_too_old`, `server_too_old`, `no_shell` (the app serves no shell: it
+  sends an empty `frame` once it listens, as a server with a shell sends its
+  first, and answers every message with this),
   `invalid_message`
   (what was sent is not JSON, not one of the messages above, or one of them
   with a field it does not have: nothing of it is acted on), `message_failed`
@@ -2882,7 +2896,12 @@ goes around moss: see [`FunctionSession`](#functionsession).
   identical either way. See [Wire size](#wire-size). `env` defaults to
   `browserEnv()`, and `url` (the socket's address) to `env.defaultUrl()`.
 - `WireEnv` — the host seam: `{ tokens: { load, save, clear, held?, key? },
-  socket({ url, offered }), defaultUrl() }`. The socket API is WHATWG-standard
+  socket({ url, offered }), defaultUrl(), onResume?, visible? }`. `onResume(resumed)`
+  calls `resumed` when the page is shown again or the network comes back and
+  returns the unsubscribe; `browserEnv` listens for `visibilitychange`, a
+  `pageshow` from the back-forward cache and `online`. `visible()` says
+  whether the page is on screen (`browserEnv`: not `document.hidden`); absent,
+  it always is. `nodeEnv` has neither. The socket API is WHATWG-standard
   in every host (browser, Node ≥22, Bun); an env only constructs it —
   `new WebSocket(url, offered)`. What is offered is who the terminal is, so an
   env that drops it connects as nobody. `held()` is for a host whose browser
@@ -2916,15 +2935,22 @@ goes around moss: see [`FunctionSession`](#functionsession).
 - **A page with nothing left to happen opens no socket.** When `initial.live`
   is `false`, the wire does not connect and `status()` is `'static'`. `reset()`,
   or a token arriving, connects after all.
-- `Wire` — `{ subscribe, snapshot, status, dispatch(canvas, event), publish,
-  reset, back, popTo(canvas, instance), dispose }`. `snapshot()` is a
-  `WireSnapshot`, `{ frame, trees }`, where `trees` is a map from a canvas's id
-  to its tree. `status()` is a `WireStatus`,
+- `Wire` — `{ subscribe, snapshot, status, droppedEvents?, dispatch(canvas,
+  event), publish, reset, back, popTo(canvas, instance), dispose }`.
+  `snapshot()` is a `WireSnapshot`, `{ frame, trees }`, where `trees` is a map
+  from a canvas's id to its tree. `status()` is a `WireStatus`,
   `'connecting' | 'open' | 'closed' | 'incompatible' | 'static'`, and changes notify subscribers like
   snapshot changes do (a renderer must be able to tell a dead socket from an
-  empty app). Hand it to a renderer.
+  empty app). It is `'open'` from the connection's first frame, not from the
+  socket opening: the server sends that frame once it listens, and a message
+  before it would be lost. `droppedEvents()` is how many events the wire kept
+  while it could not send them and then dropped (below); it only grows, and
+  subscribers are told when it does. `createWire` always gives it; it is
+  optional on the type so that a wire an app makes itself, a stand-in in a
+  check, need not count. Hand it to a renderer.
 
-Reconnect is exponential backoff with jitter, capped at 30s, reset when a
+Reconnect is exponential backoff with jitter, capped at 30s (or at once when
+the page comes back, below), reset when a
 connection is served its first frame and on any principal change (a session
 grant or a close-code recovery starts the backoff clean). Not when the socket
 opens: a server opens a connection before it refuses it (`4503`, `4500`), so
@@ -2953,13 +2979,54 @@ already, may have carried another principal, or may be a connect still in
 flight when `reset()` was called; whichever, nothing it says afterwards is
 heard, and its closing schedules nothing.
 
-**Nothing is sent on a socket that is not open, and nothing is queued.**
-`dispatch` and `publish` are dropped unless `status()` is `'open'` — the posture
-`back` and `popTo` always had. A server-drawn page is on screen before its
-socket is, so there is a moment in which something can be pressed with nothing
-to send it over; an intention replayed against a screen that may have moved is
-worse than one lost, and a browser socket that is still connecting throws on
-`send`.
+**When the page comes back, the wire checks its socket.** A phone that puts a
+page away may kill its socket without the page hearing of it until later. On
+`onResume`, a closed connection is made again at once instead of after the
+backoff, and one that still reads open is sent `{ type: 'resync' }`. Until
+anything is heard on it, events are kept (below) and `publish`, `back` and
+`popTo` are dropped; one that answers nothing within 2 seconds is replaced, and
+one that closes meanwhile is made again at once. `status()` stays `'open'`
+through it: on a live socket it is over in a round trip, and saying otherwise
+would flicker every target on every return to the page. `reset()` is still sent
+on that socket. A connection still being made is left to finish.
+
+**A socket that has gone quiet is pinged.** A socket can also die while its
+page is on screen — a network that switches, a router that drops a connection
+that says nothing. When nothing has been heard on an open connection for 25
+seconds and `visible()` is not `false`, the wire sends `{ type: 'ping' }`.
+Anything heard is the answer; one that has heard nothing 10 seconds later is
+replaced, and one that closes meanwhile is made again at once. Unlike a page
+coming back, nothing is kept while a ping is answered: the screen of a quiet
+socket is current, so presses, `back` and `publish` are sent as ever, and one
+sent onto a socket that turns out dead is lost. Nobody waits on the answer, so
+it is given long enough to spare a socket that works on a slow link. A server
+that keeps talking is never pinged; a hidden page is not pinged, and is checked
+when it comes back. 25 seconds is below the 30 to 60 seconds after which
+proxies and NATs commonly drop a quiet connection, so the ping also keeps it
+from being dropped.
+
+**A screen sent again draws nothing.** A reconnect, and a page coming back,
+is sent every screen whole. A frame or a canvas whose text is the same as the
+one on screen changes nothing and tells no subscriber; a sign-in or sign-out,
+which blanks the screen, draws the next one whatever it is.
+
+**Nothing is sent on a socket that is not open. An event is kept, and sent
+only onto the screen it was pressed on.** A server-drawn page is on screen
+before its socket is, and a page that comes back is on screen before its
+connection is, so there is a moment in which something can be pressed with
+nothing to send it over. `dispatch` then keeps the event with the tree of the
+canvas it names, as the terminal showed it. Once the connection is open and
+every canvas the kept events name has come back on it, they are sent, in the
+order they were pressed, if each of those canvases came back exactly as it
+was; otherwise all of them are dropped. They are also dropped when that has
+not happened 5 seconds after the first was pressed, and when a sign-in or
+sign-out changes who the terminal is. Dropped together, because an intention
+replayed against a screen that has moved since is worse than one lost, and so
+is half of a sequence. `droppedEvents()` counts them, for an app that tells
+the person. An event pressed while nothing can carry it joins the kept ones;
+one pressed once the connection is open drops them and is sent, because it was
+pressed on the screen the person sees now. `publish`, `back` and `popTo` name
+no canvas to check against, and are dropped unless the connection is open.
 
 `back()` sends `{ type: 'back' }` and nothing else — no location is held here,
 so what comes back is whatever canvases moved, over the same stream every other

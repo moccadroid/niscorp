@@ -11,6 +11,11 @@ export type Upgradeable = {
 
 const MAX_MESSAGE_BYTES = 256 * 1024;
 
+// A phone that goes away without closing leaves a connection that looks open until TCP gives up,
+// and keeps its shell and its place until then. Every connection is pinged this often, and one that
+// has not answered the last ping is closed. A browser that is awake answers by itself, whatever its moss.
+const PING_EVERY_MS = 30_000;
+
 export type Transport = {
   upgrade: (req: IncomingMessage, socket: Duplex, head: Buffer) => void;
   close: () => void;
@@ -26,6 +31,18 @@ export const createTransport = (accept: SocketAccept, told?: TransportSettings):
     // which is not said back.
     handleProtocols: (offered) => (offered.has(SUBPROTOCOL) ? SUBPROTOCOL : false),
   });
+  const answeredPing = new WeakSet<ServerSocket>();
+  const pinging = setInterval(() => {
+    for (const client of wss.clients) {
+      if (!answeredPing.has(client)) {
+        client.terminate();
+        continue;
+      }
+      answeredPing.delete(client);
+      client.ping();
+    }
+  }, PING_EVERY_MS);
+  pinging.unref();
   const answers = new WeakMap<IncomingMessage, readonly string[]>();
   wss.on('headers', (headers, req) => {
     for (const cookie of answers.get(req) ?? []) headers.push(`Set-Cookie: ${cookie}`);
@@ -44,6 +61,8 @@ export const createTransport = (accept: SocketAccept, told?: TransportSettings):
       answers.set(req, cookies);
       wss.handleUpgrade(req, socket, head, (opened) => {
         ws = opened;
+        answeredPing.add(opened);
+        opened.on('pong', () => answeredPing.add(opened));
         // An 'error' nobody listens for is thrown by Node and ends the process.
         // `ws` has already closed the connection with the status that says why.
         opened.on('error', (error) => {
@@ -80,6 +99,7 @@ export const createTransport = (accept: SocketAccept, told?: TransportSettings):
   return {
     upgrade,
     close: () => {
+      clearInterval(pinging);
       for (const client of wss.clients) client.close(1001, 'server closing');
       wss.close();
     },

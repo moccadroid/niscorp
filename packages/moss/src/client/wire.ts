@@ -3,6 +3,8 @@ import { CLOSE_INVALID_TOKEN, CLOSE_PROTOCOL_MISMATCH, CLOSE_SIGNED_OUT, PROTOCO
 import type { ClientMessage, DocumentSnapshot, ServerMessage } from '../protocol';
 import { browserEnv } from './env';
 import type { WireEnv, WireTokenStore } from './env';
+import { createKeptEvents } from './kept';
+import type { KeptEvents } from './kept';
 import { createScreen } from './screen';
 import type { Screen, WireSnapshot } from './screen';
 
@@ -71,6 +73,8 @@ export type Wire = {
   subscribe: (listener: () => void) => () => void;
   snapshot: () => WireSnapshot;
   status: () => WireStatus;
+  // Optional: a wire an app makes itself (a stand-in in a check) need not count.
+  droppedEvents?: () => number;
   dispatch: (canvasId: string, event: NovaEvent) => void;
   publish: (channel: string, payload?: unknown) => void;
   reset: () => void;
@@ -97,6 +101,7 @@ const messageOf = (text: string): ServerMessage | undefined => {
 
 type Hearing = {
   screen: Screen;
+  kept: KeptEvents;
   credential: Credential;
   send: (message: ClientMessage) => void;
   become: (token: string | null, sealed?: string | null) => void;
@@ -110,14 +115,18 @@ const hear = (to: Hearing, text: string): void => {
   switch (data.type) {
     case 'render':
       to.screen.render(data.canvas, data.tree, text);
+      to.kept.arrived(data.canvas);
       return;
     case 'render-delta':
-      if (to.screen.renderDelta(data.canvas, data.ops, data.hash)) return;
+      if (to.screen.renderDelta(data.canvas, data.ops, data.hash)) {
+        to.kept.arrived(data.canvas);
+        return;
+      }
       console.warn(`[moss/wire] canvas "${data.canvas}": delta did not rebuild the server's frame — resyncing.`);
       to.send({ type: 'resync' });
       return;
     case 'frame':
-      to.screen.frame(data.tree);
+      to.screen.frame(data.tree, text);
       to.served();
       return;
     case 'session':
@@ -137,6 +146,7 @@ const hear = (to: Hearing, text: string): void => {
       to.credential.upgradeAnswered();
       return;
     case 'catalog':
+    case 'pong':
       return;
     default:
       data satisfies never;
@@ -186,7 +196,13 @@ type ConnectionDeps = {
   notify: () => void;
 };
 
-type Connection = Pick<Wire, 'status' | 'reset' | 'dispose'> & { send: (message: ClientMessage) => void };
+type Connection = Pick<Wire, 'status' | 'reset' | 'dispose' | 'dispatch'> & { droppedEvents: () => number; send: (message: ClientMessage) => void };
+
+const CHECK_MS = 2000;
+// Below the 30–60 s after which proxies and NATs commonly drop a connection that says nothing.
+const QUIET_MS = 25_000;
+// Nothing waits on a ping's answer, so it is given long enough to spare a socket that works on a slow link.
+const PING_ANSWER_MS = 10_000;
 
 const createConnection = ({ config, env, credential, screen, delta, initial, notify }: ConnectionDeps): Connection => {
   // Named on the first connect only: a later one (a retry, another principal) is not the page's own shell.
@@ -196,17 +212,44 @@ const createConnection = ({ config, env, credential, screen, delta, initial, not
   let incompatible = false;
   let socket: WebSocket | null = null;
   let disposed = false;
+  let checking: ReturnType<typeof setTimeout> | undefined;
+  let quiet: ReturnType<typeof setTimeout> | undefined;
+  let pinged: ReturnType<typeof setTimeout> | undefined;
   const setStatus = (next: WireStatus): void => {
     if (status === next) return;
     status = next;
     notify();
   };
 
-  // Dropped unless the socket is open, never queued: an intention replayed against a screen that
-  // has moved since is worse than one lost.
+  // A check keeps the status open: it is over in a round trip on a live socket, and saying otherwise
+  // would flicker every target on every return to the page.
+  const live = (): boolean => socket !== null && status === 'open' && checking === undefined;
+  // `back`, `popTo` and `publish` name no canvas to check a replay against: dropped unless live.
   const send = (message: ClientMessage): void => {
-    if (socket === null || status !== 'open') return;
+    if (socket === null || !live()) return;
     socket.send(JSON.stringify(message));
+  };
+  const kept = createKeptEvents({
+    treeOf: (canvas) => screen.snapshot().trees.get(canvas),
+    open: live,
+    send: (canvas, event) => send({ type: 'event', canvas, event }),
+    changed: notify,
+  });
+
+  const stopCheck = (): void => {
+    clearTimeout(checking);
+    checking = undefined;
+  };
+  const stopTimers = (): void => {
+    stopCheck();
+    clearTimeout(quiet);
+    clearTimeout(pinged);
+    pinged = undefined;
+  };
+  const opened = (): void => {
+    stopCheck();
+    setStatus('open');
+    kept.judge();
   };
 
   const connect = (): void => {
@@ -216,8 +259,10 @@ const createConnection = ({ config, env, credential, screen, delta, initial, not
     letGoOf(socket);
     socket = null;
     incompatible = false;
+    stopTimers();
     setStatus('connecting');
     screen.forgetBases();
+    kept.fresh();
     const ws = env.socket({ url: addressOf(config.url ?? env.defaultUrl(), { credential, delta, seed, path }), offered: credential.offered() });
     seed = undefined;
     socket = ws;
@@ -225,16 +270,73 @@ const createConnection = ({ config, env, credential, screen, delta, initial, not
       incompatible = true;
       ws.close();
     };
-    // The backoff is forgotten at the first frame, not at the open: a server that refuses a
-    // connection opens it first, and every refusal would be retried at once.
-    const hearing: Hearing = { screen, credential, send, become, refuse, served: retry.forget };
-    ws.onopen = () => setStatus('open');
-    ws.onmessage = (e) => hear(hearing, String(e.data));
+    // Open at the first frame, not at the open: the server sends it once it listens, and a server
+    // that refuses a connection opens it first, so every refusal would be retried at once.
+    const served = (): void => {
+      retry.forget();
+      opened();
+    };
+    const hearing: Hearing = { screen, kept, credential, send, become, refuse, served };
+    ws.onmessage = (e) => {
+      hear(hearing, String(e.data));
+      if (socket !== ws || incompatible) return;
+      clearTimeout(pinged);
+      pinged = undefined;
+      if (checking !== undefined) opened();
+      heard();
+    };
     ws.onclose = (e) => closed(e.code);
   };
   const retry = createRetry(connect);
+  const replace = (): void => {
+    retry.forget();
+    connect();
+  };
+
+  // A socket may be dead and still read open. One that answers nothing in time is replaced.
+  // A page coming back is sent the screen again, so what is kept meanwhile waits for it.
+  const check = (): void => {
+    if (socket === null) return;
+    kept.fresh();
+    socket.send(JSON.stringify({ type: 'resync' } satisfies ClientMessage));
+    checking = setTimeout(() => {
+      checking = undefined;
+      replace();
+    }, CHECK_MS);
+  };
+  // A quiet socket's screen is current: nothing is kept while its ping is answered.
+  const ping = (): void => {
+    if (socket === null) return;
+    socket.send(JSON.stringify({ type: 'ping' } satisfies ClientMessage));
+    pinged = setTimeout(() => {
+      pinged = undefined;
+      replace();
+    }, PING_ANSWER_MS);
+  };
+
+  // A page that is hidden is not asked: it is checked when it comes back.
+  const heard = (): void => {
+    clearTimeout(quiet);
+    quiet = setTimeout(() => {
+      if (!live()) return;
+      if (env.visible?.() === false) heard();
+      else ping();
+    }, QUIET_MS);
+  };
+
+  const resumed = (): void => {
+    if (disposed) return;
+    if (status === 'closed') {
+      replace();
+      return;
+    }
+    if (live()) check();
+  };
+  const stopResuming = env.onResume?.(resumed);
 
   const closed = (code: number): void => {
+    const wasChecking = checking !== undefined || pinged !== undefined;
+    stopTimers();
     if (incompatible || code === CLOSE_PROTOCOL_MISMATCH) {
       incompatible = true;
       setStatus('incompatible');
@@ -246,10 +348,14 @@ const createConnection = ({ config, env, credential, screen, delta, initial, not
       become(null);
       return;
     }
-    if (!disposed) retry.schedule();
+    if (disposed) return;
+    // The close a check or a ping was waiting to find out about: the page is up, so no backoff.
+    if (wasChecking) replace();
+    else retry.schedule();
   };
 
   const become = (token: string | null, sealed: string | null = null): void => {
+    kept.drop();
     credential.become(token, sealed);
     retry.forget();
     screen.blank();
@@ -262,26 +368,41 @@ const createConnection = ({ config, env, credential, screen, delta, initial, not
   return {
     send,
     status: () => status,
-    reset: () => {
-      if (disposed) return;
-      if (socket !== null && status === 'open') {
-        send({ type: 'reset' });
+    droppedEvents: kept.dropped,
+    dispatch: (canvas, event) => {
+      if (disposed || status === 'static' || status === 'incompatible') return;
+      if (!live()) {
+        kept.keep(canvas, event);
         return;
       }
-      retry.forget();
-      connect();
+      // Pressed on the screen the person sees now: what was kept from before it is out of date.
+      kept.drop();
+      send({ type: 'event', canvas, event });
+    },
+    reset: () => {
+      if (disposed) return;
+      // During a check too: a dead socket loses it, and the check replaces the socket.
+      if (socket !== null && status === 'open') {
+        socket.send(JSON.stringify({ type: 'reset' } satisfies ClientMessage));
+        return;
+      }
+      replace();
     },
     dispose: () => {
       disposed = true;
       // Set directly: nothing is notified after dispose.
       status = 'closed';
       retry.forget();
-      socket?.close();
+      stopTimers();
+      kept.dispose();
+      stopResuming?.();
+      letGoOf(socket);
+      socket = null;
     },
   };
 };
 
-export const createWire = (config: WireConfig = {}): Wire => {
+export const createWire = (config: WireConfig = {}): Wire & { droppedEvents: () => number } => {
   const env = config.env ?? browserEnv();
   const credential = createCredential(env.tokens);
   const initial = config.initial !== undefined && config.initial.principal === credential.signedIn() ? config.initial : undefined;
@@ -291,7 +412,7 @@ export const createWire = (config: WireConfig = {}): Wire => {
   };
   const delta = config.delta === true;
   const screen = createScreen({ initial, delta, changed: notify });
-  const { send, status, reset, dispose } = createConnection({ config, env, credential, screen, delta, initial, notify });
+  const { send, status, droppedEvents, dispatch, reset, dispose } = createConnection({ config, env, credential, screen, delta, initial, notify });
 
   return {
     subscribe: (listener) => {
@@ -300,7 +421,8 @@ export const createWire = (config: WireConfig = {}): Wire => {
     },
     snapshot: screen.snapshot,
     status,
-    dispatch: (canvasId, event) => send({ type: 'event', canvas: canvasId, event }),
+    droppedEvents,
+    dispatch,
     publish: (channel, payload) => send(payload === undefined ? { type: 'publish', channel } : { type: 'publish', channel, payload }),
     back: () => send({ type: 'back' }),
     popTo: (canvas, instance) => send({ type: 'popTo', canvas, instance }),

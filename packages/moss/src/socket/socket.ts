@@ -147,7 +147,11 @@ const served = async (
   send({ type: 'hello', protocol: PROTOCOL, principal: who.principal, catalog: { actions: ids, hash } });
 
   const session = await opening.session?.(who.token, who.principal);
-  if (session === undefined) return undefined;
+  if (session === undefined) {
+    // A terminal counts itself connected at the first frame, shell or none.
+    if (!close.ended()) send({ type: 'frame', tree: [] });
+    return undefined;
+  }
   // One that closed while its shell was built is not attached, and is detached
   // all the same: that disposes a shell built for this connection alone.
   if (!close.ended()) session.attach(connection, { delta: opening.delta });

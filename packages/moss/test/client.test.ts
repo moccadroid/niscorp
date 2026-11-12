@@ -33,6 +33,11 @@ class FakeSocket {
   open(): void {
     this.onopen?.();
   }
+  // What a server that has attached the connection says first.
+  serve(): void {
+    this.open();
+    this.emit({ type: 'frame', tree: [] });
+  }
   emit(msg: unknown): void {
     this.onmessage?.({ data: JSON.stringify(msg) });
   }
@@ -54,6 +59,11 @@ const makeStorage = () => {
 };
 
 let storage: ReturnType<typeof makeStorage>;
+let resumers: (() => void)[];
+let pageVisible: boolean;
+const pageComesBack = (): void => {
+  for (const resumed of resumers) resumed();
+};
 
 const env = (tokenKey = 'nisc.token'): WireEnv => ({
   tokens: {
@@ -63,12 +73,19 @@ const env = (tokenKey = 'nisc.token'): WireEnv => ({
   },
   socket: (upgrade) => new FakeSocket(upgrade) as unknown as WebSocket,
   defaultUrl: () => 'ws://default.local/socket',
+  onResume: (resumed) => {
+    resumers.push(resumed);
+    return () => void (resumers = resumers.filter((r) => r !== resumed));
+  },
+  visible: () => pageVisible,
 });
 
 beforeEach(() => {
   vi.useFakeTimers();
   FakeSocket.instances = [];
   storage = makeStorage();
+  resumers = [];
+  pageVisible = true;
 });
 
 afterEach(() => {
@@ -104,9 +121,9 @@ describe('the wire — connect + snapshot', () => {
   it('no address it ever connects to carries the token', () => {
     storage.setItem('nisc.token', 'tok-1');
     const wire = createWire({ url: URL, env: env() });
-    FakeSocket.last().open();
+    FakeSocket.last().serve();
     FakeSocket.last().emit({ type: 'session', token: 'tok-2' });
-    FakeSocket.last().open();
+    FakeSocket.last().serve();
     FakeSocket.last().serverClose(1006);
     vi.advanceTimersByTime(60_000);
     wire.reset();
@@ -130,13 +147,14 @@ describe('the wire — connect + snapshot', () => {
     const snap = wire.snapshot();
     expect(snap.frame).toEqual([{ type: 'text', value: 'hi' }]);
     expect(snap.trees.get('main')).toEqual([{ type: 'text', value: 'row' }]);
-    expect(ticks).toBe(2);
+    // The first frame is also the connection opening.
+    expect(ticks).toBe(3);
   });
 
   // The socket is opened first: a connecting WebSocket throws on `send`.
   it('sends event and publish envelopes on the socket', () => {
     const wire = createWire({ url: URL, env: env() });
-    FakeSocket.last().open();
+    FakeSocket.last().serve();
     wire.dispatch('main', { type: 'ui:click', ref: 'save' } as never);
     wire.publish('refresh');
     wire.publish('sel', { id: 7 });
@@ -147,12 +165,11 @@ describe('the wire — connect + snapshot', () => {
     ]);
   });
 
-  it('drops events and publishes while the socket is not open, and does not replay them', () => {
+  it('drops publishes while the socket is not open, and does not replay them', () => {
     const wire = createWire({ url: URL, env: env() });
-    wire.dispatch('main', { type: 'ui:click', ref: 'save' } as never);
     wire.publish('refresh');
     expect(FakeSocket.last().envelopes()).toEqual([]);
-    FakeSocket.last().open();
+    FakeSocket.last().serve();
     expect(FakeSocket.last().envelopes()).toEqual([]);
     wire.publish('refresh');
     expect(FakeSocket.last().envelopes()).toEqual([{ type: 'publish', channel: 'refresh' }]);
@@ -180,7 +197,7 @@ describe('the wire — reset', () => {
   it('asks the server on an open socket, keeping the session and the token', () => {
     storage.setItem('nisc.token', 'tok');
     const wire = createWire({ url: URL, env: env() });
-    FakeSocket.last().open();
+    FakeSocket.last().serve();
 
     wire.reset();
 
@@ -192,7 +209,7 @@ describe('the wire — reset', () => {
   it('on a dead socket it reconnects NOW rather than waiting out the backoff', () => {
     storage.setItem('nisc.token', 'tok');
     const wire = createWire({ url: URL, env: env() });
-    FakeSocket.last().open();
+    FakeSocket.last().serve();
     FakeSocket.last().serverClose(1006);
     expect(wire.status()).toBe('closed');
     expect(FakeSocket.instances).toHaveLength(1);
@@ -206,7 +223,7 @@ describe('the wire — reset', () => {
 
   it('does nothing after dispose', () => {
     const wire = createWire({ url: URL, env: env() });
-    FakeSocket.last().open();
+    FakeSocket.last().serve();
     wire.dispose();
     const before = FakeSocket.last().sent.length;
     wire.reset();
@@ -231,26 +248,26 @@ describe('the wire — reset', () => {
 
     it('one socket writes the snapshot: what the other still says is not heard', () => {
       const { wire, first, second } = resetWhileConnecting();
-      second.open();
+      second.serve();
       second.emit({ type: 'render', canvas: 'main', tree: row('from the second') });
-      first.open();
+      first.serve();
       first.emit({ type: 'render', canvas: 'main', tree: row('from the first') });
       expect(wire.snapshot().trees.get('main')).toEqual(row('from the second'));
     });
 
     it('the other closing is not the connection closing, and schedules no third', () => {
       const { wire, first, second } = resetWhileConnecting();
-      second.open();
+      second.serve();
       first.serverClose(1006);
       expect(wire.status()).toBe('open');
-      vi.advanceTimersByTime(120_000);
+      vi.advanceTimersByTime(20_000);
       expect(FakeSocket.instances).toHaveLength(2);
     });
 
     it('a sign-out heard on the other signs nobody out', () => {
       storage.setItem('nisc.token', 'tok');
       const { first, second } = resetWhileConnecting();
-      second.open();
+      second.serve();
       first.serverClose(CLOSE_SIGNED_OUT);
       expect(storage.getItem('nisc.token')).toBe('tok');
       expect(FakeSocket.instances).toHaveLength(2);
@@ -261,7 +278,7 @@ describe('the wire — reset', () => {
 describe('the wire — back', () => {
   it('sends the gesture up, naming no canvas', () => {
     const wire = createWire({ url: URL, env: env() });
-    FakeSocket.last().open();
+    FakeSocket.last().serve();
 
     wire.back();
 
@@ -270,7 +287,7 @@ describe('the wire — back', () => {
 
   it('is dropped on a dead socket rather than queued for the reconnect', () => {
     const wire = createWire({ url: URL, env: env() });
-    FakeSocket.last().open();
+    FakeSocket.last().serve();
     FakeSocket.last().serverClose(1006);
 
     wire.back();
@@ -280,7 +297,7 @@ describe('the wire — back', () => {
 
   it('does nothing after dispose', () => {
     const wire = createWire({ url: URL, env: env() });
-    FakeSocket.last().open();
+    FakeSocket.last().serve();
     wire.dispose();
     wire.back();
     expect(FakeSocket.last().envelopes()).toEqual([]);
@@ -349,8 +366,7 @@ describe('the wire — reconnect backoff', () => {
     vi.advanceTimersByTime(1);
     expect(FakeSocket.instances).toHaveLength(3);
 
-    FakeSocket.last().open();
-    FakeSocket.last().emit({ type: 'frame', tree: [] });
+    FakeSocket.last().serve();
     FakeSocket.last().serverClose(1006);
     vi.advanceTimersByTime(500);
     expect(FakeSocket.instances).toHaveLength(4);
@@ -445,7 +461,7 @@ describe('the wire — what the server sends is parsed', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const wire = createWire({ url: URL, env: env(), delta: true });
     const socket = FakeSocket.last();
-    socket.open();
+    socket.serve();
     socket.emit({ type: 'frame', tree: [row] });
     socket.emit({ type: 'render', canvas: 'main', tree: [row] });
     return { wire, socket, warn };
@@ -522,7 +538,7 @@ describe('the wire — what the server sends is parsed', () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const wire = createWire({ url: URL, env: env() });
     const socket = FakeSocket.last();
-    socket.open();
+    socket.serve();
     socket.emit({ type: 'hello', principal: null, catalog: { actions: [], hash: 'x' } });
     expect(String(error.mock.calls[0]?.[0])).toContain('protocol 1');
     socket.serverClose(1005);
@@ -555,23 +571,25 @@ describe('readDocumentSnapshot', () => {
 });
 
 describe('the wire — connection status', () => {
-  it('starts connecting, opens on open, closes on close — notifying subscribers each transition', () => {
+  it('starts connecting, opens at the first frame rather than when the socket opens, closes on close — notifying subscribers each transition', () => {
     const wire = createWire({ url: URL, env: env() });
-    let ticks = 0;
-    wire.subscribe(() => (ticks += 1));
+    const seen: string[] = [];
+    wire.subscribe(() => seen.push(wire.status()));
     expect(wire.status()).toBe('connecting');
 
     FakeSocket.last().open();
+    FakeSocket.last().emit({ type: 'hello', protocol: PROTOCOL, principal: null, catalog: { actions: [], hash: 'h' } });
+    expect(wire.status()).toBe('connecting');
+
+    FakeSocket.last().emit({ type: 'frame', tree: [] });
     expect(wire.status()).toBe('open');
-    expect(ticks).toBe(1);
 
     FakeSocket.last().serverClose(1006);
     expect(wire.status()).toBe('closed');
-    expect(ticks).toBe(2);
 
     vi.advanceTimersByTime(1000);
     expect(wire.status()).toBe('connecting');
-    expect(ticks).toBe(3);
+    expect(seen.filter((status, i) => status !== seen[i - 1])).toEqual(['connecting', 'open', 'closed', 'connecting']);
   });
 
   it('dispose reads closed', () => {
@@ -600,7 +618,7 @@ describe('the wire — frame deltas', () => {
   it('applies a delta against the last render and renders the rebuilt tree', () => {
     const wire = createWire({ url: URL, env: env(), delta: true });
     const socket = FakeSocket.last();
-    socket.open();
+    socket.serve();
     const base = render([{ type: 'text', value: 'a long steady line of chrome' }, { type: 'text', value: '1' }]);
     socket.onmessage?.({ data: base });
 
@@ -614,7 +632,7 @@ describe('the wire — frame deltas', () => {
   it('chains — the rebuilt frame becomes the next delta\'s base', () => {
     const wire = createWire({ url: URL, env: env(), delta: true });
     const socket = FakeSocket.last();
-    socket.open();
+    socket.serve();
     let held = render([{ type: 'text', value: 'chrome that never changes at all' }, { type: 'text', value: '0' }]);
     socket.onmessage?.({ data: held });
 
@@ -631,7 +649,7 @@ describe('the wire — frame deltas', () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {});
     const wire = createWire({ url: URL, env: env(), delta: true });
     const socket = FakeSocket.last();
-    socket.open();
+    socket.serve();
     const base = render([{ type: 'text', value: 'a long steady line of chrome' }, { type: 'text', value: '1' }]);
     socket.onmessage?.({ data: base });
     const held = wire.snapshot().trees.get('main');
@@ -647,7 +665,7 @@ describe('the wire — frame deltas', () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {});
     const wire = createWire({ url: URL, env: env(), delta: true });
     const socket = FakeSocket.last();
-    socket.open();
+    socket.serve();
     socket.emit({ type: 'render-delta', canvas: 'main', ops: [[1, render([])]], hash: frameHash(render([])) });
 
     expect(socket.envelopes().filter((m) => m['type'] === 'resync')).toHaveLength(1);
@@ -658,7 +676,7 @@ describe('the wire — frame deltas', () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {});
     const wire = createWire({ url: URL, env: env(), delta: true });
     const socket = FakeSocket.last();
-    socket.open();
+    socket.serve();
     socket.onmessage?.({ data: render([{ type: 'text', value: 'short' }]) });
     socket.emit({ type: 'render-delta', canvas: 'main', ops: [[0, 0, 99999]], hash: 1 });
 
@@ -670,7 +688,7 @@ describe('the wire — frame deltas', () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {});
     createWire({ url: URL, env: env(), delta: true });
     const first = FakeSocket.last();
-    first.open();
+    first.serve();
     const base = render([{ type: 'text', value: 'a long steady line of chrome' }, { type: 'text', value: '1' }]);
     first.onmessage?.({ data: base });
 
@@ -678,7 +696,7 @@ describe('the wire — frame deltas', () => {
     vi.advanceTimersByTime(60_000);
     const second = FakeSocket.last();
     expect(second).not.toBe(first);
-    second.open();
+    second.serve();
 
     const next = render([{ type: 'text', value: 'a long steady line of chrome' }, { type: 'text', value: '2' }]);
     second.emit({ type: 'render-delta', canvas: 'main', ops: encodeDelta(base, next), hash: frameHash(next) });
@@ -701,6 +719,33 @@ describe('browserEnv — the browser host', () => {
     e.tokens.clear();
     expect(e.tokens.load()).toBeNull();
     expect(e.defaultUrl()).toBe('wss://app.example/socket');
+  });
+
+  it('says the page is back when it is shown again, restored from the back-forward cache or online again — not when it is hidden or first loads', () => {
+    const target = () => {
+      const on = new Map<string, (event?: unknown) => void>();
+      return { on, addEventListener: (name: string, fn: (event?: unknown) => void) => void on.set(name, fn), removeEventListener: (name: string) => void on.delete(name) };
+    };
+    const win = target();
+    const doc = { ...target(), visibilityState: 'hidden' };
+    g.window = win;
+    (globalThis as unknown as { document?: unknown }).document = doc;
+    try {
+      let back = 0;
+      const stop = browserEnv().onResume?.(() => (back += 1));
+      doc.on.get('visibilitychange')?.();
+      win.on.get('pageshow')?.({ persisted: false });
+      expect(back).toBe(0);
+      doc.visibilityState = 'visible';
+      doc.on.get('visibilitychange')?.();
+      win.on.get('pageshow')?.({ persisted: true });
+      win.on.get('online')?.();
+      expect(back).toBe(3);
+      stop?.();
+      expect([...win.on.keys(), ...doc.on.keys()]).toEqual([]);
+    } finally {
+      delete (globalThis as unknown as { document?: unknown }).document;
+    }
   });
 
   it('honours a custom tokenKey', () => {
@@ -795,7 +840,7 @@ describe('the wire — protocol', () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const wire = createWire({ url: URL, env: env() });
     const sock = FakeSocket.last();
-    sock.open();
+    sock.serve();
     sock.emit({ type: 'hello', protocol: 0, principal: null, catalog: { actions: [], hash: 'x' } });
     expect(sock.closed).toBe(true);
     expect(String(error.mock.calls[0]?.[0])).toContain('protocol 0');
@@ -809,13 +854,13 @@ describe('the wire — protocol', () => {
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const hello = { type: 'hello', principal: null, catalog: { actions: [], hash: 'x' } };
     const wire = createWire({ url: URL, env: env() });
-    FakeSocket.last().open();
+    FakeSocket.last().serve();
     FakeSocket.last().emit({ ...hello, protocol: 0 });
     FakeSocket.last().serverClose(1005);
     expect(wire.status()).toBe('incompatible');
 
     wire.reset();
-    FakeSocket.last().open();
+    FakeSocket.last().serve();
     FakeSocket.last().emit({ ...hello, protocol: PROTOCOL });
     expect(wire.status()).toBe('open');
 
@@ -843,7 +888,7 @@ describe('the wire — on a host whose browser keeps the session', () => {
     createWire({ url: URL, env: host() });
     expect(upgrade(FakeSocket.last()).token).toBe('tok-1');
     kept = true;
-    FakeSocket.last().open();
+    FakeSocket.last().serve();
     FakeSocket.last().emit(hello);
     expect(storage.getItem('nisc.token')).toBeNull();
     FakeSocket.last().serverClose(1006);
@@ -854,12 +899,12 @@ describe('the wire — on a host whose browser keeps the session', () => {
 
   it('a token it is handed at sign-in is offered, and never stored', () => {
     createWire({ url: URL, env: host() });
-    FakeSocket.last().open();
+    FakeSocket.last().serve();
     FakeSocket.last().emit({ type: 'session', token: 'granted-1' });
     expect(upgrade(FakeSocket.last()).token).toBe('granted-1');
     expect(storage.getItem('nisc.token')).toBeNull();
     kept = true;
-    FakeSocket.last().open();
+    FakeSocket.last().serve();
     FakeSocket.last().emit(hello);
     expect(storage.getItem('nisc.token')).toBeNull();
     FakeSocket.last().serverClose(1006);
@@ -869,9 +914,9 @@ describe('the wire — on a host whose browser keeps the session', () => {
 
   it('…unless the browser does not keep it (another origin, cookies refused): then it is stored, as it always was', () => {
     createWire({ url: URL, env: host() });
-    FakeSocket.last().open();
+    FakeSocket.last().serve();
     FakeSocket.last().emit({ type: 'session', token: 'granted-1' });
-    FakeSocket.last().open();
+    FakeSocket.last().serve();
     FakeSocket.last().emit(hello);
     expect(storage.getItem('nisc.token')).toBe('granted-1');
     FakeSocket.last().serverClose(1006);
@@ -882,7 +927,7 @@ describe('the wire — on a host whose browser keeps the session', () => {
   it('signed out, it says it is leaving until an upgrade is answered', () => {
     kept = true;
     createWire({ url: URL, env: host() });
-    FakeSocket.last().open();
+    FakeSocket.last().serve();
     FakeSocket.last().emit(hello);
     expect(FakeSocket.last().url).not.toContain('leave');
     FakeSocket.last().serverClose(CLOSE_SIGNED_OUT);
@@ -890,7 +935,7 @@ describe('the wire — on a host whose browser keeps the session', () => {
     FakeSocket.last().serverClose(1006);
     vi.advanceTimersByTime(60_000);
     expect(FakeSocket.last().url).toContain('leave=1');
-    FakeSocket.last().open();
+    FakeSocket.last().serve();
     FakeSocket.last().emit({ ...hello, principal: null });
     FakeSocket.last().serverClose(1006);
     vi.advanceTimersByTime(60_000);
@@ -923,7 +968,7 @@ describe('the wire — on a host whose browser keeps the session', () => {
   it('a sign-in handed to it sealed is offered back as it is — no token, nothing stored — until an upgrade is answered', () => {
     createWire({ url: URL, env: host() });
     expect(FakeSocket.last().url).toContain('sealed=1');
-    FakeSocket.last().open();
+    FakeSocket.last().serve();
     FakeSocket.last().emit({ type: 'session', sealed: 'c2VhbGVk' });
     expect(FakeSocket.instances).toHaveLength(2);
     expect(FakeSocket.last().offered).toEqual(['nisc', 'nisc.sealed.c2VhbGVk']);
@@ -933,7 +978,7 @@ describe('the wire — on a host whose browser keeps the session', () => {
     vi.advanceTimersByTime(60_000);
     expect(FakeSocket.last().offered).toEqual(['nisc', 'nisc.sealed.c2VhbGVk']);
     kept = true;
-    FakeSocket.last().open();
+    FakeSocket.last().serve();
     FakeSocket.last().emit(hello);
     FakeSocket.last().serverClose(1006);
     vi.advanceTimersByTime(60_000);
@@ -943,13 +988,13 @@ describe('the wire — on a host whose browser keeps the session', () => {
 
   it('a sealed sign-in that is refused is not offered again', () => {
     createWire({ url: URL, env: host() });
-    FakeSocket.last().open();
+    FakeSocket.last().serve();
     FakeSocket.last().emit({ type: 'session', sealed: 'c2VhbGVk' });
     expect(FakeSocket.last().offered).toEqual(['nisc', 'nisc.sealed.c2VhbGVk']);
     FakeSocket.last().serverClose(CLOSE_INVALID_TOKEN);
     expect(FakeSocket.last().offered).toEqual(['nisc']);
     const sockets = FakeSocket.instances.length;
-    FakeSocket.last().open();
+    FakeSocket.last().serve();
     FakeSocket.last().emit({ ...hello, principal: null });
     expect(FakeSocket.instances).toHaveLength(sockets);
   });
@@ -962,12 +1007,351 @@ describe('the wire — on a host whose browser keeps the session', () => {
   it('told its browser does not keep the seal, it stops asking — and the next sign-in reaches it as a token', () => {
     const warned = vi.spyOn(console, 'warn').mockImplementation(() => {});
     createWire({ url: URL, env: host() });
-    FakeSocket.last().open();
+    FakeSocket.last().serve();
     FakeSocket.last().emit({ type: 'error', code: 'seal_not_kept', message: 'not kept' });
     FakeSocket.last().emit({ ...hello, principal: null });
     FakeSocket.last().serverClose(1006);
     vi.advanceTimersByTime(60_000);
     expect(FakeSocket.last().url).not.toContain('sealed');
     expect(warned).toHaveBeenCalled();
+  });
+});
+
+describe('the wire — a press made while it cannot send', () => {
+  const row = (value: string) => [{ type: 'text' as const, value }];
+  const press = { type: 'ui:click', ref: 'save' } as never;
+  const drawn = { frame: [], trees: { main: row('page'), side: row('menu') }, principal: false };
+  const events = (socket: FakeSocket) => socket.envelopes().filter((e) => e['type'] === 'event');
+
+  it('pressed on the page the server drew, it is sent once that canvas comes back as it was', () => {
+    const wire = createWire({ url: URL, env: env(), initial: drawn });
+    wire.dispatch('main', press);
+    const socket = FakeSocket.last();
+    socket.serve();
+    expect(events(socket)).toEqual([]);
+    socket.emit({ type: 'render', canvas: 'main', tree: row('page') });
+    expect(events(socket)).toEqual([{ type: 'event', canvas: 'main', event: press }]);
+    expect(wire.droppedEvents()).toBe(0);
+  });
+
+  it('is dropped, and counted, when its canvas comes back changed', () => {
+    const wire = createWire({ url: URL, env: env(), initial: drawn });
+    let ticks = 0;
+    wire.dispatch('main', press);
+    wire.subscribe(() => (ticks += 1));
+    const socket = FakeSocket.last();
+    socket.serve();
+    const before = ticks;
+    socket.emit({ type: 'render', canvas: 'main', tree: row('moved on') });
+    expect(events(socket)).toEqual([]);
+    expect(wire.droppedEvents()).toBe(1);
+    expect(ticks).toBeGreaterThan(before);
+  });
+
+  it('is dropped when its canvas has not come back five seconds after it was pressed', () => {
+    const wire = createWire({ url: URL, env: env(), initial: drawn });
+    wire.dispatch('main', press);
+    vi.advanceTimersByTime(4999);
+    expect(wire.droppedEvents()).toBe(0);
+    vi.advanceTimersByTime(1);
+    expect(wire.droppedEvents()).toBe(1);
+    const socket = FakeSocket.last();
+    socket.serve();
+    socket.emit({ type: 'render', canvas: 'main', tree: row('page') });
+    expect(events(socket)).toEqual([]);
+  });
+
+  it('several go in the order they were pressed, once every canvas they name is back — and one moved canvas drops them all', () => {
+    const sent = createWire({ url: URL, env: env(), initial: drawn });
+    sent.dispatch('main', { type: 'ui:click', ref: 'a' } as never);
+    sent.dispatch('side', { type: 'ui:click', ref: 'b' } as never);
+    const first = FakeSocket.last();
+    first.serve();
+    first.emit({ type: 'render', canvas: 'side', tree: row('menu') });
+    expect(events(first)).toEqual([]);
+    first.emit({ type: 'render', canvas: 'main', tree: row('page') });
+    expect(events(first).map((e) => (e['event'] as { ref: string }).ref)).toEqual(['a', 'b']);
+
+    const dropped = createWire({ url: URL, env: env(), initial: drawn });
+    dropped.dispatch('main', { type: 'ui:click', ref: 'a' } as never);
+    dropped.dispatch('side', { type: 'ui:click', ref: 'b' } as never);
+    const second = FakeSocket.last();
+    second.serve();
+    second.emit({ type: 'render', canvas: 'main', tree: row('page') });
+    second.emit({ type: 'render', canvas: 'side', tree: row('another menu') });
+    expect(events(second)).toEqual([]);
+    expect(dropped.droppedEvents()).toBe(2);
+  });
+
+  it('pressed while the socket is open but before its frame, it waits for the screen too', () => {
+    const wire = createWire({ url: URL, env: env(), initial: drawn });
+    const socket = FakeSocket.last();
+    socket.open();
+    wire.dispatch('main', press);
+    expect(events(socket)).toEqual([]);
+    socket.emit({ type: 'frame', tree: [] });
+    socket.emit({ type: 'render', canvas: 'main', tree: row('page') });
+    expect(events(socket)).toHaveLength(1);
+  });
+
+  it('pressed across a drop and a reconnect, it reaches the new socket', () => {
+    const wire = createWire({ url: URL, env: env() });
+    const first = FakeSocket.last();
+    first.serve();
+    first.emit({ type: 'render', canvas: 'main', tree: row('home') });
+    first.serverClose(1006);
+    wire.dispatch('main', press);
+    vi.advanceTimersByTime(1000);
+    const second = FakeSocket.last();
+    expect(second).not.toBe(first);
+    second.serve();
+    second.emit({ type: 'render', canvas: 'main', tree: row('home') });
+    expect(events(first)).toEqual([]);
+    expect(events(second)).toEqual([{ type: 'event', canvas: 'main', event: press }]);
+  });
+
+  it('kept presses on a canvas that never comes back do not keep a press on the screen that did from being sent: they are dropped, and it is sent', () => {
+    const wire = createWire({ url: URL, env: env(), initial: drawn });
+    wire.dispatch('main', { type: 'ui:click', ref: 'old' } as never);
+    const socket = FakeSocket.last();
+    socket.serve();
+    socket.emit({ type: 'render', canvas: 'side', tree: row('menu') });
+    wire.dispatch('side', { type: 'ui:click', ref: 'new' } as never);
+    expect(events(socket).map((e) => (e['event'] as { ref: string }).ref)).toEqual(['new']);
+    expect(wire.droppedEvents()).toBe(1);
+  });
+
+  it('a sign-in drops what was pressed on the screen before it', () => {
+    const wire = createWire({ url: URL, env: env(), initial: drawn });
+    wire.dispatch('main', press);
+    FakeSocket.last().open();
+    FakeSocket.last().emit({ type: 'session', token: 'granted-1' });
+    expect(wire.droppedEvents()).toBe(1);
+  });
+});
+
+describe('the wire — when the page comes back', () => {
+  it('a closed connection is made again at once, not after the backoff', () => {
+    createWire({ url: URL, env: env() });
+    FakeSocket.last().serverClose(1006);
+    expect(FakeSocket.instances).toHaveLength(1);
+    pageComesBack();
+    expect(FakeSocket.instances).toHaveLength(2);
+  });
+
+  const home = [{ type: 'text' as const, value: 'home' }];
+  const save = { type: 'ui:click', ref: 'save' } as never;
+  const events = (socket: FakeSocket) => socket.envelopes().filter((e) => e['type'] === 'event');
+  const servedHome = (): { wire: ReturnType<typeof createWire>; socket: FakeSocket } => {
+    const wire = createWire({ url: URL, env: env() });
+    const socket = FakeSocket.last();
+    socket.serve();
+    socket.emit({ type: 'render', canvas: 'main', tree: home });
+    return { wire, socket };
+  };
+
+  it('an open one is asked for the screen again and stays open; one that answers keeps its socket', () => {
+    const { wire, socket } = servedHome();
+    const seen: string[] = [];
+    wire.subscribe(() => seen.push(wire.status()));
+    pageComesBack();
+    expect(socket.envelopes()).toEqual([{ type: 'resync' }]);
+    expect(wire.status()).toBe('open');
+    socket.emit({ type: 'frame', tree: [] });
+    vi.advanceTimersByTime(10_000);
+    expect(FakeSocket.instances).toHaveLength(1);
+    expect(seen.filter((status) => status !== 'open')).toEqual([]);
+  });
+
+  it('a press made before the answer is sent once its canvas comes back as it was, and dropped if it moved', () => {
+    const same = servedHome();
+    pageComesBack();
+    same.wire.dispatch('main', save);
+    expect(events(same.socket)).toEqual([]);
+    same.socket.emit({ type: 'frame', tree: [] });
+    same.socket.emit({ type: 'render', canvas: 'main', tree: home });
+    expect(events(same.socket)).toEqual([{ type: 'event', canvas: 'main', event: save }]);
+
+    const moved = servedHome();
+    pageComesBack();
+    moved.wire.dispatch('main', save);
+    moved.socket.emit({ type: 'frame', tree: [] });
+    moved.socket.emit({ type: 'render', canvas: 'main', tree: [{ type: 'text', value: 'elsewhere' }] });
+    expect(events(moved.socket)).toEqual([]);
+    expect(moved.wire.droppedEvents()).toBe(1);
+  });
+
+  it('a reset pressed before the answer is a reset, not a new connection', () => {
+    const { wire, socket } = servedHome();
+    pageComesBack();
+    wire.reset();
+    expect(socket.envelopes()).toEqual([{ type: 'resync' }, { type: 'reset' }]);
+    expect(FakeSocket.instances).toHaveLength(1);
+  });
+
+  it('a close heard while it waits for the answer is made again at once, not after the backoff', () => {
+    const { socket } = servedHome();
+    pageComesBack();
+    socket.serverClose(1006);
+    expect(FakeSocket.instances).toHaveLength(2);
+  });
+
+  it('an open one that answers nothing within two seconds is replaced, and a press made meanwhile reaches the new one', () => {
+    const wire = createWire({ url: URL, env: env() });
+    const dead = FakeSocket.last();
+    dead.serve();
+    dead.emit({ type: 'render', canvas: 'main', tree: [{ type: 'text', value: 'home' }] });
+    pageComesBack();
+    wire.dispatch('main', { type: 'ui:click', ref: 'save' } as never);
+    vi.advanceTimersByTime(1999);
+    expect(FakeSocket.instances).toHaveLength(1);
+    vi.advanceTimersByTime(1);
+    expect(FakeSocket.instances).toHaveLength(2);
+    expect(dead.closed).toBe(true);
+    const fresh = FakeSocket.last();
+    fresh.serve();
+    fresh.emit({ type: 'render', canvas: 'main', tree: [{ type: 'text', value: 'home' }] });
+    expect(dead.envelopes()).toEqual([{ type: 'resync' }]);
+    expect(fresh.envelopes()).toEqual([{ type: 'event', canvas: 'main', event: { type: 'ui:click', ref: 'save' } }]);
+  });
+
+  it('a connection still being made is left to finish, and a disposed wire is told nothing', () => {
+    const wire = createWire({ url: URL, env: env() });
+    pageComesBack();
+    expect(FakeSocket.instances).toHaveLength(1);
+    wire.dispose();
+    expect(resumers).toEqual([]);
+  });
+});
+
+describe('the wire — a screen sent again', () => {
+  const row = (value: string) => [{ type: 'text' as const, value }];
+
+  it('the same frame or canvas, sent again, draws nothing and tells nobody — across a reconnect too', () => {
+    const wire = createWire({ url: URL, env: env() });
+    const first = FakeSocket.last();
+    first.serve();
+    first.emit({ type: 'render', canvas: 'main', tree: row('home') });
+    let ticks = 0;
+    wire.subscribe(() => (ticks += 1));
+    const before = wire.snapshot();
+    first.emit({ type: 'frame', tree: [] });
+    first.emit({ type: 'render', canvas: 'main', tree: row('home') });
+    expect(ticks).toBe(0);
+    first.serverClose(1006);
+    vi.advanceTimersByTime(1000);
+    const second = FakeSocket.last();
+    second.serve();
+    second.emit({ type: 'render', canvas: 'main', tree: row('home') });
+    expect(wire.snapshot().trees).toBe(before.trees);
+    expect(wire.snapshot().frame).toBe(before.frame);
+    second.emit({ type: 'render', canvas: 'main', tree: row('elsewhere') });
+    expect(wire.snapshot().trees.get('main')).toEqual(row('elsewhere'));
+  });
+
+  it('after a reconnect that drew nothing, the next delta still applies', () => {
+    const render = (tree: unknown[]): string => JSON.stringify({ type: 'render', canvas: 'main', tree });
+    const wire = createWire({ url: URL, env: env(), delta: true });
+    const first = FakeSocket.last();
+    first.serve();
+    first.emit({ type: 'render', canvas: 'main', tree: row('home') });
+    first.serverClose(1006);
+    vi.advanceTimersByTime(1000);
+    const second = FakeSocket.last();
+    second.serve();
+    second.emit({ type: 'render', canvas: 'main', tree: row('home') });
+    second.emit({ type: 'render-delta', canvas: 'main', ops: encodeDelta(render(row('home')), render(row('next'))), hash: frameHash(render(row('next'))) });
+    expect(wire.snapshot().trees.get('main')).toEqual(row('next'));
+    expect(second.envelopes()).toEqual([]);
+  });
+
+  it('after a sign-in blanks the screen, the same canvas is drawn again', () => {
+    const wire = createWire({ url: URL, env: env() });
+    FakeSocket.last().serve();
+    FakeSocket.last().emit({ type: 'render', canvas: 'main', tree: row('home') });
+    FakeSocket.last().emit({ type: 'session', token: 'granted-1' });
+    expect(wire.snapshot().trees.get('main')).toBeUndefined();
+    FakeSocket.last().serve();
+    FakeSocket.last().emit({ type: 'render', canvas: 'main', tree: row('home') });
+    expect(wire.snapshot().trees.get('main')).toEqual(row('home'));
+  });
+});
+
+describe('the wire — a socket that has gone quiet', () => {
+  const home = [{ type: 'text' as const, value: 'home' }];
+  const pings = (socket: FakeSocket) => socket.envelopes().filter((e) => e['type'] === 'ping');
+  const quietSocket = (): { wire: ReturnType<typeof createWire>; socket: FakeSocket } => {
+    const wire = createWire({ url: URL, env: env() });
+    const socket = FakeSocket.last();
+    socket.serve();
+    socket.emit({ type: 'render', canvas: 'main', tree: home });
+    return { wire, socket };
+  };
+
+  it('after 25 seconds of hearing nothing it is pinged; one that answers is kept, and pinged again 25 seconds later', () => {
+    const { socket } = quietSocket();
+    vi.advanceTimersByTime(24_999);
+    expect(pings(socket)).toHaveLength(0);
+    vi.advanceTimersByTime(1);
+    expect(pings(socket)).toHaveLength(1);
+    socket.emit({ type: 'pong' });
+    vi.advanceTimersByTime(24_999);
+    expect(pings(socket)).toHaveLength(1);
+    vi.advanceTimersByTime(1);
+    expect(pings(socket)).toHaveLength(2);
+    expect(FakeSocket.instances).toHaveLength(1);
+  });
+
+  it('anything heard counts: a socket the server keeps talking on is never pinged', () => {
+    const { socket } = quietSocket();
+    for (let i = 0; i < 10; i += 1) {
+      vi.advanceTimersByTime(20_000);
+      socket.emit({ type: 'render', canvas: 'main', tree: [{ type: 'text', value: `slide ${i}` }] });
+    }
+    expect(pings(socket)).toHaveLength(0);
+  });
+
+  it('a server from before ping answers invalid_message, and that is an answer: the socket is kept', () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const { socket } = quietSocket();
+    vi.advanceTimersByTime(25_000);
+    socket.emit({ type: 'error', code: 'invalid_message', message: 'Not a message of protocol 3.' });
+    vi.advanceTimersByTime(20_000);
+    expect(FakeSocket.instances).toHaveLength(1);
+  });
+
+  it('one that answers nothing within 10 seconds is replaced', () => {
+    const { socket } = quietSocket();
+    vi.advanceTimersByTime(25_000 + 9_999);
+    expect(FakeSocket.instances).toHaveLength(1);
+    vi.advanceTimersByTime(1);
+    expect(FakeSocket.instances).toHaveLength(2);
+    expect(socket.closed).toBe(true);
+  });
+
+  it('while its answer is on its way the wire is as it was: presses, backs and publishes are sent', () => {
+    const { wire, socket } = quietSocket();
+    vi.advanceTimersByTime(25_000);
+    wire.dispatch('main', { type: 'ui:click', ref: 'save' } as never);
+    wire.back();
+    wire.publish('refresh');
+    expect(socket.envelopes().map((e) => e['type'])).toEqual(['ping', 'event', 'back', 'publish']);
+  });
+
+  it('a close heard while it waits for the answer is made again at once, not after the backoff', () => {
+    const { socket } = quietSocket();
+    vi.advanceTimersByTime(25_000);
+    socket.serverClose(1006);
+    expect(FakeSocket.instances).toHaveLength(2);
+  });
+
+  it('a hidden page is not pinged; once it is on screen again, it is', () => {
+    const { socket } = quietSocket();
+    pageVisible = false;
+    vi.advanceTimersByTime(120_000);
+    expect(pings(socket)).toHaveLength(0);
+    pageVisible = true;
+    vi.advanceTimersByTime(25_000);
+    expect(pings(socket)).toHaveLength(1);
   });
 });
