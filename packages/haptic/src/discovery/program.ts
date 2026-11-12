@@ -1,5 +1,5 @@
 import { Ajv2020 } from 'ajv/dist/2020.js';
-import { evaluate, type Config } from '@niscorp/prism';
+import { evaluate, getProfileJsonSchema, MAPPING_OPS, type Config } from '@niscorp/prism';
 import { mappingAgent } from '@niscorp/prism/agent';
 import type { CheerioAPI } from 'cheerio';
 import type { ExtractedRecord } from '../artifact/stage.js';
@@ -12,6 +12,22 @@ import type { Example } from './read.js';
 
 export type JsonSchema = Record<string, unknown>;
 export type Program = { program: Config; data: unknown; by: 'code' | 'model' };
+
+// The agent reads, filters, compares, computes and shapes record values; it is not told about the operations that
+// format values for display or the general fold. Programs are still checked against Prism's full grammar.
+const NOT_DESCRIBED = new Set(['$localeDate', '$localeMoney', '$localeNumber', '$reduce']);
+const MAPPING_AGENT = {
+  ...mappingAgent.config,
+  output: {
+    ...mappingAgent.config.output,
+    doc: `OUTPUT SCHEMA — your output MUST validate against this JSON Schema:\n${JSON.stringify(
+      getProfileJsonSchema(
+        MAPPING_OPS.filter((op) => !NOT_DESCRIBED.has(op)),
+        'draft-7',
+      ),
+    )}`,
+  },
+};
 
 const clip = (value: string, n: number) => (value.length > n ? `${value.slice(0, n)}…` : value);
 
@@ -115,7 +131,7 @@ export const writeProgram = async ({
   let labelsAsked = false;
   await calls.agent<Config>({
     job: 'map',
-    base: mappingAgent.config,
+    base: MAPPING_AGENT,
     steps,
     input: {
       sampleInput: { records: sample },

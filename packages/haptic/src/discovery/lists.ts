@@ -57,12 +57,17 @@ export const distinctLists = (
   for (const list of [...(fitting.length ? fitting : all)].sort(
     (a, b) => fragility(a.selector) - fragility(b.selector),
   )) {
-    const key =
-      `${list.count}:` +
-      list.matched
-        .slice(0, shownN)
-        .map((r) => norm($(r).text()))
-        .join('|');
+    // With a limit a run keeps the first `limit` records, so lists that agree on those are one option.
+    const key = read.limit
+      ? list.matched
+          .slice(0, read.limit)
+          .map((r) => norm($(r).text()))
+          .join('|')
+      : `${list.count}:` +
+        list.matched
+          .slice(0, shownN)
+          .map((r) => norm($(r).text()))
+          .join('|');
     if (!distinct.has(key)) distinct.set(key, list);
   }
   return [...distinct.values()];

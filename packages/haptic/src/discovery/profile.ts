@@ -32,12 +32,14 @@ export const DiscoveryProfileSchema = z
       .positive()
       .default(400_000)
       .describe('Per discovery, all attempts; when reached no new model call starts.'),
-    maxJevCalls: z
+    maxJevQuestions: z
       .number()
       .int()
       .positive()
       .default(250)
-      .describe('Per attempt; records past it are not labelled and get no where test.'),
+      .describe(
+        'Per attempt; one question per record labelled or section chosen. Records past it are not labelled and get no where test.',
+      ),
     jevConcurrency: z.number().int().positive().default(6),
     readBudgetChars: z
       .number()

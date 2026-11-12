@@ -66,16 +66,17 @@ export const fieldsContext = ({
     )
     .join('\n\n');
 
-// Jev, once per record the reader did not cite. The state is { instruction, examples, record: { fields, text } }.
-export const MEMBERSHIP_QUESTION = {
-  type: 'noul',
-  instructions:
-    'The examples are items a reader picked from a web page as answers to the instruction. Is the record also one of the items the instruction asks for?',
-  criteria: {
-    true: 'The record is one of the items the instruction asks for.',
-    false: 'The record is something else on the page, or something the instruction excludes.',
-  },
-} as const;
+// Jev, one question per record the reader did not cite, up to 25 in one call. The state is
+// { instruction, examples, records: { r1: { fields, text }, … } }.
+export const MEMBERSHIP_QUESTION = (key: string) =>
+  ({
+    type: 'noul',
+    instructions: `The examples are items a reader picked from a web page as answers to the instruction. Is the record \`records.${key}\` also one of the items the instruction asks for?`,
+    criteria: {
+      true: 'The record is one of the items the instruction asks for.',
+      false: 'The record is something else on the page, or something the instruction excludes.',
+    },
+  }) as const;
 
 // Jev, only for a page whose text view is over the budget. The state is { instruction, sections: { s1: "<heading>\n<first lines>", … } }.
 export const SECTION_QUESTION = (criteria: Record<string, string>) =>

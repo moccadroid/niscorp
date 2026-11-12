@@ -3,7 +3,8 @@
 //   complete: every reference item matched, extras at most max(1, 10% of the reference);
 //   useful partial: at least half matched; unusable: fewer; unresolved: no data.
 // An item matches when one of its values contains the reference text (case and whitespace folded) or, for an address
-// reference, equals it without its fragment (a path on another host counts).
+// reference, equals it without its fragment (a path on another host counts). Each result item answers at most one
+// reference item, so one item holding every answer as text counts once.
 import { readFile, readdir } from 'node:fs/promises';
 
 const root = new URL('../', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1');
@@ -39,6 +40,19 @@ const matches = (item: unknown, ref: { key: string }, kind: Reference['key']) =>
     );
   return values.some((v) => norm(v).includes(norm(ref.key)));
 };
+// The most reference items that distinct result items answer (a largest matching, by augmenting paths).
+const matchedCount = (refs: { key: string }[], items: unknown[], kind: Reference['key']) => {
+  const answers = new Array<number>(items.length).fill(-1);
+  const assign = (r: number, seen: boolean[]): boolean =>
+    items.some((item, i) => {
+      if (seen[i] || !matches(item, refs[r] as { key: string }, kind)) return false;
+      seen[i] = true;
+      if (answers[i] !== -1 && !assign(answers[i] as number, seen)) return false;
+      answers[i] = r;
+      return true;
+    });
+  return refs.filter((_, r) => assign(r, new Array<boolean>(items.length).fill(false))).length;
+};
 
 const rows: Record<string, unknown>[] = [];
 const dir = `${root}/data/bench/${round}`;
@@ -58,7 +72,7 @@ for (const id of await readdir(dir)) {
     let matched = 0;
     let extra = 0;
     if (items) {
-      matched = ref.items.filter((r) => items.some((i) => matches(i, r, ref.key))).length;
+      matched = matchedCount(ref.items, items, ref.key);
       extra = items.filter((i) => !ref.items.some((r) => matches(i, r, ref.key))).length;
       outcome =
         matched === ref.items.length && extra <= Math.max(1, Math.floor(ref.items.length * 0.1))

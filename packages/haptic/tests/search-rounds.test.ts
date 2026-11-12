@@ -52,7 +52,7 @@ const scripted = (answers: Record<string, unknown[]>) => {
   const calls: Calls = {
     event: () => {},
     jevLeft: () => 0,
-    decide: async () => null,
+    decide: async () => ({}),
     async agent<T>(spec: AgentSpec<T>) {
       (inputs[spec.job] ??= []).push(JSON.parse(String(spec.input)));
       for (let step = 0; step < spec.steps; step++) {

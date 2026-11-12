@@ -54,7 +54,9 @@ export const textForRead = async ({
       ]),
     ),
   };
-  const key = await calls.decide('section', state, 'section', SECTION_QUESTION(criteria));
+  const { section: key } = await calls.decide('section', state, {
+    section: SECTION_QUESTION(criteria),
+  });
   const chosen = typeof key === 'string' ? sections[keys.indexOf(key)] : undefined;
   calls.event(
     'section',

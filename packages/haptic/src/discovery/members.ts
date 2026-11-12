@@ -24,9 +24,12 @@ const pool = async <T>(items: T[], size: number, work: (item: T) => Promise<void
   );
 };
 
+const BATCH = 25;
+
 // Which extracted records answer the instruction. A record holding a cited example answers it, and so does one with
 // the same values. When the reader cited every item it counted, the rest do not; otherwise Jev decides each of the
-// rest. No labels when no record holds an example, or when the rest are more than the Jev calls left.
+// rest, up to 25 records in one call. No labels when no record holds an example, or when the rest are more than the
+// Jev questions left.
 export const labelRecords = async ({
   calls,
   instruction,
@@ -66,17 +69,27 @@ export const labelRecords = async ({
     calls.event('members', { type: 'labels-skipped', open: open.length, jevLeft: calls.jevLeft() });
     return null;
   }
-  await pool(open, concurrency, async (label) => {
-    const record = records[label.index];
-    if (!record) return;
-    const answer = await calls.decide(
+  const batches = Array.from({ length: Math.ceil(open.length / BATCH) }, (_, i) =>
+    open.slice(i * BATCH, (i + 1) * BATCH),
+  );
+  await pool(batches, concurrency, async (batch) => {
+    const keys = batch.map((_, i) => `r${i + 1}`);
+    const answers = await calls.decide(
       'members',
-      { instruction, examples, record: shown(record) },
-      'answers',
-      MEMBERSHIP_QUESTION,
+      {
+        instruction,
+        examples,
+        records: Object.fromEntries(
+          batch.map((label, i) => [keys[i], shown(records[label.index] as ExtractedRecord)]),
+        ),
+      },
+      Object.fromEntries(keys.map((key) => [key, MEMBERSHIP_QUESTION(key)])),
     );
-    if (typeof answer === 'boolean') label.keep = answer;
-    calls.event('members', { type: 'jev', index: label.index, keep: label.keep });
+    batch.forEach((label, i) => {
+      const answer = answers[keys[i] as string];
+      if (typeof answer === 'boolean') label.keep = answer;
+      calls.event('members', { type: 'jev', index: label.index, keep: label.keep });
+    });
   });
   return labels.filter((l): l is Label => l.keep !== null);
 };

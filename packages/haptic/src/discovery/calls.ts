@@ -26,13 +26,12 @@ export type AgentSpec<T> = {
 // Every model call one attempt makes. Replay tests answer these from saved runs.
 export interface Calls {
   agent<T>(spec: AgentSpec<T>): Promise<T | null>;
-  // A Jev decision: the choice's key, the yes/no answer, or null when there is no answer.
+  // One Jev call: per question, the choice's key, the yes/no answer, or null when there is no answer.
   decide(
     job: string,
     state: Record<string, unknown>,
-    name: string,
-    question: Question,
-  ): Promise<string | boolean | null>;
+    questions: Record<string, Question>,
+  ): Promise<Record<string, string | boolean | null>>;
   jevLeft(): number;
   event(job: string, event: Record<string, unknown>): void;
 }
@@ -75,7 +74,7 @@ export const createCalls = (options: {
 }): Calls => {
   const { profile, usage, events, budget } = options;
   let blocked: ProviderBlock | null = null;
-  let jevCalls = 0;
+  let jevQuestions = 0;
   const { client, blockFor } = createModelClient({
     provider: 'groq',
     apiKey: options.groqKey,
@@ -120,7 +119,7 @@ export const createCalls = (options: {
 
   return {
     event,
-    jevLeft: () => (jev ? Math.max(0, profile.maxJevCalls - jevCalls) : 0),
+    jevLeft: () => (jev ? Math.max(0, profile.maxJevQuestions - jevQuestions) : 0),
 
     async agent<T>(spec: AgentSpec<T>): Promise<T | null> {
       checkBudget();
@@ -177,14 +176,16 @@ export const createCalls = (options: {
       return result.ok ? result.output.data : null;
     },
 
-    async decide(job, state, name, question) {
-      if (!jev || jevCalls >= profile.maxJevCalls) return null;
+    async decide(job, state, questions) {
+      const names = Object.keys(questions);
+      const none = Object.fromEntries(names.map((name) => [name, null]));
+      if (!jev || jevQuestions + names.length > profile.maxJevQuestions) return none;
       checkBudget();
-      jevCalls++;
+      jevQuestions += names.length;
       try {
         const result = await jev.decide({
           state: state as never,
-          questions: { [name]: question },
+          questions,
           options: { signal: options.signal },
         });
         charge(
@@ -194,14 +195,19 @@ export const createCalls = (options: {
           result.meta.usage.outputTokens,
           result.meta.durationMs ?? 0,
         );
-        const decision = result.decisions[name] as { choice?: string; answer?: boolean };
-        return decision.choice ?? decision.answer ?? null;
+        const decisions = result.decisions as Record<
+          string,
+          { choice?: string; answer?: boolean } | undefined
+        >;
+        return Object.fromEntries(
+          names.map((name) => [name, decisions[name]?.choice ?? decisions[name]?.answer ?? null]),
+        );
       } catch (error) {
         event(job, {
           type: 'jev-failed',
           error: String((error as Error)?.message ?? error).slice(0, 200),
         });
-        return null;
+        return none;
       }
     },
   };

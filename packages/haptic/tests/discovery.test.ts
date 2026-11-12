@@ -41,10 +41,14 @@ const replay = (saved: Saved | undefined): Calls => {
       for (let i = 0; i < spec.steps; i++) if ((await spec.validate(data)) === null) return data;
       throw new Error(`the saved answer for ${spec.job} no longer passes its check`);
     },
-    async decide(job) {
+    async decide(job, _state, questions) {
       const queue = job === 'section' ? sections : members;
-      if (!queue.length) throw new Error(`no saved ${job} decision`);
-      return queue.shift() ?? null;
+      return Object.fromEntries(
+        Object.keys(questions).map((name) => {
+          if (!queue.length) throw new Error(`no saved ${job} decision`);
+          return [name, queue.shift() ?? null];
+        }),
+      );
     },
   };
 };
@@ -74,9 +78,9 @@ const picking = (choice: string | null): Calls => ({
   event: () => {},
   jevLeft: () => 1,
   agent: async () => null,
-  decide: async (_job, state, name) => {
-    asked.push({ name, state });
-    return choice;
+  decide: async (_job, state, questions) => {
+    for (const name of Object.keys(questions)) asked.push({ name, state });
+    return Object.fromEntries(Object.keys(questions).map((name) => [name, choice]));
   },
 });
 const long = load(
@@ -120,7 +124,7 @@ assert.equal(
   whole.slice(0, 60),
 );
 
-// More records to label than Jev calls left: no labels, so no where test is written from part of them.
+// More records to label than Jev questions left: no labels, so no where test is written from part of them.
 const record = (name: string) => ({
   sourceUrl: 'https://example.com/',
   text: name,
@@ -137,4 +141,35 @@ const labels = await labelRecords({
 });
 assert.equal(labels, null);
 
-console.log('discovery: four saved runs replayed, sections, Jev cap');
+// Jev labels up to 25 records in one call, each record its own question named by its key in the state.
+const sent: { records: string[]; questions: string[] }[] = [];
+const batched = await labelRecords({
+  calls: {
+    event: () => {},
+    jevLeft: () => 250,
+    agent: async () => null,
+    decide: async (_job, state, questions) => {
+      const shown = (state as { records: Record<string, { text: string }> }).records;
+      sent.push({ records: Object.keys(shown), questions: Object.keys(questions) });
+      return Object.fromEntries(
+        Object.keys(questions).map((key) => [key, shown[key]?.text !== 'x5']),
+      );
+    },
+  },
+  instruction: 'x',
+  records: Array.from({ length: 31 }, (_, i) => record(`x${i}`)),
+  cited: new Set([0]),
+  citedAll: false,
+  concurrency: 2,
+});
+assert.deepEqual(
+  sent.map((call) => call.questions.length),
+  [25, 5],
+);
+assert.ok(sent.every((call) => call.records.join() === call.questions.join()));
+assert.deepEqual(
+  batched?.filter((label) => !label.keep).map((label) => label.index),
+  [5],
+);
+
+console.log('discovery: four saved runs replayed, sections, Jev cap, Jev batches');

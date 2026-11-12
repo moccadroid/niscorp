@@ -69,9 +69,11 @@ const contextSelectors = (element: Element) => {
   return parent ? levelSelectors(parent) : [];
 };
 
-// Lower is preferred: escaped characters (utility classes), positions and nesting are what change first.
+// Lower is preferred: attribute values, escaped characters (utility classes), positions and nesting are what change first.
 export const fragility = (selector: string) =>
-  (selector.match(/\\./g) ?? []).length + (selector.match(/nth-child|:has\(/g) ?? []).length;
+  (selector.match(/="/g) ?? []).length * 2 +
+  (selector.match(/\\./g) ?? []).length +
+  (selector.match(/nth-child|:has\(/g) ?? []).length;
 const byStability = (a: string, b: string) => fragility(a) - fragility(b) || a.length - b.length;
 
 export const hits = ($: CheerioAPI, record: Element, selector: string): Element[] =>
@@ -225,11 +227,32 @@ export const candidates = ($: CheerioAPI, examples: Example[]): Candidates => {
         e.name !== 'html' && (examples.length === 1 || e.name !== 'body') && holdsOnly(e, index),
     ),
   );
+  const unique = (node: Element) =>
+    Object.entries(node.attribs)
+      .filter(
+        ([name, value]) =>
+          (name === 'id' || name.startsWith('data-')) && value && !/["\\\s]/.test(value),
+      )
+      .filter(([name, value]) => $(`[${name}="${value}"]`).length === 1)
+      .map(([name, value]) => `${node.name}[${name}="${value}"]`);
   const selectors = new Set<string>();
   for (const element of chains[0] ?? []) {
     for (const own of ownSelectors(element)) {
       selectors.add(own);
       for (const context of contextSelectors(element)) selectors.add(`${context} > ${own}`);
+    }
+    // Anchored on an ancestor up to 4 levels up, or on the element just before one, whose id or data-* value is unique.
+    let up = parentTag(element);
+    for (let depth = 0; up && depth < 4; depth++, up = parentTag(up)) {
+      let previous = up.prev;
+      while (previous && !isTag(previous)) previous = previous.prev;
+      const holder = up;
+      const anchors = [
+        ...unique(holder),
+        ...(previous && isTag(previous) ? unique(previous).map((a) => `${a} + ${holder.name}`) : []),
+      ];
+      for (const anchor of anchors)
+        for (const own of levelSelectors(element)) selectors.add(`${anchor} ${own}`);
     }
   }
   const options: Omit<ListOption, 'fields'>[] = [];
