@@ -1,0 +1,7 @@
+{
+  "key": "url",
+  "items": [
+    { "key": "https://www.sqlite.org/2026/sqlite-tools-linux-x64-3540100.zip", "label": "sqlite-tools-linux-x64-3540100.zip" }
+  ],
+  "notes": "The only archive under 'Precompiled Binaries for Linux' is sqlite-tools-linux-x64-3540100.zip (command-line shell, sqldiff, sqlite3_analyzer, sqlite3_rsync). Everything else is excluded: source/amalgamation/autoconf/preprocessed/doc/android under source or other sections, the osx-arm64/osx-x64 tools (macOS), the win dll/tools zips (Windows), wasm. Caveat on the URL: in the static HTML every download anchor has href='hp1.html' (a bot trap page); an inline script at the bottom of the page sets the real href with d391('a7','2026/sqlite-tools-linux-x64-3540100.zip'). The key is the real, script-set URL resolved against the page. An extractor that reads only static hrefs will report https://www.sqlite.org/hp1.html, which is not the download and does not match; one that reports only the filename text as a separate value also does not match the URL key unless it includes the real link. There is a single Linux item, although the instruction says 'links' in the plural."
+}

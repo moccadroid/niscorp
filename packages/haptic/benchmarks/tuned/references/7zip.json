@@ -1,0 +1,9 @@
+{
+  "key": "url",
+  "items": [
+    { "key": "https://github.com/ip7z/7zip/releases/download/26.05/7z2605-x64.exe", "label": "Download (.exe, 64-bit Windows x64)" },
+    { "key": "https://github.com/ip7z/7zip/releases/download/26.05/7z2605.exe", "label": "Download (.exe, 32-bit Windows x86)" },
+    { "key": "https://github.com/ip7z/7zip/releases/download/26.05/7z2605-arm64.exe", "label": "Download (.exe, 64-bit Windows arm64)" }
+  ],
+  "notes": "The current release table is the first one, 'Download 7-Zip 26.05 (2026-10-21) for Windows'. The items are its three .exe rows described as '7-Zip installer for Windows' (x64, x86 and arm64). Excluded: the two .msi rows, 7-Zip Extra (.7z), the Linux and macOS .tar.xz rows, the source code and LZMA SDK rows, and the 23.01 and older tables. Ambiguous: the last row of the current table, 7zr.exe ('7-Zip console executable'), is a Windows .exe, but it is a standalone console tool and not an installer, so it is excluded as an extra tool."
+}

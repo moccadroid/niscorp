@@ -1,0 +1,82 @@
+{
+  "key": "url",
+  "items": [
+    {
+      "key": "https://nginx.org/download/nginx-1.28.3.tar.gz",
+      "label": "nginx-1.28.3"
+    },
+    {
+      "key": "https://nginx.org/download/nginx-1.26.3.tar.gz",
+      "label": "nginx-1.26.3"
+    },
+    {
+      "key": "https://nginx.org/download/nginx-1.24.0.tar.gz",
+      "label": "nginx-1.24.0"
+    },
+    {
+      "key": "https://nginx.org/download/nginx-1.22.1.tar.gz",
+      "label": "nginx-1.22.1"
+    },
+    {
+      "key": "https://nginx.org/download/nginx-1.20.2.tar.gz",
+      "label": "nginx-1.20.2"
+    },
+    {
+      "key": "https://nginx.org/download/nginx-1.18.0.tar.gz",
+      "label": "nginx-1.18.0"
+    },
+    {
+      "key": "https://nginx.org/download/nginx-1.16.1.tar.gz",
+      "label": "nginx-1.16.1"
+    },
+    {
+      "key": "https://nginx.org/download/nginx-1.14.2.tar.gz",
+      "label": "nginx-1.14.2"
+    },
+    {
+      "key": "https://nginx.org/download/nginx-1.12.2.tar.gz",
+      "label": "nginx-1.12.2"
+    },
+    {
+      "key": "https://nginx.org/download/nginx-1.10.3.tar.gz",
+      "label": "nginx-1.10.3"
+    },
+    {
+      "key": "https://nginx.org/download/nginx-1.8.1.tar.gz",
+      "label": "nginx-1.8.1"
+    },
+    {
+      "key": "https://nginx.org/download/nginx-1.6.3.tar.gz",
+      "label": "nginx-1.6.3"
+    },
+    {
+      "key": "https://nginx.org/download/nginx-1.4.7.tar.gz",
+      "label": "nginx-1.4.7"
+    },
+    {
+      "key": "https://nginx.org/download/nginx-1.2.9.tar.gz",
+      "label": "nginx-1.2.9"
+    },
+    {
+      "key": "https://nginx.org/download/nginx-1.0.15.tar.gz",
+      "label": "nginx-1.0.15"
+    },
+    {
+      "key": "https://nginx.org/download/nginx-0.8.55.tar.gz",
+      "label": "nginx-0.8.55"
+    },
+    {
+      "key": "https://nginx.org/download/nginx-0.7.69.tar.gz",
+      "label": "nginx-0.7.69"
+    },
+    {
+      "key": "https://nginx.org/download/nginx-0.6.39.tar.gz",
+      "label": "nginx-0.6.39"
+    },
+    {
+      "key": "https://nginx.org/download/nginx-0.5.38.tar.gz",
+      "label": "nginx-0.5.38"
+    }
+  ],
+  "notes": "Included the .tar.gz link (link text \"nginx-X.Y.Z\") from every row under the \"Legacy versions\" heading, 1.28.3 down to 0.5.38. The page renders each legacy branch as its own one-row <table>, all between the \"Legacy versions\" and \"Source Code\" headings; I treated all of them as the Legacy versions table. Excluded: CHANGES links, pgp (.asc) signature links, nginx/Windows .zip links, mainline 1.31.8 and stable 1.30.6 above the heading, the GitHub repositories and the Linux packages link. 0.6.39 and 0.5.38 have no Windows archive; their source links are included."
+}

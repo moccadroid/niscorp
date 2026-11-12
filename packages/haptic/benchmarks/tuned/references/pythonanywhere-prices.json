@@ -1,0 +1,8 @@
+{
+  "key": "text",
+  "items": [
+    { "key": "$10/month", "label": "Developer: $10/month (.paid_plan.Developer .pricing_pane .price)" },
+    { "key": "$10 to $500/month", "label": "Custom: $10 to $500/month (.paid_plan.Custom .pricing_pane .price)" }
+  ],
+  "notes": "The two top pricing cards are the paid plans Developer and Custom. Each card has one div.price: '$10/month' for Developer and '$10 to $500/month' for Custom. Excluded: the prices in the comparison-table headers (Developer $10/month, Custom $10 to $500/month, Beginner $0/month), the Annual Subscriptions card (it shows no price, only the '2 months free' text), the free Beginner card, and the custom-plan calculator's 'Price for this plan' (empty in the capture). Ambiguous for grading: once whitespace is collapsed, the comparison-table headers show the same texts, so matching on text cannot tell a card price apart from its table duplicate. '$10 to $500/month' does not contain '$10/month', so the two keys stay distinct."
+}

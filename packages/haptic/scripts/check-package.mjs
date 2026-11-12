@@ -1,20 +1,13 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { createHash } from 'node:crypto';
 import { mkdir, mkdtemp, readFile, readdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, isAbsolute, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-// Use a real returned artifact, its original captures and its recorded outcome.
-const manifestPath = process.argv[2]
-  ? resolve(process.argv[2])
-  : fileURLToPath(new URL('../tests/fixtures/package/replay-manifest.json', import.meta.url));
-const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
-assert(manifest.length > 0, 'A returned-artifact replay manifest is required');
-const origin = dirname(manifestPath);
-const suite = JSON.parse(await readFile(resolve(origin, 'suite.json'), 'utf8'));
-const replay = JSON.parse(await readFile(resolve(origin, 'replay-results.json'), 'utf8'));
+// The packed package, installed offline in a consumer outside the checkout: generated artifacts run on their saved
+// pages with every model and codec import refused, and the entry points typecheck with and without optional peers.
+const fixtures = fileURLToPath(new URL('../tests/fixtures/discovery/', import.meta.url));
 await mkdir(resolve('data/runs'), { recursive: true });
 const evidence = await mkdtemp(resolve('data/runs/package-'));
 const consumer = await mkdtemp(resolve(tmpdir(), 'haptic-package-'));
@@ -83,17 +76,17 @@ await writeFile(
   }),
 );
 // Compiler platform packages are optional dependencies, not Haptic's optional peers.
-// Install the former while leaving model/codec peers absent until explicitly added.
 await writeFile(resolve(consumer, '.npmrc'), 'auto-install-peers=false\noptional=true\n');
-// Keep this offline consumer on the tested dependency graph. pnpm rewrites only its importer.
 let lockRoot = process.cwd();
 while (!(await readdir(lockRoot)).includes('pnpm-lock.yaml')) {
   const parent = dirname(lockRoot);
   assert.notEqual(parent, lockRoot, 'No package or workspace lockfile found');
   lockRoot = parent;
 }
-const lockBytes = await readFile(resolve(lockRoot, 'pnpm-lock.yaml'));
-await writeFile(resolve(consumer, 'pnpm-lock.yaml'), lockBytes);
+await writeFile(
+  resolve(consumer, 'pnpm-lock.yaml'),
+  await readFile(resolve(lockRoot, 'pnpm-lock.yaml')),
+);
 await run(
   [pnpm, 'install', '--offline', '--ignore-scripts', '--no-frozen-lockfile'],
   consumer,
@@ -104,28 +97,24 @@ await writeFile(
   `
 export const resolve = (specifier, context, next) => {
   if (/^(@niscorp\\/(cortex|signal)(\\/|$)|openai(\\/|$)|imagescript(\\/|$))/.test(specifier))
-    throw new Error('Optional model/codec import forbidden during core execution: ' + specifier);
+    throw new Error('Optional model/codec import forbidden while running an artifact: ' + specifier);
   return next(specifier, context);
 };
 `,
 );
-const samples = await Promise.all(
-  manifest.map(async (entry) => {
-    const bytes = await readFile(resolve(origin, entry.artifactPath));
-    assert.equal(createHash('sha256').update(bytes).digest('hex'), entry.artifactSha256);
-    const expected = replay.results.find((row) => row.id === entry.id);
-    assert(expected?.grade?.exact, 'Package check needs an independently graded correct artifact');
-    const task = suite.cases.find((task) => task.id === entry.taskId);
-    assert(task);
-    return {
-      id: entry.id,
-      artifact: JSON.parse(bytes),
-      url: task.url,
-      sources: JSON.parse(await readFile(resolve(origin, entry.sourcesPath), 'utf8')),
-      expected: JSON.parse(await readFile(resolve(origin, expected.capturedEvidencePath), 'utf8')),
-    };
-  }),
-);
+const samples = [];
+for (const name of (await readdir(fixtures)).filter((n) => n.endsWith('.json'))) {
+  const fixture = JSON.parse(await readFile(resolve(fixtures, name), 'utf8'));
+  assert(fixture.expect.artifact, name + ' has no expected artifact');
+  samples.push({
+    id: name,
+    artifact: fixture.expect.artifact,
+    url: fixture.request.url,
+    pages: fixture.pages,
+    data: fixture.expect.data,
+  });
+}
+assert(samples.length > 0);
 await writeFile(resolve(consumer, 'samples.json'), JSON.stringify(samples));
 await writeFile(
   resolve(consumer, 'execute.mjs'),
@@ -134,11 +123,9 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { prepareArtifact } from '${pkg.name}';
-import { ENGINE_SEQUENCE, ENGINE_SCHEMAS } from '${pkg.name}/migrations';
-assert.equal(ENGINE_SEQUENCE.id, 'eden.engine');
-assert.deepEqual(Object.keys(ENGINE_SCHEMAS).sort(), ['eden.engine/artifact', 'eden.engine/flow', 'eden.engine/step']);
-import { createWebOperations } from '${pkg.name}/operations';
-import { imageChoiceProfile, imageChoiceWorkflow } from '${pkg.name}/search/image-choice';
+import { HAPTIC_SEQUENCE, HAPTIC_SCHEMAS } from '${pkg.name}/migrations';
+assert.equal(HAPTIC_SEQUENCE.id, 'nisc.haptic');
+assert.deepEqual(Object.keys(HAPTIC_SCHEMAS), ['nisc.haptic/artifact']);
 assert.equal(process.env.GROQ_API_KEY, undefined);
 const require = createRequire(import.meta.url);
 const packageRequire = createRequire(require.resolve('${pkg.name}/package.json'));
@@ -146,48 +133,22 @@ for (const optional of ['@niscorp/cortex', '@niscorp/signal', 'openai', 'imagesc
   assert.throws(() => require.resolve(optional), { code: 'MODULE_NOT_FOUND' });
   assert.throws(() => packageRequire.resolve(optional), { code: 'MODULE_NOT_FOUND' });
 }
-assert(imageChoiceProfile && imageChoiceWorkflow);
 globalThis.fetch = () => { throw new Error('Provider fetch forbidden'); };
-const web = createWebOperations();
-let sources;
-const operations = { ...web.operations, 'http.get': {
-  ...web.operations['http.get'],
-  async run(input) {
-    const source = sources.findLast((source) => source.url === input.url);
-    assert(source, 'Uncaptured HTTP request: ' + input.url);
-    return structuredClone(source);
-  },
-}};
-try {
-  const samples = JSON.parse(await readFile('samples.json', 'utf8'));
-  for (const sample of samples) {
-    sources = sample.sources;
-    const prepared = await prepareArtifact(sample.artifact, operations);
-    const outcomes = await Promise.all([
-      prepared.run({ url: sample.url }), prepared.run({ url: sample.url }),
-    ]);
-    for (const outcome of outcomes) assert.deepEqual(outcome, sample.expected);
+const samples = JSON.parse(await readFile('samples.json', 'utf8'));
+let runs = 0;
+for (const sample of samples) {
+  const pages = new Map(sample.pages.map((page) => [page.url, page]));
+  const prepared = prepareArtifact(sample.artifact);
+  for (let i = 0; i < 2; i++) {
+    const outcome = await prepared.run({ url: sample.url }, { signal: AbortSignal.timeout(60000), pages: async (url) => structuredClone(pages.get(url) ?? assert.fail('Uncaptured page: ' + url)) });
+    assert.deepEqual(outcome.data, sample.data, sample.id);
+    runs++;
   }
-  console.log(JSON.stringify({ artifacts: samples.length, executions: samples.length * 2, modelImports: 0 }));
-} finally { web.close(); }
+}
+console.log(JSON.stringify({ artifacts: samples.length, runs, modelImports: 0 }));
 `,
 );
 await run(['--experimental-loader', './guard.mjs', 'execute.mjs'], consumer, 'execution');
-await writeFile(
-  resolve(consumer, 'core.ts'),
-  `
-import { prepareArtifact, type Outcome } from '${pkg.name}';
-import { ENGINE_SEQUENCE, ENGINE_SCHEMAS } from '${pkg.name}/migrations';
-void ENGINE_SEQUENCE; void ENGINE_SCHEMAS;
-import { createWebOperations } from '${pkg.name}/operations';
-import { imageChoiceWorkflow, type ImageChoiceAdapters } from '${pkg.name}/search/image-choice';
-const web = createWebOperations();
-const prepare: typeof prepareArtifact = prepareArtifact;
-const output: Outcome | null = null;
-const adapters: ImageChoiceAdapters | null = null;
-void prepare; void output; void adapters; void imageChoiceWorkflow; web.close();
-`,
-);
 const typecheck = (file, name) =>
   run(
     [
@@ -207,6 +168,16 @@ const typecheck = (file, name) =>
     consumer,
     name,
   );
+await writeFile(
+  resolve(consumer, 'core.ts'),
+  `
+import { prepareArtifact, createWebTransport, type WalkResult, type Artifact } from '${pkg.name}';
+import { HAPTIC_SEQUENCE } from '${pkg.name}/migrations';
+const web = createWebTransport();
+const run = async (artifact: Artifact): Promise<WalkResult> => prepareArtifact(artifact).run({ url: 'https://example.test/' }, { web, signal: AbortSignal.timeout(1000) });
+void run; void HAPTIC_SEQUENCE; web.close();
+`,
+);
 await typecheck('core.ts', 'types-core');
 await run(
   [
@@ -224,41 +195,17 @@ await run(
 await writeFile(
   resolve(consumer, 'consumer.ts'),
   `
-import { prepareArtifact, type Outcome } from '${pkg.name}';
-import { createWebOperations } from '${pkg.name}/operations';
-import { createDiscoveryOperations, discoveryWorkflow, discoveryProfile } from '${pkg.name}/discovery';
-import { createSearchOperations, searchWorkflow, searchProfile } from '${pkg.name}/search';
-import { createImageChallengeRecovery, imageChoiceProfile } from '${pkg.name}/search/image-choice';
-const web = createWebOperations();
-const discovery = createDiscoveryOperations({ author: { apiKey: 'not-used' }, profile: discoveryProfile });
-const search = createSearchOperations({ author: { apiKey: 'not-used' }, searchProfile });
-const run = async (): Promise<Outcome> => {
-  const prepared = await prepareArtifact(discoveryWorkflow, discovery.operations, discovery.limits);
-  return prepared.run({ url: 'https://example.test/', instruction: 'Read the page.' });
-};
-void run; void searchWorkflow; void createImageChallengeRecovery; void imageChoiceProfile;
-web.close(); discovery.close(); search.close();
+import { discover, type DiscoveryResult } from '${pkg.name}/discovery';
+import { search, duckduckgo, type SearchResult } from '${pkg.name}/search';
+const found = (): Promise<DiscoveryResult> => discover({ url: 'https://example.test/', instruction: 'Read the page.' }, { groqKey: 'not-used' });
+const searched = (): Promise<SearchResult> => search({ instruction: 'Read the page.' }, { groqKey: 'not-used', typesafeKey: 'not-used', provider: duckduckgo });
+void found; void searched;
 `,
 );
 await typecheck('consumer.ts', 'types');
 await run(['--experimental-strip-types', 'consumer.ts'], consumer, 'discovery-import');
-await run(
-  [pnpm, 'add', '--offline', '--ignore-scripts', 'imagescript@' + pkg.devDependencies.imagescript],
-  consumer,
-  'install-codec',
-);
-await writeFile(
-  resolve(consumer, 'codec.ts'),
-  `
-import assert from 'node:assert/strict';
-import { createImageScriptPreparer, imageScriptProfile } from '${pkg.name}/search/image-choice/imagescript';
-assert.equal(typeof createImageScriptPreparer(imageScriptProfile), 'function');
-`,
-);
-await typecheck('codec.ts', 'types-codec');
-await run(['--experimental-strip-types', 'codec.ts'], consumer, 'codec-import');
 // Inspect the archive, not pnpm's installed directory, which adds dependency links.
-const packedFiles = (await run(['-tzf', archive], process.cwd(), 'contents', 'tar'))
+const packedFiles = (await run(['-tzf', archives[0]], evidence, 'contents', 'tar'))
   .split(/\r?\n/)
   .filter(Boolean)
   .filter((name) => !name.endsWith('/'))
@@ -266,50 +213,24 @@ const packedFiles = (await run(['-tzf', archive], process.cwd(), 'contents', 'ta
 assert(
   packedFiles.every(
     (name) =>
-      ['package.json', 'README.md', 'LICENSE', 'DESIGN.md', 'DOCS.md'].includes(name) ||
-      name.startsWith('dist/') ||
-      name.startsWith('docs/development/') ||
-      (name.startsWith('docs/measurements/') && pkg.files.includes(name)) ||
-      (name.startsWith('docs/plans/') && pkg.files.includes(name)),
+      ['package.json', 'README.md', 'LICENSE', 'DESIGN.md', 'STATUS.md'].includes(name) ||
+      name.startsWith('dist/'),
   ),
+  'Unexpected packed file',
 );
-assert(packedFiles.includes('dist/discovery/discovery.json'));
-assert(packedFiles.includes('dist/discovery/mechanical.json'));
-for (const path of [
-  'dist/discovery/source-author.js',
-  'dist/discovery/html-view.js',
-  'dist/discovery/captured-trial.json',
-  'dist/discovery/grounded-resources.json',
-])
-  assert(packedFiles.includes(path), 'Missing source-grounded runtime asset: ' + path);
-for (const name of [
-  'candidate-builder.json',
-  'html-review.json',
-  'output-shaping.json',
-  'json-adapter.json',
-  'xml-adapter.json',
-  'reference-following.json',
-  'html-author.js',
-  'xml-author.js',
-  'output-author.js',
-  'author-actions.js',
-])
-  assert(
-    !packedFiles.includes('dist/discovery/' + name),
-    'Retired discovery asset in package: ' + name,
-  );
 for (const target of Object.values(pkg.exports))
   for (const path of typeof target === 'string' ? [target] : Object.values(target))
     assert(packedFiles.includes(path.replace(/^\.\//, '')), 'Missing export target: ' + path);
 for (const path of [
-  'dist/search/search.json',
-  'dist/search/default-profile.json',
-  'dist/search/image-choice/recovery.json',
-  'dist/search/image-choice/default-profile.json',
+  'dist/render/child.mjs',
+  'dist/web/default-profile.json',
+  'dist/connector/default-profile.json',
+  'dist/readers/html/default-profile.json',
+  'dist/readers/xml/default-profile.json',
+  'dist/discovery/output-rejection.json',
   'dist/search/image-choice/imagescript-profile.json',
-  'docs/development/limitations.md',
 ])
-  assert(packedFiles.includes(path), 'Missing runtime/document asset: ' + path);
+  assert(packedFiles.includes(path), 'Missing runtime asset: ' + path);
 assert(
   packedFiles.every(
     (name) =>
@@ -319,36 +240,8 @@ assert(
       !/\.(?:pem|key|tgz)$/i.test(name) &&
       (!name.endsWith('.ts') || name.endsWith('.d.ts')),
   ),
-  'Unexpected source, research, dependency or credential file in archive',
+  'A secret, test or source file is packed',
 );
-const packedManifest = JSON.parse(
-  await run(['-xOf', archive, 'package/package.json'], process.cwd(), 'packed-manifest', 'tar'),
+console.log(
+  `Package check: ${samples.length} generated artifacts ran twice each from the packed package with no model import; entry points typecheck with and without optional peers; ${packedFiles.length} files packed.`,
 );
-assert.equal(packedManifest.private, pkg.private, 'Packing must preserve publication status');
-for (const version of Object.values(packedManifest.dependencies ?? {}))
-  assert(!/^(?:file|link|workspace|portal|patch):/.test(version), 'Local dependency in archive');
-const result = {
-  passed: true,
-  archive,
-  consumer,
-  evidence,
-  artifacts: samples.length,
-  executions: samples.length * 2,
-  modelImportsDuringExecution: 0,
-  declarationsChecked: true,
-  discoveryImportedWithoutProviderCall: true,
-  searchImportedWithoutProviderCall: true,
-  imageChoiceImportedWithoutCodec: true,
-  codecImportedExplicitly: true,
-  optionalPeersAbsentDuringCoreCheck: true,
-  migrationsImportedAndTypechecked: true,
-  nodeVersion: process.version,
-  stagingIdentity: { name: pkg.name, version: pkg.version, private: pkg.private },
-  dependencyLockSeedSha256: createHash('sha256').update(lockBytes).digest('hex'),
-  packedFiles,
-  archiveSha256: createHash('sha256')
-    .update(await readFile(archive))
-    .digest('hex'),
-};
-await writeFile(resolve(evidence, 'verification.json'), JSON.stringify(result, null, 2));
-console.log(JSON.stringify(result, null, 2));

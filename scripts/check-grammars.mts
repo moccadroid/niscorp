@@ -1,4 +1,4 @@
-import { ENGINE_SEQUENCE, ENGINE_SCHEMAS } from '../packages/haptic/dist/migrations/index.js';
+import { HAPTIC_SEQUENCE, HAPTIC_SCHEMAS } from '../packages/haptic/dist/migrations/index.js';
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { NOVA_SEQUENCE, NOVA_SCHEMAS } from '../packages/nova/dist/migrations/index.js';
@@ -12,7 +12,7 @@ const root = resolve(import.meta.dirname, '..');
 const write = process.argv.includes('--write');
 const rebaseline = process.argv.includes('--rebaseline');
 const GRAMMARS = [
-  { sequence: ENGINE_SEQUENCE, schemas: ENGINE_SCHEMAS },
+  { sequence: HAPTIC_SEQUENCE, schemas: HAPTIC_SCHEMAS },
   { sequence: NOVA_SEQUENCE, schemas: NOVA_SCHEMAS },
   { sequence: PRISM_SEQUENCE, schemas: PRISM_SCHEMAS },
   { sequence: VEX_SEQUENCE, schemas: VEX_SCHEMAS },

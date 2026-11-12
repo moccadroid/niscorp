@@ -2,7 +2,7 @@ import { DOMImplementation, Node as XmlNode } from '@xmldom/xmldom';
 import { SaxesParser } from 'saxes';
 import { z } from 'zod';
 import { OperationFailure, RunControl } from '../../engine/control.js';
-import { readSourceBody, type HttpSourceSchema } from '../../operations/http-source.js';
+import { readSourceBody, type HttpSourceSchema } from '../../web/source.js';
 import { decodeXml } from './decode.js';
 import type { XmlProfile } from './profile.schema.js';
 export { readXmlProfile, XmlProfileSchema } from './profile.schema.js';

@@ -1,0 +1,10 @@
+{
+  "key": "url",
+  "items": [
+    { "key": "https://www.zlib.net/zlib-1.4.tar.gz", "label": "US (zlib.net) — zlib 1.4, tar.gz format" },
+    { "key": "https://www.zlib.net/zlib-1.4.tar.xz", "label": "US (zlib.net) — zlib 1.4, tar.xz format" },
+    { "key": "https://www.zlib.net/zlib14.zip", "label": "US (zlib.net) — zlib 1.4, zipfile format" },
+    { "key": "https://www.zlib.net/current/zlib.tar.gz", "label": "https://zlib.net/current/zlib.tar.gz (permalink for the most recent release)" }
+  ],
+  "notes": "Under 'The current release is publicly available here' the page lists zlib 1.4 source in tar.gz, tar.xz and zip, each as a 'US (zlib.net)' link; those three are included. The 'Permalink for the most recent release' link (current/zlib.tar.gz) directly below is also a direct archive of the current source release, so it is included too; this is the one judgement call, since it duplicates the tar.gz. Excluded: the GPG signature (.asc) links, the commented-out SourceForge mirrors and DLL (not rendered), 'All released versions of zlib' (fossils), zipknit17.tar.gz (other software), ZlibOCX2.dll, and all documentation and external links. Grading caveat: each archive key is a prefix of its .asc URL, so a result holding only the signatures would still match."
+}

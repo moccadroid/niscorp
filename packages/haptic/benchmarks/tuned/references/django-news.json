@@ -1,0 +1,16 @@
+{
+  "key": "text",
+  "items": [
+    { "key": "Quarterly contributor outreach", "label": "Quarterly contributor outreach — Oct. 19, 2026" },
+    { "key": "Django security releases issued: 6.1.3, 6.0.10, and 5.2.19", "label": "Django security releases issued: 6.1.3, 6.0.10, and 5.2.19 — Nov. 3, 2026" },
+    { "key": "Natalia Bidart - Planned short-term leave", "label": "Natalia Bidart - Planned short-term leave — Oct. 26, 2026" },
+    { "key": "Django security reporting update", "label": "Django security reporting update — Oct. 8, 2026" },
+    { "key": "Django security releases issued: 6.1.2, 6.0.9, and 5.2.18", "label": "Django security releases issued: 6.1.2, 6.0.9, and 5.2.18 — Oct. 6, 2026" },
+    { "key": "Nominate Someone for the 2026 Malcolm Tredinnick Memorial Prize", "label": "Nominate Someone for the 2026 Malcolm Tredinnick Memorial Prize — Oct. 1, 2026" },
+    { "key": "DSF member of the month - Ken Whitesell", "label": "DSF member of the month - Ken Whitesell — Sept. 24, 2026" },
+    { "key": "New Technical Governance Approved", "label": "New Technical Governance Approved — Sept. 22, 2026" },
+    { "key": "Proposed change to DSF voting membership", "label": "Proposed change to DSF voting membership — Sept. 18, 2026" },
+    { "key": "Executive Director Search Extended to September 22", "label": "Executive Director Search Extended to September 22 — Sept. 16, 2026" }
+  ],
+  "notes": "All 10 entries of the main weblog list (ul.list-news > li) on page 1 of 90, in page order. Each entry is an h2 headline link, a byline, one intro paragraph and a 'Read more' link. The first entry, 'Quarterly contributor outreach' (Oct. 19, 2026), carries the 'Featured' label and is pinned above newer posts, so page order is not date order; the instruction asks for featured entries and document order, so it is included first. Keyed by headline; each entry also has an intro paragraph that a full answer should carry, but grading here is by headline. Excluded: the 'Featured' label, bylines, 'Read more', the 'Page 1 of 90 / Next' pagination (later pages were not fetched and are not expected), the 'Additional Information' and year-archive h2s in the sidebar, the sidebar h3 blocks (Support Django, Upcoming Events, Archives, RSS Feeds) and the footer. No judgement call beyond page order with the featured entry."
+}

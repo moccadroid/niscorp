@@ -1,0 +1,9 @@
+{
+  "key": "text",
+  "items": [
+    { "key": "A new Go API for JSON", "label": "https://go.dev/blog/jsonv2 (4 November 2026)" },
+    { "key": "Our Response To The eMudhra Key Disclosure Incident", "label": "https://go.dev/blog/emudhra-incident (26 October 2026)" },
+    { "key": "Help set Go's priorities for next year", "label": "https://go.dev/blog/survey2026-announce (21 October 2026)" }
+  ],
+  "notes": "The blog index at https://go.dev/blog/ lists posts newest first: 'A new Go API for JSON' (4 November 2026), 'Our Response To The eMudhra Key Disclosure Incident' (26 October 2026), 'Help set Go's priorities for next year' (21 October 2026); the next one, 'Interactive refactoring in gopls' (16 October 2026), is the fourth and not visited. One item per visited post, keyed by its h1 title exactly as shown (straight apostrophe in Go's). Each post's extracted content should be the full article body: jsonv2 has sections Introduction, Problems with encoding/json (Behavior flaws, API deficiencies, Performance limitations), Trying to fix encoding/json directly, Building on encoding/json/jsontext, Introducing encoding/json/v2 (Type-specified customization, Caller-specified customization, Behavior differences, Performance optimizations), Compatibility, Migration, More information, A long time coming; emudhra-incident has eMudhra Incident, Incident Timeline, Lessons Learned and Future Improvements, Upgrading and Verifying Your Deployments, Securing Go Deployments Everywhere; survey2026-announce has no section headings. Excluded: author lines, dates, next/previous article links, the 'The Go Blog' index link/heading, site navigation, footer. The grader only checks that each visited page's content contains its title; completeness of the body is not captured by these keys."
+}

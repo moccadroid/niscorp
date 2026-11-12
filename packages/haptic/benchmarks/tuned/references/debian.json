@@ -1,0 +1,22 @@
+{
+  "key": "url",
+  "items": [
+    { "key": "https://www.debian.org/releases/forky/", "label": "Forky" },
+    { "key": "https://www.debian.org/releases/trixie/", "label": "Trixie" },
+    { "key": "https://www.debian.org/releases/bookworm/", "label": "Bookworm" },
+    { "key": "https://www.debian.org/releases/bullseye/", "label": "Bullseye" },
+    { "key": "https://www.debian.org/releases/buster/", "label": "Buster" },
+    { "key": "https://www.debian.org/releases/stretch/", "label": "Stretch" },
+    { "key": "https://www.debian.org/releases/jessie/", "label": "Jessie" },
+    { "key": "https://www.debian.org/releases/wheezy/", "label": "Wheezy" },
+    { "key": "https://www.debian.org/releases/squeeze/", "label": "Squeeze" },
+    { "key": "https://www.debian.org/releases/lenny/", "label": "Lenny" },
+    { "key": "https://www.debian.org/releases/etch/", "label": "Etch" },
+    { "key": "https://www.debian.org/releases/sarge/", "label": "Sarge" },
+    { "key": "https://www.debian.org/releases/woody/", "label": "Woody" },
+    { "key": "https://www.debian.org/releases/potato/", "label": "Potato" },
+    { "key": "https://www.debian.org/releases/slink/", "label": "Slink" },
+    { "key": "https://www.debian.org/releases/hamm/", "label": "Hamm" }
+  ],
+  "notes": "Linked cells of the 'Code Name' column. The page has two tables of the same shape under 'Index of releases': the current one (Duke..Stretch) and, under the sub-heading 'Historic releases', the old one (Jessie..Hamm). Both are included, because the historic table sits inside the index of releases and has the same Code Name column; this is the main ambiguity, since the instruction says 'the table' (singular). If only the first table were meant, the reference would be the first 6 items. Code names without a link are not items: Duke (15, codename announced), Bo, Rex, Buzz, and the dash rows. Excluded: the 'Codename announced', 'LTS support' and 'extended LTS support' links in the Status column, the stable/testing/unstable links in the definition list above the table, the FAQ links in prose, and site navigation. The release-number column has no links on this page."
+}

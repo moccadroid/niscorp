@@ -7,7 +7,17 @@ import { decodeHtmlSource, readHtmlProfile } from '../../readers/html/index.js';
 export const readImageChallenge = (
   html: string | Uint8Array,
   pageUrl: string,
-  profile: ImageChoiceProfile,
+  profile: Pick<
+    ImageChoiceProfile,
+    | 'form'
+    | 'tile'
+    | 'checkbox'
+    | 'image'
+    | 'submit'
+    | 'instruction'
+    | 'allowedFormOrigins'
+    | 'allowedImageOrigins'
+  >,
 ): ImageChallenge | null => {
   const $ = load(
     typeof html === 'string'

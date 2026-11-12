@@ -1,0 +1,9 @@
+{
+  "key": "url",
+  "items": [
+    { "key": "https://docs.ruby-lang.org/en", "label": "docs.ruby-lang.org/en" },
+    { "key": "https://docs.ruby-lang.org/en/4.0", "label": "docs.ruby-lang.org/en/4.0" },
+    { "key": "https://docs.ruby-lang.org/en/master", "label": "docs.ruby-lang.org/en/master" }
+  ],
+  "notes": "The 'Official Ruby Documentation' heading is followed by four one-link paragraphs; the fourth, 'C Extension Guide', is excluded as instructed, leaving three. Everything from 'Getting Started' onward (tutorials, books, community references, style guides, editors) and the site header, language menu and footer are excluded. Grading caveat: 'https://docs.ruby-lang.org/en' is a prefix of the other two keys and of the C Extension Guide URL, and '.../en/master' is a prefix of the C Extension Guide URL, so under contains-matching the first item matches almost any docs.ruby-lang.org/en link and an included C Extension Guide link would match two items."
+}

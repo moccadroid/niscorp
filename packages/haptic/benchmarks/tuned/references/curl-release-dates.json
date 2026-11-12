@@ -1,0 +1,11 @@
+{
+  "key": "text",
+  "items": [
+    { "key": "Oct 14 2026", "label": "8.23.0 — Oct 14 2026" },
+    { "key": "Sep 2 2026", "label": "8.22.0 — Sep 2 2026" },
+    { "key": "Jun 24 2026", "label": "8.21.0 — Jun 24 2026" },
+    { "key": "Apr 29 2026", "label": "8.20.0 — Apr 29 2026" },
+    { "key": "Mar 11 2026", "label": "8.19.0 — Mar 11 2026" }
+  ],
+  "notes": "The page has one table; its first two rows are headings (#, Version, Date, Since 8.23.0, Delta, Accumulated; then Days/Bugfixes/Changes/Vulns). The first five data rows are releases 8.23.0 down to 8.19.0, newest first, and the items are their Date cells (third column), keyed by the date exactly as shown. In the HTML the date's spaces are &nbsp; (e.g. Oct&nbsp;14&nbsp;2026); the keys use plain spaces, so matching relies on non-breaking spaces counting as whitespace when collapsed."
+}

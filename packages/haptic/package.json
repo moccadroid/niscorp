@@ -12,10 +12,11 @@
     "build": "pnpm clean && tsc -p tsconfig.build.json",
     "clean": "node scripts/clean.mjs",
     "typecheck": "tsc --noEmit",
-    "check": "pnpm build && tsx tests/run.ts && node --test benchmarks/discovery-support.test.mjs benchmarks/qualification-support.test.mjs",
+    "check": "pnpm build && tsx tests/run.ts",
     "test": "pnpm check",
-    "benchmark": "pnpm build && node benchmarks/engine.mjs",
-    "check:package": "node scripts/check-package.mjs"
+    "check:package": "node scripts/check-package.mjs",
+    "bench": "tsx benchmarks/discovery-bench.ts",
+    "grade": "tsx benchmarks/grade.ts"
   },
   "engines": {
     "node": ">=22.13.0"
@@ -30,16 +31,17 @@
     "domhandler": "6.0.1",
     "domutils": "4.0.2",
     "encoding-sniffer": "1.0.2",
+    "jsdom": "25.0.1",
     "saxes": "6.0.0",
     "xpath": "0.0.36"
   },
   "peerDependencies": {
-    "@niscorp/cortex": "0.1.4",
-    "@niscorp/signal": "0.1.6",
+    "@niscorp/cortex": "0.1.5",
+    "@niscorp/signal": "0.1.8",
     "imagescript": "^3.14.0",
     "openai": "^7.51.0",
     "zod": "^4.6.7",
-    "@niscorp/prism": "0.3.1",
+    "@niscorp/prism": "0.3.2",
     "@niscorp/strata": "0.1.7"
   },
   "peerDependenciesMeta": {
@@ -57,8 +59,9 @@
     }
   },
   "devDependencies": {
-    "@niscorp/cortex": "0.1.4",
-    "@niscorp/signal": "0.1.6",
+    "@niscorp/cortex": "0.1.5",
+    "@niscorp/signal": "0.1.8",
+    "@types/jsdom": "30.0.0",
     "@types/node": "26.6.6",
     "imagescript": "3.14.0",
     "openai": "7.51.0",
@@ -66,69 +69,21 @@
     "tsx": "4.23.15",
     "typescript": "7.0.2",
     "zod": "4.6.7",
-    "@niscorp/prism": "0.3.1",
+    "@niscorp/prism": "0.3.2",
     "@niscorp/strata": "0.1.7"
   },
   "files": [
     "dist",
     "README.md",
     "LICENSE",
-    "docs/development/public-api.md",
-    "docs/development/current-status.md",
-    "docs/development/artifact-execution.md",
-    "docs/development/discovery-preconditions.md",
-    "docs/development/output-shaping.md",
-    "docs/development/json-discovery.md",
-    "docs/development/xml-discovery.md",
-    "docs/development/reference-following.md",
-    "docs/development/html-records.md",
-    "docs/development/remaining-work.md",
-    "docs/development/limitations.md",
-    "docs/development/nisc-handoff.md",
-    "docs/development/release-verification.md",
-    "docs/development/search.md",
-    "docs/development/search-image-choice.md",
-    "docs/development/discovery-builder.md",
-    "docs/measurements/search-connection-2026-10-29.md",
-    "docs/measurements/search-image-choice-connected-2026-10-30.md",
-    "docs/measurements/discovery-cleanup-audit-2026-10-30.md",
-    "docs/measurements/parsed-html-preparation-2026-10-30.md",
-    "docs/measurements/author-repair-offline-2026-10-30.md",
-    "docs/measurements/author-repair-models-2026-10-30.md",
-    "docs/measurements/duckduckgo-http-investigation-2026-10-29.md",
-    "docs/measurements/search-destination-depth-2026-10-30.md",
-    "docs/measurements/search-vienna-scope-2026-10-30.md",
-    "docs/measurements/imagescript-integration-2026-10-30.md",
-    "docs/measurements/captcha-codec-discovery-consolidation-2026-10-30.md",
-    "docs/measurements/parsed-html-model-repairs-2026-10-30.md",
-    "docs/measurements/template-binding-cleanup-2026-10-30.md",
-    "docs/measurements/bounded-search-loop-2026-10-31.md",
-    "docs/measurements/search-exclusion-integration-2026-10-31.md",
-    "docs/measurements/search-ranking-cleanup-2026-10-31.md",
-    "docs/measurements/source-grounded-test-coverage.md",
-    "docs/plans/source-grounded-discovery.md",
-    "docs/plans/job-specific-discovery.md",
-    "docs/measurements/discovery-standards-2026-11-04.md",
-    "docs/measurements/discovery-local-dataflow-2026-11-04.md",
-    "docs/measurements/nisc-qualification-2026-11-04.md",
-    "docs/measurements/qualification-role-audit-2026-11-04.md",
-    "docs/measurements/provider-recovery-2026-11-04.md",
-    "docs/measurements/record-associations-2026-11-04.md",
-    "docs/measurements/haptic-handoff-2026-11-05.md",
     "DESIGN.md",
-    "DOCS.md",
-    "docs/development/nisc-integration.md"
+    "STATUS.md"
   ],
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
-    "./operations": {
-      "types": "./dist/operations/index.d.ts",
-      "import": "./dist/operations/index.js"
-    },
-    "./package.json": "./package.json",
     "./discovery": {
       "types": "./dist/discovery/index.d.ts",
       "import": "./dist/discovery/index.js"
@@ -137,18 +92,11 @@
       "types": "./dist/search/index.d.ts",
       "import": "./dist/search/index.js"
     },
-    "./search/image-choice": {
-      "types": "./dist/search/image-choice/index.d.ts",
-      "import": "./dist/search/image-choice/index.js"
-    },
-    "./search/image-choice/imagescript": {
-      "types": "./dist/search/image-choice/imagescript.d.ts",
-      "import": "./dist/search/image-choice/imagescript.js"
-    },
     "./migrations": {
       "types": "./dist/migrations/index.d.ts",
       "import": "./dist/migrations/index.js"
-    }
+    },
+    "./package.json": "./package.json"
   },
   "types": "./dist/index.d.ts",
   "repository": {

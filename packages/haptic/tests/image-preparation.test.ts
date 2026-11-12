@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { Image, Animation, Frame } from 'imagescript';
-import { captureBody } from '../src/operations/http-source.js';
+import { captureBody } from '../src/web/source.js';
 import {
   createImageScriptPreparer,
   imageScriptProfile,
 } from '../src/search/image-choice/imagescript.js';
-import type { ImageChallenge } from '../src/search/image-choice/index.js';
+import type { ImageChallenge } from '../src/search/image-choice/contracts.js';
 
 const image = await new Image(3, 2).fill(0xc8280aff).encode();
 const body = captureBody(image);
@@ -176,7 +176,7 @@ const probe = spawnSync(
   ), import.meta.url);
   await import('./dist/index.js');
   await import('./dist/search/index.js');
-  await import('./dist/search/image-choice/index.js');
+  await import('./dist/discovery/index.js');
   try { await import('./dist/search/image-choice/imagescript.js'); throw new Error('Expected missing codec'); }
   catch (error) { if (error.message !== 'CODEC_UNAVAILABLE') throw error; }
 `,
@@ -185,5 +185,5 @@ const probe = spawnSync(
 );
 assert.equal(probe.status, 0, probe.stderr);
 console.log(
-  '[pass] image preparation: core and recovery import without codec; only optional ImageScript entry requires it',
+  '[pass] image preparation: every entry point imports without the codec; only the ImageScript module requires it',
 );

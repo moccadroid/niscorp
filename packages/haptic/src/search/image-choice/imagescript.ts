@@ -1,9 +1,8 @@
 import { Animation, Image, ImageType } from 'imagescript';
 import { z } from 'zod';
 import { freezeOwned } from '../../engine/json.js';
-import { HttpSourceSchema, readSourceBody } from '../../operations/http-source.js';
-import { ChallengeSchema, type PreparedImages } from './contracts.js';
-import type { ImageChoiceAdapters } from './index.js';
+import { HttpSourceSchema, readSourceBody, type HttpSource } from '../../web/source.js';
+import { ChallengeSchema, type ImageChallenge, type PreparedImages } from './contracts.js';
 import defaults from './imagescript-profile.json' with { type: 'json' };
 
 const channel = z.number().int().min(0).max(255);
@@ -32,7 +31,11 @@ export const imageScriptProfile = freezeOwned(ImageScriptProfileSchema.parse(def
 /** Optional host codec: center-pad without resizing, preserving original tile IDs. */
 export const createImageScriptPreparer = (
   input: unknown = defaults,
-): ImageChoiceAdapters['prepareImages'] => {
+): ((
+  challenge: ImageChallenge,
+  images: HttpSource[],
+  signal: AbortSignal,
+) => Promise<PreparedImages>) => {
   const policy = freezeOwned(ImageScriptProfileSchema.parse(input));
   return async (inputChallenge, inputImages, signal): Promise<PreparedImages> => {
     signal.throwIfAborted();

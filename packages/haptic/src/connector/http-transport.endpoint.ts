@@ -15,6 +15,12 @@ export type HttpResponse = {
 };
 export interface RawHttpTransport {
   get(url: URL, headers: Record<string, string>, signal: AbortSignal): Promise<HttpResponse>;
+  post(
+    url: URL,
+    headers: Record<string, string>,
+    body: string,
+    signal: AbortSignal,
+  ): Promise<HttpResponse>;
   close(): void;
 }
 const receivedBody = (stream: Readable): AsyncIterable<unknown> => {
@@ -136,67 +142,77 @@ export const createRawHttpTransport = (configuration: HttpConfiguration): RawHtt
   };
   http.on('free', rememberIdle);
   https.on('free', rememberIdle);
-  return {
-    get: async (inputUrl, inputHeaders, signal) => {
-      if (closed) throw new Error('HTTP transport closed');
-      const url = new URL(inputUrl.href);
-      const headers = { ...inputHeaders };
-      if (!['http:', 'https:'].includes(url.protocol))
-        throw new Error('Unsupported HTTP protocol: ' + url.protocol);
-      signal.throwIfAborted();
-      return new Promise<HttpResponse>((done, reject) => {
-        const outgoing = (url.protocol === 'https:' ? httpsRequest : httpRequest)(url, {
-          headers,
-          signal: AbortSignal.any([signal, lifecycle.signal]),
-          agent: url.protocol === 'https:' ? https : http,
-        });
-        const timer = setTimeout(
-          () => outgoing.destroy(new OperationFailure('HTTP_TIMEOUT', 'HTTP headers timed out')),
-          config.headerTimeoutMs,
-        );
-        outgoing.once('socket', (socket) => {
-          idle.delete(socket);
-          if (!tracked.has(socket)) {
-            tracked.add(socket);
-            socket.once('close', () => idle.delete(socket));
-          }
-        });
-        outgoing.once('error', (error) => {
-          clearTimeout(timer);
-          reject(error);
-        });
-        outgoing.once('response', (incoming) => {
-          clearTimeout(timer);
-
-          const responseHeaders = new Headers();
-          for (const [key, value] of Object.entries(incoming.headers)) {
-            if (Array.isArray(value)) for (const part of value) responseHeaders.append(key, part);
-            else if (value !== undefined) responseHeaders.set(key, value);
-          }
-          try {
-            done({
-              status: incoming.statusCode ?? 0,
-              headers: responseHeaders,
-              rawHeaders: [...incoming.rawHeaders],
-              body: checkedBody(receivedBody(incoming), config.idleTimeoutMs, (error) =>
-                incoming.destroy(error),
-              ),
-              dispose: () => {
-                if (!incoming.complete || !incoming.readableEnded) {
-                  incoming.destroy();
-                  outgoing.destroy();
-                }
-              },
-            });
-          } catch (error) {
-            incoming.destroy();
-            outgoing.destroy();
-            reject(error);
-          }
-        });
-        outgoing.end();
+  const send = async (
+    method: 'GET' | 'POST',
+    inputUrl: URL,
+    inputHeaders: Record<string, string>,
+    body: string | null,
+    signal: AbortSignal,
+  ): Promise<HttpResponse> => {
+    if (closed) throw new Error('HTTP transport closed');
+    const url = new URL(inputUrl.href);
+    const headers = { ...inputHeaders };
+    if (!['http:', 'https:'].includes(url.protocol))
+      throw new Error('Unsupported HTTP protocol: ' + url.protocol);
+    signal.throwIfAborted();
+    return new Promise<HttpResponse>((done, reject) => {
+      const outgoing = (url.protocol === 'https:' ? httpsRequest : httpRequest)(url, {
+        method,
+        headers,
+        signal: AbortSignal.any([signal, lifecycle.signal]),
+        agent: url.protocol === 'https:' ? https : http,
       });
-    },
+      const timer = setTimeout(
+        () => outgoing.destroy(new OperationFailure('HTTP_TIMEOUT', 'HTTP headers timed out')),
+        config.headerTimeoutMs,
+      );
+      outgoing.once('socket', (socket) => {
+        idle.delete(socket);
+        if (!tracked.has(socket)) {
+          tracked.add(socket);
+          socket.once('close', () => idle.delete(socket));
+        }
+      });
+      outgoing.once('error', (error) => {
+        clearTimeout(timer);
+        reject(error);
+      });
+      outgoing.once('response', (incoming) => {
+        clearTimeout(timer);
+
+        const responseHeaders = new Headers();
+        for (const [key, value] of Object.entries(incoming.headers)) {
+          if (Array.isArray(value)) for (const part of value) responseHeaders.append(key, part);
+          else if (value !== undefined) responseHeaders.set(key, value);
+        }
+        try {
+          done({
+            status: incoming.statusCode ?? 0,
+            headers: responseHeaders,
+            rawHeaders: [...incoming.rawHeaders],
+            body: checkedBody(receivedBody(incoming), config.idleTimeoutMs, (error) =>
+              incoming.destroy(error),
+            ),
+            dispose: () => {
+              if (!incoming.complete || !incoming.readableEnded) {
+                incoming.destroy();
+                outgoing.destroy();
+              }
+            },
+          });
+        } catch (error) {
+          incoming.destroy();
+          outgoing.destroy();
+          reject(error);
+        }
+      });
+      if (body === null) outgoing.end();
+      else outgoing.end(body);
+    });
+  };
+  return {
+    get: (url, headers, signal) => send('GET', url, headers, null, signal),
+    post: (url, headers, body, signal) => send('POST', url, headers, body, signal),
     close: () => {
       if (closed) return;
       closed = true;

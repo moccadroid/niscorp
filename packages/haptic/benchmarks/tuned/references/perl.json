@@ -1,0 +1,15 @@
+{
+  "key": "url",
+  "items": [
+    { "key": "https://www.perl.org/books/beginning-perl/", "label": "Read the entire book free online... (Beginning Perl)" },
+    { "key": "http://modernperlbooks.com/books/modern_perl_2016/index.html", "label": "Read the entire book free online... (Modern Perl)" },
+    { "key": "https://www.perl.org/books/impatient-perl/", "label": "Read the entire book free online... (Impatient Perl)" },
+    { "key": "http://www.extremeperl.org/", "label": "Read the entire book free online... (Extreme Perl)" },
+    { "key": "https://masonbook.houseabsolute.com/", "label": "Read the entire book free online... (Embedding Perl in HTML with Mason)" },
+    { "key": "http://www.linuxtopia.org/online_books/perl/index.html", "label": "Read the entire book free online... (Picking Up Perl)" },
+    { "key": "http://www.faqs.org/docs/perl5int/", "label": "Read the entire book free online... (Perl 5 Internals)" },
+    { "key": "https://modperl2book.org/mp1/", "label": "Read the entire book free online... (Practical mod_perl)" },
+    { "key": "http://lwp.interglacial.com/", "label": "Read the entire book free online... (Perl & LWP)" }
+  ],
+  "notes": "Each of the nine books in the Full Text section has one link with the text 'Read the entire book free online...'. Those nine links are the items. Excluded: the three 'Read sample chapters online...' links (Writing Apache Modules, mod_perl Developer's Cookbook, and the sample-chapters entry for Perl & LWP), the Amazon, Amazon UK and Powell's redirect links, the 'First Edition (July 1999)' link under Picking Up Perl, the in-page table-of-contents anchors and the site navigation. The cover images are not links on this page. Perl & LWP appears twice, and only its full-text entry (http://lwp.interglacial.com/) counts. Relative hrefs were resolved against https://www.perl.org/books/library.html."
+}

@@ -1,7 +1,3 @@
-import { ArtifactSchema, FlowSchema, StepSchema } from '../engine/index.js';
-export { ENGINE_SEQUENCE } from '../engine/index.js';
-export const ENGINE_SCHEMAS = {
-  'eden.engine/artifact': ArtifactSchema,
-  'eden.engine/flow': FlowSchema,
-  'eden.engine/step': StepSchema,
-} as const;
+import { ArtifactSchema } from '../artifact/schema.js';
+export { HAPTIC_SEQUENCE } from '../artifact/grammar.js';
+export const HAPTIC_SCHEMAS = { 'nisc.haptic/artifact': ArtifactSchema } as const;

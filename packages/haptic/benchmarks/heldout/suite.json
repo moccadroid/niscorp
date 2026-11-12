@@ -1,0 +1,78 @@
+{
+  "cases": [
+    {
+      "id": "postgresql-final-release-dates",
+      "url": "https://www.postgresql.org/support/versioning/",
+      "instruction": "Select the version number and final release date for each major version from 10 onward in the releases table. Exclude the current minor, supported and first release columns, the rows for 9.6 and older, and the table headings.",
+      "allowLinkFollowing": false
+    },
+    {
+      "id": "nodejs-api-modules",
+      "url": "https://nodejs.org/api/",
+      "instruction": "Select the name and link of every API module page in the index list in the main content. Exclude 'About this documentation', 'Usage and example', the code repository link, the repeated list in the sidebar, the other-versions picker and the options menu.",
+      "allowLinkFollowing": false
+    },
+    {
+      "id": "usenix-upcoming-events",
+      "url": "https://www.usenix.org/conferences/upcoming",
+      "instruction": "Select the name and dates of each event in the upcoming events list. Exclude locations, submission deadlines, the Upcoming/Past/All tabs, pagination links, site navigation and footer links.",
+      "allowLinkFollowing": false
+    },
+    {
+      "id": "wikipedia-tallest-buildings",
+      "url": "https://en.wikipedia.org/wiki/List_of_tallest_buildings",
+      "instruction": "Select the building name and height in metres for the first ten buildings in the main ranked list of tallest buildings. Exclude the height in feet, floors, images, city, country, year, comments and reference columns, footnote markers, and the alternative-measurement tables further down the page.",
+      "allowLinkFollowing": false
+    },
+    {
+      "id": "nginx-legacy-source-archives",
+      "url": "https://nginx.org/en/download.html",
+      "instruction": "Select the source archive download links for the branches in the Legacy versions table. Exclude Windows archives, signature links, changes links, the mainline and stable versions above the table, and the source code and pre-built packages sections.",
+      "allowLinkFollowing": false
+    },
+    {
+      "id": "digitalocean-database-regions",
+      "url": "https://status.digitalocean.com/",
+      "instruction": "Select the region names listed under Managed Databases in the component status list. Exclude the Global entry, status labels, the regions listed under every other group such as Droplets, Kubernetes and Volumes, and the incident history.",
+      "allowLinkFollowing": false
+    },
+    {
+      "id": "pypi-requests-latest-version",
+      "url": "https://pypi.org/project/requests/",
+      "instruction": "Select the latest release version number shown in the package header. Exclude the install command, release dates, the release history entries, pre-releases and the required Python version.",
+      "allowLinkFollowing": false
+    },
+    {
+      "id": "fly-smallest-machine-price",
+      "url": "https://docs.fly.io/about/pricing",
+      "instruction": "Select the monthly price of the smallest Machine, shared-cpu-1x with 256MB RAM, in the main pricing table. Exclude other Machine sizes, additional RAM and volume prices, the notes column, and the per-region price lists.",
+      "allowLinkFollowing": false
+    },
+    {
+      "id": "haproxy-lts-latest-versions",
+      "url": "https://www.haproxy.org/",
+      "instruction": "Select the latest version number of each long-term-support branch in the Latest versions table. Exclude stable branches, critical-fixes-only branches, unmaintained branches and the development branch, as well as release dates, end-of-life dates, changelog dates and the git, web, dir, announce and bugs links.",
+      "allowLinkFollowing": false
+    },
+    {
+      "id": "jqueryui-final-releases",
+      "url": "https://jqueryui.com/changelog/",
+      "instruction": "Select the version links for final releases from 1.12.0 onward in the changelog list. Exclude betas and release candidates, versions older than 1.12.0, release dates, the widget, effect and utility lists in the sidebar, and site navigation.",
+      "allowLinkFollowing": false
+    },
+    {
+      "id": "go-blog-recent-posts",
+      "url": "https://go.dev/blog/",
+      "instruction": "Visit the three most recent posts linked from this blog index. Select each post's title and complete article body, including all paragraphs, code examples, lists and section headings. Exclude author names and dates, the next and previous article links, the blog index link, site navigation and footer.",
+      "allowLinkFollowing": true,
+      "linkDepth": 1
+    },
+    {
+      "id": "typescript-blog-section-headings",
+      "url": "https://devblogs.microsoft.com/typescript/",
+      "instruction": "Visit the two most recent posts linked from this blog. From each, select the post title and the section headings inside the article. Exclude the author byline and date, paragraphs and code examples, comments, share buttons, related posts, sidebar and footer.",
+      "allowLinkFollowing": true,
+      "linkDepth": 1
+    }
+  ]
+}
