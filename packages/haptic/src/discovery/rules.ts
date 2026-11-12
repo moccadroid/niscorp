@@ -256,8 +256,13 @@ export const candidates = ($: CheerioAPI, examples: Example[]): Candidates => {
     }
   }
   const options: Omit<ListOption, 'fields'>[] = [];
-  const nests = (matched: Element[]) =>
-    matched.some((e) => matched.some((o) => o !== e && contains($, o, e)));
+  const nests = (matched: Element[]) => {
+    const set = new Set<AnyNode>(matched);
+    return matched.some((e) => {
+      for (let up = e.parent; up; up = up.parent) if (set.has(up)) return true;
+      return false;
+    });
+  };
   for (const written of selectors) {
     let selector = written;
     let matched: Element[];
@@ -285,8 +290,17 @@ export const candidates = ($: CheerioAPI, examples: Example[]): Candidates => {
       item: norm($(found[0]).text()),
     });
   }
+  // Field rules depend only on the records holding the examples, which many rules share.
+  const ruled = new Map<string, Record<string, FoundRule | null>>();
+  const ids = new Map<Element, number>();
+  const idOf = (record: Element) => ids.get(record) ?? (ids.set(record, ids.size), ids.size - 1);
   const withFields = options
-    .map((option) => ({ ...option, fields: fieldRules($, option.records, examples) }))
+    .map((option) => {
+      const key = option.records.map(idOf).join(',');
+      const fields = ruled.get(key) ?? fieldRules($, option.records, examples);
+      ruled.set(key, fields);
+      return { ...option, fields };
+    })
     .sort((a, b) => byStability(a.selector, b.selector) || b.count - a.count);
   return { options: withFields, examples };
 };

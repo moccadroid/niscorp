@@ -43,8 +43,8 @@ export type DiscoverOptions = {
   // Where pages come from: saved pages (tests, benchmarks) or a web; by default a web with the default profile.
   pages?: (url: string) => Promise<HttpSource>;
   web?: WebTransport;
-  // Replaces the model calls of each attempt (replay tests).
-  calls?: (effort: Effort, attempt: number) => Calls;
+  // Replaces the model calls of an attempt (replay tests); undefined leaves that attempt live.
+  calls?: (effort: Effort, attempt: number) => Calls | undefined;
 };
 
 export type AttemptSummary = {

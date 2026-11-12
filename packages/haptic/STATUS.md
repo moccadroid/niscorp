@@ -1,13 +1,13 @@
 # Haptic status
 
-Measured 2026-11-08 to 2026-11-12 (the table: 2026-11-12, after `docs/plans/efficiency.md`), gpt-oss-120b through Groq, Jev through TypeSafe.
+Measured 2026-11-08 to 2026-11-12 (the table: 2026-11-12, after `docs/plans/efficiency.md` and `speed.md`), gpt-oss-120b through Groq, Jev through TypeSafe.
 
 ## Results
 
 | Set                                                                                                                       | Complete    | Input tokens per discovery | Time per discovery |
 | ------------------------------------------------------------------------------------------------------------------------- | ----------- | -------------------------- | ------------------ |
-| Tuned: 17 pages × 3 runs (`benchmarks/tuned`)                                                                             | 49/51 (96%) | 15.9k average              | median 4 s         |
-| Held-out: 11 sites × 3 runs, written blind, never tuned on (`benchmarks/heldout`, PyPI left out: its page is a bot check) | 23/33 (70%) | 37k average                | median 20 s        |
+| Tuned: 17 pages × 3 runs (`benchmarks/tuned`)                                                                             | 49/51 (96%) | 14.2k average              | median 3.5 s       |
+| Held-out: 11 sites × 3 runs, written blind, never tuned on (`benchmarks/heldout`, PyPI left out: its page is a bot check) | 24/33 (73%) | 39k average                | median 6 s         |
 
 "Complete" means every item of an independently written reference list is in the result, each as its own item, with at most one extra item (or 10%). One live search ("Show me a list of ai meetups in Vienna!", 2026-11-12) ranked 5 sources; 4 gave usable artifacts that ran again with no model in 1.5–2.7 s.
 
@@ -21,7 +21,6 @@ Measured 2026-11-08 to 2026-11-12 (the table: 2026-11-12, after `docs/plans/effi
 - **Jev labels up to 25 records per call**: Node.js's API list takes 3 calls per attempt instead of about 200.
 - **Fields across levels** cannot be combined: the program sees only the last level's records.
 - **Rendering costs about 1.4 s per rendered page** (0.85 s of it starting the process and loading jsdom), twice per discovery: once in the attempt, once in the trial.
-- **Rule search on very long tables is slow**: curl's release table takes about 40 s of code, no model involved; Fly's pricing page about 19 s.
 
 ## Not built yet
 
