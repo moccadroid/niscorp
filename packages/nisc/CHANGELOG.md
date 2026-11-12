@@ -1,5 +1,12 @@
 # @niscorp/nisc
 
+## 0.9.3
+
+### Patch Changes
+
+- Updated dependencies [a740e2a]
+  - @niscorp/moss@0.9.2
+
 ## 0.9.2
 
 ### Patch Changes
