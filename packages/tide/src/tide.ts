@@ -29,7 +29,7 @@ import { stateOf } from './engine/materialize';
 import { admitFact, announceFact } from './engine/facts';
 
 export type Tide = {
-  load: (reflexes: readonly ReflexInput[], options?: { at?: number }) => Promise<LoadReport>;
+  load: (reflexes: readonly ReflexInput[], options?: { at?: number; isolate?: boolean }) => Promise<LoadReport>;
   reflexes: () => readonly Reflex[];
   graph: () => GraphReport;
 
@@ -90,8 +90,8 @@ export const createTide = (config: TideConfig): Tide => {
     },
   };
 
-  const load = async (input: readonly ReflexInput[], options?: { at?: number }): Promise<LoadReport> => {
-    const { reflexes: parsed, graph } = admitReflexes(input, mergedEffects);
+  const load = async (input: readonly ReflexInput[], options?: { at?: number; isolate?: boolean }): Promise<LoadReport> => {
+    const { reflexes: parsed, graph, refused } = admitReflexes(input, mergedEffects, options?.isolate === true);
 
     const previously = new Set(loaded.keys());
 
@@ -115,7 +115,7 @@ export const createTide = (config: TideConfig): Tide => {
     loaded.clear();
     for (const [id, entry] of next) loaded.set(id, entry);
 
-    return { loaded: parsed.length, cycles: graph.cycles, blind: graph.blind, warnings: graph.warnings };
+    return { loaded: parsed.length, cycles: graph.cycles, blind: graph.blind, warnings: graph.warnings, refused };
   };
 
   const mergedEffects = (parsed: readonly Reflex[]): EffectRegistry => {

@@ -1,6 +1,6 @@
 import { ReflexSchema } from '../schemas';
 import type { Reflex, ReflexDraft, Timer } from '../schemas';
-import { zonedParts } from './occurrence';
+import { occurrencesBetween, zonedParts } from './occurrence';
 
 export const timerMs = (timer: Timer): number => (((timer.hours ?? 0) * 60 + (timer.minutes ?? 0)) * 60 + (timer.seconds ?? 0)) * 1000;
 
@@ -16,5 +16,12 @@ export const anchorDraft = (draft: ReflexDraft, anchor: { at: number; tz: string
   // A clock names whole seconds. Rounded up: a timer may run a fraction of a
   // second long, never short.
   const fires = Math.ceil((anchor.at + timerMs(draft.on.timer)) / 1000) * 1000;
-  return ReflexSchema.parse({ ...draft, on: { clock: { at: localDateTime(fires, anchor.tz), tz: anchor.tz } } });
+  return ReflexSchema.parse({ ...draft, on: { clock: clockAt(fires, anchor.tz) } });
+};
+
+// The host's zone, where its wall clock names the instant; in the hour a clock turned back repeats, the local time names
+// the first pass, an hour early, so the timer is kept in UTC, which names every instant once.
+const clockAt = (fires: number, tz: string): { at: string; tz: string } => {
+  const local = { at: localDateTime(fires, tz), tz };
+  return occurrencesBetween(local, fires - 1000, fires, 1)[0]?.at === fires ? local : { at: localDateTime(fires, 'UTC'), tz: 'UTC' };
 };

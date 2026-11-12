@@ -14,6 +14,8 @@ export type { TideDriver, TideDriverConfig } from './driver';
 
 export {
   ReflexSchema,
+  reflexSchemaOf,
+  REFLEX_TRIGGERS,
   ReflexDraftSchema,
   draftSchemaOf,
   DRAFT_TRIGGERS,
@@ -34,12 +36,14 @@ export {
   FactInputSchema,
   FactKindSchema,
   ClockUnitSchema,
+  TimeZoneSchema,
   OpSchema,
   WEEKDAYS,
 } from './schemas';
 export type {
   Reflex,
   ReflexInput,
+  ReflexTrigger,
   ReflexDraft,
   DraftChoice,
   DraftField,
@@ -65,6 +69,7 @@ export type {
   EffectRegistry,
   Fact,
   LoadReport,
+  LoadRefusal,
   NewFact,
   PreviewCtx,
   PreviewReport,
@@ -102,7 +107,7 @@ export type {
 
 export type { AdvanceOptions } from './engine/advance';
 export type { PreviewOptions } from './engine/preview';
-export type { GraphReport, Edge } from './engine/graph';
+export type { GraphReport, GraphRefusal, Edge } from './engine/graph';
 
 export { occurrencesBetween, occurrenceKey, zonedParts, zonedToUtc, daysInMonth } from './engine/occurrence';
 export { anchorDraft, timerMs } from './engine/anchor';
