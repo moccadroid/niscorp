@@ -1,4 +1,4 @@
-import { FactInputSchema, ReflexSchema, factOf } from './schemas';
+import { FactInputSchema, factOf } from './schemas';
 import type { Reflex, ReflexInput } from './schemas';
 import { TideError } from './errors';
 import type {
@@ -17,6 +17,7 @@ import type {
 import { versionOf } from './engine/runtime';
 import type { EngineDeps, LoadedReflex } from './engine/runtime';
 import { buildGraph } from './engine/graph';
+import { admitReflexes } from './engine/admit';
 import type { GraphReport } from './engine/graph';
 import { runAdvance } from './engine/advance';
 import type { AdvanceOptions } from './engine/advance';
@@ -28,7 +29,7 @@ import { stateOf } from './engine/materialize';
 import { admitFact, announceFact } from './engine/facts';
 
 export type Tide = {
-  load: (reflexes: readonly ReflexInput[], options?: { at?: number }) => Promise<LoadReport>;
+  load: (reflexes: readonly ReflexInput[], options?: { at?: number; isolate?: boolean }) => Promise<LoadReport>;
   reflexes: () => readonly Reflex[];
   graph: () => GraphReport;
 
@@ -89,25 +90,8 @@ export const createTide = (config: TideConfig): Tide => {
     },
   };
 
-  const load = async (input: readonly ReflexInput[], options?: { at?: number }): Promise<LoadReport> => {
-    const parsed: Reflex[] = [];
-    const seen = new Set<string>();
-
-    for (const candidate of input) {
-      const result = ReflexSchema.safeParse(candidate);
-      if (!result.success)
-        throw new TideError('invalid_reflex', `reflex did not parse: ${result.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')}`, {
-          issues: result.error.issues,
-        });
-      if (seen.has(result.data.id)) throw new TideError('duplicate_reflex', `duplicate reflex id "${result.data.id}"`);
-      seen.add(result.data.id);
-      parsed.push(result.data);
-    }
-
-    const graph = buildGraph(parsed, mergedEffects(parsed));
-    const refused = graph.refusals[0];
-    if (refused !== undefined)
-      throw new TideError(refused.code, `tide refused to load:\n  ${graph.errors.join('\n  ')}`, { errors: graph.errors, refusals: graph.refusals });
+  const load = async (input: readonly ReflexInput[], options?: { at?: number; isolate?: boolean }): Promise<LoadReport> => {
+    const { reflexes: parsed, graph, refused } = admitReflexes(input, mergedEffects, options?.isolate === true);
 
     const previously = new Set(loaded.keys());
 
@@ -131,7 +115,7 @@ export const createTide = (config: TideConfig): Tide => {
     loaded.clear();
     for (const [id, entry] of next) loaded.set(id, entry);
 
-    return { loaded: parsed.length, cycles: graph.cycles, blind: graph.blind, warnings: graph.warnings };
+    return { loaded: parsed.length, cycles: graph.cycles, blind: graph.blind, warnings: graph.warnings, refused };
   };
 
   const mergedEffects = (parsed: readonly Reflex[]): EffectRegistry => {

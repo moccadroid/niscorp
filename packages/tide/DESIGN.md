@@ -675,7 +675,10 @@ cannot count it:
 
 Load **refuses** outright: a reflex that does not parse, a duplicate id, a reflex
 naming an unregistered effect, a `when` on a non-fact trigger, `each` mode with no
-`unitKey`, a run subscription to a reflex that is not loaded, an unguarded cycle. The verification is only as good as the
+`unitKey`, a run subscription to a reflex that is not loaded, an unguarded cycle. A host
+whose reflexes are its people's rows loads with `isolate`: then each such reflex is left
+out alone and reported, because one person's bad row refusing the load stopped everybody
+else's. The verification is only as good as the
 effects' `writes`: under moss they are *derived* (from `mutationEffect` on the vex
 mutation behind each effect), so an edge is never guessed; a plain host declares
 them or forgoes the check, and an effect with none is reported as a **blind** edge,

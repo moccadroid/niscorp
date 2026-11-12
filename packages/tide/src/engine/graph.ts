@@ -4,12 +4,14 @@ import type { EffectRegistry } from '../types';
 
 export type Edge = { from: string; to: string; via: string };
 
+export type GraphRefusal = { code: 'unknown_reflex' | 'unknown_effect' | 'unguarded_cycle'; message: string; reflexIds: readonly string[] };
+
 export type GraphReport = {
   edges: readonly Edge[];
   cycles: readonly { reflexIds: readonly string[]; guarded: boolean }[];
   blind: readonly { reflexId: string; effect: string }[];
   errors: readonly string[];
-  refusals: readonly { code: 'unknown_reflex' | 'unknown_effect' | 'unguarded_cycle'; message: string }[];
+  refusals: readonly GraphRefusal[];
   warnings: readonly string[];
 };
 
@@ -17,7 +19,7 @@ const isGuarded = (reflex: Reflex): boolean => reflex.select !== undefined || re
 
 export const buildGraph = (reflexes: readonly Reflex[], effects: EffectRegistry): GraphReport => {
   const edges: Edge[] = [];
-  const refusals: { code: 'unknown_reflex' | 'unknown_effect' | 'unguarded_cycle'; message: string }[] = [];
+  const refusals: GraphRefusal[] = [];
   const warnings: string[] = [];
   const blind: { reflexId: string; effect: string }[] = [];
 
@@ -35,14 +37,14 @@ export const buildGraph = (reflexes: readonly Reflex[], effects: EffectRegistry)
       const existing = runWatchers.get(fact.run) ?? [];
       runWatchers.set(fact.run, [...existing, reflex.id]);
       if (fact.run === reflex.id) warnings.push(`${reflex.id} subscribes to its own run — a drain loop; make sure it narrows`);
-      if (!byId.has(fact.run)) refusals.push({ code: 'unknown_reflex', message: `${reflex.id} watches the run of unknown reflex "${fact.run}"` });
+      if (!byId.has(fact.run)) refusals.push({ code: 'unknown_reflex', message: `${reflex.id} watches the run of unknown reflex "${fact.run}"`, reflexIds: [reflex.id] });
     }
   }
 
   for (const reflex of reflexes) {
     const handler = effects[reflex.effect.name];
     if (handler === undefined) {
-      refusals.push({ code: 'unknown_effect', message: `${reflex.id} names effect "${reflex.effect.name}", which is not registered` });
+      refusals.push({ code: 'unknown_effect', message: `${reflex.id} names effect "${reflex.effect.name}", which is not registered`, reflexIds: [reflex.id] });
       continue;
     }
     if (handler.writes === undefined) {
@@ -69,6 +71,7 @@ export const buildGraph = (reflexes: readonly Reflex[], effects: EffectRegistry)
       refusals.push({
         code: 'unguarded_cycle',
         message: `unguarded cycle: ${cycle.reflexIds.join(' → ')} → ${cycle.reflexIds[0]} — no selection and no \`when\` anywhere on the loop, so it diverges by construction`,
+        reflexIds: cycle.reflexIds,
       });
 
   return { edges, cycles, blind, errors: refusals.map((refusal) => refusal.message), refusals, warnings };

@@ -42,6 +42,23 @@ const reflexRules = (reflex: { on: object; when?: unknown; select?: { mode: stri
 
 export const ReflexSchema = z.object(reflexFields).strict().superRefine(reflexRules);
 
+export const REFLEX_TRIGGERS = {
+  clock: ClockTriggerSchema,
+  write: WriteTriggerSchema,
+  signal: SignalTriggerSchema,
+  run: RunTriggerSchema,
+  manual: ManualTriggerSchema,
+} as const;
+export type ReflexTrigger = keyof typeof REFLEX_TRIGGERS;
+
+export const reflexSchemaOf = (choice: { triggers?: readonly ReflexTrigger[] } = {}): z.ZodType<Reflex, ReflexInput> => {
+  if (choice.triggers === undefined) return ReflexSchema;
+  const [first, ...rest] = choice.triggers.map((kind): z.ZodType<Reflex['on'], ReflexInput['on']> => REFLEX_TRIGGERS[kind]);
+  if (first === undefined) throw new Error('tide: a reflex needs at least one trigger kind');
+  const on: z.ZodType<Reflex['on'], ReflexInput['on']> = rest.length === 0 ? first : z.union([first, ...rest]);
+  return z.object({ ...reflexFields, on }).strict().superRefine(reflexRules);
+};
+
 export const TimerSchema = z
   .object({
     hours: z.number().int().min(0).optional(),
