@@ -1,28 +1,30 @@
 # Haptic status
 
-Measured 2026-11-13 on the code of `docs/plans/speed.md`: three rounds of each set, one at a time on a quiet machine, gpt-oss-120b through Groq, Jev through TypeSafe.
+Measured 2026-11-14: three rounds of each set, one at a time on a quiet machine, gpt-oss-120b through Groq, Jev through TypeSafe.
 
 ## Results
 
 | Set                                                                       | Complete, 3 rounds                 | Input tokens per discovery | Time per discovery |
 | ------------------------------------------------------------------------- | ---------------------------------- | -------------------------- | ------------------ |
-| Tuned: 17 pages × 3 runs (`benchmarks/tuned`)                             | 42, 43, 42 of 51 (83%)             | 14–15k average             | median 4 s         |
-| Held-out: 11 sites × 3 runs, written blind, never tuned on (`benchmarks/heldout`) | 18, 16, 19 of 33 (54%) | 36–39k average             | median 5–6 s       |
+| Tuned: 17 pages × 3 runs (`benchmarks/tuned`)                             | 48, 46, 44 of 51 (90%)             | 16k average                | median 4 s         |
+| Held-out: 11 sites × 3 runs, written blind, never tuned on (`benchmarks/heldout`) | 18, 20, 19 of 33 (58%) | 33–44k average             | median 5–8 s       |
+
+Before identical records were merged and many-line fields took their whole passage (2026-11-13): tuned 42, 43, 42; held-out 18, 16, 19.
 
 On the same held-out set: Crawl4AI 9/33 (median 5 s), ScrapeGraphAI 6/33 (3 s), AutoScraper given two answers 3/33.
 
 **Complete** means every item of an independently written reference list is in the result, each as its own item, with at most one other item (or 10%); a duplicate of an answer counts as another item. Where a reference lists them, the item must also contain the texts the instruction asks for and none of those it excludes: this is how the linked-page cases check each post's content, not only its title.
 
-**Reuse.** Every held-out page was captured twice, 2026-11-07 and 2026-11-13; eight of the eleven changed in between, and the Go blog's answer changed (a new post). Each artifact a round saved was run again with no model on the later copy and graded against references written for it: in all three rounds, every artifact complete on the first copy was complete on the later copy (18, 16 and 19).
+**Reuse.** Every held-out page was captured twice, 2026-11-07 and 2026-11-13; eight of the eleven changed in between, and the Go blog's answer changed (a new post). Each artifact a round saved was run again with no model on the later copy and graded against references written for it: in all three rounds, every artifact complete on the first copy was complete on the later copy (18, 20 and 19).
 
-**Per held-out site**, complete runs of 9: DigitalOcean, Fly, HAProxy and PostgreSQL 9; Node.js and USENIX 6; jQuery UI 5; Go blog, TypeScript blog, nginx and Wikipedia 0.
+**Per held-out site**, complete runs of 9: Fly, HAProxy and PostgreSQL 9; DigitalOcean and Node.js 8; Go blog and jQuery UI 6; USENIX 2; TypeScript blog, nginx and Wikipedia 0. Tuned sites below 9 of 9: Django linked posts 8, Lua 8, Debian 7, zlib 6, SQLite release notes 1.
 
 ## Known limits
 
-- **Linked pages: the content is not what was asked.** TypeScript's "section headings" carry the article's paragraphs; Go's article bodies carry the author line and next/previous links, or miss subheadings; SQLite's change lists carry navigation text.
+- **Linked pages: Read cites the wrong lines.** TypeScript: Read cites body paragraphs as section headings. SQLite release notes: the change lists and the footer sit side by side in the page body, so no element holds the passage alone, and the field takes the footer too.
+- **USENIX: some rounds Read's citations give a rule for 9 of the 15 rows**, or Read cites the link address where the name is asked.
 - **One group among many alike** with nothing unique around it (7-Zip's release tables, nginx's three version tables): the records come from all groups. A group whose container, or the element just before it, carries a unique `id` or `data-*` value (DigitalOcean) is found through that value.
 - **Programs that name today's values**: a filter can leave out records by their current text (Wikipedia: "not Shanghai World Financial Center"), which breaks when the list changes. Nothing rejects it yet.
-- **Duplicates**: Lua's one download link comes back several times.
 - **Rules anchored on a generated value** (an `id` the site renumbers) can return the wrong records without reporting `broken` when the value moves to another element.
 - **Merged table cells** (Wikipedia's rank ties): a position-based field rule reads the wrong cell after a merged cell.
 - **Valid but wrong answers** pass every check: a reader that cites a link address where a title was asked for, or reads "modules" literally.

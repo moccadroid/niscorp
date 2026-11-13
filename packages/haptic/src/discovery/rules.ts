@@ -36,6 +36,9 @@ const SKIP_ATTRS = new Set([
   'value',
 ]);
 
+const HEADINGS = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6'];
+const TEXT_BLOCKS = [...HEADINGS, 'p', 'li', 'pre', 'blockquote'];
+
 const parentTag = (node: AnyNode): Element | null =>
   node.parent && isTag(node.parent) ? node.parent : null;
 const ancestors = (element: Element) => {
@@ -188,6 +191,30 @@ export const fieldRules = (
           ),
         ].map((element): Cited => ({ element, attribute: null, kind: 'lines' })),
       }));
+      // The cited lines are samples of one passage. When an element inside the record holds them all, the rule is
+      // every block of their family in it (headings alone when only headings were cited); otherwise one rule per kind.
+      const holders = pairs.map((p) => lowestCommon(p.cited.map((c) => c.element)));
+      const passage = holders.every((holder, i) => holder && holder !== pairs[i]?.record)
+        ? ruleFor(
+            $,
+            pairs.map((p, i) => ({
+              record: p.record,
+              cited: [{ element: holders[i] as Element, attribute: null, kind: 'lines' }],
+            })),
+            null,
+            false,
+          )
+        : undefined;
+      if (passage) {
+        const family = [...kindsOf(pairs)].every((kind) => HEADINGS.includes(kind))
+          ? HEADINGS
+          : TEXT_BLOCKS;
+        fields[name] = {
+          selector: family.map((kind) => `${passage} ${kind}`).join(', '),
+          attribute: null,
+        };
+        continue;
+      }
       const parts = [...kindsOf(pairs)].map((kind) =>
         ruleFor(
           $,

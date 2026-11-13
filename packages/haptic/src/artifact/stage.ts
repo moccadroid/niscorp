@@ -35,6 +35,8 @@ const rulesOf = (fields: Record<string, FieldRule>) =>
 
 // The records one page yields: required fields, then where, then the limit. Values are cleaned the way the program
 // sees them: text with whitespace collapsed, addresses resolved; one value per field unless it collects a list.
+// A record whose every field equals an earlier record's is the same item again (one link behind its text, its image
+// and its file name) and is left out.
 export const readRecords = (
   source: HttpSource,
   stage: RecordStage,
@@ -48,6 +50,7 @@ export const readRecords = (
     return value.replace(/\s+/g, ' ').trim() || null;
   };
   const records: ExtractedRecord[] = [];
+  const seen = new Set<string>();
   for (const item of selection.items) {
     if (stage.limit && records.length >= stage.limit) break;
     if (
@@ -64,7 +67,10 @@ export const readRecords = (
         : (found[0] ?? null);
     }
     const record = { sourceUrl: source.url, text: item.text, attributes: item.attributes, fields };
-    if (passes(record, stage.where)) records.push(record);
+    const same = JSON.stringify(fields);
+    if (!passes(record, stage.where) || seen.has(same)) continue;
+    seen.add(same);
+    records.push(record);
   }
   return records;
 };
