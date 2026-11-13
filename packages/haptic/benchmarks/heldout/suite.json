@@ -37,12 +37,6 @@
       "allowLinkFollowing": false
     },
     {
-      "id": "pypi-requests-latest-version",
-      "url": "https://pypi.org/project/requests/",
-      "instruction": "Select the latest release version number shown in the package header. Exclude the install command, release dates, the release history entries, pre-releases and the required Python version.",
-      "allowLinkFollowing": false
-    },
-    {
       "id": "fly-smallest-machine-price",
       "url": "https://docs.fly.io/about/pricing",
       "instruction": "Select the monthly price of the smallest Machine, shared-cpu-1x with 256MB RAM, in the main pricing table. Exclude other Machine sizes, additional RAM and volume prices, the notes column, and the per-region price lists.",

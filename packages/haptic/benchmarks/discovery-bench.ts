@@ -1,10 +1,12 @@
 // Live discovery over saved pages: the tuned set (17 pages, captures in benchmarks/tuned/captures) or the held-out
-// set (12 sites; its captures are 59 MB and stay in data/pilot/heldout/captures). Each run writes
+// set (11 sites; its captures are 59 MB and stay in data/pilot/heldout/captures). Each run writes
 // data/bench/<round>/<case>/run<n>/result.json for benchmarks/grade.ts.
 // Usage: tsx benchmarks/discovery-bench.ts --set=tuned|heldout --round=<folder> [--runs=3] [--case=a,b]
 //   [--efforts=low,medium] the effort ladder (default: the profile's).
 //   [--from=<round>] only the runs of that saved round whose first attempt did not get ready: the first attempt
 //   replays its saved model answers, the later attempts run live. Compares later efforts on the same first attempts.
+// Times are only comparable on a quiet machine, so a second bench refuses to start while one runs.
+import { rmSync } from 'node:fs';
 import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import type { Calls } from '../src/discovery/calls.js';
 import { discover } from '../src/discovery/discover.js';
@@ -24,6 +26,22 @@ const from = arg('from', null);
 process.loadEnvFile(`${root}/.env`);
 const groqKey = process.env.GROQ_API_KEY;
 if (!groqKey) throw new Error('GROQ_API_KEY is not set');
+
+const lock = `${root}/data/bench/.running`;
+const holder = Number(await readFile(lock, 'utf8').catch(() => '0'));
+const alive = (pid: number) => {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+};
+if (holder && holder !== process.pid && alive(holder))
+  throw new Error(`another bench is running (process ${holder}); its times and this one's would mix`);
+await mkdir(`${root}/data/bench`, { recursive: true });
+await writeFile(lock, String(process.pid));
+process.on('exit', () => rmSync(lock, { force: true }));
 
 type Case = {
   id: string;

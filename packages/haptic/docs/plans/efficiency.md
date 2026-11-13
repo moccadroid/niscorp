@@ -10,7 +10,7 @@ Status: built 2026-11-12 on branch `haptic-efficiency` (off `haptic-rebuild` 858
 | ScrapeGraphAI | 6/33 | 16k | 3 s | no: the model reads the page on every run |
 | Crawl4AI | 10/33 | 27k | 5 s | yes (a CSS schema) |
 
-Complete counts are graded one-to-one: each result item answers at most one reference item (`benchmarks/grade.ts` since 2026-11-12). The earlier grader counted a reference item as found when any result item contained its text, so one ScrapeGraphAI item holding every answer as text counted as complete; under that rule ScrapeGraphAI had 19/33. Haptic's and Crawl4AI's counts are the same under both rules. With PyPI included (12 sites, 36 runs): Haptic 22/36 (23/36 after these changes), Crawl4AI 13/36, ScrapeGraphAI 9/36; both tools complete PyPI's page, which Haptic's Read fails on.
+Complete counts are graded one-to-one: each result item answers at most one reference item (`benchmarks/grade.ts` since 2026-11-12). The earlier grader counted a reference item as found when any result item contained its text, so one ScrapeGraphAI item holding every answer as text counted as complete; under that rule ScrapeGraphAI had 19/33. Haptic's and Crawl4AI's counts are the same under both rules. PyPI stays out of every comparison: its captured page is a bot check, its reference list is empty, and an empty or one-item result grades as complete. Crawl4AI's `[]` and ScrapeGraphAI's `"NA"` count as complete there for that reason, not because they found the version.
 
 Reading the page is not the difference: Haptic's Read costs about what the others' one call costs. The difference is what Haptic adds after it. Per held-out discovery:
 

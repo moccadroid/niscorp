@@ -1,8 +1,41 @@
 {
   "key": "text",
   "items": [
-    { "key": "Announcing TypeScript 7.1 Beta", "label": "https://devblogs.microsoft.com/typescript/announcing-typescript-7-1-beta/ (Oct 20, 2026)" },
-    { "key": "Announcing TypeScript 7.0", "label": "https://devblogs.microsoft.com/typescript/announcing-typescript-7-0/ (Jul 8, 2026)" }
+    {
+      "key": "Announcing TypeScript 7.1 Beta",
+      "label": "https://devblogs.microsoft.com/typescript/announcing-typescript-7-1-beta/ (Oct 20, 2026)",
+      "include": [
+        "Support for Import Attributes in Ambient Modules",
+        "Source Phase Imports",
+        "File System APIs",
+        "Stronger Checks When Using Distributive Type Parameters",
+        "What’s Next?"
+      ],
+      "exclude": [
+        "October 20th, 2026",
+        "Principal Product Manager",
+        "Today we’re excited to announce the beta release of TypeScript 7.1!",
+        "Share on Linkedin"
+      ]
+    },
+    {
+      "key": "Announcing TypeScript 7.0",
+      "label": "https://devblogs.microsoft.com/typescript/announcing-typescript-7-0/ (Jul 8, 2026)",
+      "include": [
+        "What Does A Faster TypeScript Mean?",
+        "Battle-Tested and Ready for Production",
+        "Nightly Builds and @typescript/native-preview",
+        "Type-Checker Parallelization",
+        "Template Literal Types Now Preserve Unicode Code Points",
+        "The Road Forward"
+      ],
+      "exclude": [
+        "July 8th, 2026",
+        "Principal Product Manager",
+        "Today we are proud to announce the availability of TypeScript 7",
+        "Share on Linkedin"
+      ]
+    }
   ],
-  "notes": "The blog index's 'Latest posts' list runs newest first: 'Announcing TypeScript 7.1 Beta' (Oct 20, 2026), 'Announcing TypeScript 7.0' (Jul 8, 2026), then 'Announcing TypeScript 7.0 RC' (Jun 18, 2026), which is not visited. One item per visited post, keyed by its h1 title as shown. Expected extraction per post: title plus the h2/h3 headings inside .entry-content. 7.1 Beta: Support for Import Attributes in Ambient Modules; Source Phase Imports; --target es2026; New Library Methods; TypeScript 7.1 API; Snapshots; File System APIs; Content Mappers; More on the API; Optimizations; Notable Behavioral Changes; lib.d.ts; Stronger Checks When Using Distributive Type Parameters; What’s Next? (curly apostrophe). 7.0: What Does A Faster TypeScript Mean?; Battle-Tested and Ready for Production; Running Side-by-Side with TypeScript 6.0; Nightly Builds and @typescript/native-preview; Custom Scaling: Parallelization and Controls; Type-Checker Parallelization; Project Reference Builder Parallelization; Single-Threaded Mode; Improved --watch Mode; Updates Since 5.x, and New Behaviors from 6.0; Template Literal Types Now Preserve Unicode Code Points; JavaScript Differences; Editor Experience; TypeScript and Embedded Languages; The Road Forward. Excluded: the two empty table-of-contents h2s, and page headings outside the article (Category, Share, Author, 'N comments', 'Leave a comment', 'Read next' and its related-post titles, Stay informed, Insert/edit link, Code Block). Judgement call / grader weakness: the key 'Announcing TypeScript 7.0' is a substring of 'Announcing TypeScript 7.0 RC' and also appears in the 7.1 Beta page's 'Read next' block, so a run that wrongly visits the RC post, or keeps related posts, could still match it."
+  "notes": "The blog index's 'Latest posts' list runs newest first: 'Announcing TypeScript 7.1 Beta' (Oct 20, 2026), 'Announcing TypeScript 7.0' (Jul 8, 2026), then 'Announcing TypeScript 7.0 RC' (Jun 18, 2026), which is not visited. One item per visited post, keyed by its h1 title as shown. Expected extraction per post: title plus the h2/h3 headings inside .entry-content. 7.1 Beta: Support for Import Attributes in Ambient Modules; Source Phase Imports; --target es2026; New Library Methods; TypeScript 7.1 API; Snapshots; File System APIs; Content Mappers; More on the API; Optimizations; Notable Behavioral Changes; lib.d.ts; Stronger Checks When Using Distributive Type Parameters; What’s Next? (curly apostrophe). 7.0: What Does A Faster TypeScript Mean?; Battle-Tested and Ready for Production; Running Side-by-Side with TypeScript 6.0; Nightly Builds and @typescript/native-preview; Custom Scaling: Parallelization and Controls; Type-Checker Parallelization; Project Reference Builder Parallelization; Single-Threaded Mode; Improved --watch Mode; Updates Since 5.x, and New Behaviors from 6.0; Template Literal Types Now Preserve Unicode Code Points; JavaScript Differences; Editor Experience; TypeScript and Embedded Languages; The Road Forward. Excluded: the two empty table-of-contents h2s, and page headings outside the article (Category, Share, Author, 'N comments', 'Leave a comment', 'Read next' and its related-post titles, Stay informed, Insert/edit link, Code Block). Judgement call / grader weakness: the key 'Announcing TypeScript 7.0' is a substring of 'Announcing TypeScript 7.0 RC' and also appears in the 7.1 Beta page's 'Read next' block, so a run that wrongly visits the RC post, or keeps related posts, could still match it. Each item's include lists section headings from inside the article that the post's content must contain; its exclude lists the date, the author's job title from the byline, the opening paragraph sentence and the 'Share on Linkedin' button, which must not appear in it."
 }

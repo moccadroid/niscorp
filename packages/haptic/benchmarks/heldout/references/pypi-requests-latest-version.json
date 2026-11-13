@@ -1,5 +1,0 @@
-{
-  "key": "text",
-  "items": [],
-  "notes": "NO REFERENCE POSSIBLE FROM THIS CAPTURE. The only source (status 200, url = finalUrl https://pypi.org/project/requests/) is a \"Client Challenge\" bot-check page: a noscript message and a script loader, with no package header, version, release history or any requests data. The saved page does not contain the answer, so items is empty. Grader caution: with an empty list any run with at most one item counts as complete; this case should be recaptured or dropped rather than scored."
-}

@@ -1,0 +1,270 @@
+{
+  "key": "url",
+  "items": [
+    {
+      "key": "https://nodejs.org/api/assert.html",
+      "label": "Assertion testing"
+    },
+    {
+      "key": "https://nodejs.org/api/async_context.html",
+      "label": "Asynchronous context tracking"
+    },
+    {
+      "key": "https://nodejs.org/api/async_hooks.html",
+      "label": "Async hooks"
+    },
+    {
+      "key": "https://nodejs.org/api/bench.html",
+      "label": "Benchmark runner"
+    },
+    {
+      "key": "https://nodejs.org/api/buffer.html",
+      "label": "Buffer"
+    },
+    {
+      "key": "https://nodejs.org/api/addons.html",
+      "label": "C++ addons"
+    },
+    {
+      "key": "https://nodejs.org/api/n-api.html",
+      "label": "C/C++ addons with Node-API"
+    },
+    {
+      "key": "https://nodejs.org/api/embedding.html",
+      "label": "C++ embedder API"
+    },
+    {
+      "key": "https://nodejs.org/api/child_process.html",
+      "label": "Child processes"
+    },
+    {
+      "key": "https://nodejs.org/api/cluster.html",
+      "label": "Cluster"
+    },
+    {
+      "key": "https://nodejs.org/api/cli.html",
+      "label": "Command-line options"
+    },
+    {
+      "key": "https://nodejs.org/api/console.html",
+      "label": "Console"
+    },
+    {
+      "key": "https://nodejs.org/api/crypto.html",
+      "label": "Crypto"
+    },
+    {
+      "key": "https://nodejs.org/api/debugger.html",
+      "label": "Debugger"
+    },
+    {
+      "key": "https://nodejs.org/api/deprecations.html",
+      "label": "Deprecated APIs"
+    },
+    {
+      "key": "https://nodejs.org/api/diagnostics_channel.html",
+      "label": "Diagnostics Channel"
+    },
+    {
+      "key": "https://nodejs.org/api/dns.html",
+      "label": "DNS"
+    },
+    {
+      "key": "https://nodejs.org/api/domain.html",
+      "label": "Domain"
+    },
+    {
+      "key": "https://nodejs.org/api/environment_variables.html",
+      "label": "Environment Variables"
+    },
+    {
+      "key": "https://nodejs.org/api/errors.html",
+      "label": "Errors"
+    },
+    {
+      "key": "https://nodejs.org/api/events.html",
+      "label": "Events"
+    },
+    {
+      "key": "https://nodejs.org/api/fs.html",
+      "label": "File system"
+    },
+    {
+      "key": "https://nodejs.org/api/ffi.html",
+      "label": "FFI"
+    },
+    {
+      "key": "https://nodejs.org/api/globals.html",
+      "label": "Globals"
+    },
+    {
+      "key": "https://nodejs.org/api/http.html",
+      "label": "HTTP"
+    },
+    {
+      "key": "https://nodejs.org/api/http2.html",
+      "label": "HTTP/2"
+    },
+    {
+      "key": "https://nodejs.org/api/https.html",
+      "label": "HTTPS"
+    },
+    {
+      "key": "https://nodejs.org/api/inspector.html",
+      "label": "Inspector"
+    },
+    {
+      "key": "https://nodejs.org/api/intl.html",
+      "label": "Internationalization"
+    },
+    {
+      "key": "https://nodejs.org/api/stream_iter.html",
+      "label": "Iterable Streams API"
+    },
+    {
+      "key": "https://nodejs.org/api/modules.html",
+      "label": "Modules: CommonJS modules"
+    },
+    {
+      "key": "https://nodejs.org/api/esm.html",
+      "label": "Modules: ECMAScript modules"
+    },
+    {
+      "key": "https://nodejs.org/api/module.html",
+      "label": "Modules: node:module API"
+    },
+    {
+      "key": "https://nodejs.org/api/packages.html",
+      "label": "Modules: Packages"
+    },
+    {
+      "key": "https://nodejs.org/api/typescript.html",
+      "label": "Modules: TypeScript"
+    },
+    {
+      "key": "https://nodejs.org/api/net.html",
+      "label": "Net"
+    },
+    {
+      "key": "https://nodejs.org/api/os.html",
+      "label": "OS"
+    },
+    {
+      "key": "https://nodejs.org/api/path.html",
+      "label": "Path"
+    },
+    {
+      "key": "https://nodejs.org/api/perf_hooks.html",
+      "label": "Performance hooks"
+    },
+    {
+      "key": "https://nodejs.org/api/permissions.html",
+      "label": "Permissions"
+    },
+    {
+      "key": "https://nodejs.org/api/process.html",
+      "label": "Process"
+    },
+    {
+      "key": "https://nodejs.org/api/punycode.html",
+      "label": "Punycode"
+    },
+    {
+      "key": "https://nodejs.org/api/querystring.html",
+      "label": "Query strings"
+    },
+    {
+      "key": "https://nodejs.org/api/readline.html",
+      "label": "Readline"
+    },
+    {
+      "key": "https://nodejs.org/api/repl.html",
+      "label": "REPL"
+    },
+    {
+      "key": "https://nodejs.org/api/report.html",
+      "label": "Report"
+    },
+    {
+      "key": "https://nodejs.org/api/single-executable-applications.html",
+      "label": "Single executable applications"
+    },
+    {
+      "key": "https://nodejs.org/api/sqlite.html",
+      "label": "SQLite"
+    },
+    {
+      "key": "https://nodejs.org/api/stream.html",
+      "label": "Stream"
+    },
+    {
+      "key": "https://nodejs.org/api/string_decoder.html",
+      "label": "String decoder"
+    },
+    {
+      "key": "https://nodejs.org/api/test.html",
+      "label": "Test runner"
+    },
+    {
+      "key": "https://nodejs.org/api/timers.html",
+      "label": "Timers"
+    },
+    {
+      "key": "https://nodejs.org/api/tls.html",
+      "label": "TLS/SSL"
+    },
+    {
+      "key": "https://nodejs.org/api/tracing.html",
+      "label": "Trace events"
+    },
+    {
+      "key": "https://nodejs.org/api/tty.html",
+      "label": "TTY"
+    },
+    {
+      "key": "https://nodejs.org/api/dgram.html",
+      "label": "UDP/datagram"
+    },
+    {
+      "key": "https://nodejs.org/api/url.html",
+      "label": "URL"
+    },
+    {
+      "key": "https://nodejs.org/api/util.html",
+      "label": "Utilities"
+    },
+    {
+      "key": "https://nodejs.org/api/v8.html",
+      "label": "V8"
+    },
+    {
+      "key": "https://nodejs.org/api/vfs.html",
+      "label": "Virtual File System"
+    },
+    {
+      "key": "https://nodejs.org/api/vm.html",
+      "label": "VM"
+    },
+    {
+      "key": "https://nodejs.org/api/wasi.html",
+      "label": "WASI"
+    },
+    {
+      "key": "https://nodejs.org/api/webcrypto.html",
+      "label": "Web Crypto API"
+    },
+    {
+      "key": "https://nodejs.org/api/webstreams.html",
+      "label": "Web Streams API"
+    },
+    {
+      "key": "https://nodejs.org/api/worker_threads.html",
+      "label": "Worker threads"
+    },
+    {
+      "key": "https://nodejs.org/api/zlib.html",
+      "label": "Zlib"
+    }
+  ],
+  "notes": "Every link in the main-content index list between the \"Usage and example\" group and the \"Code repository\" group, in page order, as absolute URLs under https://nodejs.org/api/ (66 links). Included pages that are not strictly modules but sit in the same index list (e.g. Command-line options, Deprecated APIs, Environment Variables, Errors, Globals, C++ addons, Report), since the instruction only excludes About this documentation, Usage and example and the code repository link. Excluded: sidebar list, other-versions picker, options menu, heading anchor. Changed since 2026-11-07: the documentation version moved from v26.13.0 to v26.13.1 (page title and version labels). The index list has the same 66 links in the same order, so the items are the same."
+}

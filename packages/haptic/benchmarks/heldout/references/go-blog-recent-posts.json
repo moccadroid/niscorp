@@ -1,9 +1,56 @@
 {
   "key": "text",
   "items": [
-    { "key": "A new Go API for JSON", "label": "https://go.dev/blog/jsonv2 (4 November 2026)" },
-    { "key": "Our Response To The eMudhra Key Disclosure Incident", "label": "https://go.dev/blog/emudhra-incident (26 October 2026)" },
-    { "key": "Help set Go's priorities for next year", "label": "https://go.dev/blog/survey2026-announce (21 October 2026)" }
+    {
+      "key": "A new Go API for JSON",
+      "label": "https://go.dev/blog/jsonv2 (4 November 2026)",
+      "include": [
+        "Trying to fix encoding/json directly",
+        "Type-specified customization",
+        "Performance limitations",
+        "A long time coming",
+        "JavaScript Object Notation (JSON) is a simple data interchange format",
+        "Thank you to everyone that contributed!"
+      ],
+      "exclude": [
+        "Chris Hines, and Damien Neil",
+        "4 November 2026",
+        "Previous article: Our Response To The eMudhra",
+        "Blog Index"
+      ]
+    },
+    {
+      "key": "Our Response To The eMudhra Key Disclosure Incident",
+      "label": "https://go.dev/blog/emudhra-incident (26 October 2026)",
+      "include": [
+        "Incident Timeline",
+        "Lessons Learned and Future Improvements",
+        "Securing Go Deployments Everywhere",
+        "On October 19, the Go team initiated an expedited security release",
+        "We are grateful to the independent security researchers"
+      ],
+      "exclude": [
+        "Roland Shoemaker, on behalf of the Go Security team",
+        "26 October 2026",
+        "Next article: A new Go API for JSON",
+        "Previous article: Help set Go's priorities for next year"
+      ]
+    },
+    {
+      "key": "Help set Go's priorities for next year",
+      "label": "https://go.dev/blog/survey2026-announce (21 October 2026)",
+      "include": [
+        "Hi Gophers! The 2026 Go Developer Survey is now open.",
+        "Last year, 5,379 of you responded",
+        "Thank you for helping shape the future of Go!"
+      ],
+      "exclude": [
+        "Cameron Balahan, on behalf of the Go team",
+        "21 October 2026",
+        "Next article: Our Response To The eMudhra",
+        "Previous article: Interactive refactoring in gopls"
+      ]
+    }
   ],
-  "notes": "The blog index at https://go.dev/blog/ lists posts newest first: 'A new Go API for JSON' (4 November 2026), 'Our Response To The eMudhra Key Disclosure Incident' (26 October 2026), 'Help set Go's priorities for next year' (21 October 2026); the next one, 'Interactive refactoring in gopls' (16 October 2026), is the fourth and not visited. One item per visited post, keyed by its h1 title exactly as shown (straight apostrophe in Go's). Each post's extracted content should be the full article body: jsonv2 has sections Introduction, Problems with encoding/json (Behavior flaws, API deficiencies, Performance limitations), Trying to fix encoding/json directly, Building on encoding/json/jsontext, Introducing encoding/json/v2 (Type-specified customization, Caller-specified customization, Behavior differences, Performance optimizations), Compatibility, Migration, More information, A long time coming; emudhra-incident has eMudhra Incident, Incident Timeline, Lessons Learned and Future Improvements, Upgrading and Verifying Your Deployments, Securing Go Deployments Everywhere; survey2026-announce has no section headings. Excluded: author lines, dates, next/previous article links, the 'The Go Blog' index link/heading, site navigation, footer. The grader only checks that each visited page's content contains its title; completeness of the body is not captured by these keys."
+  "notes": "The blog index at https://go.dev/blog/ lists posts newest first: 'A new Go API for JSON' (4 November 2026), 'Our Response To The eMudhra Key Disclosure Incident' (26 October 2026), 'Help set Go's priorities for next year' (21 October 2026); the next one, 'Interactive refactoring in gopls' (16 October 2026), is the fourth and not visited. One item per visited post, keyed by its h1 title exactly as shown (straight apostrophe in Go's). Each post's extracted content should be the full article body: jsonv2 has sections Introduction, Problems with encoding/json (Behavior flaws, API deficiencies, Performance limitations), Trying to fix encoding/json directly, Building on encoding/json/jsontext, Introducing encoding/json/v2 (Type-specified customization, Caller-specified customization, Behavior differences, Performance optimizations), Compatibility, Migration, More information, A long time coming; emudhra-incident has eMudhra Incident, Incident Timeline, Lessons Learned and Future Improvements, Upgrading and Verifying Your Deployments, Securing Go Deployments Everywhere; survey2026-announce has no section headings. Excluded: author lines, dates, next/previous article links, the 'The Go Blog' index link/heading, site navigation, footer. The grader only checks that each visited page's content contains its title; completeness of the body is not captured by these keys. Each item's include lists section headings and a sentence from the start and the end of that post's article body (survey2026-announce has no headings, so body sentences only); its exclude lists the author line, the date line, and the next/previous article and Blog Index links, which must not appear in that post's content."
 }

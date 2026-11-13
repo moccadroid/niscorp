@@ -1,0 +1,62 @@
+{
+  "key": "text",
+  "items": [
+    {
+      "key": "AMS3",
+      "label": "AMS3"
+    },
+    {
+      "key": "ATL1",
+      "label": "ATL1"
+    },
+    {
+      "key": "BLR1",
+      "label": "BLR1"
+    },
+    {
+      "key": "FRA1",
+      "label": "FRA1"
+    },
+    {
+      "key": "LON1",
+      "label": "LON1"
+    },
+    {
+      "key": "MKC1",
+      "label": "MKC1"
+    },
+    {
+      "key": "NYC1",
+      "label": "NYC1"
+    },
+    {
+      "key": "NYC2",
+      "label": "NYC2"
+    },
+    {
+      "key": "NYC3",
+      "label": "NYC3"
+    },
+    {
+      "key": "SFO2",
+      "label": "SFO2"
+    },
+    {
+      "key": "SFO3",
+      "label": "SFO3"
+    },
+    {
+      "key": "SGP1",
+      "label": "SGP1"
+    },
+    {
+      "key": "SYD1",
+      "label": "SYD1"
+    },
+    {
+      "key": "TOR1",
+      "label": "TOR1"
+    }
+  ],
+  "notes": "Included the 14 child components of the \"Managed Databases\" group in the component list, in page order, as the region codes the page shows (AMS3 ... TOR1). Excluded the \"Global\" child, the \"Operational\" status labels, the children of every other group (Droplets, Kubernetes, Volumes, App Platform, etc.) and the incident history. Judgement: the keys are the region codes exactly as displayed; no city names appear for this group. Changed since 2026-11-07: the page now shows a scheduled-maintenance notice \"Storage Network Maintenance in TOR1\" (Nov 13, 2026, 15:30-19:00 UTC) above the component list where it used to say \"All Systems Operational\", with a long subscribe form. The Managed Databases list itself is unchanged (same 14 regions, all Operational), so the items are the same. Grader weakness: \"TOR1\" also appears in that maintenance notice, so a result that wrongly keeps the notice can still match the TOR1 item."
+}
