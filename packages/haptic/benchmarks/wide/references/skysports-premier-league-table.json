@@ -1,0 +1,86 @@
+{
+  "key": "text",
+  "items": [
+    {
+      "key": "Arsenal",
+      "label": "1, 10 played, 27 pts"
+    },
+    {
+      "key": "Brighton and Hove Albion",
+      "label": "2, 10, 22"
+    },
+    {
+      "key": "Manchester City",
+      "label": "3, 10, 21"
+    },
+    {
+      "key": "Liverpool",
+      "label": "4, 10, 18"
+    },
+    {
+      "key": "Chelsea",
+      "label": "5, 10, 16"
+    },
+    {
+      "key": "Everton",
+      "label": "6, 10, 16"
+    },
+    {
+      "key": "Bournemouth",
+      "label": "7, 10, 15"
+    },
+    {
+      "key": "Brentford",
+      "label": "8, 10, 14"
+    },
+    {
+      "key": "Leeds United",
+      "label": "9, 10, 14"
+    },
+    {
+      "key": "Aston Villa",
+      "label": "10, 10, 13"
+    },
+    {
+      "key": "Tottenham Hotspur",
+      "label": "11, 10, 12"
+    },
+    {
+      "key": "Newcastle United",
+      "label": "12, 10, 12"
+    },
+    {
+      "key": "Hull City",
+      "label": "13, 10, 11"
+    },
+    {
+      "key": "Ipswich Town",
+      "label": "14, 10, 11"
+    },
+    {
+      "key": "Fulham",
+      "label": "15, 10, 10"
+    },
+    {
+      "key": "Nottingham Forest",
+      "label": "16, 10, 9"
+    },
+    {
+      "key": "Coventry City",
+      "label": "17, 10, 9"
+    },
+    {
+      "key": "Manchester United",
+      "label": "18, 10, 8"
+    },
+    {
+      "key": "Sunderland",
+      "label": "19, 10, 8"
+    },
+    {
+      "key": "Crystal Palace",
+      "label": "20, 10, 7"
+    }
+  ],
+  "notes": "20 teams, all with 10 played. Keys are the team name as shown in the table (full name, e.g. \"Brighton and Hove Albion\"; the short name \"Brighton\" sits only in a data attribute). Position, played and points are in the label; they are not checked by the key because they repeat across teams. The navigation menu lists the same clubs (and women's teams) and is excluded."
+}

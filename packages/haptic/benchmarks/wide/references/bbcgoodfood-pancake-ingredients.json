@@ -1,0 +1,30 @@
+{
+  "key": "text",
+  "items": [
+    {
+      "key": "plain flour",
+      "label": "100g plain flour"
+    },
+    {
+      "key": "large eggs",
+      "label": "2 large eggs"
+    },
+    {
+      "key": "milk",
+      "label": "300ml milk"
+    },
+    {
+      "key": "sunflower or vegetable oil",
+      "label": "1 tbsp sunflower or vegetable oil plus a little extra for frying"
+    },
+    {
+      "key": "lemon wedges",
+      "label": "lemon wedges to serve (optional)"
+    },
+    {
+      "key": "caster sugar",
+      "label": "caster sugar to serve (optional)"
+    }
+  ],
+  "notes": "Six ingredient lines, metric view. Keys are the ingredient name without the quantity so a result that splits quantity and name into two fields still matches; the full line is in the label. The last two lines (lemon wedges, caster sugar) have no quantity on the page but are ingredient lines, so they are included. Method step 1 repeats the first four lines inside one sentence; that is excluded and would count as an extra. \"milk\" is a short key; no other ingredient line contains it."
+}

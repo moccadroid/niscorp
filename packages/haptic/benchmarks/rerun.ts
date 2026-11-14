@@ -1,7 +1,7 @@
 // Runs the artifacts a bench round saved again, with no model, on a later copy of the pages: what a caller gets when
 // the artifact is reused after the site changed. Writes data/bench/<out>/<case>/<run>/result.json for
 // benchmarks/grade.ts (grade it with the references written for that copy).
-// Usage: tsx benchmarks/rerun.ts --set=tuned|heldout --round=<saved round> --captures=<folder under data/> --out=<round>
+// Usage: tsx benchmarks/rerun.ts --set=<set> --round=<saved round> --captures=<folder under data/> --out=<round>
 import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { prepareArtifact } from '../src/artifact/prepare.js';
 import type { HttpSource } from '../src/web/source.js';

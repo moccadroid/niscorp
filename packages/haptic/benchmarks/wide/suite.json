@@ -1,0 +1,175 @@
+{
+  "cases": [
+    {
+      "id": "fed-treasury-nominal-latest",
+      "url": "https://www.federalreserve.gov/releases/h15/",
+      "instruction": "Select the maturity and the rate in the right-most (most recent) date column for each nominal Treasury constant maturity row, from 1-month to 30-year, in the selected interest rates table. Exclude the inflation-indexed rows, the Treasury bill, commercial paper, federal funds, prime and discount window rows, the earlier date columns and the footnotes.",
+      "allowLinkFollowing": false
+    },
+    {
+      "id": "ons-cpi-annual-rates",
+      "url": "https://www.ons.gov.uk/economy/inflationandpriceindices/timeseries/d7g7/mm23",
+      "instruction": "Select the year and the CPI annual rate for each year from 2015 onward in the yearly table. Exclude the quarterly and monthly rows, the years before 2015, the chart, related series and the download links.",
+      "allowLinkFollowing": false
+    },
+    {
+      "id": "bbcgoodfood-pancake-ingredients",
+      "url": "https://www.bbcgoodfood.com/recipes/easy-pancakes",
+      "instruction": "Select each ingredient line in the recipe's ingredients list, with its quantity. Exclude the method steps, the nutrition values, the cook-mode note, related recipes, adverts and site navigation.",
+      "allowLinkFollowing": false
+    },
+    {
+      "id": "skysports-premier-league-table",
+      "url": "https://www.skysports.com/premier-league-table",
+      "instruction": "Select the position, team name, games played and points for every team in the Premier League table. Exclude the won, drawn, lost and goal columns, the team lists in the navigation menus, the Women's Super League and other competitions, and the key below the table.",
+      "allowLinkFollowing": false
+    },
+    {
+      "id": "formula1-2025-driver-standings-top10",
+      "url": "https://www.formula1.com/en/results/2025/drivers",
+      "instruction": "Select the position, driver name, team and points of the first ten drivers in the 2025 drivers' standings table. Exclude drivers placed eleventh or lower, the nationality column, the season and category pickers, and site navigation.",
+      "allowLinkFollowing": false
+    },
+    {
+      "id": "bart-station-list",
+      "url": "https://www.bart.gov/stations",
+      "instruction": "Select the name and link of every BART station in the station list on the page. Exclude the system map, elevator and escalator status links, other Stations menu items, site navigation and footer links.",
+      "allowLinkFollowing": false
+    },
+    {
+      "id": "tfl-victoria-line-stations",
+      "url": "https://tfl.gov.uk/tube/route/victoria/",
+      "instruction": "Select the name of each station on the Victoria line route, in the order shown from Brixton to Walthamstow Central. Exclude the connection notes (National Rail, Overground and other lines), the switch-direction and A-Z controls, Night Tube information and site navigation.",
+      "allowLinkFollowing": false
+    },
+    {
+      "id": "cambridge-cst-part-ia-michaelmas",
+      "url": "https://www.cl.cam.ac.uk/teaching/2526/part1a.html",
+      "instruction": "Select the course name, lecturers and number of lecture hours for each course listed under Michaelmas term. Exclude the Lent and Easter term courses, the Part IB and Part II links, the side menu and the footer.",
+      "allowLinkFollowing": false
+    },
+    {
+      "id": "ucla-math-assistant-professors",
+      "url": "https://www.math.ucla.edu/people/ladder",
+      "instruction": "Select the name and office location of each faculty member whose title is Assistant Professor in the faculty table. Exclude faculty with any other title (Professor, Distinguished Professor, Emeritus and joint appointments), the phone numbers, and the people menu.",
+      "allowLinkFollowing": false
+    },
+    {
+      "id": "noaa-mauna-loa-latest-daily-co2",
+      "url": "https://gml.noaa.gov/ccgg/trends/monthly.html",
+      "instruction": "Select the date and value of the most recent daily average CO2 reading in the Recent Daily Average Mauna Loa CO2 box. Exclude the earlier days, the last-updated date, the graph text and the explanatory paragraphs.",
+      "allowLinkFollowing": false
+    },
+    {
+      "id": "ranchogordo-heirloom-bean-prices",
+      "url": "https://www.ranchogordo.com/collections/heirloom-beans",
+      "instruction": "Select the name and price of every product in the heirloom beans product grid on this page. Exclude the product descriptions and review counts, the Quick add buttons, the pagination, the Recent Rancho Gordo Recipes posts, and the shop menus.",
+      "allowLinkFollowing": false
+    },
+    {
+      "id": "kexp-upcoming-events",
+      "url": "https://www.kexp.org/events/",
+      "instruction": "Select the name and date of each event in the events list. Exclude the More Info links, the radio player, the now-playing track, and site navigation.",
+      "allowLinkFollowing": false
+    },
+    {
+      "id": "lacma-events-today",
+      "url": "https://www.lacma.org/events-calendar",
+      "instruction": "Select the title, time and location of each event listed for the first date shown in the events calendar. Exclude events on later dates, the event category labels, the filter controls, and site navigation.",
+      "allowLinkFollowing": false
+    },
+    {
+      "id": "jobsacuk-physics-results",
+      "url": "https://www.jobs.ac.uk/search/?keywords=physics",
+      "instruction": "Select the job title, employer and link of each job in the search results list. Exclude the salary, hours, contract and sector filters with their counts, the job-alert dialogs, sort controls, pagination and adverts.",
+      "allowLinkFollowing": false
+    },
+    {
+      "id": "npr-ted-radio-hour-episodes",
+      "url": "https://www.npr.org/podcasts/510298/ted-radio-hour",
+      "instruction": "Select the title and date of each episode in the episodes list. Exclude episode teaser texts, durations, the Listen, Download and Embed controls, embed code, image credits, and links to other NPR podcasts.",
+      "allowLinkFollowing": false
+    },
+    {
+      "id": "snap-social-network-datasets",
+      "url": "https://snap.stanford.edu/data/",
+      "instruction": "Select the name, type, number of nodes and number of edges of each dataset in the Social networks table. Exclude datasets in the other tables (communities, communication, citation, collaboration, web graphs and the rest), the descriptions, the category overview list at the top, and the page footer.",
+      "allowLinkFollowing": false
+    },
+    {
+      "id": "unicode-versions-since-2020",
+      "url": "https://www.unicode.org/versions/enumeratedversions.html",
+      "instruction": "Select the version name and year of each Unicode Standard version released in 2020 or later from the versions table. Exclude versions from before 2020, the Components, blog-post and publication links, the explanatory text above the table, and site navigation.",
+      "allowLinkFollowing": false
+    },
+    {
+      "id": "guardian-science-headlines",
+      "url": "https://www.theguardian.com/science",
+      "instruction": "Select the headline and link of each article in the first Science section of the page. Exclude article standfirsts, kicker labels, the News and other later sections, the Most viewed list, video durations, and site navigation.",
+      "allowLinkFollowing": false
+    },
+    {
+      "id": "lobsters-front-page-stories",
+      "url": "https://lobste.rs/",
+      "instruction": "Select the title, link and number of comments of each story on the front page. Exclude the tags, domains, submitter names, timestamps, vote counts, and the site navigation and footer links.",
+      "allowLinkFollowing": false
+    },
+    {
+      "id": "craigslist-sfbay-apartments-first10",
+      "url": "https://sfbay.craigslist.org/search/apa",
+      "instruction": "Select the title, price and location of the first ten listings in the apartments for rent results. Exclude listings after the tenth, the see-also links to other apartment searches, and the search and filter controls.",
+      "allowLinkFollowing": false
+    },
+    {
+      "id": "nws-glossary-air-terms",
+      "url": "https://forecast.weather.gov/glossary.php?letter=a",
+      "instruction": "Select the term and definition of each glossary entry whose term starts with the letters 'Air' (a term like 'Airport' would count). Exclude all other A entries, abbreviations such as AIRMET that are written in capitals, the letter index, and site navigation.",
+      "allowLinkFollowing": false
+    },
+    {
+      "id": "cambridge-dictionary-serendipity",
+      "url": "https://dictionary.cambridge.org/dictionary/english/serendipity",
+      "instruction": "Select the headword, part of speech, UK pronunciation, US pronunciation and definition from the Cambridge Advanced Learner's Dictionary entry. Exclude the SMART Vocabulary related words, the corpus example sentences, translations, the word-of-the-day and blog panels, and site navigation.",
+      "allowLinkFollowing": false
+    },
+    {
+      "id": "irs-form-1040-recent-developments",
+      "url": "https://www.irs.gov/forms-pubs/about-form-1040",
+      "instruction": "Select the title and date of each item in the Recent developments list dated 2025 or later. Exclude items dated before 2025, the 'Other items you may find useful' links, the where-to-file section, and site navigation.",
+      "allowLinkFollowing": false
+    },
+    {
+      "id": "nobel-physics-laureates-since-2015",
+      "url": "https://www.nobelprize.org/prizes/lists/all-nobel-prizes-in-physics/",
+      "instruction": "Select the year and laureate names of each Nobel Prize in Physics awarded from 2015 onward. Exclude prizes before 2015, the prize-motivation quotes, the introductory text, and site navigation.",
+      "allowLinkFollowing": false
+    },
+    {
+      "id": "nationalgallery-sunflowers-details",
+      "url": "https://www.nationalgallery.org.uk/paintings/vincent-van-gogh-sunflowers",
+      "instruction": "Select the date made, medium and support, dimensions, acquisition credit and inventory number from the painting's Details section. Exclude the provenance, exhibition history and bibliography, the overview essay, the frame description, and shop or related-painting links.",
+      "allowLinkFollowing": false
+    },
+    {
+      "id": "budgetbytes-dinner-recipes",
+      "url": "https://www.budgetbytes.com/category/recipes/",
+      "instruction": "Visit the first three recipes linked in the Recipes for Dinner section of this page. Select each recipe's title, cook time and number of servings. Exclude the cost figures, the ingredient and method text, comments, and recipes from the Popular Recipes, Chicken Recipes and other sections.",
+      "allowLinkFollowing": true,
+      "linkDepth": 1
+    },
+    {
+      "id": "govuk-latest-news",
+      "url": "https://www.gov.uk/search/news-and-communications",
+      "instruction": "Visit the three most recent items in the news and communications results list. Select each item's title, publishing organisation and published date. Exclude the body text, related links, topic and organisation filters, and the GOV.UK navigation and footer.",
+      "allowLinkFollowing": true,
+      "linkDepth": 1
+    },
+    {
+      "id": "publicdomainreview-latest-essays",
+      "url": "https://publicdomainreview.org/essays/",
+      "instruction": "Visit the three most recent essays linked from this index. Select each essay's title, author and publication date. Exclude the essay text, image captions, footnotes, newsletter and shop promotions, and the subject category links.",
+      "allowLinkFollowing": true,
+      "linkDepth": 1
+    }
+  ]
+}

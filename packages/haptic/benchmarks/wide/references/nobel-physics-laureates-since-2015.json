@@ -1,0 +1,34 @@
+{
+  "key": "text",
+  "items": [
+    {
+      "key": "Francis Halzen",
+      "label": "2026: Francis Halzen"
+    },
+    {
+      "key": "John Clarke",
+      "label": "2025: John Clarke, Michel H. Devoret, John M. Martinis"
+    },
+    {
+      "key": "John J. Hopfield",
+      "label": "2024: John J. Hopfield, Geoffrey Hinton"
+    },
+    {
+      "key": "Pierre Agostini",
+      "label": "2023: Pierre Agostini, Ferenc Krausz, Anne L’Huillier"
+    },
+    {
+      "key": "Alain Aspect",
+      "label": "2022: Alain Aspect, John Clauser, Anton Zeilinger"
+    },
+    {
+      "key": "Syukuro Manabe",
+      "label": "2021: Syukuro Manabe, Klaus Hasselmann, Giorgio Parisi"
+    },
+    {
+      "key": "Roger Penrose",
+      "label": "2020: Roger Penrose, Reinhard Genzel, Andrea Ghez"
+    }
+  ],
+  "notes": "PARTIAL: the saved copy lists only 2026 down to 2020, then a 'Load more' button; the 2015-2019 prizes are loaded by JavaScript and are not in the HTML, so the full answer to 'from 2015 onward' is not in the saved copy. Drop the case if a partial reference is unwanted. One item per prize year, keyed by the first-listed laureate; all laureates are in the label. 2021 and 2020 are split prizes with two motivations; one item per year. The capture includes a 2026 prize (Francis Halzen)."
+}

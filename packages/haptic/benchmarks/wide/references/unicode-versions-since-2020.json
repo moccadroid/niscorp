@@ -1,0 +1,34 @@
+{
+  "key": "text",
+  "items": [
+    {
+      "key": "Unicode 18.0.0",
+      "label": "2026"
+    },
+    {
+      "key": "Unicode 17.0.0",
+      "label": "2025"
+    },
+    {
+      "key": "Unicode 16.0.0",
+      "label": "2024"
+    },
+    {
+      "key": "Unicode 15.1.0",
+      "label": "2023"
+    },
+    {
+      "key": "Unicode 15.0.0",
+      "label": "2022"
+    },
+    {
+      "key": "Unicode 14.0.0",
+      "label": "2021"
+    },
+    {
+      "key": "Unicode 13.0.0",
+      "label": "2020"
+    }
+  ],
+  "notes": "Year column >= 2020: 7 versions, 18.0.0 (2026) down to 13.0.0 (2020). 2020 is included (\"2020 or later\"). Unicode 3.0.1 is listed with year 2000 and is excluded. Keyed by the version name as written."
+}

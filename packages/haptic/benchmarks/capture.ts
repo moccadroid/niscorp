@@ -1,7 +1,7 @@
 // Saves each case's pages as the bench reads them: the start page with its redirects and, for a case that follows
 // links, every same-site page the start page links to (at most 60), so a capture does not depend on which links are
 // the right ones. Fetched the way discovery fetches, with Haptic's own web transport.
-// Usage: tsx benchmarks/capture.ts --set=tuned|heldout --out=<folder under data/> [--case=a,b]
+// Usage: tsx benchmarks/capture.ts --set=<set> --out=<folder under data/> [--case=a,b]
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import * as cheerio from 'cheerio';
 import type { HttpSource } from '../src/web/source.js';
@@ -12,8 +12,7 @@ const arg = (name: string) =>
   process.argv.find((a) => a.startsWith(`--${name}=`))?.slice(name.length + 3);
 const set = arg('set');
 const out = arg('out');
-if ((set !== 'tuned' && set !== 'heldout') || !out)
-  throw new Error('--set=tuned|heldout and --out=<folder> are required');
+if (!set || !out) throw new Error('--set=<set> and --out=<folder> are required');
 const only = arg('case')?.split(',');
 const MAX_LINKED = 60;
 const web = createWebTransport();

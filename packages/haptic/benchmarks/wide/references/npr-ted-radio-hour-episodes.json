@@ -1,0 +1,46 @@
+{
+  "key": "text",
+  "items": [
+    {
+      "key": "An epidemiologist's guide to good health advice",
+      "label": "November 13, 2026"
+    },
+    {
+      "key": "Escaping the modern world and your noisy mind",
+      "label": "November 6, 2026"
+    },
+    {
+      "key": "Can curiosity save the wild?",
+      "label": "October 30, 2026"
+    },
+    {
+      "key": "How we experience time",
+      "label": "October 23, 2026"
+    },
+    {
+      "key": "Have we forgotten how to play?",
+      "label": "October 16, 2026"
+    },
+    {
+      "key": "The shocking power of tiny things",
+      "label": "October 9, 2026"
+    },
+    {
+      "key": "The women missing from music",
+      "label": "October 2, 2026"
+    },
+    {
+      "key": "Life can be so awkward. Here's how to embrace the embarrassing",
+      "label": "September 25, 2026"
+    },
+    {
+      "key": "Big mysteries explained through your senses",
+      "label": "September 18, 2026"
+    },
+    {
+      "key": "What this musician’s identity crisis teaches us about navigating change",
+      "label": "September 11, 2026"
+    }
+  ],
+  "notes": "10 episodes under \"Most Recent Episodes\"; more load only via \"Load more episodes\" and are not in the saved copy. Keyed by episode title; date in the label. The October 16 episode shows a different audio-player title (\"TED Radio Hour-10.16.2026\"); the reference uses the episode headline \"Have we forgotten how to play?\". Keys keep the page's own apostrophes (straight in two titles, curly ’ in the September 11 one)."
+}

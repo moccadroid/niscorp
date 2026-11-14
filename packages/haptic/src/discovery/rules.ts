@@ -58,7 +58,7 @@ const position = (element: Element) =>
 const levelSelectors = (element: Element) => {
   const out = [element.name];
   for (const name of Object.keys(element.attribs))
-    if (!SKIP_ATTRS.has(name) && !name.startsWith('on')) out.push(`${element.name}[${name}]`);
+    if (!SKIP_ATTRS.has(name) && !name.startsWith('on')) out.push(`${element.name}[${cssEscape(name)}]`);
   for (const cls of (element.attribs.class ?? '').split(/\s+/).filter(Boolean))
     out.push(`${element.name}.${cssEscape(cls)}`);
   return out;
@@ -277,8 +277,8 @@ export const candidates = ($: CheerioAPI, examples: Example[]): Candidates => {
         ([name, value]) =>
           (name === 'id' || name.startsWith('data-')) && value && !/["\\\s]/.test(value),
       )
-      .filter(([name, value]) => $(`[${name}="${value}"]`).length === 1)
-      .map(([name, value]) => `${node.name}[${name}="${value}"]`);
+      .filter(([name, value]) => $(`[${cssEscape(name)}="${value}"]`).length === 1)
+      .map(([name, value]) => `${node.name}[${cssEscape(name)}="${value}"]`);
   const selectors = new Set<string>();
   for (const element of chains[0] ?? []) {
     for (const own of ownSelectors(element)) {

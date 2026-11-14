@@ -1,0 +1,34 @@
+{
+  "key": "url",
+  "items": [
+    {
+      "key": "https://www.theguardian.com/science/2026/nov/13/kurt-godel-notebooks-ai-helps-unlock-hidden-discoveries-man-who-transformed-maths",
+      "label": "‘Ahead of his time’: AI helps unlock discoveries hidden in notebooks of man who transformed maths"
+    },
+    {
+      "key": "https://www.theguardian.com/science/2026/nov/13/spacex-starship-megarocket-blasts-off-earth-orbit",
+      "label": "SpaceX Starship megarocket blasts off before expected return for reuse"
+    },
+    {
+      "key": "https://www.theguardian.com/science/2026/nov/14/children-iengland-prescribed-weight-loss-jabs",
+      "label": "Hundreds of children in England prescribed weight-loss jabs, figures show"
+    },
+    {
+      "key": "https://www.theguardian.com/science/video/2026/nov/13/what-science-can-tell-us-about-the-art-of-conversation-video",
+      "label": "What science can tell us about the art of conversation"
+    },
+    {
+      "key": "https://www.theguardian.com/science/2026/nov/13/the-sinister-power-of-friday-13th-how-this-maligned-date-affects-our-lives",
+      "label": "The sinister power of Friday 13th: how this maligned date affects our lives"
+    },
+    {
+      "key": "https://www.theguardian.com/science/2026/nov/12/european-euclid-mission-reveals-900m-galaxies-secrets-dark-universe",
+      "label": "European survey reveals 900m galaxies – and possibly secrets of ‘dark universe’"
+    },
+    {
+      "key": "https://www.theguardian.com/society/2026/nov/11/bmi-alternative-obesity-diagnosis-body-mass-index",
+      "label": "BMI alternative for identifying obesity ‘could prevent misdiagnosis in millions’"
+    }
+  ],
+  "notes": "The first section (headed \"Science\", before \"News\") holds 7 articles; keyed by absolute link, headline in the label. Judgement call: the Science Weekly video \"What science can tell us about the art of conversation\" is included, since the instruction only excludes its duration. The last item links under /society/ but sits in the Science section. The SpaceX story reappears later (Key issues, Most viewed); only one item for it."
+}

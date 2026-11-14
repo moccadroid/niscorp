@@ -1,0 +1,26 @@
+{
+  "key": "text",
+  "items": [
+    {
+      "key": "Claiming “no tax on tips” deduction for occupations that customarily and regularly receive tips may require an amended return",
+      "label": "dated 04-MAY-2026"
+    },
+    {
+      "key": "Treasury and IRS Announce Tax Filing Relief to DHS Personnel",
+      "label": "dated 1-APR-2026"
+    },
+    {
+      "key": "Changes to the 2025 Instructions for Form 1040",
+      "label": "dated 11-MAR-2026"
+    },
+    {
+      "key": "Correction to 2024 Schedule 2 (Form 1040), line 21",
+      "label": "dated 21-JAN-2025"
+    },
+    {
+      "key": "Correction to the tax rate schedules in the 2024 Instructions for Form 1040",
+      "label": "dated 8-JAN-2025"
+    }
+  ],
+  "notes": "Five of the six Recent developments items are dated 2025 or later; 'Correction to the 2023 Instructions for Form 1040, Instructions for Schedule 3, line 5b -- 7-JUN-2024' is excluded. Keys are the titles; the date follows each title after ' -- ' (or ' – ' for the first) and is in the label. The first title uses curly quotes around no tax on tips."
+}

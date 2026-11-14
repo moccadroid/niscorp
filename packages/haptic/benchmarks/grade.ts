@@ -1,5 +1,5 @@
 // Grades bench rounds against the blind references of their set.
-// Usage: tsx benchmarks/grade.ts --set=tuned|heldout --round=<folder>[,<folder>…] [--references=<dir>] [--quiet]
+// Usage: tsx benchmarks/grade.ts --set=<set> --round=<folder>[,<folder>…] [--references=<dir>] [--quiet]
 //   complete: every reference item answered, extras at most max(1, 10% of the reference);
 //   useful partial: at least half answered; unusable: fewer; unresolved: no data.
 // A result item answers a reference item when one of its values contains the reference text (case and whitespace

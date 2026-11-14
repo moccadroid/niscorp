@@ -1,0 +1,50 @@
+{
+  "key": "text",
+  "items": [
+    {
+      "key": "2015",
+      "label": "0.0"
+    },
+    {
+      "key": "2016",
+      "label": "0.7"
+    },
+    {
+      "key": "2017",
+      "label": "2.7"
+    },
+    {
+      "key": "2018",
+      "label": "2.5"
+    },
+    {
+      "key": "2019",
+      "label": "1.8"
+    },
+    {
+      "key": "2020",
+      "label": "0.9"
+    },
+    {
+      "key": "2021",
+      "label": "2.6"
+    },
+    {
+      "key": "2022",
+      "label": "9.1"
+    },
+    {
+      "key": "2023",
+      "label": "7.3"
+    },
+    {
+      "key": "2024",
+      "label": "2.5"
+    },
+    {
+      "key": "2025",
+      "label": "3.4"
+    }
+  ],
+  "notes": "The yearly table (1989-2025) is in the saved HTML only inside a <noscript> block (the visible table is filled by JavaScript from the chart data); I took it as the answer because it is the page's own data in the saved copy. A reader that drops <noscript> sees no table. Years 2015 through 2025 qualify (2025 is the last full year). Keys are the year as written; the rate is in the label because values repeat (2.5 for 2018 and 2024). Quarterly rows (\"2015 Q1\") and monthly rows (\"2015 JAN\") contain the year text too, but they are excluded and would count as extras."
+}

@@ -1,7 +1,8 @@
-// Live discovery over saved pages: the tuned set (17 pages, captures in benchmarks/tuned/captures) or the held-out
-// set (11 sites; its captures are 59 MB and stay in data/pilot/heldout/captures). Each run writes
+// Live discovery over saved pages: the tuned set (17 pages, captures in benchmarks/tuned/captures), the held-out
+// set (11 sites; its captures are 59 MB and stay in data/pilot/heldout/captures), or another held-out set whose
+// captures stay in data/<set>/captures (the wide set). Each run writes
 // data/bench/<round>/<case>/run<n>/result.json for benchmarks/grade.ts.
-// Usage: tsx benchmarks/discovery-bench.ts --set=tuned|heldout --round=<folder> [--runs=3] [--case=a,b]
+// Usage: tsx benchmarks/discovery-bench.ts --set=tuned|heldout|wide --round=<folder> [--runs=3] [--case=a,b]
 //   [--efforts=low,medium] the effort ladder (default: the profile's).
 //   [--from=<round>] only the runs of that saved round whose first attempt did not get ready: the first attempt
 //   replays its saved model answers, the later attempts run live. Compares later efforts on the same first attempts.
@@ -18,7 +19,7 @@ const arg = (name: string, fallback: string | null) =>
 const set = arg('set', 'tuned');
 const round = arg('round', null);
 if (!round) throw new Error('--round=<folder> is required');
-if (set !== 'tuned' && set !== 'heldout') throw new Error('--set is tuned or heldout');
+if (!set) throw new Error('--set is required');
 const runs = Number(arg('runs', '3'));
 const only = arg('case', null)?.split(',');
 const efforts = arg('efforts', null)?.split(',') as ('low' | 'medium' | 'high')[] | undefined;
@@ -59,7 +60,9 @@ const captureOf = async (id: string): Promise<Capture | null> => {
   return json(
     set === 'tuned'
       ? `benchmarks/tuned/captures/${id}.json`
-      : `data/pilot/heldout/captures/${id}.json`,
+      : set === 'heldout'
+        ? `data/pilot/heldout/captures/${id}.json`
+        : `data/${set}/captures/${id}.json`,
   ).catch(() => null);
 };
 

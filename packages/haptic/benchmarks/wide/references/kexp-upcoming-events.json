@@ -1,0 +1,42 @@
+{
+  "key": "text",
+  "items": [
+    {
+      "key": "Vinelands Live: Spiritual Cramp, Ryli",
+      "label": "Saturday, November 14th"
+    },
+    {
+      "key": "Audioasis Live",
+      "label": "Saturday, November 21st"
+    },
+    {
+      "key": "GWAR Live in the Gathering Space",
+      "label": "Sunday, November 22nd"
+    },
+    {
+      "key": "Blood Drive: Portland",
+      "label": "Monday, November 30th"
+    },
+    {
+      "key": "Yule Benefit: Seattle",
+      "label": "Thursday, December 3rd"
+    },
+    {
+      "key": "Yule Benefit: Portland",
+      "label": "Friday, December 4th"
+    },
+    {
+      "key": "Yule Benefit: Berkeley",
+      "label": "Saturday, December 5th"
+    },
+    {
+      "key": "Tuesday, December 29th",
+      "label": "Blood Drive: Seattle (name appears twice; keyed by its date)"
+    },
+    {
+      "key": "Wednesday, December 30th",
+      "label": "Blood Drive: Seattle (name appears twice; keyed by its date)"
+    }
+  ],
+  "notes": "\"The events list\" read as the main \"Upcoming KEXP Events\" list, the one with More Info links (9 events). The two \"Blood Drive: Seattle\" rows have the same name, so they are keyed by their dates as written. Judgement call: a second sidebar block, \"Upcoming KEXP Events + In-Studio Sessions\", repeats 5 of these events under longer names with venues (e.g. \"The 2026 Yule Benefit Tour (Seattle)\"); it is not counted as separate items. A result that lists it as well would duplicate events."
+}
