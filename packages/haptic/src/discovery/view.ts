@@ -2,6 +2,7 @@ import * as cheerio from 'cheerio';
 import type { CheerioAPI } from 'cheerio';
 import { isTag, type AnyNode, type Element } from 'domhandler';
 import { fold } from '../artifact/fold.js';
+import { spreadMergedCells } from '../readers/html/cells.js';
 
 const INLINE = new Set([
   'span',
@@ -41,7 +42,11 @@ export type Line = {
 };
 
 // The page as the stage reader parses it, so rules found on it select the same elements at run time.
-export const load = (html: string): CheerioAPI => cheerio.load(html);
+export const load = (html: string): CheerioAPI => {
+  const $ = cheerio.load(html);
+  spreadMergedCells($);
+  return $;
+};
 
 const parentTag = (node: AnyNode): Element | null =>
   node.parent && isTag(node.parent) ? node.parent : null;

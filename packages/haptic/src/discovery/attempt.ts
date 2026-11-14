@@ -1,4 +1,5 @@
 import type { CheerioAPI } from 'cheerio';
+import { isTag } from 'domhandler';
 import { z } from 'zod';
 import type { Config } from '@niscorp/prism';
 import { readRecords, type ExtractedRecord } from '../artifact/stage.js';
@@ -13,15 +14,22 @@ import { labelRecords } from './members.js';
 import { findWhere } from './phrase.js';
 import type { DiscoveryProfile } from './profile.js';
 import { inferSchema, writeProgram, type JsonSchema } from './program.js';
-import { FIELDS_INSTRUCTIONS, fieldsContext, READ_INSTRUCTIONS, readContext } from './prompts.js';
 import {
+  FIELDS_INSTRUCTIONS,
+  fieldsContext,
+  LINK_TEXT_QUESTION,
+  READ_INSTRUCTIONS,
+  readContext,
+} from './prompts.js';
+import {
+  linksWithoutText,
   ReadAnswerSchema,
   resolveAnswer,
   type Example,
   type ReadAnswer,
   type Resolved,
 } from './read.js';
-import { candidates, hits, valueOf, type FoundRule } from './rules.js';
+import { candidates, fieldRules, hits, valueOf, type FoundRule } from './rules.js';
 import { textForRead } from './sections.js';
 import { buildLines, load } from './view.js';
 
@@ -113,6 +121,7 @@ export const runAttempt = async ({
         calls,
         budget: profile.readBudgetChars,
       });
+      let linkTextAsked = false;
       read = await calls.agent<ReadAnswer>({
         job: `read-${depth}`,
         instructions: READ_INSTRUCTIONS,
@@ -129,6 +138,12 @@ export const runAttempt = async ({
           const found = resolveAnswer($, lines, answer, { fieldNames, mayFollow, base: page.url });
           if (found.problems.length)
             return `Fix these and answer again:\n${found.problems.map((p) => `- ${p}`).join('\n')}`;
+          const linkOnly = linkTextAsked ? [] : linksWithoutText(lines, answer);
+          linkTextAsked = true;
+          if (linkOnly.length)
+            return linkOnly
+              .map((l) => LINK_TEXT_QUESTION(l.item, l.field, l.line, l.text))
+              .join('\n');
           resolved = found;
           return null;
         },
@@ -192,8 +207,14 @@ export const runAttempt = async ({
         count: chosen.count,
       });
 
-      let ruleOf: Record<string, FoundRule | null> = chosen.fields;
-      let required = chosen.required;
+      // The chosen list's own records decide between field rules that all fit the examples.
+      let ruleOf: Record<string, FoundRule | null> = fieldRules(
+        $,
+        chosen.records,
+        examples,
+        $(chosen.selector).toArray().filter(isTag),
+      );
+      let required = requiredFields(examples, ruleOf);
       const missing = Object.entries(ruleOf)
         .filter(([, rule]) => !rule)
         .map(([name]) => name);

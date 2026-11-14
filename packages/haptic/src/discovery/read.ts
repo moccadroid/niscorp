@@ -33,6 +33,23 @@ export type Resolved = { problems: string[]; examples: Example[]; follow: Line[]
 const clip = (value: string, n: number) => (value.length > n ? `${value.slice(0, n)}…` : value);
 const NEAR = 2;
 
+// Fields that cite a line's link address while no field of the same item cites that line's text.
+export const linksWithoutText = (lines: Line[], answer: ReadAnswer) => {
+  const byNumber = new Map(lines.map((l) => [l.number, l]));
+  return answer.items.flatMap((item, index) =>
+    Object.entries(item.fields).flatMap(([field, value]) => {
+      if (!('link' in value)) return [];
+      const textCited = Object.values(item.fields).some(
+        (other) =>
+          other !== value &&
+          ('lines' in other ? other.lines.includes(value.line) : other.line === value.line),
+      );
+      const text = byNumber.get(value.line)?.text.trim() ?? '';
+      return textCited || !text ? [] : [{ item: index + 1, field, line: value.line, text }];
+    }),
+  );
+};
+
 // Turns a Read answer into cited page elements, with the problems a retry message lists.
 export const resolveAnswer = (
   $: CheerioAPI,

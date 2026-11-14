@@ -5,6 +5,7 @@ import { selectAll } from 'css-select';
 import * as dom from 'domutils';
 import { z } from 'zod';
 import { compileClosestLocator, validateLocator } from './locator.js';
+import { spreadMergedCells } from './cells.js';
 import profile from './default-profile.json' with { type: 'json' };
 export const HtmlStructureLimitsSchema = z
   .object({
@@ -67,6 +68,7 @@ export const createHtmlStructure = (
   const limits = HtmlStructureLimitsSchema.parse(inputLimits);
   if (Buffer.byteLength(content) > limits.maxIndexBytes) throw new Error('HTML_SOURCE_BYTE_BUDGET');
   const $ = load(content);
+  spreadMergedCells($);
   const root = $.root().get(0);
   if (!root) throw new Error('HTML_DOCUMENT_ROOT_MISSING');
   const entries = new WeakMap<AnyNode, Entry>();

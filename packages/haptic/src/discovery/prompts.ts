@@ -66,6 +66,10 @@ export const fieldsContext = ({
     )
     .join('\n\n');
 
+// Strict discovery, once per Read: a field cites a link's address and no field of its item cites that line's text.
+export const LINK_TEXT_QUESTION = (item: number, field: string, line: number, text: string) =>
+  `Item ${item}, field ${field}: you cited the link address on line ${line}. That line's text is "${text}". If the instruction asks for that text, cite it with text instead of link; if it asks for the address, keep the link.`;
+
 // Jev, one question per record the reader did not cite, up to 25 in one call. The state is
 // { instruction, examples, records: { r1: { fields, text }, … } }.
 export const MEMBERSHIP_QUESTION = (key: string) =>

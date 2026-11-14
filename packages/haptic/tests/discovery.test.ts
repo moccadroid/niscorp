@@ -172,4 +172,15 @@ assert.deepEqual(
   [5],
 );
 
-console.log('discovery: four saved runs replayed, sections, Jev cap, Jev batches');
+// A cell spanning rows is in every row it covers, so the n-th cell is the n-th column in each row.
+const merged = load(
+  '<table><tr><td rowspan="2">8</td><td>Guangzhou</td><td>530</td></tr><tr><td>Tianjin</td><td>530</td></tr><tr><td>10</td><td>CITIC</td><td>527.7</td></tr></table>',
+);
+assert.deepEqual(
+  merged('tr')
+    .toArray()
+    .map((row) => merged(row).children('td').eq(1).text()),
+  ['Guangzhou', 'Tianjin', 'CITIC'],
+);
+
+console.log('discovery: four saved runs replayed, sections, Jev cap, Jev batches, merged cells');

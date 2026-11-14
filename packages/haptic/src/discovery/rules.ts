@@ -117,11 +117,13 @@ type Pair = { cited: Cited[]; record: Element };
 
 // A rule that gives every cited value in each record. A single value comes from the rule's first match, and one
 // distinct value per record is preferred; a list takes the stablest rule, then the one with the fewest matches.
+// Given the list's records, the stablest rule that finds a value in the most of them comes first.
 const ruleFor = (
   $: CheerioAPI,
   pairs: Pair[],
   attribute: string | null,
   many: boolean,
+  list: Element[] = [],
 ): string | undefined => {
   const candidates = pairs
     .flatMap((p) => p.cited.map((c) => relative(p.record, c.element)))
@@ -147,20 +149,35 @@ const ruleFor = (
     );
   const total = (selector: string) =>
     pairs.reduce((sum, p) => sum + hits($, p.record, selector).length, 0);
+  const reach = new Map<string, number>();
+  const reached = (selector: string) => {
+    if (!reach.has(selector))
+      reach.set(
+        selector,
+        list.filter((r) => hits($, r, selector).some((e) => valueOf($, e, attribute) !== ''))
+          .length,
+      );
+    return reach.get(selector) as number;
+  };
   const fitting = candidates
     .filter(covers)
     .sort(
       (a, b) =>
-        fragility(a) - fragility(b) || (many ? total(a) - total(b) : 0) || a.length - b.length,
+        fragility(a) - fragility(b) ||
+        reached(b) - reached(a) ||
+        (many ? total(a) - total(b) : 0) ||
+        a.length - b.length,
     );
   return many ? fitting[0] : (fitting.find(single) ?? fitting[0]);
 };
 
-// Field rules shared by all example records. Each example field has one or more cited elements.
+// Field rules shared by all example records. Each example field has one or more cited elements. Given the chosen
+// list's records, a single-value rule is the one that finds a value in the most of them.
 export const fieldRules = (
   $: CheerioAPI,
   records: Element[],
   examples: Example[],
+  list: Element[] = [],
 ): Record<string, FoundRule | null> => {
   const fields: Record<string, FoundRule | null> = {};
   for (const name of new Set(examples.flatMap((e) => Object.keys(e)))) {
@@ -228,7 +245,7 @@ export const fieldRules = (
       fields[name] = parts.every(Boolean) ? { selector: parts.join(', '), attribute: null } : null;
       continue;
     }
-    const pick = ruleFor($, pairs, attribute, many);
+    const pick = ruleFor($, pairs, attribute, many, many ? [] : list);
     fields[name] = pick ? { selector: pick, attribute } : null;
   }
   return fields;
