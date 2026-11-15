@@ -1,7 +1,6 @@
 {
   "name": "@niscorp/haptic",
   "version": "0.1.0",
-  "private": true,
   "type": "module",
   "description": "Request and URL to reusable JSON artifacts; deterministic HTTP, HTML, JSON and XML execution.",
   "license": "Apache-2.0",
@@ -36,13 +35,13 @@
     "xpath": "0.0.36"
   },
   "peerDependencies": {
-    "@niscorp/cortex": "0.1.5",
-    "@niscorp/signal": "0.1.8",
+    "@niscorp/cortex": "workspace:^",
+    "@niscorp/signal": "workspace:^",
     "imagescript": "^3.14.0",
     "openai": "^7.51.0",
     "zod": "^4.6.7",
-    "@niscorp/prism": "0.3.2",
-    "@niscorp/strata": "0.1.7"
+    "@niscorp/prism": "workspace:^",
+    "@niscorp/strata": "workspace:^"
   },
   "peerDependenciesMeta": {
     "@niscorp/cortex": {
@@ -59,18 +58,18 @@
     }
   },
   "devDependencies": {
-    "@niscorp/cortex": "0.1.5",
-    "@niscorp/signal": "0.1.8",
+    "@niscorp/cortex": "workspace:*",
+    "@niscorp/signal": "workspace:*",
     "@types/jsdom": "30.0.0",
     "@types/node": "26.6.6",
     "imagescript": "3.14.0",
     "openai": "7.51.0",
     "prettier": "3.9.10",
     "tsx": "4.23.15",
-    "typescript": "7.0.2",
-    "zod": "4.6.7",
-    "@niscorp/prism": "0.3.2",
-    "@niscorp/strata": "0.1.7"
+    "typescript": "^6.0.2",
+    "zod": "^4.6.5",
+    "@niscorp/prism": "workspace:*",
+    "@niscorp/strata": "workspace:*"
   },
   "files": [
     "dist",
