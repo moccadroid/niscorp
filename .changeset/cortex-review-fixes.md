@@ -11,3 +11,5 @@ An approval answered (or a run aborted) before `policy.approvalTimeoutMs` runs o
 A correction sent back to the model quotes the issues word for word: `$$`, `$&` and `$'` in them were rewritten before.
 
 The README's quick example no longer runs model-written text with `new Function`, and the docs say that a model swapped in by `prepareStep` is sent the output strategy resolved for the run's own `llm`.
+
+A tool that takes no arguments now runs when its call arrives with no argument text, instead of failing with "arguments arrived as ONE STRING".

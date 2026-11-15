@@ -245,7 +245,8 @@ export const runLoop = async <TData, TDeps>(
       return undefined;
     }
 
-    let parsedArgs = tool.config.input.safeParse(args);
+    // A provider may send no argument text at all for a call that takes none.
+    let parsedArgs = tool.config.input.safeParse(args === '' ? {} : args);
     if (!parsedArgs.success) {
       // Some models stringify nested values inside the arguments.
       const repaired = tool.config.input.safeParse(deepDecodeJsonish(args));

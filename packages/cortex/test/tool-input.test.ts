@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { z } from 'zod';
+import { createSignal } from '@niscorp/signal';
 import type { ZodType } from 'zod';
 import { defineAgent, defineTool } from '../src';
 import type { ToolObservation } from '../src';
@@ -79,5 +80,37 @@ describe('a tool input schema that converts', () => {
   it('which is harmless where applying it again changes nothing', async () => {
     const { received } = await callOnce(z.object({ label: z.string().trim() }), { label: '  jazz  ' });
     expect(received).toEqual([{ label: 'jazz' }]);
+  });
+});
+
+describe('a tool that takes no arguments, through signal', () => {
+  it('runs when the provider streams its call with no argument text', async () => {
+    let turn = 0;
+    const create = async () => {
+      turn += 1;
+      const chunk = turn === 1
+        ? { choices: [{ delta: { tool_calls: [{ index: 0, id: 'c1', function: { name: 'now' } }] }, finish_reason: 'tool_calls' }] }
+        : { choices: [{ delta: { content: '{"response":"It is noon."}' }, finish_reason: 'stop' }] };
+      return (async function* () {
+        yield chunk;
+      })();
+    };
+    const llm = createSignal(
+      { baseUrl: 'https://fake.api.com/v1', apiKey: 'k', model: 'm', capabilities: { nativeTools: true } },
+      { client: { chat: { completions: { create } } } },
+    );
+    const now = defineTool({ id: 'now', name: 'now', description: 'The time.', input: z.object({}), execute: () => '12:00' });
+    const observations: ToolObservation[] = [];
+    const agent = defineAgent({ id: 'clock', description: 'Tells the time.', instructions: 'Answer.', tools: [now] });
+
+    const result = await agent.run('What time is it?', {
+      llm,
+      onEvent: (event) => {
+        if (event.type === 'tool-end') observations.push(event.observation);
+      },
+    }).result;
+
+    expect(observations.map((observation) => observation.kind)).toEqual(['result']);
+    expect(result.ok && result.output.response).toBe('It is noon.');
   });
 });
