@@ -651,7 +651,9 @@ no canvas, and the canvases a manifest declares are never taken out. What is
 pushed onto a canvas after its slot went is mounted and drawn nowhere, as on
 any canvas no layout has a slot for.
 
-**Moss changes and deletes no row.** `list` answers the latest version of each
+**A save, a restore and a reset each add rows and change none.** The one
+column moss changes is `last_used_at`, and the one delete is the aging sweep's
+("It ages out when nobody uses it"). `list` answers the latest version of each
 of the principal's artifacts that has a body. `history` answers the versions
 of one, the newest first (the newest 500). `restore` is a new save that holds
 a copy of a version and says which (`copiedFrom`); it is checked as a save
