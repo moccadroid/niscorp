@@ -493,6 +493,8 @@ store.list();                            // → array of stored ids
 store.resolveReferences(layout);         // → the layout with every { ref } it can resolve inlined
 ```
 
+`resolveReferences` expands without data, so a `{ ref }` met again inside its own expansion (a tree whose rows use the same layout) is left as `{ ref }`; the renderer resolves it row by row.
+
 `set` validates the layout against `LayoutNodeSchema` and throws `DefinitionValidationError` if it doesn't parse. So you can't accidentally store an invalid layout.
 
 ---

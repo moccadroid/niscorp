@@ -34,11 +34,13 @@ export const createLayoutStore = (): LayoutStore => {
 
   const list = (): string[] => Array.from(layouts.keys());
 
-  const resolveReferences = (layout: LayoutNode): LayoutNode => {
+  const expand = (layout: LayoutNode, open: ReadonlySet<string>): LayoutNode => {
+    const resolveReferences = (node: LayoutNode): LayoutNode => expand(node, open);
     if (isLayoutRefNode(layout)) {
       const target = layouts.get(layout.ref);
-      if (target === undefined) return layout;
-      return resolveReferences(target);
+      // A ref met again inside its own expansion stays a ref: the renderer resolves it with data.
+      if (target === undefined || open.has(layout.ref)) return layout;
+      return expand(target, new Set([...open, layout.ref]));
     }
     if (Array.isArray(layout)) {
       return layout.map(resolveReferences);
@@ -73,6 +75,8 @@ export const createLayoutStore = (): LayoutStore => {
     }
     return layout;
   };
+
+  const resolveReferences = (layout: LayoutNode): LayoutNode => expand(layout, new Set());
 
   return { get, set, delete: remove, list, resolveReferences };
 };
