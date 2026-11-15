@@ -58,3 +58,10 @@ describe('contractAsMarkdown — the props table', () => {
     expect(md).toContain('**Plain**');
   });
 });
+
+describe('buildContract — the audiences the charter fences', () => {
+  it('reads a string where a list of globs belongs as that one glob, as the charter grants it', () => {
+    const charter: ContractHost['charter'] = JSON.parse('{"crew":{"actions":{"allow":"ext.crew.*"}},"desk":{"actions":["ext.desk.*"]},"gone":null}');
+    expect(buildContract({ ...host, charter }, 'acme').audiences).toEqual(['crew', 'desk']);
+  });
+});

@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
+import { normalizeRole } from '@niscorp/charter';
 import type { Charter } from '@niscorp/charter';
 import { paletteEntryOf } from '@niscorp/nova';
 import type { ActionDefinition, ComponentMeta, LayoutPaletteEntry } from '@niscorp/nova';
@@ -203,10 +204,8 @@ export const buildContract = (host: ContractHost, integrationId: string): Contra
     .map((name) => paletteEntryOf(name, componentMetaOf(registered[name]?.meta)));
   const audiences = new Set<string>();
   for (const def of Object.values(host.charter)) {
-    if (def === undefined || Array.isArray(def)) continue;
-    const selection = def.actions;
-    const list = Array.isArray(selection) ? selection : (selection?.allow ?? []);
-    for (const entry of list) {
+    if (Array.isArray(def) || def?.actions === undefined) continue;
+    for (const entry of normalizeRole(def, 'actions').allow) {
       const parts = entry.split('.');
       if (parts[0] === 'ext' && parts[1] !== undefined && parts[1] !== '*') audiences.add(parts[1]);
     }
