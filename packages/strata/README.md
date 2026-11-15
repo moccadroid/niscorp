@@ -61,7 +61,10 @@ ledgered run, and the server checks them at boot.
   change tables can still check them.
 - **A run is one transaction** under an advisory lock. A step throws, nothing
   from the run happened — Postgres DDL is transactional. Two processes migrating
-  at once serialize; the second finds the work done.
+  at once serialize; the second finds the work done. A statement Postgres will
+  not run inside a transaction (`CREATE INDEX CONCURRENTLY`) always
+  fails its run with `STEP_FAILED` ("cannot run inside a transaction block"):
+  write it without `CONCURRENTLY`, or run it outside strata.
 - **A run sets its own timeouts**, for its transaction only: a statement
   timeout (1 hour) that also bounds the wait for another run, then a lock
   timeout (10 s) so a step queued behind a busy table gives up instead of
