@@ -151,6 +151,9 @@ describe('plain objects', () => {
     expect(() => evaluate({ name: 'x', nick }, { user: { profile: null } })).toThrow(expect.objectContaining({ code: 'E_TYPE' }));
     expect(() => evaluate({ nick, __optional: ['nick'] }, { user: { profile: 5 } })).toThrow(expect.objectContaining({ code: 'E_TYPE' }));
     expect(() => evaluate({ nick, __optional: ['nick'] }, { user: { profile: 'text' } })).toThrow(expect.objectContaining({ code: 'E_TYPE' }));
+    expect(() => evaluate({ nick, __optional: ['nick'] }, { user: { profile: ['a'] } })).toThrow(expect.objectContaining({ code: 'E_TYPE' }));
+    const second = { $get: { from: { $ref: '$.user' }, path: ['profile', 1] } };
+    expect(() => evaluate({ second, __optional: ['second'] }, { user: { profile: { nick: 'a' } } })).toThrow(expect.objectContaining({ code: 'E_TYPE' }));
   });
 
   it('handles nested template objects', () => {

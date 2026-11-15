@@ -42,7 +42,7 @@ Plain objects support an `__optional` metadata key that lists field names to sil
 
 If `$.user.nickname` doesn't exist, the result is `{ "name": "Alice" }` — no error.
 
-A `$get` whose path runs into `null` or a missing key is left out the same way. One that runs into a number, text or a boolean is still an error.
+A `$get` whose path runs into `null` or a missing key is left out the same way. One that runs into a number, text or a boolean, reads a list by a key that is not an index, or reads an object by an index, is still an error (`E_TYPE`).
 
 ---
 
