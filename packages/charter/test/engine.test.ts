@@ -167,6 +167,14 @@ describe('verifier', () => {
     expect(withU.warnings).toContainEqual({ level: 'warning', rule: 'orphan', detail: 'function "notes.add" is granted by no role — deployed but unreachable' });
   });
 
+  it('a role closure lists the functions a role is granted when that universe is handed in, and has no such field when it is not', () => {
+    const charter: Charter = { r: { actions: ['a.*'], functions: ['notes.*'] }, all: ['*'] };
+    const withU = verifyCharter(charter, { ...universes(gids), functions: ['notes.add', 'other'] });
+    expect(withU.perRole.find((p) => p.role === 'r')?.functions).toEqual(['notes.add']);
+    expect(withU.perRole.find((p) => p.role === 'all')?.functions).toEqual([]);
+    expect(verifyCharter(charter, universes(gids)).perRole.find((p) => p.role === 'r')).not.toHaveProperty('functions');
+  });
+
   it('the closure auditor receives each role\'s granted variant ids', () => {
     const seen: Array<readonly string[] | undefined> = [];
     verifyCharter(

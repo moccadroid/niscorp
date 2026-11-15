@@ -5,7 +5,7 @@ import { charterShape, fieldsOf, roleOf } from './shape';
 
 export type VerifyIssue = { level: 'error' | 'warning'; rule: string; detail: string };
 
-export type RoleClosure = { role: string; actions: string[]; data: string[]; layouts: string[]; issues: string[] };
+export type RoleClosure = { role: string; actions: string[]; data: string[]; layouts: string[]; functions?: string[]; issues: string[] };
 
 export type VerifyReport = { errors: VerifyIssue[]; warnings: VerifyIssue[]; perRole: RoleClosure[] };
 
@@ -137,7 +137,8 @@ export const verifyCharter = (
     const data = [...(resolved.data.get(role) ?? [])].sort();
     const layouts = [...(resolved.layouts.get(role) ?? [])].sort();
     const issues = closure?.(actions, layouts) ?? [];
-    perRole.push({ role, actions, data, layouts, issues });
+    const functions = universes.functions === undefined ? {} : { functions: [...(resolved.functions.get(role) ?? [])].sort() };
+    perRole.push({ role, actions, data, layouts, ...functions, issues });
   }
 
   return { errors, warnings, perRole };

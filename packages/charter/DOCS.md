@@ -201,11 +201,11 @@ role's effective definitions. Absent, every role's `issues` is empty.
 type VerifyReport = {
   errors: VerifyIssue[];       // refuse to boot if non-empty
   warnings: VerifyIssue[];     // deploy, but review
-  perRole: RoleClosure[];      // resolved actions + data + layouts (sorted) + closure issues, per role
+  perRole: RoleClosure[];      // resolved actions + data + layouts (+ functions, when that universe is handed in) (sorted) + closure issues, per role
 };
 
 type VerifyIssue = { level: 'error' | 'warning'; rule: string; detail: string };
-type RoleClosure = { role: string; actions: string[]; data: string[]; layouts: string[]; issues: string[] };
+type RoleClosure = { role: string; actions: string[]; data: string[]; layouts: string[]; functions?: string[]; issues: string[] };
 ```
 
 ### The checks
