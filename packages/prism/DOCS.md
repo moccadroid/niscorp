@@ -818,6 +818,10 @@ Past any of them the evaluation throws `E_BUDGET`. `maxValues` counts a value
 each time it appears, as it would be serialized: a `$reduce` whose body is
 `[{ "$var": "acc" }, { "$var": "acc" }]` doubles its count with every item.
 
+A source nested deeper than the call stack reaches (tens of thousands of levels
+in Node) also throws `E_BUDGET` once the evaluation walks it. That stack has no
+limit to set; in Firefox the engine's own error comes through instead.
+
 ## Error Codes
 
 | Code | Meaning |
@@ -830,7 +834,7 @@ each time it appears, as it would be serialized: a `$reduce` whose body is
 | `E_VAR_NOT_FOUND` | `$var` references undefined variable |
 | `E_NODE_SHAPE` | A node no op answers to, in a tree that never went through the schema |
 | `E_ASSERT` | A config's own `$assert` refused its input |
-| `E_BUDGET` | Evaluation went past a limit (see Limits) |
+| `E_BUDGET` | Evaluation went past a limit, or nested past the call stack (see Limits) |
 
 All errors are instances of `PrismError` with `.code` and optional `.context`.
 

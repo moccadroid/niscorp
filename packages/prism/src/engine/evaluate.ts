@@ -6,7 +6,7 @@ import { OPTIONAL_FIELDS_KEY } from '../schemas/node.schema';
 import { PrismError, ErrorCode, clip, failAt } from '../errors';
 import { depthRefusal, exceedsDepth } from '@niscorp/strata';
 import { desugar } from '../sugar/desugar';
-import { createBudget, measure, measureString, spendStep, type Limits } from './budget';
+import { createBudget, measure, measureString, spendStep, stackRefusal, type Limits } from './budget';
 import { optimize } from './optimize';
 import { placeError } from './place';
 import { writeOwnKey } from '../utils/own-keys';
@@ -241,7 +241,7 @@ const keptTrees = new WeakMap<object, Kept>();
 // tree is optimized the second time. Not the first: a config handed over once
 // would pay for an optimization nothing uses. Kept by the object, so a config
 // changed in place after its first call is not read again.
-export const evaluate = (config: Config, source: unknown, options?: EvaluateOptions): JsonValue => {
+const evaluateOnce = (config: Config, source: unknown, options?: EvaluateOptions): JsonValue => {
   if (options?.check === 'always') {
     const wrong = notJson(source, 'source');
     if (wrong !== undefined) throw new PrismError(`The source must be plain JSON: ${wrong}.`, ErrorCode.TYPE);
@@ -258,6 +258,14 @@ export const evaluate = (config: Config, source: unknown, options?: EvaluateOpti
     kept.optimized = true;
   }
   return run(kept.tree, input, options?.limits, true, config);
+};
+
+export const evaluate = (config: Config, source: unknown, options?: EvaluateOptions): JsonValue => {
+  try {
+    return evaluateOnce(config, source, options);
+  } catch (error) {
+    throw stackRefusal(error);
+  }
 };
 
 export const evaluateSafe = (config: Config, source: unknown, options?: EvaluateOptions): Result<JsonValue> => {

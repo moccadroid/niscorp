@@ -1,7 +1,7 @@
 import type { JsonValue, JsonObject, CompiledIr } from '../types';
 import { evaluateNode } from './evaluate';
 import { rehydrate } from './optimize';
-import { createBudget, measure, type Limits } from './budget';
+import { createBudget, measure, stackRefusal, type Limits } from './budget';
 import { placeError } from './place';
 
 const hydrated = new WeakSet<object>();
@@ -23,6 +23,6 @@ export const execute = (ir: CompiledIr, source: JsonObject, limits?: Partial<Lim
     return result;
   } catch (error) {
     placeError(error, core);
-    throw error;
+    throw stackRefusal(error);
   }
 };
