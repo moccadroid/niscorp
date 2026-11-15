@@ -1,6 +1,6 @@
 import type { ResolvedQuery } from '../../engine/engine.types.js';
 import type { CompiledQuery, ParamSlot, ContextContract } from '../adapter.types.js';
-import { compileFilter, compileCompute, compileAggregate, compileJoinPairs, quoteIdent } from './operators.js';
+import { compileFilter, compileCompute, compileAggregate, compileJoinPairs, quoteIdent, sqlName, columnSql } from './operators.js';
 import { VexError } from '../../errors.js';
 import type { CompilationContext } from './operators.js';
 
@@ -36,7 +36,7 @@ const compileLevel = (resolved: ResolvedQuery, paramSlots: ParamSlot[], paramCou
   }
 
   const fieldColumns = resolved.fields.map((f) =>
-    `${f.alias}.${f.column} AS ${quoteIdent(f.outputName)}`,
+    `${columnSql(f.alias, f.column)} AS ${quoteIdent(f.outputName)}`,
   );
 
   const computeColumns = resolved.computes.map((c) => {
@@ -59,9 +59,9 @@ const compileLevel = (resolved: ResolvedQuery, paramSlots: ParamSlot[], paramCou
   const firstSource = resolved.sources[0];
   if (firstSource !== undefined) {
     if (firstSource.subquery !== undefined) {
-      sqlParts.push(`FROM (${compileLevel(firstSource.subquery, paramSlots, paramCounter)}) AS ${firstSource.alias}`);
+      sqlParts.push(`FROM (${compileLevel(firstSource.subquery, paramSlots, paramCounter)}) AS ${sqlName(firstSource.alias)}`);
     } else if (firstSource.table !== undefined) {
-      sqlParts.push(`FROM ${firstSource.table} AS ${firstSource.alias}`);
+      sqlParts.push(`FROM ${sqlName(firstSource.table)} AS ${sqlName(firstSource.alias)}`);
     }
   }
 
@@ -75,9 +75,9 @@ const compileLevel = (resolved: ResolvedQuery, paramSlots: ParamSlot[], paramCou
       ];
       const on = conditions.join(' AND ');
       if (joinSource.subquery !== undefined) {
-        sqlParts.push(`${keyword} (${compileLevel(joinSource.subquery, paramSlots, paramCounter)}) AS ${join.toAlias} ON ${on}`);
+        sqlParts.push(`${keyword} (${compileLevel(joinSource.subquery, paramSlots, paramCounter)}) AS ${sqlName(join.toAlias)} ON ${on}`);
       } else {
-        sqlParts.push(`${keyword} ${join.toTable} AS ${join.toAlias} ON ${on}`);
+        sqlParts.push(`${keyword} ${sqlName(join.toTable)} AS ${sqlName(join.toAlias)} ON ${on}`);
       }
     }
   }
@@ -88,9 +88,9 @@ const compileLevel = (resolved: ResolvedQuery, paramSlots: ParamSlot[], paramCou
   for (const source of resolved.sources) {
     if (source.alias === firstSource?.alias || joinedAliases.has(source.alias)) continue;
     if (source.subquery !== undefined) {
-      sqlParts.push(`CROSS JOIN (${compileLevel(source.subquery, paramSlots, paramCounter)}) AS ${source.alias}`);
+      sqlParts.push(`CROSS JOIN (${compileLevel(source.subquery, paramSlots, paramCounter)}) AS ${sqlName(source.alias)}`);
     } else if (source.table !== undefined) {
-      sqlParts.push(`CROSS JOIN ${source.table} AS ${source.alias}`);
+      sqlParts.push(`CROSS JOIN ${sqlName(source.table)} AS ${sqlName(source.alias)}`);
     }
   }
 
@@ -100,7 +100,7 @@ const compileLevel = (resolved: ResolvedQuery, paramSlots: ParamSlot[], paramCou
   }
 
   if (resolved.groupBy.length > 0) {
-    const groupByParts = resolved.groupBy.map((f) => `${f.alias}.${f.column}`);
+    const groupByParts = resolved.groupBy.map((f) => columnSql(f.alias, f.column));
     sqlParts.push(`GROUP BY ${groupByParts.join(', ')}`);
   }
 
@@ -109,13 +109,13 @@ const compileLevel = (resolved: ResolvedQuery, paramSlots: ParamSlot[], paramCou
       if (typeof s.field === 'string') {
         return `${quoteIdent(s.field)} ${s.dir === 'desc' ? 'DESC' : 'ASC'}`;
       }
-      return `${s.field.alias}.${s.field.column} ${s.dir === 'desc' ? 'DESC' : 'ASC'}`;
+      return `${columnSql(s.field.alias, s.field.column)} ${s.dir === 'desc' ? 'DESC' : 'ASC'}`;
     });
     sqlParts.push(`ORDER BY ${orderByParts.join(', ')}`);
   } else if (resolved.semantic !== undefined) {
     const { field, contextPath } = resolved.semantic;
-    const position = paramSlots.findIndex((slot) => slot.kind === 'semantic' && slot.key === contextPath) + 1;
-    if (position > 0) sqlParts.push(`ORDER BY ${field.alias}.${field.column} <=> $${position} ASC`);
+    const position = paramSlots.findIndex((slot) => (slot.kind === 'semantic' || slot.embed === true) && slot.key === contextPath) + 1;
+    if (position > 0) sqlParts.push(`ORDER BY ${columnSql(field.alias, field.column)} <=> $${position} ASC`);
   }
 
   if (resolved.limit !== undefined) {

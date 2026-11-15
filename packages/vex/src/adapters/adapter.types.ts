@@ -12,6 +12,8 @@ export type ParamSlot = {
   kind: 'context' | 'scope' | 'semantic';
   type: 'string' | 'number' | 'boolean' | 'string[]' | 'number[]' | 'json';
   dimensions?: number;
+  // A `scope` slot whose text is embedded, as a `semantic` slot's context text is.
+  embed?: true;
   // The value goes into a json/jsonb column and binds as its JSON text. Left to
   // a driver, a JS array becomes a Postgres ARRAY literal: `[]` arrives as '{}',
   // which jsonb reads as an object. PGlite does not do this and cannot show it.

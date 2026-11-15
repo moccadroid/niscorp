@@ -28,9 +28,10 @@ type CompilationContext = {
   existsMap?: Map<object, ResolvedExists>;
 };
 
-// An authored string reaches SQL text only as a column that resolved against
-// the schema (`columnOf`), a quoted literal (`quoteLiteral`) or a quoted output
-// name (`quoteIdent`). A request's values never do: they bind as parameters.
+// An authored string reaches SQL text only as a table, alias or column that
+// resolved against the schema (`sqlName`), a quoted literal (`quoteLiteral`) or
+// a quoted output name (`quoteIdent`). A request's values never do: they bind
+// as parameters.
 export const quoteLiteral = (s: string): string => {
   const doubled = s.replace(/'/g, "''");
   // With standard_conforming_strings off, a backslash in '…' is an escape, and
@@ -41,17 +42,42 @@ export const quoteLiteral = (s: string): string => {
 
 export const quoteIdent = (name: string): string => `"${name.replace(/"/g, '""')}"`;
 
+// The words Postgres refuses as a bare table or column name: its reserved
+// keywords and those that can name a type or a function.
+const RESERVED = new Set([
+  'all', 'analyse', 'analyze', 'and', 'any', 'array', 'as', 'asc', 'asymmetric', 'authorization', 'binary', 'both', 'case', 'cast',
+  'check', 'collate', 'collation', 'column', 'concurrently', 'constraint', 'create', 'cross', 'current_catalog', 'current_date',
+  'current_role', 'current_schema', 'current_time', 'current_timestamp', 'current_user', 'default', 'deferrable', 'desc', 'distinct',
+  'do', 'else', 'end', 'except', 'false', 'fetch', 'for', 'foreign', 'freeze', 'from', 'full', 'grant', 'group', 'having', 'ilike',
+  'in', 'initially', 'inner', 'intersect', 'into', 'is', 'isnull', 'join', 'lateral', 'leading', 'left', 'like', 'limit', 'localtime',
+  'localtimestamp', 'natural', 'not', 'notnull', 'null', 'offset', 'on', 'only', 'or', 'order', 'outer', 'overlaps', 'placing',
+  'primary', 'references', 'returning', 'right', 'select', 'session_user', 'similar', 'some', 'symmetric', 'system_user', 'table',
+  'tablesample', 'then', 'to', 'trailing', 'true', 'union', 'unique', 'user', 'using', 'variadic', 'verbose', 'when', 'where',
+  'window', 'with',
+]);
+const LOWER_IDENTIFIER = /^[a-z_][a-z0-9_]*$/;
+
+// Postgres folds a bare name to lower case, so a name is written bare only
+// where it reads back as itself.
+export const sqlName = (name: string): string => (LOWER_IDENTIFIER.test(name) && !RESERVED.has(name) ? name : quoteIdent(name));
+
+export const columnSql = (qualifier: string, column: string): string => `${sqlName(qualifier)}.${sqlName(column)}`;
+
 // A number that is not finite has no SQL spelling: `NaN` would read as a name.
 export const numberLiteral = (n: number): string => {
   if (!Number.isFinite(n)) throw new VexError('invalid_dsl', `${String(n)} is not a number SQL can hold.`);
   return String(n);
 };
 
+// An alias map value is `<alias>.<column>`, as the resolver writes it.
 const columnOf = (path: string, ctx: CompilationContext): string => {
   const mapped = ctx.aliasMap.get(path);
-  if (mapped !== undefined) return mapped;
+  if (mapped !== undefined) {
+    const dot = mapped.indexOf('.');
+    return columnSql(mapped.slice(0, dot), mapped.slice(dot + 1));
+  }
   const res = ctx.resolvedPaths.get(path);
-  if (res !== undefined) return `${res.alias}.${res.column}`;
+  if (res !== undefined) return columnSql(res.alias, res.column);
   throw new VexError('invalid_dsl', `"${path}" is not a column this query reads.`);
 };
 
@@ -114,7 +140,7 @@ export const compileJoinPairs = (join: ResolvedJoin): string[] =>
         `The join from "${join.fromAlias}" to "${join.toAlias}" pairs "${column}" with no column.`,
       );
     }
-    return `${join.fromAlias}.${column} = ${join.toAlias}.${to}`;
+    return `${columnSql(join.fromAlias, column)} = ${columnSql(join.toAlias, to)}`;
   });
 
 const compileComparisonFilter = (
@@ -146,7 +172,7 @@ export const compileFilter = (
 
     const parts: string[] = ['SELECT 1'];
     const first = resolved.sources[0];
-    if (first?.table !== undefined) parts.push(`FROM ${first.table} AS ${first.alias}`);
+    if (first?.table !== undefined) parts.push(`FROM ${sqlName(first.table)} AS ${sqlName(first.alias)}`);
     for (const join of resolved.joins) {
       const source = resolved.sources.find((s) => s.alias === join.toAlias);
       if (source?.table === undefined) continue;
@@ -155,7 +181,7 @@ export const compileFilter = (
         ...compileJoinPairs(join),
         ...(join.on ?? []).map((extra) => compileFilter(extra.original, inner)),
       ];
-      parts.push(`${keyword} ${source.table} AS ${join.toAlias} ON ${conditions.join(' AND ')}`);
+      parts.push(`${keyword} ${sqlName(source.table)} AS ${sqlName(join.toAlias)} ON ${conditions.join(' AND ')}`);
     }
     if (resolved.filter !== undefined) parts.push(`WHERE ${compileFilter(resolved.filter.original, inner)}`);
 
@@ -258,19 +284,17 @@ export const compileFilter = (
     const col = columnOf(fieldPath, ctx);
 
     const queryRef = filter.semantic.query;
-    const key = '$context' in queryRef ? queryRef.$context : queryRef.$scope;
     if ('$context' in queryRef) assertNotReserved(queryRef.$context);
 
     const res = ctx.resolvedPaths.get(fieldPath);
     const dimensions = res?.schema.vectorDimensions;
 
     ctx.paramCounter.value += 1;
-    ctx.paramSlots.push({
-      key,
-      kind: 'semantic',
-      type: 'string',
-      dimensions,
-    });
+    ctx.paramSlots.push(
+      '$context' in queryRef
+        ? { key: queryRef.$context, kind: 'semantic', type: 'string', dimensions }
+        : { key: queryRef.$scope, kind: 'scope', type: 'string', dimensions, embed: true },
+    );
 
     const paramRef = `$${ctx.paramCounter.value}`;
     const minScore = numberLiteral(filter.semantic.minScore ?? 0);

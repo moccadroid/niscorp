@@ -64,6 +64,12 @@ Then keep **one** unlocked endpoint (wired with `generateDsl`) for genuine
 ad-hoc queries — an agent, an admin console — under its own scope policy. Built
 surfaces are locked; exploration is open and scoped.
 
+An unlocked endpoint also answers `PATCH` and `DELETE`, and they check nobody:
+whoever reaches it can unprotect any entry, a seeded one included, and then
+delete it or generate over it. Fingerprints are global, so that changes what
+the locked endpoints replay. Mount it only where everybody who reaches it may
+do that.
+
 ## Documentation
 
 - **[DOCS.md](./DOCS.md)** — Full usage guide: configuration, DSL reference, scope, caching, framework adapters, error handling, local dev.

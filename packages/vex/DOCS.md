@@ -182,6 +182,11 @@ type QueryEngineConfig = {
 - `createPostgresAdapter({ pool, exclude })` names tables the adapter never
   reports: `introspect()` leaves them out. It is for tables the host owns that
   are not application data, such as a migration journal.
+- `createPostgresAdapter({ pool, schema })` makes `introspect()` list the tables
+  of that Postgres schema (`public` without it). Queries and mutations name
+  their tables without a schema, so they resolve through the connection's
+  `search_path`: with `schema`, set the `search_path` to that schema too, or
+  reads and writes reach the tables of another schema.
 - `config.statementTimeoutMs` is enforced by the database (`statement_timeout`),
   set up at `introspect()`. A database that cannot enforce it (PGlite) runs
   reads unbounded and the engine warns each time `introspect()` runs. A `PgPool`
@@ -465,7 +470,13 @@ Each entry is `entity.field`, or `{ field, as }` to set a distinct output key
 without a compute). There is no `SELECT *`. `fields` is **optional** — omit it
 for an aggregate-only query (e.g. a bare `COUNT(*)`); a query must have at least
 one of `fields` / `aggregate`. Every entity referenced anywhere must also appear
-in `from`.
+in `from`. A table with a foreign key to itself can be listed twice and is
+joined to itself along it; every path names the last copy, and scope rules
+apply to both.
+
+A query is refused when an optional key is `null`: `"limit": null` is an
+error, not a missing limit. The query agent's tools read a top-level `null`
+argument as left out.
 
 ```json
 { "from": ["order", "customer"],
@@ -653,8 +664,10 @@ const engine = createQueryEngine({
 });
 ```
 
-At execution, the `query` ref's text is read from context, embedded, and bound
-as the vector parameter. (Never select a vector column directly in `fields` — it
+At execution, the `query` ref's text is read from context (`$context`) or from
+the scope values the host supplies (`$scope`), embedded, and bound as the vector
+parameter. A missing `$scope` value is refused with `missing_scope`, as any
+other scope slot is. (Never select a vector column directly in `fields` — it
 is for `semantic` filters only.)
 
 ---
@@ -838,6 +851,12 @@ holding two additive rather than a conflict to arbitrate.
 practice. A phase only one role grants keeps that role's rules intact, which is
 what carries a member's identity stamp onto a write no other role grants.
 
+Two rule sets with the same number of matches are not combined: the role listed
+first wins, and the principal reads only the rows its rules allow. The merged
+policy is `default: 'deny'`, and a role's `public` or `deny` entry is skipped, so
+an entity only such entries name is refused. Policies from `createScopePolicy`
+carry neither.
+
 ### A read that must stay narrow
 
 The merge above widens. For a read whose answer legitimately widens with the
@@ -858,10 +877,16 @@ still refused. A mutation entry takes `reach` the same way (`SeedMutation.reach`
 and the write is compiled at that profile whoever asks.
 
 The host supplies `policyForReach(reach)` (hono: `getPolicyForReach(c, reach)`),
-because vex holds neither grants nor behaviors. **It fails closed both ways:** an
-entry declaring a reach no host can resolve is a 500, and a host returning
-`undefined` is a 403. Falling back to the caller's own reach would be silent,
-and silence is the whole risk — the read would answer, with too much.
+because vex knows neither grants nor behaviors. **The handler fails closed both
+ways:** an entry declaring a reach no host can resolve is a 500, and a host
+returning `undefined` is a 403. Falling back to the caller's own reach would be
+silent, and silence is the whole risk — the read would answer, with too much.
+
+That is `handleQuery` and the hono and express adapters. `engine.execute` does
+not read an entry's `reach`: a replay through it runs under the policy it is
+handed (`scopePolicy`, else the engine's own), whatever reach the entry
+declares. Code that replays an entry with a reach in-process hands it the policy
+at that reach itself.
 
 ## Mutations
 
@@ -1587,6 +1612,8 @@ other than `GET`/`POST`/`PATCH`/`DELETE` answers 405.
   **`DELETE`** with `{ fingerprint }` → evict (a protected entry, read or mutation,
   is refused with 409 `fingerprint_protected`). Both are refused with 403 `locked` on a
   locked endpoint and answer 404 `cache_miss` for an unknown fingerprint.
+  On an unlocked endpoint they check nobody: no policy, no scope. Whoever
+  reaches it can unprotect any entry, a seeded one included, and delete it.
   Fingerprints ride the body — names contain `/` — and a body that is not
   JSON, or carries no fingerprint, is a 400 `invalid_request` before anything
   else is checked.

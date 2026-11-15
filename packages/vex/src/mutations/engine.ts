@@ -1,11 +1,12 @@
-import { compileFilter, compileFieldOrValue } from '../adapters/postgres/operators.js';
+import { compileFilter, compileFieldOrValue, sqlName } from '../adapters/postgres/operators.js';
 import type { CompilationContext } from '../adapters/postgres/operators.js';
 import type { ParamSlot, Row } from '../adapters/adapter.types.js';
 import type { Filter } from '../schemas/filter.schema.js';
 import type { DatabaseSchema } from '../schemas/database.schema.js';
 import type { ScopePolicy, ScopeValues, ScopeMatch, ScopeRule } from '../scope/scope.types.js';
 import { isSetMatch } from '../scope/scope.types.js';
-import { VexScopeError } from '../scope/apply.js';
+import { VexScopeError, readRulesOf } from '../scope/apply.js';
+import type { Refusal } from '../scope/apply.js';
 import { VexError } from '../errors.js';
 import { isFieldPathShape } from '../schemas/identifier.schema.js';
 import { resolveParams } from '../utils/context.js';
@@ -145,18 +146,11 @@ const assertReturnedColumns = (refs: ReadonlyMap<string, ReturnedSource>, schema
 };
 
 const readMatchesFor = (table: string, policy: ScopePolicy): ScopeMatch[] => {
-  const rule = policy.entities[table];
-  if (rule === undefined) {
-    if (policy.default === 'deny') throw new VexScopeError(table, `A $lookup reads "${table}", which is not allowed by scope policy (default: deny).`);
-    return [];
-  }
-  if ('public' in rule) return [];
-  if ('deny' in rule) throw new VexScopeError(table, `A $lookup reads "${table}", which is denied by scope policy.`);
-  if (rule.read === undefined) {
-    if (policy.default === 'deny') throw new VexScopeError(table, `A $lookup reads "${table}", which this principal has no read grant for.`);
-    return [];
-  }
-  return rule.read;
+  const rules = readRulesOf(policy, table);
+  if (rules === 'unlisted') throw new VexScopeError(table, `A $lookup reads "${table}", which is not allowed by scope policy (default: deny).`);
+  if (rules === 'denied') throw new VexScopeError(table, `A $lookup reads "${table}", which is denied by scope policy.`);
+  if (rules === 'ungranted') throw new VexScopeError(table, `A $lookup reads "${table}", which this principal has no read grant for.`);
+  return rules;
 };
 
 const boundaryOf = (table: string, r: ScopeMatch): Filter =>
@@ -180,20 +174,23 @@ const scopeLookups = <V extends MutationValue | ItemRef>(cols: Record<string, V>
 
 type WriteGate = { rule: Extract<ScopePolicy['entities'][string], { read?: unknown }>; rules: readonly ScopeRule[] };
 
-const writeGate = (table: string, op: 'insert' | 'update' | 'delete', policy: ScopePolicy): WriteGate | undefined => {
+// `undefined`: the write is allowed with no rules.
+export const writeGateOf = (table: string, op: 'insert' | 'update' | 'delete', policy: ScopePolicy): WriteGate | undefined | Refusal => {
   const rule = policy.entities[table];
-  if (rule === undefined) {
-    if (policy.default === 'deny') throw new VexScopeError(table, `Writes to "${table}" are not allowed by scope policy (default: deny).`);
-    return undefined;
-  }
+  if (rule === undefined) return policy.default === 'deny' ? 'unlisted' : undefined;
   if ('public' in rule) return undefined;
-  if ('deny' in rule) throw new VexScopeError(table, `Writes to "${table}" are denied by scope policy.`);
+  if ('deny' in rule) return 'denied';
   const specific = op === 'insert' ? rule.insert : op === 'update' ? rule.update : rule.delete;
-  if (rule.write === undefined && specific === undefined) {
-    if (policy.default === 'deny') throw new VexScopeError(table, `"${op}" on "${table}" is not allowed by scope policy (default: deny).`);
-    return undefined;
-  }
+  if (rule.write === undefined && specific === undefined) return policy.default === 'deny' ? 'ungranted' : undefined;
   return { rule, rules: [...(rule.write ?? []), ...(specific ?? [])] };
+};
+
+const writeGate = (table: string, op: 'insert' | 'update' | 'delete', policy: ScopePolicy): WriteGate | undefined => {
+  const gate = writeGateOf(table, op, policy);
+  if (gate === 'unlisted') throw new VexScopeError(table, `Writes to "${table}" are not allowed by scope policy (default: deny).`);
+  if (gate === 'denied') throw new VexScopeError(table, `Writes to "${table}" are denied by scope policy.`);
+  if (gate === 'ungranted') throw new VexScopeError(table, `"${op}" on "${table}" is not allowed by scope policy (default: deny).`);
+  return gate;
 };
 
 // The ON CONFLICT half is governed as the UPDATE it is.
@@ -291,7 +288,8 @@ const newCtx = (): WriteContext => ({
 });
 
 // A single-table statement needs no aliases, so each path maps to itself. Only
-// for a filter assertFilterColumns has already held to the table's real columns.
+// for a filter whose paths assertFilterColumns has already checked against the
+// table's real columns.
 const indexFilterFields = (filter: Filter, aliasMap: Map<string, string>): void => {
   for (const path of filterColumns(filter)) aliasMap.set(path, path);
 };
@@ -303,7 +301,7 @@ const compileValue = (v: MutationValue, ctx: WriteContext): string => {
   if (isLookup(v)) {
     indexFilterFields(v.$lookup.where, ctx.aliasMap);
     const where = compileFilter(v.$lookup.where, ctx);
-    return `(SELECT ${v.$lookup.field} FROM ${v.$lookup.from} WHERE ${where})`;
+    return `(SELECT ${sqlName(v.$lookup.field)} FROM ${sqlName(v.$lookup.from)} WHERE ${where})`;
   }
   if (isReturned(v)) {
     ctx.paramCounter.value += 1;
@@ -328,35 +326,36 @@ const compileColumnValue = (table: string, column: string, v: MutationValue, ctx
 const compileConflict = (m: { table: string; onConflict?: ResolvedOnConflict }, ctx: WriteContext, schema: DatabaseSchema): string => {
   const c = m.onConflict;
   if (c === undefined) return '';
-  if (c.set === undefined) return ` ON CONFLICT (${c.target.join(', ')}) DO NOTHING`;
-  const sets = Object.entries(c.set).map(([col, v]) => `${col} = ${compileColumnValue(m.table, col, v, ctx, schema)}`);
+  const target = c.target.map(sqlName).join(', ');
+  if (c.set === undefined) return ` ON CONFLICT (${target}) DO NOTHING`;
+  const sets = Object.entries(c.set).map(([col, v]) => `${sqlName(col)} = ${compileColumnValue(m.table, col, v, ctx, schema)}`);
   let where = '';
   if (c.where !== undefined) {
     indexFilterFields(c.where, ctx.aliasMap);
     where = ` WHERE ${compileFilter(c.where, ctx)}`;
   }
-  return ` ON CONFLICT (${c.target.join(', ')}) DO UPDATE SET ${sets.join(', ')}${where}`;
+  return ` ON CONFLICT (${target}) DO UPDATE SET ${sets.join(', ')}${where}`;
 };
 
 const compileMutation = (m: ResolvedMutation, schema: DatabaseSchema): Compiled => {
   const ctx = newCtx();
   if (m.op === 'insert') {
     const entries = Object.entries(m.values);
-    const cols = entries.map(([c]) => c);
+    const cols = entries.map(([c]) => sqlName(c));
     const vals = entries.map(([c, v]) => compileColumnValue(m.table, c, v, ctx, schema));
-    return { sql: `INSERT INTO ${m.table} (${cols.join(', ')}) VALUES (${vals.join(', ')})${compileConflict(m, ctx, schema)} RETURNING *`, slots: ctx.paramSlots, returned: ctx.returned };
+    return { sql: `INSERT INTO ${sqlName(m.table)} (${cols.join(', ')}) VALUES (${vals.join(', ')})${compileConflict(m, ctx, schema)} RETURNING *`, slots: ctx.paramSlots, returned: ctx.returned };
   }
   if (m.op === 'insertEach') {
     const types = new Map(findEntity(m.table, schema)?.fields.map((f) => [f.name, f.type]));
     const entries = Object.entries(m.values);
-    const cols = entries.map(([c]) => c);
+    const cols = entries.map(([c]) => sqlName(c));
     const itemKeys: Record<string, string> = {};
     const itemColumns: string[] = [];
     const exprs = entries.map(([col, v]) => {
       if (isItemRef(v)) {
         itemKeys[col] = v.$item;
-        itemColumns.push(`${col} ${String(types.get(col))}`);
-        return `item.${col}`;
+        itemColumns.push(`${sqlName(col)} ${String(types.get(col))}`);
+        return `item.${sqlName(col)}`;
       }
       return isReturned(v) ? compileColumnValue(m.table, col, v, ctx, schema) : compileValue(v, ctx);
     });
@@ -365,21 +364,21 @@ const compileMutation = (m: ResolvedMutation, schema: DatabaseSchema): Compiled 
     const items = `$${ctx.paramCounter.value}::jsonb`;
     const source = itemColumns.length === 0 ? `jsonb_array_elements(${items}) AS item` : `jsonb_to_recordset(${items}) AS item(${itemColumns.join(', ')})`;
     return {
-      sql: `INSERT INTO ${m.table} (${cols.join(', ')}) SELECT ${exprs.join(', ')} FROM ${source}${compileConflict(m, ctx, schema)} RETURNING *`,
+      sql: `INSERT INTO ${sqlName(m.table)} (${cols.join(', ')}) SELECT ${exprs.join(', ')} FROM ${source}${compileConflict(m, ctx, schema)} RETURNING *`,
       slots: ctx.paramSlots,
       returned: ctx.returned,
       itemKeys,
     };
   }
   if (m.op === 'update') {
-    const sets = Object.entries(m.set).map(([c, v]) => `${c} = ${compileColumnValue(m.table, c, v, ctx, schema)}`);
+    const sets = Object.entries(m.set).map(([c, v]) => `${sqlName(c)} = ${compileColumnValue(m.table, c, v, ctx, schema)}`);
     indexFilterFields(m.where, ctx.aliasMap);
     const where = compileFilter(m.where, ctx);
-    return { sql: `UPDATE ${m.table} SET ${sets.join(', ')} WHERE ${where} RETURNING *`, slots: ctx.paramSlots, returned: ctx.returned };
+    return { sql: `UPDATE ${sqlName(m.table)} SET ${sets.join(', ')} WHERE ${where} RETURNING *`, slots: ctx.paramSlots, returned: ctx.returned };
   }
   indexFilterFields(m.where, ctx.aliasMap);
   const where = compileFilter(m.where, ctx);
-  return { sql: `DELETE FROM ${m.table} WHERE ${where} RETURNING *`, slots: ctx.paramSlots, returned: ctx.returned };
+  return { sql: `DELETE FROM ${sqlName(m.table)} WHERE ${where} RETURNING *`, slots: ctx.paramSlots, returned: ctx.returned };
 };
 
 const SUGAR: { [K in Mutation['op']]?: (m: Extract<Mutation, { op: K }>, context: Record<string, unknown>) => CoreMutation } = {

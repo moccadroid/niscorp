@@ -6,16 +6,18 @@ import { QueryRequestSchema } from './schemas/request.schema.js';
 import { QuerySchema } from './schemas/query.schema.js';
 import { isEntryFresh, isTouchDue, fireAndForget } from './cache/util.js';
 import { computeSchemaFingerprint } from './cache/hash.js';
-import { executeWrites } from './mutations/engine.js';
+import { executeWrites, writeGateOf } from './mutations/engine.js';
 import type { MutationClient, WriteResult } from './mutations/engine.js';
 import { collectMutationContext, collectQueryContext, mutationEffect } from './mutations/signature.js';
 import type { ContextSignature, MutationEffect } from './mutations/signature.js';
 import type { CacheEntry } from './cache/cache.types.js';
 import type { QueryResponse } from './schemas/request.schema.js';
-import type { Query } from './schemas/query.schema.js';
 import { isVexError } from './errors.js';
 import { depthRefusal, exceedsDepth } from '@niscorp/strata';
 import { canReadTable } from './scope/apply.js';
+import { discoverEntities } from './scope/discover.js';
+import { pruneOptional } from './engine/optional.js';
+import type { Query } from './schemas/query.schema.js';
 
 export type VexHandlerConfig = {
   engine: QueryEngine;
@@ -143,35 +145,31 @@ const filterSchema = (schema: DatabaseSchema | undefined, entities?: string[]): 
   return schema.entities.filter(e => entities.includes(e.name));
 };
 
-// For discovery only: it mirrors what scopeMutation enforces on every request.
-const canWriteTable = (policy: ScopePolicy, table: string, op: string): boolean => {
-  const rule = policy.entities[table];
-  if (rule === undefined) return policy.default === 'allow';
-  if ('public' in rule) return true;
-  if ('deny' in rule) return false;
-  if (rule.write !== undefined || policy.default === 'allow') return true;
-  if (op === 'insert' || op === 'insertEach') return rule.insert !== undefined;
-  if (op === 'update') return rule.update !== undefined;
-  if (op === 'delete') return rule.delete !== undefined;
-  // An upsert runs as an insert or as an update, per call.
-  if (op === 'upsert') return rule.insert !== undefined || rule.update !== undefined;
-  return false;
+// An upsert runs as an insert or as an update, per call.
+const WRITES_OF: Record<MutationEffect['op'], readonly ('insert' | 'update' | 'delete')[]> = {
+  insert: ['insert'],
+  insertEach: ['insert'],
+  update: ['update'],
+  delete: ['delete'],
+  upsert: ['insert', 'update'],
 };
 
-const collectTables = (dsl: Query): string[] => {
-  const out: string[] = [];
-  const walk = (q: Query): void => {
-    for (const src of q.from) {
-      if (typeof src === 'string') out.push(src);
-      else walk(src.query);
-    }
-  };
-  walk(dsl);
-  return out;
+const canWriteTable = (policy: ScopePolicy, table: string, op: MutationEffect['op']): boolean =>
+  WRITES_OF[op].some((write) => typeof writeGateOf(table, write, policy) !== 'string');
+
+// Read the way the engine reads it: every optional condition kept. A query whose
+// optional conditions cannot be resolved runs for nobody, so nobody sees it.
+const tablesRead = (dsl: Query): string[] | undefined => {
+  try {
+    return [...discoverEntities(pruneOptional(dsl, 'all'))];
+  } catch (err) {
+    if (isVexError(err)) return undefined;
+    throw err;
+  }
 };
 
 const entryVisible = (policy: ScopePolicy, entry: CacheEntry): boolean => {
-  if (entry.kind === 'ok') return collectTables(entry.dsl).every((t) => canReadTable(policy, t));
+  if (entry.kind === 'ok') return tablesRead(entry.dsl)?.every((t) => canReadTable(policy, t)) ?? false;
   if (entry.kind === 'mutation') return mutationEffect(entry.mutation).every((e) => canWriteTable(policy, e.table, e.op));
   return false;
 };
@@ -309,6 +307,28 @@ export const handleQuery = async (
 
 const elapsedClock = (): number => (typeof performance !== 'undefined' ? performance.now() : Date.now());
 
+// Never the caller's own, wider policy: an entry that declares a reach is
+// served at that reach or refused.
+const policyAtReach = async (config: VexHandlerConfig, fingerprint: string, reach: string): Promise<ScopePolicy | QueryResult> => {
+  if (config.policyForReach === undefined) {
+    return {
+      status: 500,
+      body: {
+        error: 'execution_error',
+        message: `Entry "${fingerprint}" requires reach "${reach}" and this handler has no policyForReach.`,
+      },
+    };
+  }
+  const narrowed = await config.policyForReach(reach);
+  if (narrowed === undefined) {
+    return {
+      status: 403,
+      body: { error: 'scope_denied', message: `Reach "${reach}" is not available to this principal.` },
+    };
+  }
+  return narrowed;
+};
+
 const runQuery = async (
   config: VexHandlerConfig,
   body: unknown,
@@ -367,23 +387,9 @@ const runQuery = async (
         }
         let writePolicy = config.mutations.policy;
         if (entry.reach !== undefined) {
-          if (config.policyForReach === undefined) {
-            return {
-              status: 500,
-              body: {
-                error: 'execution_error',
-                message: `Entry "${parsed.data.fingerprint ?? ''}" requires reach "${entry.reach}" and this handler has no policyForReach.`,
-              },
-            };
-          }
-          const narrowed = await config.policyForReach(entry.reach);
-          if (narrowed === undefined) {
-            return {
-              status: 403,
-              body: { error: 'scope_denied', message: `Reach "${entry.reach}" is not available to this principal.` },
-            };
-          }
-          writePolicy = narrowed;
+          const reached = await policyAtReach(config, parsed.data.fingerprint, entry.reach);
+          if ('status' in reached) return reached;
+          writePolicy = reached;
         }
 
         const writes = await executeWrites(config.mutations.client, entry.mutation, {
@@ -411,22 +417,9 @@ const runQuery = async (
 
     let readPolicy = config.scopePolicy;
     if (entryReach !== undefined) {
-      if (config.policyForReach === undefined) {
-        return {
-          status: 500,
-          body: {
-            error: 'execution_error',
-            message: `Entry "${parsed.data.fingerprint ?? ''}" requires reach "${entryReach}" and this handler has no policyForReach.`,
-          },
-        };
-      }
-      readPolicy = await config.policyForReach(entryReach);
-      if (readPolicy === undefined) {
-        return {
-          status: 403,
-          body: { error: 'scope_denied', message: `Reach "${entryReach}" is not available to this principal.` },
-        };
-      }
+      const reached = await policyAtReach(config, parsed.data.fingerprint ?? '', entryReach);
+      if ('status' in reached) return reached;
+      readPolicy = reached;
     }
 
     const response = await engine.execute(parsed.data, {
