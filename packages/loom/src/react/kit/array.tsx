@@ -6,11 +6,12 @@ import { LOOM_COLUMN } from '@editor/default.layout';
 import { useModelWrite } from '../hooks/model.js';
 import { decodeLiteral, inputStyle, matches } from './shared.js';
 import { ActionMenu, MenuItem, SubMenu } from './menu.js';
+import { COLORS } from './tokens.js';
 
-const arrayStyle: CSSProperties = { display: 'flex', flexDirection: 'column', gap: 8, padding: 12, border: '1px dashed #d1d5db', borderRadius: 6 };
+const arrayStyle: CSSProperties = { display: 'flex', flexDirection: 'column', gap: 8, padding: 12, border: `1px dashed ${COLORS.border}`, borderRadius: 6 };
 const arrayItemStyle: CSSProperties = { display: 'flex', gap: 6, alignItems: 'flex-start' };
 const itemEditorStyle: CSSProperties = { flex: 1, minWidth: 0 };
-const addButtonStyle: CSSProperties = { ...inputStyle, alignSelf: 'flex-start', cursor: 'pointer', background: '#f3f4f6' };
+const addButtonStyle: CSSProperties = { ...inputStyle, alignSelf: 'flex-start', cursor: 'pointer', background: COLORS.fill };
 
 export const LoomArray: NovaComponent = ({ children }) => <div style={arrayStyle}>{children}</div>;
 

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type FC } from 'react';
 import type { NovaComponent } from '@niscorp/nova/adapters/react';
 import type { Query, VexRunResult } from '../index.js';
+import { COLORS } from '@react/kit/tokens.js';
 
 type State =
   | { status: 'empty' }
@@ -59,12 +60,12 @@ const PreviewView: FC<{ state: State }> = ({ state }) => {
 const mono = 'ui-monospace, SFMono-Regular, Menlo, monospace';
 
 const Note: FC<{ children: string }> = ({ children }) => (
-  <div style={{ fontSize: 13, color: '#6b7280', padding: 12 }}>{children}</div>
+  <div style={{ fontSize: 13, color: COLORS.muted, padding: 12 }}>{children}</div>
 );
 
 const TONES: Record<'error' | 'warn', { fg: string; bg: string; border: string }> = {
-  error: { fg: '#991b1b', bg: '#fef2f2', border: '#fecaca' },
-  warn: { fg: '#92400e', bg: '#fffbeb', border: '#fde68a' },
+  error: { fg: COLORS.dangerText, bg: COLORS.dangerFill, border: COLORS.dangerBorder },
+  warn: { fg: COLORS.warningText, bg: COLORS.warningFill, border: COLORS.warningBorder },
 };
 
 const Banner: FC<{ tone: 'error' | 'warn'; lines: string[] }> = ({ tone, lines }) => {
@@ -76,8 +77,8 @@ const Banner: FC<{ tone: 'error' | 'warn'; lines: string[] }> = ({ tone, lines }
   );
 };
 
-const th: CSSProperties = { textAlign: 'left', padding: '6px 10px', background: '#f9fafb', borderBottom: '1px solid #e5e7eb', color: '#6b7280', fontWeight: 600, whiteSpace: 'nowrap' };
-const td: CSSProperties = { padding: '6px 10px', borderBottom: '1px solid #f1f5f9', fontFamily: mono, whiteSpace: 'nowrap' };
+const th: CSSProperties = { textAlign: 'left', padding: '6px 10px', background: COLORS.surfaceMuted, borderBottom: `1px solid ${COLORS.borderSubtle}`, color: COLORS.muted, fontWeight: 600, whiteSpace: 'nowrap' };
+const td: CSSProperties = { padding: '6px 10px', borderBottom: `1px solid ${COLORS.borderFaint}`, fontFamily: mono, whiteSpace: 'nowrap' };
 
 const cell = (value: unknown): string =>
   value === null ? '∅' : typeof value === 'object' ? JSON.stringify(value) : String(value);
@@ -90,7 +91,7 @@ const RowsTable: FC<{ rows: unknown[] }> = ({ rows }) => {
   }
   const cols = Object.keys(first as Record<string, unknown>);
   return (
-    <div style={{ overflow: 'auto', border: '1px solid #e5e7eb', borderRadius: 6 }}>
+    <div style={{ overflow: 'auto', border: `1px solid ${COLORS.borderSubtle}`, borderRadius: 6 }}>
       <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 12 }}>
         <thead>
           <tr>{cols.map((c) => <th key={c} style={th}>{c}</th>)}</tr>

@@ -9,3 +9,5 @@ A field named `toString` or `constructor` shows its validation message; the erro
 `onChange` and the editor's `change` event fire once per edit, with the same values as before; each edit fired twice, once for the edit and once for the validation it wrote back.
 
 The README says how to use `toNova` and `attachValidation` directly with a schema that has a top-level `_errors` field: compile it with `rootKey`, as the editor does.
+
+The kit and the reference plugins draw their colours from CSS variables (`--loom-border`, `--loom-danger` and 23 more, listed in the README), each falling back to the colour used today, so nothing looks different until a host sets one.

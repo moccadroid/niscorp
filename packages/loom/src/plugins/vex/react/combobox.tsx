@@ -1,7 +1,8 @@
 import { useState, type CSSProperties, type FC } from 'react';
 import { fieldStyle } from './styles.js';
+import { COLORS } from '@react/kit/tokens.js';
 
-const comboListStyle: CSSProperties = { position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 20, marginTop: 2, maxHeight: 200, overflowY: 'auto', background: '#fff', border: '1px solid #d1d5db', borderRadius: 6, boxShadow: '0 6px 16px rgba(0,0,0,0.12)' };
+const comboListStyle: CSSProperties = { position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 20, marginTop: 2, maxHeight: 200, overflowY: 'auto', background: COLORS.surface, border: `1px solid ${COLORS.border}`, borderRadius: 6, boxShadow: `0 6px 16px ${COLORS.shadow}` };
 const comboItemStyle: CSSProperties = { padding: '6px 10px', fontSize: 13, cursor: 'pointer', fontFamily: 'ui-monospace, Menlo, monospace' };
 
 // Not a <datalist>: that shows only the exact match once a value is set.

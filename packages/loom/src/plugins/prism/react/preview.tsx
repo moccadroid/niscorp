@@ -1,11 +1,12 @@
 import type { CSSProperties, FC } from 'react';
 import type { NovaComponent } from '@niscorp/nova/adapters/react';
 import { ConfigSchema, evaluateSafe, type JsonObject } from '@niscorp/prism';
+import { COLORS } from '@react/kit/tokens.js';
 
 const mono = 'ui-monospace, SFMono-Regular, Menlo, monospace';
 
 const Note: FC<{ children: string }> = ({ children }) => (
-  <div style={{ fontSize: 13, color: '#6b7280', padding: 12 }}>{children}</div>
+  <div style={{ fontSize: 13, color: COLORS.muted, padding: 12 }}>{children}</div>
 );
 
 const jsonStyle = (tone: 'plain' | 'muted' | 'error'): CSSProperties => ({
@@ -18,12 +19,12 @@ const jsonStyle = (tone: 'plain' | 'muted' | 'error'): CSSProperties => ({
   wordBreak: 'break-word',
   maxHeight: 320,
   overflow: 'auto',
-  border: '1px solid #e5e7eb',
-  background: tone === 'error' ? '#fef2f2' : tone === 'muted' ? '#f9fafb' : '#ffffff',
-  color: tone === 'error' ? '#991b1b' : '#1f2937',
+  border: `1px solid ${COLORS.borderSubtle}`,
+  background: tone === 'error' ? COLORS.dangerFill : tone === 'muted' ? COLORS.surfaceMuted : COLORS.surface,
+  color: tone === 'error' ? COLORS.dangerText : COLORS.textBody,
 });
 
-const head: CSSProperties = { fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.4, color: '#6b7280', margin: '0 0 4px' };
+const head: CSSProperties = { fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.4, color: COLORS.muted, margin: '0 0 4px' };
 
 const Panel: FC<{ label: string; tone?: 'plain' | 'muted' | 'error'; children: string }> = ({ label, tone = 'plain', children }) => (
   <div>

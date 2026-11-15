@@ -398,6 +398,14 @@ describe('LoomEditor — fields named like built-in object members', () => {
   });
 });
 
+describe('LoomForm — colours', () => {
+  it('are CSS variables a host can set, with the colours of the kit as their fallback', () => {
+    render(<LoomForm schema={z.object({ email: z.email({ message: 'Bad email' }) })} />);
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'nope' } });
+    expect(screen.getByText('Bad email').style.color).toBe('var(--loom-danger, #dc2626)');
+  });
+});
+
 describe('LoomEditor — the onChange prop', () => {
   it('is called once for one keystroke, with the edited document', () => {
     const onChange = vi.fn();

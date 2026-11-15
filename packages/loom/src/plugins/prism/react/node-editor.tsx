@@ -8,6 +8,7 @@ import { useModelWrite } from '@react/hooks/model.js';
 import { JsonEditor } from '@react/kit/json-editor.js';
 import { KeyInput } from '@react/kit/key-input.js';
 import { ActionMenu, MenuItem, SubMenu } from '@react/kit/menu.js';
+import { COLORS } from '@react/kit/tokens.js';
 
 type NodeKind = { id: string; label: string; category: string; variant: Variant };
 
@@ -125,21 +126,21 @@ const unwrapChildren = (value: unknown): { label: string; node: unknown }[] => {
   return nodeChildren(argFieldOf(kind.variant), isObj(value) ? value[id] : undefined);
 };
 
-const input: CSSProperties = { padding: '6px 10px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 14, width: '100%', boxSizing: 'border-box' };
+const input: CSSProperties = { padding: '6px 10px', border: `1px solid ${COLORS.border}`, borderRadius: 6, fontSize: 14, width: '100%', boxSizing: 'border-box' };
 const block: CSSProperties = { display: 'flex', flexDirection: 'column', gap: 8 };
-const nested: CSSProperties = { ...block, paddingLeft: 12, borderLeft: '2px solid #e5e7eb' };
-const groupBox: CSSProperties = { ...block, padding: 10, border: '1px solid #e5e7eb', borderRadius: 6 };
-const label: CSSProperties = { fontSize: 12, fontWeight: 600, color: '#374151' };
+const nested: CSSProperties = { ...block, paddingLeft: 12, borderLeft: `2px solid ${COLORS.borderSubtle}` };
+const groupBox: CSSProperties = { ...block, padding: 10, border: `1px solid ${COLORS.borderSubtle}`, borderRadius: 6 };
+const label: CSSProperties = { fontSize: 12, fontWeight: 600, color: COLORS.label };
 const rowStyle: CSSProperties = { display: 'flex', gap: 6, alignItems: 'flex-start' };
-const iconBtn: CSSProperties = { padding: '4px 8px', border: '1px solid #d1d5db', borderRadius: 6, background: '#fff', cursor: 'pointer', fontSize: 13, lineHeight: 1 };
-const addBtn: CSSProperties = { ...input, alignSelf: 'flex-start', cursor: 'pointer', background: '#f3f4f6', width: 'auto' };
-const chooserBtn: CSSProperties = { ...input, display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', background: '#fff', textAlign: 'left' };
-const popover: CSSProperties = { position: 'absolute', top: '100%', left: 0, zIndex: 40, marginTop: 4, width: 380, background: '#fff', border: '1px solid #d1d5db', borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.14)', overflow: 'hidden' };
-const catPane: CSSProperties = { minWidth: 132, borderRight: '1px solid #e5e7eb', overflowY: 'auto', padding: 4 };
+const iconBtn: CSSProperties = { padding: '4px 8px', border: `1px solid ${COLORS.border}`, borderRadius: 6, background: COLORS.surface, cursor: 'pointer', fontSize: 13, lineHeight: 1 };
+const addBtn: CSSProperties = { ...input, alignSelf: 'flex-start', cursor: 'pointer', background: COLORS.fill, width: 'auto' };
+const chooserBtn: CSSProperties = { ...input, display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', background: COLORS.surface, textAlign: 'left' };
+const popover: CSSProperties = { position: 'absolute', top: '100%', left: 0, zIndex: 40, marginTop: 4, width: 380, background: COLORS.surface, border: `1px solid ${COLORS.border}`, borderRadius: 8, boxShadow: `0 8px 24px ${COLORS.shadowStrong}`, overflow: 'hidden' };
+const catPane: CSSProperties = { minWidth: 132, borderRight: `1px solid ${COLORS.borderSubtle}`, overflowY: 'auto', padding: 4 };
 const opPane: CSSProperties = { flex: 1, overflowY: 'auto', padding: 4 };
-const tag: CSSProperties = { fontSize: 11, color: '#9ca3af' };
-const empty: CSSProperties = { padding: 12, fontSize: 13, color: '#9ca3af' };
-const CHOOSER_CSS = '.prism-pick{width:100%;box-sizing:border-box;text-align:left;padding:6px 10px;border:none;border-radius:4px;background:transparent;cursor:pointer;font-size:13px;display:flex;justify-content:space-between;gap:10px;align-items:center;}.prism-pick:hover{background:#f3f4f6;}.prism-pick[data-active="true"]{background:#eff6ff;color:#1d4ed8;font-weight:600;}';
+const tag: CSSProperties = { fontSize: 11, color: COLORS.faint };
+const empty: CSSProperties = { padding: 12, fontSize: 13, color: COLORS.faint };
+const CHOOSER_CSS = `.prism-pick{width:100%;box-sizing:border-box;text-align:left;padding:6px 10px;border:none;border-radius:4px;background:transparent;cursor:pointer;font-size:13px;display:flex;justify-content:space-between;gap:10px;align-items:center;}.prism-pick:hover{background:${COLORS.fill};}.prism-pick[data-active="true"]{background:${COLORS.accentFill};color:${COLORS.accent};font-weight:600;}`;
 
 const NodeKindChooser: FC<{ current: string; onPick: (id: string) => void }> = ({ current, onPick }) => {
   const here = BY_ID.get(current);

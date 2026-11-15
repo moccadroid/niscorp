@@ -143,6 +143,40 @@ reference plugins:
   renders `layout` against; it has no schema, and its form has one control per
   key of the `data` the artifact carries.
 
+### Colours
+
+The kit and the reference plugins draw every colour from a CSS variable, with
+the colour Loom uses when it is not set. Set one on any element around the
+editor to restyle what is inside it:
+
+| Variable | Default | Used for |
+|---|---|---|
+| `--loom-border` | `#d1d5db` | inputs, buttons, menus, list frames |
+| `--loom-border-subtle` | `#e5e7eb` | panels, groups, table heads |
+| `--loom-border-faint` | `#f1f5f9` | lines between table rows |
+| `--loom-surface` | `#fff` | buttons, menus, popovers, a preview's output |
+| `--loom-surface-muted` | `#f9fafb` | panel and table heads, a muted preview |
+| `--loom-fill` | `#f3f4f6` | add and Vex control buttons, a hovered menu item or op |
+| `--loom-text` | `#111827` | group titles |
+| `--loom-text-body` | `#1f2937` | a preview's output |
+| `--loom-label` | `#374151` | field labels, panel heads |
+| `--loom-muted` | `#6b7280` | descriptions, empty previews, table heads |
+| `--loom-faint` | `#9ca3af` | a disabled menu item, op tags in the Prism chooser |
+| `--loom-accent` | `#1d4ed8` | the active op in the Prism chooser |
+| `--loom-accent-fill` | `#eff6ff` | behind the active op in the Prism chooser |
+| `--loom-danger` | `#dc2626` | a field's message, the required mark, a refused name or JSON |
+| `--loom-danger-text` | `#991b1b` | a preview's error |
+| `--loom-danger-fill` | `#fef2f2` | behind JSON that does not parse, a preview's error |
+| `--loom-danger-border` | `#fecaca` | around a Vex preview's error |
+| `--loom-warning-text` | `#92400e` | a Vex preview's warning |
+| `--loom-warning-fill` | `#fffbeb` | behind a Vex preview's warning |
+| `--loom-warning-border` | `#fde68a` | around a Vex preview's warning |
+| `--loom-shadow` | `rgba(0,0,0,0.12)` | the shadow of menus and Vex pickers |
+| `--loom-shadow-strong` | `rgba(0,0,0,0.14)` | the shadow of the Prism chooser |
+| `--loom-stage` | `#0c0c18` | the Nova preview's background |
+| `--loom-stage-glow` | `#1b1b3a` | the light in the Nova preview's background |
+| `--loom-stage-border` | `#2a2a4a` | around the Nova preview |
+
 ## Entry points
 
 | Import | What it gives you |
