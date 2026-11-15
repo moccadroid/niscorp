@@ -1,4 +1,4 @@
-import { useEffect, useState, type FC } from 'react';
+import { useEffect, useRef, useState, type FC } from 'react';
 import type { ZodType } from 'zod';
 import type { ComponentRegistry, LayoutNode } from '@niscorp/nova';
 import { NovaShell, type NovaComponent } from '@niscorp/nova/adapters/react';
@@ -24,6 +24,10 @@ export type LoomEditorProps = {
 export const LoomEditor: FC<LoomEditorProps> = ({ plugins, artifact, onChange }) => {
   const [api, setApi] = useState<LoomEditorApi | null>(null);
   const [documents, setDocuments] = useState<Record<string, unknown>>({});
+  const onChangeRef = useRef(onChange);
+  useEffect(() => {
+    onChangeRef.current = onChange;
+  });
 
   useEffect(() => {
     const registry = createLoomRegistry();
@@ -43,10 +47,10 @@ export const LoomEditor: FC<LoomEditorProps> = ({ plugins, artifact, onChange })
     editor.open(artifact);
     setApi(editor);
     setDocuments(editor.documents);
-    onChange?.(editor.documents);
+    onChangeRef.current?.(editor.documents);
     const off = editor.on('change', () => {
       setDocuments(editor.documents);
-      onChange?.(editor.documents);
+      onChangeRef.current?.(editor.documents);
     });
     return () => {
       off();

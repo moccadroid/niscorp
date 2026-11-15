@@ -11,3 +11,5 @@ Two recursive documents in one plugin each render their own nested levels: a rec
 A document with a top-level field named `_errors` keeps that field in the editor: it is no longer stripped, overwritten by the error tree and reported missing.
 
 A stored document whose root is not an object (a list, a scalar, a tuple, a union) opens as it was stored even when its schema refuses it, as an object document already did; validation flags it. It used to open the schema's defaults, which a host saving on change wrote over the stored document.
+
+`<LoomEditor>` calls the `onChange` of its latest render, not the one it mounted with.

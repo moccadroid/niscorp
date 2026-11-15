@@ -386,3 +386,18 @@ describe('LoomEditor — a document with a field named _errors', () => {
     expect(screen.queryByText(/expected string/i)).toBeNull();
   });
 });
+
+describe('LoomEditor — the onChange prop', () => {
+  it('calls the onChange of the latest render', () => {
+    const first = vi.fn();
+    const second = vi.fn();
+    const { rerender } = render(<LoomForm schema={personSchema} onChange={first} />);
+    rerender(<LoomForm schema={personSchema} onChange={second} />);
+    first.mockClear();
+
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Ada' } });
+
+    expect(second).toHaveBeenLastCalledWith(expect.objectContaining({ name: 'Ada' }));
+    expect(first).not.toHaveBeenCalled();
+  });
+});
