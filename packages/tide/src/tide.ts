@@ -87,6 +87,7 @@ export const createTide = (config: TideConfig): Tide => {
   };
 
   let tokens = 0;
+  let hasLoaded = false;
   const deps: EngineDeps = {
     store: config.store,
     transform: config.transform,
@@ -99,6 +100,7 @@ export const createTide = (config: TideConfig): Tide => {
     leaseMs: config.leaseMs ?? DEFAULT_LEASE_MS,
     emit: config.onEvent ?? (() => undefined),
     reflexes: () => [...loaded.values()],
+    hasLoaded: () => hasLoaded,
     find: (id) => loaded.get(id),
     nextToken: () => {
       tokens += 1;
@@ -144,6 +146,7 @@ export const createTide = (config: TideConfig): Tide => {
     loaded.clear();
     for (const [id, entry] of next) loaded.set(id, entry);
     for (const id of next.keys()) everLoaded.add(id);
+    hasLoaded = true;
 
     const leaseWarnings = parsed
       .filter((reflex) => reflex.policy.timeoutMs >= deps.leaseMs)

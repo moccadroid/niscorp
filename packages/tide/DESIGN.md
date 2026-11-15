@@ -342,9 +342,10 @@ advance({ now, limit })              — ONE committed increment; the driver's v
    │                  a question the fact already answers); a declared selection is
    │                  ENRICHMENT, re-run under the reflex's own principal — the guard
    │                  that re-checks reality. Duplicate unitKey refuses the run
-   │                  loudly; a transient seam failure DEFERS it. With ZERO reflexes
-   │                  loaded this pass does nothing either: before the first load every
-   │                  pending run would read as one whose reflex was taken out.
+   │                  loudly; a transient seam failure DEFERS it. Before the engine's
+   │                  first load has finished this pass does nothing: every pending run
+   │                  would read as one whose reflex was taken out. After it, a run whose
+   │                  reflex a load left out is skipped, a load of nothing included.
    ├─ 4 CLAIM         due tasks and lapsed leases, in one statement — exactly-once,
    │                  `order: 'serial'` honoured inside the claim, `attempt`
    │                  incremented as part of it, one fencing token per claim

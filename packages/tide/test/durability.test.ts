@@ -598,6 +598,34 @@ describe('the load race', () => {
     expect(charged).toEqual([{ id: 's1' }]);
   });
 
+  it('a pending run whose reflex a later load of nothing took out is skipped, and not run when it comes back', async () => {
+    let databaseUp = false;
+    const charged: unknown[] = [];
+    const x: ReflexInput = {
+      id: 'x',
+      intent: 'Charge by hand.',
+      on: { manual: {} },
+      select: { query: {}, mode: 'each', unitKey: 'id' },
+      effect: { name: 'charge', input: { id: { $ref: '$.row.id' } } },
+    };
+    const { tide } = await harness([x], { charge: { run: (input) => (charged.push(input), null) } }, {
+      select: async () => {
+        if (!databaseUp) throw new Error('ECONNREFUSED');
+        return [{ id: 's1' }];
+      },
+    });
+    await tide.fire('x', { now: T0 });
+    await tide.advance({ now: T0 + 1 });
+    await tide.load([], { at: T0 + 2 });
+    await tide.advance({ now: T0 + 3 });
+    expect((await tide.ledger.runs()).map((run) => [run.state, run.note])).toEqual([['skipped', 'reflex is no longer loaded']]);
+
+    databaseUp = true;
+    await tide.load([x], { at: T0 + 5 });
+    for (let step = 0; step < 4; step += 1) await tide.advance({ now: T0 + 6 + step });
+    expect(charged).toEqual([]);
+  });
+
   it('two loads that overlap leave the set the later call was given', async () => {
     const { tide } = await harness([], { work: { run: () => null } }, { load: false });
     const manual = (id: string): ReflexInput => ({ id, intent: 'By hand.', on: { manual: {} }, effect: { name: 'work' } });

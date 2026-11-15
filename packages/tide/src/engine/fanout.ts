@@ -46,8 +46,8 @@ const factRowsOf = async (deps: EngineDeps, run: Run): Promise<readonly Fact[]> 
 
 export const fanOut = async (deps: EngineDeps, now: number, limit: number): Promise<number> => {
   let created = 0;
-  // As in matching: before the first load every pending run would read as one whose reflex is gone.
-  if (deps.reflexes().length === 0) return created;
+  // Before the first load every pending run would read as one whose reflex was taken out.
+  if (!deps.hasLoaded()) return created;
 
   const pending = await deps.store.query({
     table: 'run',

@@ -19,6 +19,7 @@ export type EngineDeps = {
   leaseMs: number;
   emit: (event: TideEvent) => void;
   reflexes: () => readonly LoadedReflex[];
+  hasLoaded: () => boolean;
   find: (id: string) => LoadedReflex | undefined;
   nextToken: () => string;
 };
