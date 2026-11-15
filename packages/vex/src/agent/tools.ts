@@ -61,12 +61,6 @@ const TestQueryInputSchema = z
   .describe('Your draft DSL query — the query object itself, NOT wrapped in any field.');
 export type TestQueryInput = z.infer<typeof TestQueryInputSchema>;
 
-const withoutNullObjectKeys = (value: unknown): unknown => {
-  if (Array.isArray(value)) return value.map(withoutNullObjectKeys);
-  if (value === null || typeof value !== 'object') return value;
-  return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== null).map(([key, entry]) => [key, withoutNullObjectKeys(entry)]));
-};
-
 const CannotSatisfyInputSchema = z.object({
   reason: z.string().describe('Why the request cannot be satisfied'),
 });
@@ -219,13 +213,10 @@ export const createQueryTools = (deps: QueryToolDeps): ReturnType<typeof defineT
     input: TestQueryInputSchema,
     execute: async (input: TestQueryInput): Promise<TestQueryResult> => {
       if (exceedsDepth(input)) return { rows: [], sql: '', warnings: [], errors: [depthRefusal()] };
-      // A key the model sent as null is one it left out. Below the top level a
-      // null can also be a literal (a `case`'s `then` or `else`), so nested nulls
-      // are dropped only for a query that does not parse with them.
-      const asSent = QuerySchema.safeParse(Object.fromEntries(Object.entries(input).filter(([, value]) => value !== null)));
-      const parseResult = asSent.success ? asSent : QuerySchema.safeParse(withoutNullObjectKeys(input));
+      // A top-level key the model sent as null is one it left out.
+      const parseResult = QuerySchema.safeParse(Object.fromEntries(Object.entries(input).filter(([, value]) => value !== null)));
       if (!parseResult.success) {
-        const validationErrors = (asSent.error ?? parseResult.error).issues.map(
+        const validationErrors = parseResult.error.issues.map(
           issue => `${issue.path.join('.')}: ${issue.message}`,
         );
         return { rows: [], sql: '', warnings: [], errors: validationErrors };

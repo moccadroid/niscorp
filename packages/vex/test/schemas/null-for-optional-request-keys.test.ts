@@ -50,11 +50,11 @@ describe('testQuery with a null nested in the query', () => {
   const context = { runId: 'r', agentId: 'a', agentPath: [], signal: new AbortController().signal, forward: () => {} };
   const run = (input: unknown): Promise<unknown> => Promise.resolve(testQuery?.config.execute(input, context));
 
-  it('runs a key the model sent as null as one it left out', async () => {
+  it('refuses a nested null key, so the model fixes it before its final answer', async () => {
     read.length = 0;
     const result = await run({ from: ['tasks'], fields: ['tasks.title'], sort: [{ field: 'tasks.title', dir: null }] });
-    expect(result).toMatchObject({ rows: [{ title: 'first' }], errors: [] });
-    expect(read).toEqual([{ from: ['tasks'], fields: ['tasks.title'], sort: [{ field: 'tasks.title', dir: 'asc' }], limit: 5 }]);
+    expect(result).toMatchObject({ rows: [], errors: [expect.stringContaining('sort.0.dir')] });
+    expect(read).toEqual([]);
   });
 
   it('keeps a null that is a literal, as today', async () => {
@@ -62,13 +62,5 @@ describe('testQuery with a null nested in the query', () => {
     const compute = { label: { case: { when: [{ condition: { eq: ['tasks.id', 't1'] }, then: null }], else: 'other' } } };
     expect(await run({ from: ['tasks'], fields: ['tasks.title'], compute, limit: null })).toMatchObject({ errors: [] });
     expect(read).toEqual([{ from: ['tasks'], fields: ['tasks.title'], compute, limit: 5 }]);
-  });
-
-  it('stays refused when dropping its nulls would drop a literal null too, with the errors of the query as sent', async () => {
-    read.length = 0;
-    const compute = { label: { case: { when: [{ condition: { eq: ['tasks.id', 't1'] }, then: null }], else: 'other' } } };
-    const result = await run({ from: ['tasks'], fields: ['tasks.title'], compute, sort: [{ field: 'tasks.title', dir: null }] });
-    expect(result).toMatchObject({ rows: [], errors: [expect.stringContaining('sort.0.dir')] });
-    expect(read).toEqual([]);
   });
 });

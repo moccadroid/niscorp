@@ -1523,12 +1523,6 @@ none of this applies — only the `Query` you return matters.)
 a column of any type (Postgres infers from the column side), so a draft is
 judged on executability, never on a guessed value's cast.
 
-A key of the draft the model sends as `null` is read as one it left out
-(`"limit": null`). Inside the query, a `null` can also be a literal (a `case`'s
-`then` or `else`), so nested `null` keys (`"dir": null` in a sort) are dropped
-only when the draft does not validate with them. If it still does not
-validate, `testQuery` reports the errors of the draft as sent.
-
 ### `vexGuide()` — the exported agent-facing contract
 
 Any agent that reads or embeds Vex endpoints should inject `vexGuide()` (a
