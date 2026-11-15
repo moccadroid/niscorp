@@ -90,7 +90,10 @@ How the envelope travels from model to runtime. One field,
 | `respond` | a synthesized `respond` tool; the envelope is its arguments | where the tool params can ENFORCE the contract — the endpoint does not validate tool args itself, the schema is small, the model carries nested args intact (auto-picked there) |
 | `emit` | the model's completion IS the envelope (content channel) | everything else — auto-picked wherever neither of the above enforces anything: all of Groq, big schemas, models that mangle nested tool args |
 
-Zod validates in **every** strategy. Invalid output feeds back as a
+Zod validates in **every** strategy. A `data` that arrives as a
+string of JSON is decoded before it is checked, and checked as
+written when the decoded value fails: `z.string()` takes `"[1,2,3]"`.
+Invalid output feeds back as a
 correction *inside the same run* (the attempt and a system message
 naming the issues are appended) — never a full re-run. Big recursive
 schemas (Prism nodes, Nova actions) ride `emit`; cortex injects
