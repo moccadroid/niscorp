@@ -576,6 +576,8 @@ removal. Changes to the grammar are strata migrations on `nisc.prism`
 
 Powered by [dayjs](https://day.js.org/). Date values can be ISO 8601 strings or Unix timestamps (milliseconds). A date-only string (`YYYY-MM-DD`) is parsed and computed in UTC, so the calendar day survives the round trip.
 
+A date and time with no zone (`2026-01-01T09:00`) is read in the time zone of the machine that runs Prism: `$date` answers `2026-01-01T08:00:00.000Z` on a server in Vienna and `2026-01-01T17:00:00.000Z` in Los Angeles. A `format` without `utc: true` prints in that zone too: `2026-01-01T09:00Z` with `"format": "HH:mm"` is `10:00` in Vienna and `01:00` in Los Angeles. For the same answer on every server, write the zone into the value (`Z` or `+01:00`) and pass `utc: true` when formatting.
+
 ### `$date` — Format a date
 ```json
 { "$date": { "value": { "$ref": "$.createdAt" } } }
