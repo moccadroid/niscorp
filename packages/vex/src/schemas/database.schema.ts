@@ -44,6 +44,7 @@ export const EntitySchemaSchema = z.object({
 
 export const DatabaseSchemaSchema = z.object({
   entities: z.array(EntitySchemaSchema),
+  namespace: z.string().optional(),
 });
 
 export type NormalizedType = z.infer<typeof NormalizedTypeSchema>;

@@ -1,6 +1,6 @@
 import type { QueryEngine } from '../../types.js';
-import type { ScopeValues } from '../../scope/scope.types.js';
-import type { VexHandlerConfig } from '../../handler.js';
+import type { ScopePolicy, ScopeValues } from '../../scope/scope.types.js';
+import type { VexHandlerConfig, ExecuteRecord } from '../../handler.js';
 import { handleDiscovery, handleQuery, handleFingerprintPatch, handleFingerprintDelete } from '../../handler.js';
 
 export type VexExpressRequest = {
@@ -19,7 +19,10 @@ export type VexExpressConfig<TReq extends VexExpressRequest = VexExpressRequest>
   entities?: string[];
   locked?: boolean;
   getScope?: (req: TReq) => Promise<ScopeValues> | ScopeValues;
+  getPolicy?: (req: TReq) => Promise<ScopePolicy | undefined> | ScopePolicy | undefined;
+  getPolicyForReach?: (req: TReq, reach: string) => Promise<ScopePolicy | undefined> | ScopePolicy | undefined;
   mutations?: VexHandlerConfig['mutations'];
+  onExecute?: (record: ExecuteRecord) => void;
 };
 
 // A fingerprint may contain '/' (a named slot such as "deals/table"), so it
@@ -40,15 +43,29 @@ export const vex = <TReq extends VexExpressRequest = VexExpressRequest>(
     ...(config.mutations !== undefined ? { mutations: config.mutations } : {}),
   };
 
+  // Fingerprint management (PATCH, DELETE) is an operator's surface: it keeps
+  // `handlerConfig` and carries no per-request policy.
+  const requestConfig = async (req: TReq): Promise<VexHandlerConfig> => {
+    const policy = config.getPolicy ? await config.getPolicy(req) : undefined;
+    const { getPolicyForReach } = config;
+    return {
+      ...handlerConfig,
+      ...(policy !== undefined ? { scopePolicy: policy } : {}),
+      ...(getPolicyForReach !== undefined ? { policyForReach: (reach: string) => getPolicyForReach(req, reach) } : {}),
+      ...(config.onExecute !== undefined ? { onExecute: config.onExecute } : {}),
+      ...(config.mutations !== undefined ? { mutations: { ...config.mutations, policy: policy ?? config.mutations.policy } } : {}),
+    };
+  };
+
   return async (req: TReq, res: VexExpressResponse): Promise<void> => {
     if (req.method === 'GET') {
-      res.json(await handleDiscovery(handlerConfig));
+      res.json(await handleDiscovery(await requestConfig(req)));
       return;
     }
 
     if (req.method === 'POST') {
       const scope = config.getScope ? await config.getScope(req) : {};
-      const result = await handleQuery(handlerConfig, req.body, scope);
+      const result = await handleQuery(await requestConfig(req), req.body, scope);
       res.status(result.status).json(result.body);
       return;
     }

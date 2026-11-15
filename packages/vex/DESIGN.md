@@ -790,16 +790,11 @@ byte for byte, so nothing a cache already holds under one has moved.
    checked against `ident` and quoted. Values from a request bind as parameters and never reach
    text at all. The name grammar (`identifier.schema.ts`) is checked three
    times — at parse, in the resolver for a DSL that skipped parsing, and by a
-   compiler that refuses any field position that did not resolve.
-
-   ⟲ It was not, until 2026-09-24. Field positions (`isNull`, `in`, `like`,
-   aggregate arguments) were typed `z.string()`; the resolver skipped any
-   string without a dot and the compiler pasted it into the statement, so
-   `{ isNotNull: "(SELECT secret FROM …)" }` was a boolean oracle over a table
-   the policy denied. Output names went into `AS "…"` unescaped, and a literal
-   containing a backslash could close its own string on a server with
-   `standard_conforming_strings` off. `test/security/injection.test.ts` is the
-   attack list, against a real Postgres; it failed 35 of 41 before the fix.
+   compiler that refuses any field position that did not resolve. With
+   `qualifyTables`, one more piece of text reaches a statement: the adapter's
+   `schema` option, set by the operator and never by a query, quoted before
+   each table name. `test/security/injection.test.ts` is the attack list,
+   against a real Postgres.
 
 2. **The LLM is injected, not embedded.** Making `generateDsl`/`mapToShape`
    plain hooks keeps the engine deterministic and testable without a model,

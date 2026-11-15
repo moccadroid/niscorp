@@ -22,6 +22,13 @@ export const QueryRequestSchema = z.object({
 
 export type QueryRequest = z.infer<typeof QueryRequestSchema>;
 
+export const dropNullIntentAndFingerprint = (body: unknown): unknown => {
+  if (body === null || typeof body !== 'object' || Array.isArray(body)) return body;
+  const isNullAt = (key: string): boolean => Reflect.get(body, key) === null;
+  if (!isNullAt('intent') && !isNullAt('fingerprint')) return body;
+  return Object.fromEntries(Object.entries(body).filter(([key, value]) => value !== null || (key !== 'intent' && key !== 'fingerprint')));
+};
+
 export type CacheMeta = {
   hit: boolean;
   fingerprint?: string;

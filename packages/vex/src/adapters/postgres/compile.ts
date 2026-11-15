@@ -1,12 +1,12 @@
 import type { ResolvedQuery } from '../../engine/engine.types.js';
 import type { CompiledQuery, ParamSlot, ContextContract } from '../adapter.types.js';
-import { compileFilter, compileCompute, compileAggregate, compileJoinPairs, quoteIdent, sqlName, columnSql } from './operators.js';
+import { compileFilter, compileCompute, compileAggregate, compileJoinPairs, quoteIdent, sqlName, columnSql, tableSql } from './operators.js';
 import { VexError } from '../../errors.js';
 import type { CompilationContext } from './operators.js';
 
-export const compileQuery = (resolved: ResolvedQuery): CompiledQuery => {
+export const compileQuery = (resolved: ResolvedQuery, namespace?: string): CompiledQuery => {
   const paramSlots: ParamSlot[] = [];
-  const sql = compileLevel(resolved, paramSlots, { value: 0 });
+  const sql = compileLevel(resolved, paramSlots, { value: 0 }, namespace);
 
   const contextContract: ContextContract = {};
   for (const slot of paramSlots) {
@@ -18,13 +18,14 @@ export const compileQuery = (resolved: ResolvedQuery): CompiledQuery => {
 
 // A subquery compiles into its parent's slots and counter, so each `$N` of the
 // statement is numbered once.
-const compileLevel = (resolved: ResolvedQuery, paramSlots: ParamSlot[], paramCounter: { value: number }): string => {
+const compileLevel = (resolved: ResolvedQuery, paramSlots: ParamSlot[], paramCounter: { value: number }, namespace: string | undefined): string => {
   const ctx: CompilationContext = {
     resolvedPaths: resolved.filter?.resolvedPaths ?? new Map(),
     aliasMap: resolved.aliasMap,
     paramSlots,
     paramCounter,
     ...(resolved.existsMap !== undefined ? { existsMap: resolved.existsMap } : {}),
+    ...(namespace !== undefined ? { namespace } : {}),
   };
 
   const sqlParts: string[] = [];
@@ -59,9 +60,9 @@ const compileLevel = (resolved: ResolvedQuery, paramSlots: ParamSlot[], paramCou
   const firstSource = resolved.sources[0];
   if (firstSource !== undefined) {
     if (firstSource.subquery !== undefined) {
-      sqlParts.push(`FROM (${compileLevel(firstSource.subquery, paramSlots, paramCounter)}) AS ${sqlName(firstSource.alias)}`);
+      sqlParts.push(`FROM (${compileLevel(firstSource.subquery, paramSlots, paramCounter, namespace)}) AS ${sqlName(firstSource.alias)}`);
     } else if (firstSource.table !== undefined) {
-      sqlParts.push(`FROM ${sqlName(firstSource.table)} AS ${sqlName(firstSource.alias)}`);
+      sqlParts.push(`FROM ${tableSql(firstSource.table, namespace)} AS ${sqlName(firstSource.alias)}`);
     }
   }
 
@@ -75,9 +76,9 @@ const compileLevel = (resolved: ResolvedQuery, paramSlots: ParamSlot[], paramCou
       ];
       const on = conditions.join(' AND ');
       if (joinSource.subquery !== undefined) {
-        sqlParts.push(`${keyword} (${compileLevel(joinSource.subquery, paramSlots, paramCounter)}) AS ${sqlName(join.toAlias)} ON ${on}`);
+        sqlParts.push(`${keyword} (${compileLevel(joinSource.subquery, paramSlots, paramCounter, namespace)}) AS ${sqlName(join.toAlias)} ON ${on}`);
       } else {
-        sqlParts.push(`${keyword} ${sqlName(join.toTable)} AS ${sqlName(join.toAlias)} ON ${on}`);
+        sqlParts.push(`${keyword} ${tableSql(join.toTable, namespace)} AS ${sqlName(join.toAlias)} ON ${on}`);
       }
     }
   }
@@ -88,9 +89,9 @@ const compileLevel = (resolved: ResolvedQuery, paramSlots: ParamSlot[], paramCou
   for (const source of resolved.sources) {
     if (source.alias === firstSource?.alias || joinedAliases.has(source.alias)) continue;
     if (source.subquery !== undefined) {
-      sqlParts.push(`CROSS JOIN (${compileLevel(source.subquery, paramSlots, paramCounter)}) AS ${sqlName(source.alias)}`);
+      sqlParts.push(`CROSS JOIN (${compileLevel(source.subquery, paramSlots, paramCounter, namespace)}) AS ${sqlName(source.alias)}`);
     } else if (source.table !== undefined) {
-      sqlParts.push(`CROSS JOIN ${sqlName(source.table)} AS ${sqlName(source.alias)}`);
+      sqlParts.push(`CROSS JOIN ${tableSql(source.table, namespace)} AS ${sqlName(source.alias)}`);
     }
   }
 

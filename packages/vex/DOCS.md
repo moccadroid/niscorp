@@ -187,6 +187,16 @@ type QueryEngineConfig = {
   their tables without a schema, so they resolve through the connection's
   `search_path`: with `schema`, set the `search_path` to that schema too, or
   reads and writes reach the tables of another schema.
+- `createPostgresAdapter({ pool, schema, qualifyTables: true })` writes the
+  schema's name on every table instead (`FROM "app".tasks`), in reads and in
+  mutations, so the `search_path` does not matter. `introspect()` then returns
+  the name as `namespace` on the `DatabaseSchema`, and the mutation compiler
+  reads it there. It is not part of the schema fingerprint, so cached entries
+  stay fresh when the option is turned on. Without the option, tables are named
+  bare, as above: a host that points the `search_path` at a schema per tenant
+  keeps doing so. With the option, `adapter.introspect({ schema: 'other' })`
+  lists `other`'s tables but still names them, and reports `namespace`, with the
+  adapter's own `schema`.
 - `config.statementTimeoutMs` is enforced by the database (`statement_timeout`),
   set up at `introspect()`. A database that cannot enforce it (PGlite) runs
   reads unbounded and the engine warns each time `introspect()` runs. A `PgPool`
@@ -258,6 +268,8 @@ type QueryRequest = {
 ```
 
 The request is Zod-validated; `execute` throws `invalid_request` on failure.
+A `fingerprint` or `intent` sent as `null` is read as left out. A `null` in
+`context` is a value and stays.
 It must carry a `fingerprint`, a `shape`, or both — the three postures:
 
 1. **Explore** — `{ intent, shape, context }`: generate, cache, mint a
@@ -876,7 +888,7 @@ only narrow rows, never widen phases. A caller with no verb for the table is
 still refused. A mutation entry takes `reach` the same way (`SeedMutation.reach`),
 and the write is compiled at that profile whoever asks.
 
-The host supplies `policyForReach(reach)` (hono: `getPolicyForReach(c, reach)`),
+The host supplies `policyForReach(reach)` (hono: `getPolicyForReach(c, reach)`; express: `getPolicyForReach(req, reach)`),
 because vex knows neither grants nor behaviors. **The handler fails closed both
 ways:** an entry declaring a reach no host can resolve is a 500, and a host
 returning `undefined` is a 403. Falling back to the caller's own reach would be
@@ -1574,9 +1586,12 @@ app.all('/api/orders/vex', vex({
 }));
 ```
 
-`VexExpressConfig` also takes `locked` and `mutations`
-(`{ client, policy, onWrite? }`). It has no per-request policy hook. Any method
-other than `GET`/`POST`/`PATCH`/`DELETE` answers 405.
+`VexExpressConfig` also takes `locked`, `mutations` (`{ client, policy, onWrite? }`),
+`getPolicy(req)`, `getPolicyForReach(req, reach)` and `onExecute`. These mean
+what they mean for Hono: `getPolicy` governs reads, mutation replay and
+discovery, and when it returns `undefined` the engine's policy and
+`mutations.policy` stay in force. `PATCH` and `DELETE` carry no per-request
+policy. Any method other than `GET`/`POST`/`PATCH`/`DELETE` answers 405.
 
 ### The endpoints
 
@@ -1658,7 +1673,7 @@ log); the engine itself emits the `query.*` and `rows.*` events.
 
 ### The execution observer
 
-`onExecute` (handler config; the hono adapter passes it through) fires once per
+`onExecute` (handler config; the hono and express adapters pass it through) fires once per
 `handleQuery`, read or write, after the outcome is known:
 
 ```typescript

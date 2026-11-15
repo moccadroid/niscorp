@@ -1,4 +1,4 @@
-import { compileFilter, compileFieldOrValue, sqlName } from '../adapters/postgres/operators.js';
+import { compileFilter, compileFieldOrValue, sqlName, tableSql } from '../adapters/postgres/operators.js';
 import type { CompilationContext } from '../adapters/postgres/operators.js';
 import type { ParamSlot, Row } from '../adapters/adapter.types.js';
 import type { Filter } from '../schemas/filter.schema.js';
@@ -279,12 +279,13 @@ const itemRow = (element: unknown, itemKeys: Record<string, string>): Record<str
 
 type WriteContext = CompilationContext & { returned: Map<number, string> };
 
-const newCtx = (): WriteContext => ({
+const newCtx = (namespace: string | undefined): WriteContext => ({
   resolvedPaths: new Map(),
   aliasMap: new Map(),
   paramSlots: [],
   paramCounter: { value: 0 },
   returned: new Map(),
+  ...(namespace !== undefined ? { namespace } : {}),
 });
 
 // A single-table statement needs no aliases, so each path maps to itself. Only
@@ -301,7 +302,7 @@ const compileValue = (v: MutationValue, ctx: WriteContext): string => {
   if (isLookup(v)) {
     indexFilterFields(v.$lookup.where, ctx.aliasMap);
     const where = compileFilter(v.$lookup.where, ctx);
-    return `(SELECT ${sqlName(v.$lookup.field)} FROM ${sqlName(v.$lookup.from)} WHERE ${where})`;
+    return `(SELECT ${sqlName(v.$lookup.field)} FROM ${tableSql(v.$lookup.from, ctx.namespace)} WHERE ${where})`;
   }
   if (isReturned(v)) {
     ctx.paramCounter.value += 1;
@@ -338,12 +339,12 @@ const compileConflict = (m: { table: string; onConflict?: ResolvedOnConflict }, 
 };
 
 const compileMutation = (m: ResolvedMutation, schema: DatabaseSchema): Compiled => {
-  const ctx = newCtx();
+  const ctx = newCtx(schema.namespace);
   if (m.op === 'insert') {
     const entries = Object.entries(m.values);
     const cols = entries.map(([c]) => sqlName(c));
     const vals = entries.map(([c, v]) => compileColumnValue(m.table, c, v, ctx, schema));
-    return { sql: `INSERT INTO ${sqlName(m.table)} (${cols.join(', ')}) VALUES (${vals.join(', ')})${compileConflict(m, ctx, schema)} RETURNING *`, slots: ctx.paramSlots, returned: ctx.returned };
+    return { sql: `INSERT INTO ${tableSql(m.table, schema.namespace)} (${cols.join(', ')}) VALUES (${vals.join(', ')})${compileConflict(m, ctx, schema)} RETURNING *`, slots: ctx.paramSlots, returned: ctx.returned };
   }
   if (m.op === 'insertEach') {
     const types = new Map(findEntity(m.table, schema)?.fields.map((f) => [f.name, f.type]));
@@ -364,7 +365,7 @@ const compileMutation = (m: ResolvedMutation, schema: DatabaseSchema): Compiled 
     const items = `$${ctx.paramCounter.value}::jsonb`;
     const source = itemColumns.length === 0 ? `jsonb_array_elements(${items}) AS item` : `jsonb_to_recordset(${items}) AS item(${itemColumns.join(', ')})`;
     return {
-      sql: `INSERT INTO ${sqlName(m.table)} (${cols.join(', ')}) SELECT ${exprs.join(', ')} FROM ${source}${compileConflict(m, ctx, schema)} RETURNING *`,
+      sql: `INSERT INTO ${tableSql(m.table, schema.namespace)} (${cols.join(', ')}) SELECT ${exprs.join(', ')} FROM ${source}${compileConflict(m, ctx, schema)} RETURNING *`,
       slots: ctx.paramSlots,
       returned: ctx.returned,
       itemKeys,
@@ -374,11 +375,11 @@ const compileMutation = (m: ResolvedMutation, schema: DatabaseSchema): Compiled 
     const sets = Object.entries(m.set).map(([c, v]) => `${sqlName(c)} = ${compileColumnValue(m.table, c, v, ctx, schema)}`);
     indexFilterFields(m.where, ctx.aliasMap);
     const where = compileFilter(m.where, ctx);
-    return { sql: `UPDATE ${sqlName(m.table)} SET ${sets.join(', ')} WHERE ${where} RETURNING *`, slots: ctx.paramSlots, returned: ctx.returned };
+    return { sql: `UPDATE ${tableSql(m.table, schema.namespace)} SET ${sets.join(', ')} WHERE ${where} RETURNING *`, slots: ctx.paramSlots, returned: ctx.returned };
   }
   indexFilterFields(m.where, ctx.aliasMap);
   const where = compileFilter(m.where, ctx);
-  return { sql: `DELETE FROM ${sqlName(m.table)} WHERE ${where} RETURNING *`, slots: ctx.paramSlots, returned: ctx.returned };
+  return { sql: `DELETE FROM ${tableSql(m.table, schema.namespace)} WHERE ${where} RETURNING *`, slots: ctx.paramSlots, returned: ctx.returned };
 };
 
 const SUGAR: { [K in Mutation['op']]?: (m: Extract<Mutation, { op: K }>, context: Record<string, unknown>) => CoreMutation } = {

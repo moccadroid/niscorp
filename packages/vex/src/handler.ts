@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type { QueryEngine } from './types.js';
 import type { ScopePolicy, ScopeValues } from './scope/scope.types.js';
 import type { DatabaseSchema, EntitySchema } from './schemas/database.schema.js';
-import { QueryRequestSchema } from './schemas/request.schema.js';
+import { QueryRequestSchema, dropNullIntentAndFingerprint } from './schemas/request.schema.js';
 import { QuerySchema } from './schemas/query.schema.js';
 import { isEntryFresh, isTouchDue, fireAndForget } from './cache/util.js';
 import { computeSchemaFingerprint } from './cache/hash.js';
@@ -340,7 +340,7 @@ const runQuery = async (
 
   // Before the schema: a deep enough body overflows the stack when parsed.
   if (exceedsDepth(body)) return { status: 400, body: { error: 'invalid_request', message: depthRefusal() } };
-  const parsed = QueryRequestSchema.safeParse(body);
+  const parsed = QueryRequestSchema.safeParse(dropNullIntentAndFingerprint(body));
   if (!parsed.success) {
     return {
       status: 400,
