@@ -365,7 +365,7 @@ shell.setCanvasLayout(layout);           // swap how the shell arranges its canv
 shell.setLayout('region-a', layout);     // swap what a LayoutRef placeholder resolves to
 ```
 
-`removeAction` with an id the shell does not have is a no-op. Where it unmounts the top of a canvas, the instance beneath resumes; fragments and the instances of other actions are untouched.
+`removeAction` with an id the shell does not have is a no-op. Where it unmounts the top of a canvas, the instance beneath resumes, on a `mode: 'list'` canvas too: the card left last re-runs its `mount` and `resume` hooks, as after `pop`. Fragments and the instances of other actions are untouched.
 
 `setLayout` is the hot-swap hook for dynamic region layouts: a canvasLayout embeds `{ ref: id }` placeholders, and this replaces what one resolves to — the frame/chrome stays intact.
 

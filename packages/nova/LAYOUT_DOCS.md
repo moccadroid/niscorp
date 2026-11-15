@@ -273,10 +273,13 @@ A string starting with `$.` reads a value from the data object.
 The raw value is returned with its type preserved — numbers stay numbers, arrays stay arrays.
 
 **Path forms:**
-- `$.foo.bar` — start from the data root, walk `foo` then `bar`
+- `$.foo.bar` — start from the data root, walk `foo` then `bar`. Inside a loop, the loop's own names come first: `$.index`, `$.items` and `$.<as>` read the loop's values, not root keys of those names
 - `$foo` — read variable `foo` from the closest enclosing scope (loop variable, etc.)
 - `$foo.bar` — read variable `foo`, walk `bar` on it
 - `$index` — special: the loop iteration index
+- `$` alone — the whole innermost scope: the data root, or inside a loop the loop's own `{ <as>, index, items }`
+
+A string that starts with `$` and then a letter or `_` is a path, never text: `'$USD'` reads a key `USD` and renders empty when there is none. Text that starts with `$` comes from data or a binding (`'{{$.label}}'`).
 
 ### 2. Template strings
 
