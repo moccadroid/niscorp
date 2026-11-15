@@ -1,18 +1,28 @@
 import { defineComponent, h, inject, provide } from 'vue';
 import { scopeDispatch } from '@shared/event-bus';
 import { ActionSlotPropsSchema, CanvasSlotPropsSchema, type ActionSlotProps, type CanvasSlotProps } from '../../primitive-props';
-import { NovaRenderKey, type NovaRenderContextValue } from '../context';
+import { NovaOpenCanvasesKey, NovaRenderKey, type NovaRenderContextValue, type OpenCanvases } from '../context';
 import { useShellSource } from '../composables/context';
 import { useCanvasRenderTree, useRenderTree } from '../composables/shell';
+import { ErrorMarker } from '../error-marker';
 import { RenderTree } from '../render-tree';
 
 export { CanvasSlotPropsSchema, type CanvasSlotProps, ActionSlotPropsSchema, type ActionSlotProps };
+
+const NONE_OPEN: OpenCanvases = { has: () => false };
 
 export const CanvasSlot = Object.assign(
   defineComponent(
     (props: CanvasSlotProps) => {
       const tree = useCanvasRenderTree(() => props.canvasId);
-      return () => (props.canvasId === undefined || props.canvasId === '' ? null : h(RenderTree, { nodes: tree.value }));
+      const open = inject(NovaOpenCanvasesKey, NONE_OPEN);
+      provide(NovaOpenCanvasesKey, { has: (canvasId) => canvasId === props.canvasId || open.has(canvasId) });
+      return () => {
+        const canvasId = props.canvasId;
+        if (canvasId === undefined || canvasId === '') return null;
+        if (open.has(canvasId)) return h(ErrorMarker, { code: 'RENDER_ERROR', message: `canvas "${canvasId}" is placed inside itself` });
+        return h(RenderTree, { nodes: tree.value });
+      };
     },
     { name: 'NovaCanvasSlot', props: ['canvasId'], inheritAttrs: false },
   ),

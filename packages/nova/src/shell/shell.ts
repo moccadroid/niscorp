@@ -29,7 +29,7 @@ import { createChainCount, rememberChainCount } from './chains';
 import { createNavigationHandler, navigatedChannel } from './navigation';
 import type { NavigatedMessage } from './navigation';
 import { createRuntimeRegistry } from './runtime-registry';
-import { createRuntimeFactory, misfiledDefinitions, refuseSharedId, snapshotCanvas, validateActions, validateFragments } from './shell-internals';
+import { createRuntimeFactory, getEndpointsWithBody, misfiledDefinitions, refuseSharedId, snapshotCanvas, validateActions, validateFragments } from './shell-internals';
 import { createTelemetry } from './telemetry';
 import type {
   CanvasChangeHandler,
@@ -55,6 +55,8 @@ export const createShell = (config: ShellConfig): Shell => {
   if (shared !== undefined) refuseSharedId(shared);
   const misfiled = misfiledDefinitions({ ...config.actions, ...config.fragments });
   if (misfiled !== undefined) config.onError?.(misfiled);
+  const bodiedGets = getEndpointsWithBody({ ...config.actions, ...config.fragments });
+  if (bodiedGets !== undefined) config.onError?.(bodiedGets);
 
   const id = (config.shellIdFn ?? defaultShellIdFactory)();
   const instanceIdFn = config.instanceIdFn ?? createIdFactory('act');
@@ -208,6 +210,8 @@ export const createShell = (config: ShellConfig): Shell => {
     const held = definitions.get(definition.id);
     if (held !== undefined && isFragment(held) !== isFragment(definition)) refuseSharedId(definition.id);
     definitions.set(definition.id, definition);
+    const bodiedGets = getEndpointsWithBody({ [definition.id]: definition });
+    if (bodiedGets !== undefined) config.onError?.(bodiedGets);
   };
 
   const removeAction = (actionId: string): void => {

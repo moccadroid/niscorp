@@ -46,6 +46,7 @@ type Ctx = {
   api: TtyRenderApi;
   out: TtyInteractive[];
   fallback?: TtyComponent;
+  openCanvases: ReadonlySet<string>;
 };
 
 const errorBlock = (code: string, message: string): TtyBlock => ({ lines: [`!! ${code}: ${message}`] });
@@ -69,11 +70,12 @@ const renderNode = (node: RenderNode, ctx: Ctx): TtyBlock => {
   if (node.name === CANVAS_SLOT) {
     const canvasId = typeof node.props['canvasId'] === 'string' ? (node.props['canvasId'] as string) : '';
     if (canvasId === '') return { lines: [] };
+    if (ctx.openCanvases.has(canvasId)) return errorBlock('RENDER_ERROR', `canvas "${canvasId}" is placed inside itself`);
     const tree = ctx.api.canvasTree(canvasId);
     if (tree.length === 0) return { lines: [] };
     // A canvas starts outside any instance, even when an instance's layout placed it.
     const { origin: _outer, ...outside } = ctx;
-    const canvasCtx: Ctx = { ...outside, canvas: canvasId };
+    const canvasCtx: Ctx = { ...outside, canvas: canvasId, openCanvases: new Set([...ctx.openCanvases, canvasId]) };
     return { lines: [canvasRule(canvasId), ...tree.flatMap((child) => renderNode(child, canvasCtx).lines), ''] };
   }
 
@@ -123,7 +125,7 @@ export const createTtyView = (
 ): TtyView => {
   const render = (): TtyFrame => {
     const out: TtyInteractive[] = [];
-    const ctx: Ctx = { registry, canvas: '', api, out, ...(options.fallback !== undefined ? { fallback: options.fallback } : {}) };
+    const ctx: Ctx = { registry, canvas: '', api, out, openCanvases: new Set(), ...(options.fallback !== undefined ? { fallback: options.fallback } : {}) };
     const lines = api.frame().flatMap((node) => renderNode(node, ctx).lines);
     return { text: tidy(lines).join('\n'), interactives: out };
   };

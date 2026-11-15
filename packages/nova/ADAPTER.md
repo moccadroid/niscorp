@@ -110,7 +110,10 @@ Register two structural components under the core names `CANVAS_SLOT_NAME`
 and `ACTION_SLOT_NAME` — the shell's default layouts reference them:
 
 - **CanvasSlot** (`{ canvasId }`): renders that canvas's tree; nothing when
-  `canvasId` is missing.
+  `canvasId` is missing. A `CanvasSlot` inside the canvas it names would draw
+  that canvas forever: carry the canvases open on the way down, and draw an
+  error node there instead (`RENDER_ERROR: canvas "<id>" is placed inside
+  itself`), as nova's adapters do.
 - **ActionSlot** (`{ instanceId }`): renders that instance's tree; nothing
   when `instanceId` is missing. Wrap the dispatch handed to the instance's
   subtree with core's `scopeDispatch(dispatch, instanceId)` so its UI events
@@ -180,6 +183,21 @@ or bound inputs drop keystrokes the moment the shell is remote:
   value on blur. The React, Vue, DOM and Ink adapters implement it — omitting it silently
   makes a served `debounce` a no-op in your terminal, so the same layout behaves
   differently across renderers.
+- **Honour `replaceDraftOnWrite` on a `model`-bound node.** With
+  `props.replaceDraftOnWrite === true`, a focused field still ignores a new
+  tree value equal to one it dispatched since it was focused (its echo), but
+  any other change of the tree value replaces the in-progress value, drops a
+  pending debounced dispatch (which would write the old text back), and puts
+  the caret at the end. Keep the values the field dispatched; empty the list
+  when the field is focused, when a tree value equals the last of them, and
+  when a value replaces the draft. Only a change of the tree value counts: a
+  write that leaves the stored value as it was reaches no adapter. So without
+  `debounce` (each keystroke already stored) a `set` of the model path to
+  `""` clears the field, but with `debounce`, while the typing still waits and
+  the stored value is still `""`, the same `set` does nothing, and leaving the
+  field then dispatches the typing. Without the prop, the first obligation
+  stands as written. The React, Vue, DOM and Ink adapters implement it; the
+  React, Vue and DOM ones are tested, Ink's is not.
 
 These belong to *every* adapter because they are artifacts of the transport, not
 of taste — unlike styling, hover, or animation, which *should* differ per kit.
@@ -305,7 +323,9 @@ close it; nothing has needed one yet.
   element's, and stay with it. Once it is left, the next render shows the tree's
   value again (the kit is asked for the field afresh, because how a value is
   shown is the kit's business). A checkbox or a radio is not "typed in": the
-  tree's answer shows at once.
+  tree's answer shows at once. A field with `replaceDraftOnWrite` takes a
+  value that is not an echo of what it dispatched into the same element while
+  it is typed in, with the caret at the end.
 - **A field that had to be built again while focused** (another of its props
   changed) is given what was being typed, the caret, and focus.
 - **Focus follows the element.** One that stayed has it still. One that was

@@ -82,6 +82,16 @@ export const InputPropsSchema = z
       .number()
       .optional()
       .describe('Milliseconds to coalesce keystrokes before dispatching ui:model. Default: 0 (every keystroke). Set it when the shell is remote to cut round-trips.'),
+    replaceDraftOnWrite: z
+      .boolean()
+      .optional()
+      .describe(
+        'While the field is focused, a change of the value at its model path replaces what is typed and drops any dispatch still waiting on debounce, ' +
+          'unless the new value equals one the field has dispatched since it was focused. ' +
+          'A write that leaves the stored value as it was is no change: with `debounce`, a `set` to "" while the typing still waits and the stored value is still "" does nothing, ' +
+          'and leaving the field then dispatches the typing. ' +
+          'Default: false — while focused, the field keeps what is typed and ignores its model value.',
+      ),
   })
   .strict()
   .describe('Text input bound to data via the `model` field on the layout node.');

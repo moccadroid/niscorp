@@ -26,3 +26,6 @@ export type NovaShellSource = { readonly shell: Shell };
 
 export const NovaRenderKey: InjectionKey<NovaRenderContextValue> = Symbol.for('@niscorp/nova/adapters/vue:render');
 export const NovaShellKey: InjectionKey<NovaShellSource> = Symbol.for('@niscorp/nova/adapters/vue:shell');
+
+export type OpenCanvases = { readonly has: (canvasId: string) => boolean };
+export const NovaOpenCanvasesKey: InjectionKey<OpenCanvases> = Symbol.for('@niscorp/nova/adapters/vue:open-canvases');

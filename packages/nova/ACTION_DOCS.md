@@ -196,6 +196,8 @@ Remove an element at a specific index.
 
 The index can also be a template string (e.g. `"{{@event.payload}}"`) resolved before applying. One that does not resolve to a whole number (a missing path, a fraction, a word) leaves the array as it is, and the steps after it run.
 
+A negative index counts from the end, as in JavaScript's `splice`: `-1` removes the last element, and an index further back than the first element removes the first. An index computed as `-1` for "not found" therefore removes the last element: check the index before the step runs. An index past the end removes nothing.
+
 ### `move`
 
 Reorder an array element from one index to another.
@@ -287,6 +289,8 @@ The `pop` effect uses `pop: true` (a literal boolean) to distinguish it from the
 
 `push`, `replace`, and `resetTo` accept an optional `with: [...]` — ids of `ActionFragment`s composed into the action before it is instantiated. Each fragment wraps the action (the action's layout fills the fragment's `{ slot: 'body' }`) and contributes its triggers/data; the action wins on conflict.
 
+A `push` (the effect or `shell.push`) to a canvas id the shell was not given creates that canvas. It is not in the shell layout: only a `CanvasSlot` naming it, or `getCanvasRenderTree`, shows it. Declare a canvas with `canvases` or `addCanvas`.
+
 `input` values resolve against the current data plus the firing event, so a trigger can pass dynamic data to the action it opens — e.g. `input: { record: '@event.payload' }` or `input: { id: '@event.payload.todo_id' }`. `action` resolves the same way (`action: '{{@event.payload}}'` opens the action a binding names); a literal id passes through unchanged.
 
 ### `popTo`, `resetTo`
@@ -361,7 +365,6 @@ endpoints: {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
-      'authorization': 'Bearer {{$.token}}',
     },
     request: { name: { $ref: '$.user.name' }, email: { $ref: '$.user.email' } },
     target: 'savedUser',
@@ -375,7 +378,7 @@ endpoints: {
 - **`url`** *(required)* — template URL. Bindings work.
 - **`method`** *(required)* — `GET` | `POST` | `PUT` | `PATCH` | `DELETE`.
 - **`headers`** *(optional)* — object of header name → value. Values can be templated; names cannot.
-- **`request`** *(optional)* — a transform config run by the **injected evaluator** (see below) over the action data to build the request body. Static parts are literal; dynamic parts use the evaluator's ops. A string result is sent as-is; anything else is JSON-stringified. Declaring `request` without an injected transform is a hard error — never a silent empty body.
+- **`request`** *(optional)* — a transform config run by the **injected evaluator** (see below) over the action data to build the request body. Static parts are literal; dynamic parts use the evaluator's ops. A string result is sent as-is; anything else is JSON-stringified. Declaring `request` without an injected transform is a hard error — never a silent empty body. Not on a `GET`: fetch sends no body with a GET, so every call of it fails; the shell reports such an endpoint to `onError` as a `DefinitionValidationError` when `createShell` or `registerAction` loads the definition, and loads it as given.
 - **`response`** *(optional)* — a transform config run by the injected evaluator over the reply **exactly as received** (`$` is the reply — object, array, or scalar; no wrapping) to produce the value stored at `target`. Declaring it without an injected transform is a hard error — never the unshaped reply.
 - **`target`** *(optional)* — data path to write the (possibly transformed) response into on success. If unset, the response is discarded.
 - **`errorTarget`** *(optional)* — data path to write the error info into on failure.
@@ -553,7 +556,7 @@ Action-time errors all extend `NovaError`:
 - **`UnknownFragmentError`** — a `with: [...]` names a fragment the shell doesn't have
 - **`UnknownFunctionError`** — a `call` to a function endpoint whose `fn` isn't registered, with no `onError` branch, in strict mode
 - **`DefinitionValidationError`** — an action definition fails Zod validation at shell init
-- **`MutationError`** — in strict mode, `push`, `pop`, `removeAt`, `move` or `clear` aimed at a path that is missing or of the wrong type. It is reported to `onError`, and the batch of mutations it was in is not applied. In lax mode the op is a no-op
+- **`MutationError`** — in strict mode, `push`, `pop`, `removeAt`, `move` or `clear` aimed at a path that is missing or of the wrong type. It is reported to `onError`, and the batch of mutations it was in is not applied. In lax mode the op is a no-op, except `clear`, which removes the key (see `clear` above)
 
 A runaway trigger chain is reported as a plain `NovaError` with code `RUNAWAY_CHAIN`.
 

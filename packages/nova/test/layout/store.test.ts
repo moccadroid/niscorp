@@ -54,4 +54,18 @@ describe('layout store', () => {
     const loopOut = store.resolveReferences({ for: '$.xs', as: 'x', do: { ref: 'a' } });
     expect(loopOut).toEqual({ for: '$.xs', as: 'x', do: 'A' });
   });
+
+  it('resolveReferences expands a layout that refers to itself once and leaves the inner reference', () => {
+    const store = createLayoutStore();
+    const tree: LayoutNode = { component: 'Stack', children: { for: '$node.children', as: 'node', do: { ref: 'tree' } } };
+    store.set('tree', tree);
+    expect(store.resolveReferences({ ref: 'tree' })).toEqual(tree);
+  });
+
+  it('resolveReferences leaves a reference that comes back through another layout', () => {
+    const store = createLayoutStore();
+    store.set('x', { component: 'Box', children: { ref: 'y' } });
+    store.set('y', { component: 'Box', children: [{ ref: 'x' }] });
+    expect(store.resolveReferences({ ref: 'x' })).toEqual({ component: 'Box', children: { component: 'Box', children: [{ ref: 'x' }] } });
+  });
 });

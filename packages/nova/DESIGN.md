@@ -129,8 +129,10 @@ runtime writes to it, the layout renderer reads from it via a narrow
 
 ### `shared/event-bus/`
 
-Topic-based pub/sub. Validates events against `NovaEventSchema` before
-dispatch. Used for ambient UI events such as `ui:model`. Handlers receive
+Topic-based pub/sub. It does not validate events: a host that takes events
+from outside parses them with `NovaEventSchema` before it emits them (moss
+does, where a terminal's events arrive). Used for ambient UI events such as
+`ui:model`. Handlers receive
 typed `NovaEvent` payloads. Subscriptions return cleanup functions.
 
 ### `shared/message-bus/`

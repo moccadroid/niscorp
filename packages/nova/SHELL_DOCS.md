@@ -133,6 +133,8 @@ In nova itself every `initial` seed is pushed, and one naming an unknown action 
 
 Every action the shell can mount, keyed by id. Actions are validated at shell init via `ActionDefinitionSchema`. Any malformed definition throws `DefinitionValidationError` with a list of Zod issues. An action or fragment keyed by anything other than its id is reported to `onError` as a `DefinitionValidationError`, in strict mode too, and the shell still loads it under its key: `push` and `removeAction` then take the key, and the instance carries the id.
 
+A `GET` endpoint with a `request` body (in an action or a fragment) is reported the same way, by `createShell` and by `registerAction`, and is loaded as given: fetch sends no body with a GET, so its every call fails.
+
 Actions can `{push: {action: 'someId'}}` other actions — but only ones that exist in this map. Trying to push an unknown action throws `UnknownActionError`.
 
 ### `registry` and `layoutStore`
@@ -363,7 +365,7 @@ shell.setCanvasLayout(layout);           // swap how the shell arranges its canv
 shell.setLayout('region-a', layout);     // swap what a LayoutRef placeholder resolves to
 ```
 
-`removeAction` with an id the shell does not have is a no-op. Where it unmounts the top of a canvas, the instance beneath resumes; fragments and the instances of other actions are untouched.
+`removeAction` with an id the shell does not have is a no-op. Where it unmounts the top of a canvas, the instance beneath resumes, on a `mode: 'list'` canvas too: the card left last re-runs its `mount` and `resume` hooks, as after `pop`. Fragments and the instances of other actions are untouched.
 
 `setLayout` is the hot-swap hook for dynamic region layouts: a canvasLayout embeds `{ ref: id }` placeholders, and this replaces what one resolves to — the frame/chrome stays intact.
 

@@ -273,10 +273,13 @@ A string starting with `$.` reads a value from the data object.
 The raw value is returned with its type preserved — numbers stay numbers, arrays stay arrays.
 
 **Path forms:**
-- `$.foo.bar` — start from the data root, walk `foo` then `bar`
+- `$.foo.bar` — start from the data root, walk `foo` then `bar`. Inside a loop, the loop's own names come first: `$.index`, `$.items` and `$.<as>` read the loop's values, not root keys of those names
 - `$foo` — read variable `foo` from the closest enclosing scope (loop variable, etc.)
 - `$foo.bar` — read variable `foo`, walk `bar` on it
 - `$index` — special: the loop iteration index
+- `$` alone — the whole innermost scope: the data root, or inside a loop the loop's own `{ <as>, index, items }`
+
+A string that starts with `$` and then a letter or `_` is a path, never text: `'$USD'` reads a key `USD` and renders empty when there is none. Text that starts with `$` comes from data or a binding (`'{{$.label}}'`).
 
 ### 2. Template strings
 
@@ -468,7 +471,7 @@ If a component carries a static `.meta` property, `registerAll` picks it up auto
 
 - **`Stack`** — flex container with `direction`, `gap`, `align`, `justify`, `padding`, `wrap`
 - **`Text`** — typography element with `as`, `size`, `weight`, `color`
-- **`Input`** — text input bound via `model`; holds a local draft while focused and honours a `debounce` prop (ms) on `ui:model` dispatches
+- **`Input`** — text input bound via `model`; while focused it shows a local draft of what is typed, and it honours a `debounce` prop (ms) on `ui:model` dispatches; with `replaceDraftOnWrite: true`, a change of the value at its model path while it is focused, other than an echo of what it dispatched, replaces what is typed (a write that leaves the stored value as it was changes nothing: see ADAPTER.md §6)
 - **`Button`** — clickable button that dispatches `ui:click` with its `ref`
 - **`Box`** — generic styling container
 - **`Panel`** — titled container with optional `backRef`/`closeRef` header buttons
@@ -492,6 +495,8 @@ store.delete('user-card');               // remove it
 store.list();                            // → array of stored ids
 store.resolveReferences(layout);         // → the layout with every { ref } it can resolve inlined
 ```
+
+`resolveReferences` expands without data, so a `{ ref }` met again inside its own expansion (a tree whose rows use the same layout) is left as `{ ref }`; the renderer resolves it row by row.
 
 `set` validates the layout against `LayoutNodeSchema` and throws `DefinitionValidationError` if it doesn't parse. So you can't accidentally store an invalid layout.
 

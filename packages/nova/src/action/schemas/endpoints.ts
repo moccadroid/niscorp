@@ -13,7 +13,8 @@ const HttpEndpointSchema = z
           'request body — EVALUATED ON EVERY CALL, so body values can follow screen state. ' +
           'Static parts are literal JSON; a dynamic part is an evaluator op over the data root, ' +
           'e.g. { "q": { "$ref": "$.search" } } makes body field q carry the current $.search each call. ' +
-          'Requires an injected transform.',
+          'Requires an injected transform. ' +
+          'Not on a GET: fetch sends no body with a GET, so the shell reports such an endpoint to onError once when the definition loads, and every call of it fails.',
       ),
     response: z
       .unknown()
