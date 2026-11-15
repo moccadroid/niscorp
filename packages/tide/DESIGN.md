@@ -342,7 +342,9 @@ advance({ now, limit })              — ONE committed increment; the driver's v
    │                  a question the fact already answers); a declared selection is
    │                  ENRICHMENT, re-run under the reflex's own principal — the guard
    │                  that re-checks reality. Duplicate unitKey refuses the run
-   │                  loudly; a transient seam failure DEFERS it.
+   │                  loudly; a transient seam failure DEFERS it. With ZERO reflexes
+   │                  loaded this pass does nothing either: before the first load every
+   │                  pending run would read as one whose reflex was taken out.
    ├─ 4 CLAIM         due tasks and lapsed leases, in one statement — exactly-once,
    │                  `order: 'serial'` honoured inside the claim, `attempt`
    │                  incremented as part of it, one fencing token per claim
@@ -619,6 +621,19 @@ to a world in which the reflex did not exist.
 A **paused** reflex materializes nothing and keeps its watermark moving. A reflex
 *entering* the loaded set re-baselines to the `at` passed to `load`. Both say the same
 thing: coming back is not the same as never having left.
+
+What an engine knows of "entering" is its own memory, so after a restart every reflex
+enters, and downtime is re-baselined away: `catchUp` never meets it. `load(…, { resume:
+true })` is the opt-in that hands downtime to `catchUp`: a reflex this engine has never
+loaded keeps the watermark the store has. A reflex left out of a load and brought back
+by the same engine still re-baselines. Across a restart the engine cannot tell a reflex
+that was away from one that was down — that needs a durable record of each reflex's
+absence — so `resume` belongs on the load a process makes when it starts, never on an
+engine made per request, whose every load would run what was missed since the last.
+Whether `resume` should be the default is open.
+
+Loads run one at a time, in the order they are called, so the set swapped in last is the
+set passed last.
 
 **⟲ This is where the worst defect in the package lived.** A disarmed reflex was
 skipped outright, which froze its watermark at the moment of the pause. Eight days off

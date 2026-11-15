@@ -29,7 +29,7 @@ import { stateOf } from './engine/materialize';
 import { admitFact, announceFact } from './engine/facts';
 
 export type Tide = {
-  load: (reflexes: readonly ReflexInput[], options?: { at?: number; isolate?: boolean }) => Promise<LoadReport>;
+  load: (reflexes: readonly ReflexInput[], options?: { at?: number; isolate?: boolean; resume?: boolean }) => Promise<LoadReport>;
   reflexes: () => readonly Reflex[];
   graph: () => GraphReport;
 
@@ -90,7 +90,17 @@ export const createTide = (config: TideConfig): Tide => {
     },
   };
 
-  const load = async (input: readonly ReflexInput[], options?: { at?: number; isolate?: boolean }): Promise<LoadReport> => {
+  const everLoaded = new Set<string>();
+  let lastLoad: Promise<unknown> = Promise.resolve();
+
+  // One at a time: two loads that overlapped would otherwise swap their sets in in the order they finished.
+  const load = (input: readonly ReflexInput[], options?: { at?: number; isolate?: boolean; resume?: boolean }): Promise<LoadReport> => {
+    const turn = lastLoad.then(() => loadNow(input, options));
+    lastLoad = turn.catch(() => undefined);
+    return turn;
+  };
+
+  const loadNow = async (input: readonly ReflexInput[], options?: { at?: number; isolate?: boolean; resume?: boolean }): Promise<LoadReport> => {
     const { reflexes: parsed, graph, refused } = admitReflexes(input, mergedEffects, options?.isolate === true);
 
     const previously = new Set(loaded.keys());
@@ -107,13 +117,17 @@ export const createTide = (config: TideConfig): Tide => {
 
       // A reflex entering the set has its watermark moved up to `at`: left out
       // of the load for a while, it would otherwise materialize all it missed.
-      if (!previously.has(reflex.id) && stored?.materializedThrough !== undefined && options?.at !== undefined)
+      // With `resume`, one this engine never loaded keeps its watermark: its
+      // process restarted, and its `catchUp` decides what the downtime runs.
+      const entering = !previously.has(reflex.id) && (options?.resume !== true || everLoaded.has(reflex.id));
+      if (entering && stored?.materializedThrough !== undefined && options?.at !== undefined)
         await config.store.cas('state', reflex.id, {}, { materializedThrough: Math.max(stored.materializedThrough, options.at) });
 
       next.set(reflex.id, { reflex, version: versionOf(reflex), armedAt });
     }
     loaded.clear();
     for (const [id, entry] of next) loaded.set(id, entry);
+    for (const id of next.keys()) everLoaded.add(id);
 
     const leaseWarnings = parsed
       .filter((reflex) => reflex.policy.timeoutMs >= deps.leaseMs)

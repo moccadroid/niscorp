@@ -195,6 +195,17 @@ nothing, not eight occurrences waiting to be minted the moment it comes back.
 A reflex that *enters* the loaded set re-baselines to the `at` passed to `load`,
 for the same reason: coming back is not the same as never having left.
 
+**A restart re-baselines too, unless the load says `resume`.** An engine knows
+only what it has loaded itself, so after a restart every reflex enters the set
+and the downtime is passed over: a daily reflex down three days runs nothing
+for them, and a one-shot clock due during the restart never fires.
+`load(reflexes, { at, resume: true })` hands the downtime to each reflex's
+`catchUp` instead: a reflex this engine has never loaded keeps the watermark
+the store has. One left out of a load and brought back by the same engine
+still re-baselines. Pass it on the load a process makes when it starts — not
+on an engine made for each request, whose every load would then run what was
+missed since the one before.
+
 **There is no poll.** A data change is a write fact the host pushes when it
 sees its own write; an external source with no write choke point enters through
 an importer that ingests write facts at the door. A poll could only re-discover
@@ -365,10 +376,14 @@ not duplicates of each other, and without it one of them loses its rows.
 ## Verbs
 
 ```typescript
-load(reflexes, options?: { at?: number; isolate?: boolean }): Promise<LoadReport>
+load(reflexes, options?: { at?: number; isolate?: boolean; resume?: boolean }): Promise<LoadReport>
 ```
 Validates, hashes versions, derives and verifies the graph, and arms. `at` is
 the host's boot time; arming persists, so a restart does not reopen the past.
+`resume` is under [Triggers](#triggers): what a restart does to the occurrences it
+missed. Loads run one at a time, in the order they are called: a second call
+resolves after the first, and the set it was given is the one loaded. Before
+the first load, `advance` matches no fact and fans out no run; both wait for it.
 `LoadReport` carries `{ loaded, cycles, blind, warnings, refused }` — guarded
 cycles are legal and reported; effects with no `writes` are reported as
 blind edges; `warnings` names a reflex that subscribes to its own run and a

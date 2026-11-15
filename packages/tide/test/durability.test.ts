@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createMemoryStore, createTide } from '../src/index';
+import { createMemoryStore, createTide, createTideDriver } from '../src/index';
 import type { EffectRegistry, Fact, ReflexInput, Row, SelectFn, Tide, TideConfig, TideEvent, TideStore } from '../src/index';
 import { failingFirstRunFact, testTransform, utc } from './support';
 
@@ -558,6 +558,133 @@ describe('the load race', () => {
     await tide.load([reflex], { at: T0 });
     await tide.advance({ now: T0 + 1 });
     expect(calls).toHaveLength(1);
+  });
+
+  it('a pending run is not skipped by an advance that comes before the first load', async () => {
+    const store = createMemoryStore();
+    let databaseUp = false;
+    const charged: unknown[] = [];
+    const monthly: ReflexInput = {
+      id: 'billing.monthly',
+      intent: 'Charge every member on the first of the month.',
+      on: { clock: { every: 'month', on: 1, at: '03:00', tz: vienna } },
+      select: { query: {}, mode: 'each', unitKey: 'id' },
+      effect: { name: 'charge', input: { id: { $ref: '$.row.id' } } },
+    };
+    const engine = (): Tide =>
+      createTide({
+        store,
+        transform: testTransform,
+        select: async () => {
+          if (!databaseUp) throw new Error('ECONNREFUSED');
+          return [{ id: 's1' }];
+        },
+        effects: { charge: { run: (input) => (charged.push(input), null) } },
+      });
+    const before = engine();
+    await before.load([monthly], { at: utc('2026-03-20T00:00:00Z') });
+    await before.advance({ now: utc('2026-04-01T01:05:00Z') });
+    expect((await before.ledger.runs())[0]?.state).toBe('pending');
+
+    databaseUp = true;
+    const after = engine();
+    const now = utc('2026-04-01T01:20:00Z');
+    const driver = createTideDriver({ tide: after, now: () => now });
+    await driver.ingest({ kind: 'write', entity: 'members', op: 'insert', row: { id: 'm9' }, at: now });
+    await driver.wake();
+    await after.load([monthly], { at: now });
+    await driver.wake();
+    await driver.stop();
+    expect(charged).toEqual([{ id: 's1' }]);
+  });
+
+  it('two loads that overlap leave the set the later call was given', async () => {
+    const { tide } = await harness([], { work: { run: () => null } }, { load: false });
+    const manual = (id: string): ReflexInput => ({ id, intent: 'By hand.', on: { manual: {} }, effect: { name: 'work' } });
+    const first = tide.load([manual('x'), manual('y'), manual('z')], { at: T0 });
+    const second = tide.load([manual('x'), manual('z')], { at: T0 });
+    await Promise.all([first, second]);
+    expect(tide.reflexes().map((reflex) => reflex.id)).toEqual(['x', 'z']);
+  });
+
+  it('a load that throws does not stop the loads after it', async () => {
+    const { tide } = await harness([], { work: { run: () => null } }, { load: false });
+    const manual = (id: string): ReflexInput => ({ id, intent: 'By hand.', on: { manual: {} }, effect: { name: 'work' } });
+    const refused = tide.load([manual('x'), manual('x')], { at: T0 });
+    const next = tide.load([manual('y')], { at: T0 });
+    await expect(refused).rejects.toThrow();
+    await next;
+    expect(tide.reflexes().map((reflex) => reflex.id)).toEqual(['y']);
+  });
+});
+
+describe('a restart and the clock occurrences it missed', () => {
+  const nightly: ReflexInput = {
+    id: 'billing.nightly',
+    intent: 'Every night at 03:00.',
+    on: { clock: { every: 'day', at: '03:00', tz: vienna } },
+    effect: { name: 'work', input: { day: { $ref: '$.occurrence.key' } } },
+    policy: { overlap: 'allow', catchUp: 'run' },
+  };
+  const drain = async (tide: Tide, now: number): Promise<void> => {
+    for (let step = 0; step < 20; step += 1) await tide.advance({ now });
+  };
+  const daysRun = (): { effects: EffectRegistry; days: unknown[] } => {
+    const days: unknown[] = [];
+    return { days, effects: { work: { run: (input) => (days.push((input as { day?: string } | undefined)?.day), null) } } };
+  };
+
+  it('with `resume`, a restarted process runs the occurrences missed while it was down', async () => {
+    const store = createMemoryStore();
+    const { days, effects } = daysRun();
+    const before = createTide({ store, transform: testTransform, effects });
+    await before.load([nightly], { at: T0 });
+    await drain(before, utc('2026-03-02T12:00:00Z'));
+
+    const after = createTide({ store, transform: testTransform, effects });
+    await after.load([nightly], { at: utc('2026-03-06T12:00:00Z'), resume: true });
+    await drain(after, utc('2026-03-06T12:00:00Z'));
+    expect(days).toEqual(['2026-03-01', '2026-03-02', '2026-03-03', '2026-03-04', '2026-03-05', '2026-03-06']);
+  });
+
+  it('without `resume`, a restarted process starts from the load', async () => {
+    const store = createMemoryStore();
+    const { days, effects } = daysRun();
+    const before = createTide({ store, transform: testTransform, effects });
+    await before.load([nightly], { at: T0 });
+    await drain(before, utc('2026-03-02T12:00:00Z'));
+
+    const after = createTide({ store, transform: testTransform, effects });
+    await after.load([nightly], { at: utc('2026-03-06T12:00:00Z') });
+    await drain(after, utc('2026-03-06T12:00:00Z'));
+    expect(days).toEqual(['2026-03-01', '2026-03-02']);
+  });
+
+  it('with `resume`, a one-shot clock due during a restart fires after it', async () => {
+    const store = createMemoryStore();
+    const { days, effects } = daysRun();
+    const once: ReflexInput = { id: 'talk.timer', intent: 'Once.', on: { clock: { at: '2026-03-02T10:05:00', tz: vienna } }, effect: { name: 'work' } };
+    const before = createTide({ store, transform: testTransform, effects });
+    await before.load([once], { at: utc('2026-03-02T09:00:00Z') });
+    await drain(before, utc('2026-03-02T09:03:00Z'));
+
+    const after = createTide({ store, transform: testTransform, effects });
+    await after.load([once], { at: utc('2026-03-02T09:07:00Z'), resume: true });
+    await drain(after, utc('2026-03-02T09:07:00Z'));
+    expect(days).toHaveLength(1);
+  });
+
+  it('with `resume`, a reflex left out of a load and brought back does not run what it missed', async () => {
+    const { days, effects } = daysRun();
+    const other: ReflexInput = { id: 'other', intent: 'By hand.', on: { manual: {} }, effect: { name: 'work' } };
+    const { tide } = await harness([], effects, { load: false });
+    await tide.load([nightly, other], { at: T0, resume: true });
+    await drain(tide, utc('2026-03-01T12:00:00Z'));
+    await tide.load([other], { at: utc('2026-03-01T12:00:00Z'), resume: true });
+    await drain(tide, utc('2026-03-05T12:00:00Z'));
+    await tide.load([nightly, other], { at: utc('2026-03-05T12:00:00Z'), resume: true });
+    await drain(tide, utc('2026-03-05T12:00:00Z'));
+    expect(days).toEqual(['2026-03-01']);
   });
 });
 
