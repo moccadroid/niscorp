@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { z } from 'zod';
 import {
   defineAgent,
@@ -288,5 +288,37 @@ describe('run.abort(reason)', () => {
     expect(result.error.cause).toBe('the member closed the tab');
     const reason = seen.reason;
     expect(typeof reason === 'object' && reason !== null && 'name' in reason ? reason.name : undefined).toBe('AbortError');
+  });
+});
+
+describe('policy.approvalTimeoutMs after the ask is over', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('leaves no timer running once the ask is answered', async () => {
+    const run = makeAgent(60_000).run('go', {
+      llm: stubSignal(SCRIPT()),
+      onEvent: (event) => {
+        if (event.type === 'approval-required') run.approve(event.approval.id);
+      },
+    });
+    expect((await run.result).ok).toBe(true);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('leaves no timer running once the run is aborted during the ask', async () => {
+    const run = makeAgent(60_000).run('go', {
+      llm: stubSignal(SCRIPT()),
+      onEvent: (event) => {
+        if (event.type === 'approval-required') queueMicrotask(() => run.abort());
+      },
+    });
+    const result = await run.result;
+    expect(result.ok ? undefined : result.error.code).toBe('aborted');
+    expect(vi.getTimerCount()).toBe(0);
   });
 });

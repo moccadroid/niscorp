@@ -217,18 +217,11 @@ export const runLoop = async <TData, TDeps>(
           type: 'approval-required',
           approval: { id: approvalId, toolId, callId: call.id, args, reason: decision.ask.reason },
         });
-        const outcome = await new Promise<Awaited<ReturnType<ApprovalBridge['ask']>>>((resolve) => {
-          const onAbort = (): void => resolve({ approved: false, reason: 'aborted' });
-          if (cfg.abort.aborted) {
-            onAbort();
-            return;
-          }
-          cfg.abort.addEventListener('abort', onAbort, { once: true });
-          void askPromise.then((askDecision) => {
-            cfg.abort.removeEventListener('abort', onAbort);
-            resolve(askDecision);
-          });
-        });
+        const onAbort = (): void => cfg.approvals.deny(approvalId, 'aborted');
+        if (cfg.abort.aborted) onAbort();
+        else cfg.abort.addEventListener('abort', onAbort, { once: true });
+        const outcome = await askPromise;
+        cfg.abort.removeEventListener('abort', onAbort);
         // The abort check comes before `pending` is cleared: a snapshot taken after
         // an abort still resumes into the approval.
         if (cfg.abort.aborted) return fail(makeError('aborted', 'run aborted', errorContext));
