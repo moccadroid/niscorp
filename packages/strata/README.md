@@ -44,7 +44,9 @@ ledgered run, and the server checks them at boot.
   ledger; change them and every database that ran it refuses to boot
   (`EDITED`). Append a new migration instead. Descriptions, `dependsOn` and
   full-line `--` comments are not part of the checksum — rewording is not
-  editing.
+  editing. A line that begins with `--`, after any spaces, is left out even inside a string
+  literal or a dollar-quoted body, so an edit to such a line is not caught:
+  keep text like that off the start of a line, or in a migration of its own.
 - **One statement per step.** A driver that prepares statements (PGlite, `pg`
   with parameters) refuses a string carrying several. For a DDL file, use
   `sqlSteps(ddl)` — never split on every `;`: a comment containing one is cut
