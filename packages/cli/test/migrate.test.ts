@@ -2,13 +2,13 @@ import { spawnSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { NISC } from './nisc';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const bin = join(here, '..', 'bin', 'nisc.js');
 const SLOW = 60_000;
 
 const migrate = (fixture: string, args: readonly string[] = [], env: Record<string, string> = {}) =>
-  spawnSync(process.execPath, [bin, 'migrate', '--root', join(here, 'fixtures', fixture), ...args], { encoding: 'utf8', env: { ...process.env, ...env } });
+  spawnSync(process.execPath, [...NISC, 'migrate', '--root', join(here, 'fixtures', fixture), ...args], { encoding: 'utf8', env: { ...process.env, ...env } });
 
 describe('nisc migrate', () => {
   it('says what a config is missing, and exits 1', () => {

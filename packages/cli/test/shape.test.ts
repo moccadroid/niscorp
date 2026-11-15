@@ -1,11 +1,15 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { runShapeCheck } from '../src/shape';
 import type { ShapeCheckConfig } from '../src/shape';
 
-// Inside the package, so the app's `typescript` is found the way an app's own is: from its folder up.
-const scratch = mkdtempSync(join(import.meta.dirname, '.shape-'));
+const scratch = mkdtempSync(join(tmpdir(), 'nisc-shape-'));
+// The apps find `typescript` the way an app finds its own: in a node_modules from their folder up.
+mkdirSync(join(scratch, 'node_modules'));
+symlinkSync(dirname(createRequire(import.meta.url).resolve('typescript/package.json')), join(scratch, 'node_modules', 'typescript'), 'junction');
 afterAll(() => rmSync(scratch, { recursive: true, force: true }));
 
 const TSCONFIG = {

@@ -8,10 +8,10 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { brotliDecompressSync, gunzipSync } from 'node:zlib';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { NISC } from './nisc';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, 'fixtures', 'own-shell');
-const bin = join(here, '..', 'bin', 'nisc.js');
 const SLOW = 60_000;
 const BROWSER = { 'accept-encoding': 'gzip, deflate, br, zstd' };
 
@@ -53,7 +53,7 @@ const decoded = (answer: Answer): string => {
 beforeAll(async () => {
   const port = await freePort();
   base = `http://127.0.0.1:${port}`;
-  child = spawn(process.execPath, [bin, 'start', '--root', root, '--port', String(port)], { stdio: ['ignore', 'pipe', 'pipe'] });
+  child = spawn(process.execPath, [...NISC, 'start', '--root', root, '--port', String(port)], { stdio: ['ignore', 'pipe', 'pipe'] });
   child.stdout?.on('data', (chunk: Buffer) => (log += chunk.toString()));
   child.stderr?.on('data', (chunk: Buffer) => (log += chunk.toString()));
   const deadline = Date.now() + 30_000;
