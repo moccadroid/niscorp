@@ -1,5 +1,4 @@
-import { mountView } from '@editor/view';
-import type { LoomPlugin } from '@editor/types';
+import { mountView, type LoomPlugin } from '@editor';
 import { layoutSchema, type NovaComponentShape } from './schema.js';
 import { dataLayout } from './data.layout.js';
 import { previewAction } from './preview.action.js';

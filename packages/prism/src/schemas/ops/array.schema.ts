@@ -41,8 +41,8 @@ export const ReduceNodeSchema = z
     $reduce: z
       .object({
         over: z.lazy(node).describe('Array to reduce.'),
-        as: z.string().min(1).describe('Variable name for the current element.'),
-        acc: z.string().min(1).optional().default('acc').describe('Accumulator variable name. Default: "acc".'),
+        as: z.string().min(1).describe('Variable name for the current element. When as and acc are one name, the body sees the accumulator, not the element.'),
+        acc: z.string().min(1).optional().default('acc').describe('Accumulator variable name. Default: "acc". When as and acc are one name, the body sees the accumulator, not the element.'),
         init: z.lazy(node).describe('Initial accumulator value.'),
         body: z.lazy(node).describe('Expression evaluated for each element with both element and accumulator in scope.'),
       })

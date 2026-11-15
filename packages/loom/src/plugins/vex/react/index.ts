@@ -1,5 +1,5 @@
 import type { NovaComponent } from '@niscorp/nova/adapters/react';
-import type { LoomEditorPlugin } from '@react/editor/loom-editor';
+import type { LoomEditorPlugin } from '@react';
 import { vexPlugin, type VexPluginConfig } from '../index.js';
 import { PREVIEW } from '../preview.layout.js';
 import { catalogOf, VEX_COMPARISON, VEX_FIELD_PATH, VEX_AGGREGATE, VEX_COMPUTE } from '../widgets.js';

@@ -4,6 +4,7 @@ import { ErrorCode, describeValue, failAt } from '../errors';
 import { isJsonObject } from '../schemas/guards';
 import { readOwnKey } from '../utils/own-keys';
 import { TEXT_LIKE, isTextLike, refuseType, writtenNote } from './refuse';
+import { measureString, type Budget } from '../engine/budget';
 
 export const opJoin = (node: JoinNode, context: EvalContext, evaluate: EvaluateFn): JsonValue => {
   const { parts, sep = '' } = node.$join;
@@ -44,19 +45,23 @@ export const opInterpolate = (node: InterpolateNode, context: EvalContext, evalu
   });
 };
 
-const fillOne = (value: JsonValue): JsonValue => {
+// Measured at every level, not once at the end: a slot used twice in its
+// phrase doubles the text at each level of nesting.
+const fillOne = (value: JsonValue, budget: Budget | undefined, node: FillNode): JsonValue => {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return value;
   const { phrase, slots } = value as { phrase?: JsonValue; slots?: JsonValue };
   if (typeof phrase !== 'string' || !isJsonObject(slots)) return value;
-  return phrase.replace(/\{([A-Za-z_][A-Za-z0-9_]*)\}/g, (hole, name: string) => {
+  const filled = phrase.replace(/\{([A-Za-z_][A-Za-z0-9_]*)\}/g, (hole, name: string) => {
     const slot = readOwnKey(slots, name);
     if (slot === undefined || slot === null) return hole;
-    const filled = fillOne(slot);
-    return typeof filled === 'object' ? hole : String(filled);
+    const inner = fillOne(slot, budget, node);
+    return typeof inner === 'object' ? hole : String(inner);
   });
+  if (budget !== undefined) measureString(filled, budget, node);
+  return filled;
 };
 
-export const opFill = (node: FillNode, context: EvalContext, evaluate: EvaluateFn): JsonValue => fillOne(evaluate(node.$fill, context));
+export const opFill = (node: FillNode, context: EvalContext, evaluate: EvaluateFn): JsonValue => fillOne(evaluate(node.$fill, context), context.budget, node);
 
 export const opTrim = (node: TrimNode, context: EvalContext, evaluate: EvaluateFn): JsonValue => {
   const value = evaluate(node.$trim, context);

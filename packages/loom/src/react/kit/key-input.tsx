@@ -1,6 +1,7 @@
 import { useState, type CSSProperties, type FC } from 'react';
+import { COLORS } from './tokens.js';
 
-const clashStyle: CSSProperties = { fontSize: 12, color: '#dc2626' };
+const clashStyle: CSSProperties = { fontSize: 12, color: COLORS.danger };
 
 // A name another entry has is kept on screen, marked, and not written: the
 // entry is renamed once what is typed no longer clashes, and leaving the field
@@ -29,7 +30,7 @@ export const KeyInput: FC<{
           if (name !== value) onRename(name);
         }}
         onBlur={() => setClash(undefined)}
-        style={clash === undefined ? style : { ...style, borderColor: '#dc2626' }}
+        style={clash === undefined ? style : { ...style, borderColor: COLORS.danger }}
       />
       {clash !== undefined ? <span role="alert" style={clashStyle}>{`"${clash}" is already a key`}</span> : null}
     </div>

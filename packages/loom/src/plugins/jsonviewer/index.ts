@@ -1,5 +1,4 @@
-import { mountView } from '@editor/view';
-import type { LoomPlugin } from '@editor/types';
+import { mountView, type LoomPlugin } from '@editor';
 import { jsonviewerAction } from './jsonviewer.action.js';
 
 export { JSONVIEWER } from './jsonviewer.layout.js';

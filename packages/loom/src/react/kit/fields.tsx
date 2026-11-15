@@ -1,11 +1,12 @@
 import type { CSSProperties } from 'react';
 import type { NovaComponent } from '@niscorp/nova/adapters/react';
+import { COLORS } from './tokens.js';
 
 const groupStyle: CSSProperties = { display: 'flex', flexDirection: 'column' };
-const titleStyle: CSSProperties = { fontSize: 15, fontWeight: 700, marginBottom: 8, color: '#111827' };
+const titleStyle: CSSProperties = { fontSize: 15, fontWeight: 700, marginBottom: 8, color: COLORS.text };
 const fieldStyle: CSSProperties = { display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 12 };
-const labelStyle: CSSProperties = { fontSize: 13, fontWeight: 600, color: '#374151' };
-const hintStyle: CSSProperties = { fontSize: 12, color: '#6b7280' };
+const labelStyle: CSSProperties = { fontSize: 13, fontWeight: 600, color: COLORS.label };
+const hintStyle: CSSProperties = { fontSize: 12, color: COLORS.muted };
 
 export const LoomGroup: NovaComponent<{ title?: string }> = ({ title, children }) => (
   <div style={groupStyle}>
@@ -25,10 +26,10 @@ export const LoomField: NovaComponent<{
   <div style={fieldStyle}>
     <span style={labelStyle}>
       {label}
-      {required ? <span style={{ color: '#dc2626' }}> *</span> : null}
+      {required ? <span style={{ color: COLORS.danger }}> *</span> : null}
     </span>
     {description !== undefined ? <span style={hintStyle}>{description}</span> : null}
     {children}
-    {typeof error === 'string' ? <span style={{ ...hintStyle, color: '#dc2626' }}>{error}</span> : null}
+    {typeof error === 'string' ? <span style={{ ...hintStyle, color: COLORS.danger }}>{error}</span> : null}
   </div>
 );

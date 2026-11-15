@@ -87,3 +87,44 @@ describe('createLoomEditor.open — the seed of an object document, as before', 
     expect(opened(Shape, { kind: 'rect', w: 3, h: 4 })).toEqual({ kind: 'rect', w: 3, h: 4 });
   });
 });
+
+describe('createLoomEditor — change, once for each write', () => {
+  const writes = (steps: ReadonlyArray<(data: Record<string, unknown>) => Record<string, unknown>>): number[] => {
+    const editor = createLoomEditor({ registry: anyKit() });
+    editor.loadPlugin({ name: 'test', documents: { doc: z.object({ name: z.string().min(2), n: z.number().optional() }) } });
+    let calls = 0;
+    editor.on('change', () => (calls += 1));
+    editor.open({ type: 'test' });
+    const instance = editor.shell.getCanvasState('form:doc').active;
+    const runtime = instance === undefined ? undefined : editor.shell.getRuntime(instance.id);
+    if (runtime === undefined) throw new Error('no form runtime');
+    const counts = steps.map((step) => {
+      calls = 0;
+      runtime.setData(step(runtime.getData()));
+      return calls;
+    });
+    editor.dispose();
+    return counts;
+  };
+
+  it('an edit the validation answers is one call, not two', () => {
+    expect(writes([(data) => ({ ...data, name: 'x' }), (data) => ({ ...data, name: 'xy' })])).toEqual([1, 1]);
+  });
+
+  it('a write of the same value again is one call, as before', () => {
+    expect(writes([(data) => ({ ...data, name: 'x' }), (data) => ({ ...data, name: 'x' })])).toEqual([1, 1]);
+  });
+
+  it('NaN and then null, which read as the same JSON, are one call each, as before', () => {
+    expect(writes([(data) => ({ ...data, n: Number.NaN }), (data) => ({ ...data, n: null })])).toEqual([1, 1]);
+  });
+
+  it('a key set to undefined and then removed is one call each, as before', () => {
+    expect(
+      writes([
+        (data) => ({ ...data, n: undefined }),
+        ({ n: _n, ...rest }) => rest,
+      ]),
+    ).toEqual([1, 1]);
+  });
+});

@@ -1,5 +1,6 @@
 import { useEffect, useState, type CSSProperties, type FC } from 'react';
 import { inputStyle } from './shared.js';
+import { COLORS } from './tokens.js';
 
 const rawStyle: CSSProperties = {
   ...inputStyle,
@@ -53,7 +54,7 @@ export const JsonEditor: FC<{ value: unknown; onChange: (value: unknown) => void
           setValid(false);
         }
       }}
-      style={valid ? rawStyle : { ...rawStyle, borderColor: '#dc2626', background: '#fef2f2' }}
+      style={valid ? rawStyle : { ...rawStyle, borderColor: COLORS.danger, background: COLORS.dangerFill }}
     />
   );
 };

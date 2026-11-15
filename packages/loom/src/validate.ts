@@ -1,20 +1,27 @@
 import type { Shell } from '@niscorp/nova';
 import type { ZodType } from 'zod';
-import { ERROR_NAMESPACE } from './compile/to-nova.js';
+import { ERROR_NAMESPACE } from './compile/index.js';
 
 type Doc = Record<string, unknown>;
 
 type Issue = { readonly path: ReadonlyArray<PropertyKey>; readonly message: string };
 
+// A field may be named `toString`, `constructor` or `__proto__`: only own keys
+// are read, and a key is defined, never assigned.
+const writeOwn = <T>(node: Doc, key: string, value: T): T => {
+  Object.defineProperty(node, key, { value, enumerable: true, writable: true, configurable: true });
+  return value;
+};
+
 const setPath = (root: Doc, path: ReadonlyArray<PropertyKey>, message: string): void => {
   let node = root;
   for (let i = 0; i < path.length - 1; i += 1) {
     const key = String(path[i]);
-    const next = node[key];
-    node = typeof next === 'object' && next !== null ? (next as Doc) : (node[key] = {});
+    const next = Object.hasOwn(node, key) ? node[key] : undefined;
+    node = typeof next === 'object' && next !== null ? (next as Doc) : writeOwn(node, key, {});
   }
   const leaf = String(path[path.length - 1]);
-  if (!(leaf in node)) node[leaf] = message;
+  if (!Object.hasOwn(node, leaf)) writeOwn(node, leaf, message);
 };
 
 const errorTree = (issues: ReadonlyArray<Issue>): Doc => {

@@ -1,5 +1,5 @@
 import type { DatabaseSchema, NormalizedType } from '@niscorp/vex';
-import type { WidgetBinding } from '@editor/types';
+import type { WidgetBinding } from '@editor';
 
 export const VEX_COMPARISON = 'vex:comparison';
 export const VEX_FIELD_PATH = 'vex:field-path';

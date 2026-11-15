@@ -58,6 +58,10 @@ const getStopped = (node: GetNode, root: JsonValue, count: number, context: Eval
   return `$get.path ${JSON.stringify(steps)} ${whereStopped(root, steps, (upTo) => (upTo === 0 ? 'from' : JSON.stringify(steps.slice(0, upTo))), true)}`;
 };
 
+// A path that runs into null or a missing key reads nothing: a template's
+// `__optional` field leaves it out, as it does a missing path.
+const absentAt = (current: JsonValue | undefined): { details?: { absent: true } } => (current === null || current === undefined ? { details: { absent: true } } : {});
+
 export const opGet = (node: GetNode, context: EvalContext, evaluate: EvaluateFn): JsonValue => {
   const { from, path, fallback } = node.$get;
   const root = evaluate(from, context);
@@ -72,7 +76,7 @@ export const opGet = (node: GetNode, context: EvalContext, evaluate: EvaluateFn)
     if (typeof evaluated === 'number') {
       if (!isJsonArray(current)) {
         if (fallback !== undefined) return evaluate(fallback, context);
-        return failAt(getStopped(node, root, i + 1, context, evaluate), ErrorCode.TYPE, { op: '$get' }, { node, op: '$get', field: 'path', form: true });
+        return failAt(getStopped(node, root, i + 1, context, evaluate), ErrorCode.TYPE, { op: '$get', ...absentAt(current) }, { node, op: '$get', field: 'path', form: true });
       }
       current = current[evaluated];
     } else {
@@ -83,7 +87,7 @@ export const opGet = (node: GetNode, context: EvalContext, evaluate: EvaluateFn)
       }
       if (!isJsonObject(current)) {
         if (fallback !== undefined) return evaluate(fallback, context);
-        return failAt(getStopped(node, root, i + 1, context, evaluate), ErrorCode.TYPE, { op: '$get' }, { node, op: '$get', field: 'path', form: true });
+        return failAt(getStopped(node, root, i + 1, context, evaluate), ErrorCode.TYPE, { op: '$get', ...absentAt(current) }, { node, op: '$get', field: 'path', form: true });
       }
       current = readOwnKey(current, key);
     }

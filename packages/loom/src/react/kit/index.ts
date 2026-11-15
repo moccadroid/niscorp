@@ -1,7 +1,7 @@
 import { createComponentRegistry, type ComponentRegistry } from '@niscorp/nova';
 import type { NovaComponent } from '@niscorp/nova/adapters/react';
-import { Roles } from '@compile/roles';
-import { LOOM_COLUMN } from '@editor/default.layout';
+import { Roles } from '@compile';
+import { LOOM_COLUMN } from '@editor';
 import { LoomGroup, LoomField } from './fields.js';
 import { LoomText, LoomNumber, LoomCheckbox, LoomSelect, LoomRaw } from './controls.js';
 import { LoomBranch, LoomVariant } from './variant.js';
@@ -13,6 +13,9 @@ export { LoomBranch, LoomVariant } from './variant.js';
 export { LoomArray, LoomArrayItem, LoomBox, LoomColumn, LoomAppend, LoomRowMenu } from './array.js';
 export { JsonEditor } from './json-editor.js';
 export { ActionMenu, MenuItem, SubMenu } from './menu.js';
+export { JsonPane } from './json-pane.js';
+export { KeyInput } from './key-input.js';
+export { COLORS } from './tokens.js';
 
 export const loomComponents: Record<string, NovaComponent> = {
   [Roles.group]: LoomGroup,

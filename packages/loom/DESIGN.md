@@ -212,7 +212,10 @@ contributed by plugins. The flow:
 - `open(artifact)` selects the plugin named by `artifact.type` and compiles its
   documents into form canvases. The controller then publishes the live document
   values (`editor.documents`) and validation problems (`editor.validations`), and
-  emits `change` / `open` events. `editor.plugin` is the selected plugin,
+  emits `change` / `open` events. `change` is emitted once for each write to a
+  form's data, with one exception: the validation an edit causes writes its
+  answer before the edit's own change has reached the editor, and that `change`
+  already carries the edit, so the edit's change is not emitted again. `editor.plugin` is the selected plugin,
   `undefined` before the first `open`. The default canvas layout is a row of
   `loom:column` nodes, one holding the forms and one holding every other canvas;
   `loom:column` is the kit's sized column, with `grow` (default 1), its
@@ -277,6 +280,18 @@ core descriptor plus `components`, a map from role to component: the views its
 The controller produces the structure and
 drives the shell; React only mounts it and supplies components. A Vue surface
 later would be the same controller with a Vue kit.
+
+## How the code is laid out
+
+Each directory under `src/` is reached through its `index.ts`: `compile/` (the
+compiler: `parse`, `toNova`, roles, the field model), `editor/` (the editor
+host), `react/` (the React surface), and `react/kit/` for the kit's parts the
+plugins draw with (`JsonEditor`, `KeyInput`, `JsonPane`, the menus, `COLORS`).
+Each plugin under `plugins/` is reached through its `index.ts` and its
+`react/index.ts`. Those of `prism`, `vex` and `nova` are entry points of the
+package (`@niscorp/loom/plugins/<name>` and `…/react`); `jsonviewer` and
+`validation` are not, and reach a host through `defaultPlugins`. `validate.ts`
+sits beside `src/index.ts`, so `pnpm check:modules` does not cover loom.
 
 ## Locked decisions
 

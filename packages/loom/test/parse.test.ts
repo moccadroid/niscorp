@@ -199,3 +199,17 @@ describe('parse — Zod schema → field model', () => {
     });
   });
 });
+
+describe('parse — a schema whose own code runs on a missing value', () => {
+  it('is required when that code throws, and optional when it accepts the value', () => {
+    const trims = (value: unknown): unknown => {
+      if (typeof value !== 'string') throw new TypeError('not text');
+      return value.trim();
+    };
+    const ir = parse(z.object({ text: z.preprocess((value) => String(value).trim(), z.string()), trimmed: z.preprocess(trims, z.string()) }));
+    expect(ir.kind === 'object' ? ir.fields.map((field) => [field.key, field.required]) : []).toEqual([
+      ['text', false],
+      ['trimmed', true],
+    ]);
+  });
+});

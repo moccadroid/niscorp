@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FC } from 'react';
 import type { ComponentRegistry } from '@niscorp/nova';
 import { NovaShell, type NovaComponent } from '@niscorp/nova/adapters/react';
-import { createLoomEditor, type LoomArtifact, type LoomEditor as LoomEditorApi, type LoomPlugin } from '@editor/editor';
+import { createLoomEditor, type LoomArtifact, type LoomEditor as LoomEditorApi, type LoomPlugin } from '@editor';
 import { createLoomRegistry } from '../kit/index.js';
 import { LoomDocumentContext } from '../hooks/document.js';
 

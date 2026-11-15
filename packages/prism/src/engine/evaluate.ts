@@ -59,7 +59,7 @@ const evaluateUnbudgeted = (node: unknown, context: EvalContext): JsonValue => {
         if (isOptional && (evaluated === null || evaluated === undefined)) continue;
         writeOwnKey(result, key, evaluated);
       } catch (error) {
-        if (isOptional && error instanceof PrismError && error.code === ErrorCode.MISSING_PATH) continue;
+        if (isOptional && error instanceof PrismError && (error.code === ErrorCode.MISSING_PATH || error.context?.details?.['absent'] === true)) continue;
         throw error;
       }
     }

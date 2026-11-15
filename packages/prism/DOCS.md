@@ -42,6 +42,8 @@ Plain objects support an `__optional` metadata key that lists field names to sil
 
 If `$.user.nickname` doesn't exist, the result is `{ "name": "Alice" }` — no error.
 
+A `$get` whose path runs into `null` or a missing key is left out the same way. One that runs into a number, text or a boolean, reads a list by a key that is not an index, or reads an object by an index, is still an error (`E_TYPE`).
+
 ---
 
 ## Core Operations
@@ -178,7 +180,7 @@ Reduces an array to a single value. Binds each element as `as` and the running a
 
 Source: `{ "numbers": [1, 2, 3] }` → `6`
 
-The `acc` name defaults to `"acc"` if omitted.
+The `acc` name defaults to `"acc"` if omitted. When `as` and `acc` are one name (`"as": "acc"` with no `acc`, for one), the body sees the accumulator, not the item.
 
 ### `$slice` — Slice array or string
 
@@ -312,6 +314,8 @@ Replaces `{{key}}` placeholders with values from the evaluated object. Missing k
 Source: `{ "progress": { "phrase": "{n} of {total}", "slots": { "n": 1, "total": 12 } } }` → `"1 of 12"`
 
 Takes a node that evaluates to a pattern value `{ phrase, slots }` and replaces each `{name}` hole with its slot, in the source language. A slot that is itself a pattern is filled recursively; a hole with no slot (or a null one) is left as written. Anything that is not a pattern passes through unchanged.
+
+The text is measured at each level it fills, so a pattern whose text grows past `maxStringLength` is refused (`E_BUDGET`) as soon as it does. A slot used twice in its phrase still doubles the work at each level of nesting: when the text does not grow (the innermost slot is `""`), nothing is refused, and 24 such levels take seconds.
 
 ### `$trim`
 ```json
@@ -559,7 +563,10 @@ Visits every node — objects, arrays and leaves, at any depth — and replaces 
 with the first rule whose `when` holds (bound to `as`); no rule, the node stays.
 `"order": "post"` (default) rewrites children first, so a node's rules see them
 rewritten; `"pre"` applies the rules first and descends into the result. A
-replacement is never walked again at its own level, so it always terminates. A
+replacement is never walked again at its own level. With `post` the walk never
+goes into a replacement, so it always ends. With `pre` it goes into each
+replacement's children: if every replacement again contains a node a rule
+matches, the walk does not end, and the run stops at the budget (`E_BUDGET`). A
 walk visits objects too: guard a string op with a type check
 (`{ "$and": [{ "$eq": [{ "$type": { "$var": "n" } }, "string"] }, …] }`).
 

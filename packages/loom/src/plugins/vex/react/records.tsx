@@ -1,9 +1,8 @@
 import { useState, type FC, type ReactNode } from 'react';
 import type { NovaComponent, NovaModelBinding } from '@niscorp/nova/adapters/react';
-import { useModelWrite } from '@react/hooks/model';
-import { JsonEditor } from '@react/kit';
-import { KeyInput } from '@react/kit/key-input.js';
-import { isRecord } from '@compile/parse';
+import { useModelWrite } from '@react';
+import { COLORS, JsonEditor, KeyInput } from '@react/kit';
+import { isRecord } from '@compile';
 import type { Catalog } from '../widgets.js';
 import { useScopedColumns } from './columns.js';
 import { Combo } from './combobox.js';
@@ -28,7 +27,7 @@ const RecordRows: FC<{
     return `field_${n}`;
   };
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: 12, border: '1px dashed #d1d5db', borderRadius: 6 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: 12, border: `1px dashed ${COLORS.border}`, borderRadius: 6 }}>
       {entries.map(([key, val], index) => (
         <div key={index} style={{ display: 'flex', gap: 6, alignItems: 'flex-start' }}>
           <KeyInput

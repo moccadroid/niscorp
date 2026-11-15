@@ -387,7 +387,34 @@ describe('LoomEditor — a document with a field named _errors', () => {
   });
 });
 
+describe('LoomEditor — fields named like built-in object members', () => {
+  it('shows the message of a field named toString and of one named constructor', () => {
+    render(<LoomForm schema={z.object({ toString: z.string().min(3, 'Too short'), constructor: z.string().min(3, 'Too short') })} />);
+    const [first, second] = screen.getAllByRole('textbox');
+    if (first === undefined || second === undefined) throw new Error('expected two text boxes');
+    fireEvent.change(first, { target: { value: 'x' } });
+    fireEvent.change(second, { target: { value: 'y' } });
+    expect(screen.queryAllByText('Too short')).toHaveLength(2);
+  });
+});
+
+describe('LoomForm — colours', () => {
+  it('are CSS variables a host can set, with the colours of the kit as their fallback', () => {
+    render(<LoomForm schema={z.object({ email: z.email({ message: 'Bad email' }) })} />);
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'nope' } });
+    expect(screen.getByText('Bad email').style.color).toBe('var(--loom-danger, #dc2626)');
+  });
+});
+
 describe('LoomEditor — the onChange prop', () => {
+  it('is called once for one keystroke, with the edited document', () => {
+    const onChange = vi.fn();
+    render(<LoomForm schema={z.object({ name: z.string().min(2) })} onChange={onChange} />);
+    onChange.mockClear();
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'x' } });
+    expect(onChange.mock.calls).toEqual([[{ name: 'x' }]]);
+  });
+
   it('calls the onChange of the latest render', () => {
     const first = vi.fn();
     const second = vi.fn();

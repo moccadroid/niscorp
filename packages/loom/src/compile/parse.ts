@@ -54,10 +54,19 @@ const isInteger = (schema: ZodType): boolean => {
 const enumOptions = (schema: ZodType): EnumOption[] =>
   Object.values(defOf(schema).entries ?? {}).map((value) => ({ value, label: String(value) }));
 
+// A schema whose own code throws on a missing value cannot accept one.
+const acceptsAbsence = (schema: ZodType): boolean => {
+  try {
+    return schema.safeParse(undefined).success;
+  } catch {
+    return false;
+  }
+};
+
 const objectFields = (schema: ZodType, walk: Walk): ObjectField[] =>
   Object.entries(defOf(schema).shape ?? {}).map(([key, value]) => ({
     key,
-    required: !value.safeParse(undefined).success,
+    required: !acceptsAbsence(value),
     field: parseField(value, walk),
   }));
 

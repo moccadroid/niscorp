@@ -1,8 +1,6 @@
 import { z, type ZodType } from 'zod';
 import { createLayoutStore, createShell, type ActionDefinition, type Shell } from '@niscorp/nova';
-import { parse, buildDocument, isRecord } from '@compile/parse';
-import type { Field } from '@compile/types';
-import { toNova, ERROR_NAMESPACE } from '@compile/to-nova';
+import { parse, buildDocument, isRecord, toNova, ERROR_NAMESPACE, type Field } from '@compile';
 import { attachValidation, stripErrors } from '../validate.js';
 import { defaultCanvasLayout } from './default.layout.js';
 import type { LoomArtifact, LoomEditor, LoomEditorConfig, LoomEvent, LoomPlugin } from './types.js';
@@ -102,6 +100,18 @@ export const createLoomEditor = (config: LoomEditorConfig): LoomEditor => {
       if (instanceId !== undefined) formInstances[name] = instanceId;
     }
 
+    // A validation writes its answer while the edit's own change is still being
+    // handed out, and that write has already published the edit: the edit's
+    // change, arriving after it, is not published again.
+    let tick = 0;
+    let lastPublished = 0;
+    const begun = new WeakMap<object, number>();
+    detach.push(
+      shell.onDataChange((change) => {
+        begun.set(change, (tick += 1));
+      }),
+    );
+
     for (const [name, instanceId] of Object.entries(formInstances)) {
       const document = plugin.documents[name];
       if (typeof document !== 'function' && document !== undefined) {
@@ -112,6 +122,8 @@ export const createLoomEditor = (config: LoomEditorConfig): LoomEditor => {
     detach.push(
       shell.onDataChange((change) => {
         if (!Object.values(formInstances).includes(change.instanceId)) return;
+        if (lastPublished > (begun.get(change) ?? 0)) return;
+        lastPublished = tick += 1;
         refresh();
         emit('change');
       }),

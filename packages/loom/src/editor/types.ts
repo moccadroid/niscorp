@@ -1,6 +1,6 @@
 import type { ZodType } from 'zod';
 import type { ComponentRegistry, LayoutNode, Shell } from '@niscorp/nova';
-import type { FieldContext } from '@compile/types';
+import type { FieldContext } from '@compile';
 
 export type DocumentLayout = (value: unknown) => LayoutNode;
 export type Document = ZodType | DocumentLayout;

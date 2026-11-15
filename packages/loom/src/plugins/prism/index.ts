@@ -1,7 +1,6 @@
 import type { ZodType } from 'zod';
 import { NodeSchema, type Config, type JsonObject, type JsonValue } from '@niscorp/prism';
-import { mountView } from '@editor/view';
-import type { LoomPlugin } from '@editor/types';
+import { mountView, type LoomPlugin } from '@editor';
 import { previewAction } from './preview.action.js';
 
 export { PREVIEW } from './preview.layout.js';

@@ -47,6 +47,7 @@ type EvalContext = {
   source: JsonValue;                   // Root source data (immutable)
   vars: Record<string, JsonValue>;     // Scoped variables (a loop writes to its own copy only)
   budget?: Budget;                     // What this evaluation may still cost (engine/budget.ts)
+  kept?: boolean;                      // The tree is kept and run again: a `$const` is handed out as a copy
 };
 ```
 
@@ -78,7 +79,7 @@ The interpreter asks it for every node it evaluates; the optimizer asks it once 
 
 ## Plain Objects and `__optional`
 
-Objects without `$`-prefixed keys are output templates. Each value is recursively evaluated. The `__optional` metadata key lists fields that should be silently omitted when they evaluate to `null`/`undefined` or throw `E_MISSING_PATH`.
+Objects without `$`-prefixed keys are output templates. Each value is recursively evaluated. The `__optional` metadata key lists fields that should be silently omitted when they evaluate to `null`/`undefined`, throw `E_MISSING_PATH`, or throw a `$get` error marked `details.absent` (its path ran into `null` or a missing key; the code stays `E_TYPE`).
 
 This enables partial results from incomplete source data without try/catch wrapping every field.
 
@@ -230,6 +231,8 @@ language into a package that has no business knowing which languages exist.
 Formatter construction is cached per resolved argument tuple, because building
 an `Intl` formatter costs roughly two orders of magnitude more than using one
 and a mapping over a thousand rows would otherwise build a thousand of them.
+Each cache keeps up to 1,000 formatters and is emptied when full, as the path
+cache is: a locale read from data adds one per distinct tag.
 
 ---
 

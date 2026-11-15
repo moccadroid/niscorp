@@ -1,7 +1,8 @@
 import { createContext, useContext, useState, type CSSProperties, type FC, type ReactNode } from 'react';
+import { COLORS } from './tokens.js';
 
-const trigger: CSSProperties = { padding: '4px 8px', border: '1px solid #d1d5db', borderRadius: 6, background: '#fff', cursor: 'pointer', fontSize: 13, lineHeight: 1 };
-const base: CSSProperties = { position: 'absolute', zIndex: 30, minWidth: 170, display: 'flex', flexDirection: 'column', background: '#fff', border: '1px solid #d1d5db', borderRadius: 6, boxShadow: '0 6px 16px rgba(0,0,0,0.12)', padding: 4 };
+const trigger: CSSProperties = { padding: '4px 8px', border: `1px solid ${COLORS.border}`, borderRadius: 6, background: COLORS.surface, cursor: 'pointer', fontSize: 13, lineHeight: 1 };
+const base: CSSProperties = { position: 'absolute', zIndex: 30, minWidth: 170, display: 'flex', flexDirection: 'column', background: COLORS.surface, border: `1px solid ${COLORS.border}`, borderRadius: 6, boxShadow: `0 6px 16px ${COLORS.shadow}`, padding: 4 };
 const menuRight: CSSProperties = { ...base, top: '100%', right: 0, marginTop: 4 };
 const menuLeft: CSSProperties = { ...base, top: '100%', left: 0, marginTop: 4 };
 // Flush (`100%`), no gap: the pointer has to cross into the submenu without
@@ -9,8 +10,8 @@ const menuLeft: CSSProperties = { ...base, top: '100%', left: 0, marginTop: 4 };
 const flyLeft: CSSProperties = { ...base, top: 0, right: '100%', maxHeight: 280, overflowY: 'auto' };
 const flyRight: CSSProperties = { ...base, top: 0, left: '100%', maxHeight: 280, overflowY: 'auto' };
 const itemStyle: CSSProperties = { width: '100%', boxSizing: 'border-box', textAlign: 'left', padding: '6px 10px', cursor: 'pointer', fontSize: 13, borderRadius: 4, whiteSpace: 'nowrap', display: 'flex', justifyContent: 'space-between', gap: 12 };
-const itemDisabled: CSSProperties = { ...itemStyle, color: '#9ca3af', cursor: 'default' };
-const MENU_CSS = '.loom-menu-item{background:transparent;border:none;}.loom-menu-item:hover:not(:disabled){background:#f3f4f6;}';
+const itemDisabled: CSSProperties = { ...itemStyle, color: COLORS.faint, cursor: 'default' };
+const MENU_CSS = `.loom-menu-item{background:transparent;border:none;}.loom-menu-item:hover:not(:disabled){background:${COLORS.fill};}`;
 
 type Anchor = 'left' | 'right';
 const MenuContext = createContext<{ close: () => void; anchor: Anchor }>({ close: () => {}, anchor: 'right' });
