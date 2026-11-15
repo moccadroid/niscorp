@@ -14,7 +14,7 @@ export const vexGuide = (): string =>
     '  - A value the query filters with ILIKE is a pattern: "%text%" matches contains.',
     '  - OPTIONAL keys: meta.context marks some keys `optional: true`. Those switch a condition ON — send the key and it applies, omit it and the condition is not in the query at all (it does not match everything by accident, and omitting it is never an error). A key marked `absent: true` is one you did not send on this run. This is how one fingerprint answers "everyone", "everyone matching a search", and "one by id".',
     '',
-    'result — exactly the requested shape (array, object, or scalar). meta.cache = { hit, fingerprint, replaced? }; meta.missingContext lists REQUIRED context keys you did not send — the query ran without them, so the result is WRONG. Supply the keys and re-run before trusting it. Optional keys never appear there; leaving one out is a choice, not a mistake.',
+    'result — exactly the requested shape (array, object, or scalar). meta.cache = { hit, fingerprint, replaced? }; meta.missingContext lists REQUIRED context keys you did not send — the query did NOT run, and the result is an empty list whatever the shape. Supply the keys and send the request again. Optional keys never appear there; leaving one out is a choice, not a mistake.',
     '',
     'GET on the same URL returns the endpoint\'s self-description: its entities, the query body contract, and every existing named fingerprint with its intent — check it before generating a query that may already exist.',
   ].join('\n');

@@ -167,7 +167,9 @@ Three functions, in two stages:
   inner-joined table, in the join's ON for a left-joined one, and inside every
   subquery and `exists`. It runs after resolution, because where a rule goes
   depends on how its table is joined (see decision 4 under *Key design
-  decisions*).
+  decisions*). A rule is placed per source, on that source's alias: a table
+  listed twice in `from` gets its rule on both copies. (Every path names the
+  last copy; the DSL has no way to name the first.)
 
 The analyzer and the compiler never know scope exists: they process a resolved
 query that happens to carry extra predicates.
@@ -353,7 +355,7 @@ identity stays global.
 - `POST /api/<scope>/vex` — execute (the three postures above). Errors:
   unknown fingerprint replay → 404 `cache_miss`; protected slot + differing
   request → 409 `fingerprint_protected`; locked endpoint asked to generate →
-  403 `locked`.
+  400 `locked`.
 - `GET /api/<scope>/vex` — self-description: `{ protection:
   "all"|"some"|"none", locked, fingerprints: [{ fingerprint, protected,
   schemaFresh, intent, lastUsedAt }] }` plus the schema/DSL/body docs. Doubles
@@ -361,7 +363,9 @@ identity stays global.
   call.
 - `PATCH /…/vex` with `{ fingerprint, protected }` — flip the bit. `DELETE`
   with `{ fingerprint }` — evict (unprotected only). Fingerprints ride the
-  body, not the path — names contain `/`.
+  body, not the path — names contain `/`. A locked endpoint refuses both with
+  403 `locked`; an unlocked one checks nobody, so whoever reaches it can
+  unprotect any entry, a seeded one included, and delete it.
 
 **What dies with v1:**
 
@@ -676,6 +680,7 @@ src/
     apply.ts                     checkScope, scopeResolved, applyScope, VexScopeError
     grants.ts                    createScopePolicy, mergeScopePolicies, scopeGrants, scopeProfiles, scopeBindings
     scope.types.ts               ScopePolicy, ScopeEntityRule, ScopeMatch, ScopeSet
+    index.ts                     Barrel
 
   engine/
     runtime.ts                   createQueryEngine — orchestration + cache + single-flight
@@ -685,6 +690,7 @@ src/
     optional.ts                  pruneOptional, presenceOf — optional conditions
     live.ts                      createLiveRows — the rows cache and follows behind refresh: 'reactive'
     engine.types.ts             ResolvedQuery and friends, AnalysisConfig, TestResult
+    index.ts                     Barrel
 
   adapters/
     adapter.types.ts             DatabaseAdapter, CompiledQuery, ParamSlot, capabilities
@@ -692,9 +698,10 @@ src/
       postgres.adapter.ts        createPostgresAdapter
       introspect.ts              schema discovery from pg_catalog
       compile.ts                 ResolvedQuery → parameterized SQL
-      operators.ts               per-operator SQL generation
+      operators.ts               per-operator SQL generation; how a table, alias or column name is written
       statement-timeout.ts       how a read's time limit is enforced
       date-parsers.ts            RAW_DATE_PARSERS, shared by the two pool shims
+      index.ts                   Barrel
     pglite/index.ts              createPglitePool (@niscorp/vex/pglite)
     pg/index.ts                  createPgPool (@niscorp/vex/pg)
     hono/index.ts                vex() Hono app (@niscorp/vex/hono)
@@ -776,10 +783,11 @@ byte for byte, so nothing a cache already holds under one has moved.
 
    A validated JSON union is only injection-proof if every string in it reaches
    SQL as something the union can vouch for. Authored text reaches a statement
-   exactly three ways: a **column** that resolved against the introspected
-   schema, a **literal** quoted the way Postgres's `quote_literal` does (safe
-   under either `standard_conforming_strings`), or an **output name** held to
-   `ident` and quoted. Values from a request bind as parameters and never reach
+   exactly three ways: a **table, alias or column name** that resolved against
+   the introspected schema, written bare where Postgres reads it back as itself
+   and quoted otherwise; a **literal** quoted the way Postgres's `quote_literal`
+   does (safe under either `standard_conforming_strings`); or an **output name**
+   checked against `ident` and quoted. Values from a request bind as parameters and never reach
    text at all. The name grammar (`identifier.schema.ts`) is checked three
    times — at parse, in the resolver for a DSL that skipped parsing, and by a
    compiler that refuses any field position that did not resolve.
@@ -849,6 +857,32 @@ byte for byte, so nothing a cache already holds under one has moved.
    engine-trusted field, so there is no key to strip at intake and no forgery
    surface to remember.
 
+5. **Negative caching with a TTL.** An "impossible" request is expensive to
+   re-discover every time, so a `cannotSatisfy` result is cached — but TTL'd and
+   fingerprinted, because a schema change can make yesterday's impossible
+   request possible.
+
+6. **Single-flight on the default path.** A burst of identical cache misses
+   collapses to one generation; the rest await it. (The `refresh`/`bypass`
+   cache modes that opted out died with v1 — see *Cache v2*.)
+
+7. **Adapters own compilation.** The DSL and agent loop are database-agnostic;
+   only SQL generation is not. Keeping the entire compile step inside the
+   adapter means a new backend is a self-contained unit and the core never grows
+   dialect knowledge.
+
+8. **A discovery endpoint, not just a query endpoint.** A self-describing
+   resource (`GET` → entities + contract + DSL JSON Schema) lets a client — or
+   another agent — learn how to query it without out-of-band documentation.
+
+9. **Writes are replay-only, one wire shape with reads.** Mutations are
+   dev-authored cache entries (`kind: 'mutation'`) invoked by fingerprint;
+   the def never travels and no generation path exists. The client-facing
+   API is uniformly `{ fingerprint, context }` — the entry's kind picks the
+   pipeline. Context signatures are DERIVED from the stored def (typed from
+   the schema by position), so the input contract can't drift.
+
+
 10. **`exists` shadows SQL rather than inventing a vocabulary.** Correlated
     subqueries were the one thing the filter grammar could not express, so
     "issues nobody was sent to" and "rooms nobody is in" became two round trips
@@ -883,31 +917,6 @@ byte for byte, so nothing a cache already holds under one has moved.
     EXISTS returns a boolean, but a boolean about somebody else's rows is still
     an answer about somebody else's rows, and an uncorrelated `exists` over a
     scoped table would otherwise report whether ANY tenant had one.
-
-5. **Negative caching with a TTL.** An "impossible" request is expensive to
-   re-discover every time, so a `cannotSatisfy` result is cached — but TTL'd and
-   fingerprinted, because a schema change can make yesterday's impossible
-   request possible.
-
-6. **Single-flight on the default path.** A burst of identical cache misses
-   collapses to one generation; the rest await it. (The `refresh`/`bypass`
-   cache modes that opted out died with v1 — see *Cache v2*.)
-
-7. **Adapters own compilation.** The DSL and agent loop are database-agnostic;
-   only SQL generation is not. Keeping the entire compile step inside the
-   adapter means a new backend is a self-contained unit and the core never grows
-   dialect knowledge.
-
-8. **A discovery endpoint, not just a query endpoint.** A self-describing
-   resource (`GET` → entities + contract + DSL JSON Schema) lets a client — or
-   another agent — learn how to query it without out-of-band documentation.
-
-9. **Writes are replay-only, one wire shape with reads.** Mutations are
-   dev-authored cache entries (`kind: 'mutation'`) invoked by fingerprint;
-   the def never travels and no generation path exists. The client-facing
-   API is uniformly `{ fingerprint, context }` — the entry's kind picks the
-   pipeline. Context signatures are DERIVED from the stored def (typed from
-   the schema by position), so the input contract can't drift.
 
 ---
 
@@ -981,7 +990,9 @@ AND A CALLER IS NOT ONE ROLE. Reach belongs to a role, and people hold several �
 the instructor who trains at the studio they teach at is the ordinary case, not
 the edge. So the unit of compilation is the ROLE: one policy each, merged
 (`mergeScopePolicies`), broadest rule set winning per entity and phase. A
-principal may do anything any of their roles permits.
+principal may do anything any of their roles permits, as far as one rule set can
+say it: two rule sets with the same number of matches are not combined, and the
+role listed first wins.
 
 That merge has a consequence worth stating plainly: for somebody holding both, a
 staff role's studio-wide reach WINS over a member role's personal one on the
