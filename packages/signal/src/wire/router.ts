@@ -156,14 +156,15 @@ export const routeResponse = (request: RouteRequest): Routed => {
   return contentTurn(request);
 };
 
-let recoveredCallCounter = 0;
+// A browser page served over plain http has no crypto.randomUUID.
+const recoveredCallId = (): string =>
+  `recovered_${globalThis.crypto?.randomUUID?.() ?? `${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`}`;
 
 export const routeRejection = (rejection: Rejection, request: Omit<RouteRequest, 'content' | 'toolCalls'>): Routed => {
   const name = rejection.name;
   if (name !== undefined && request.declared.has(name) && name !== request.outputTool) {
-    recoveredCallCounter += 1;
     const args = rejection.args ?? decodeJsonish(rejection.argsText);
-    return toolTurn([{ id: `recovered_${recoveredCallCounter}`, name, args }], []);
+    return toolTurn([{ id: recoveredCallId(), name, args }], []);
   }
 
   const call: StepToolCall = { id: '', name: name ?? '', args: rejection.args ?? rejection.argsText };

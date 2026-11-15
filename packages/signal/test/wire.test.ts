@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { z } from 'zod';
 import { createSignal } from '../src/signal';
 import { routeResponse, routeRejection } from '../src/wire/router';
@@ -174,6 +174,22 @@ describe('routeRejection — the 400 carried the payload', () => {
     );
     expect(routed.outcome.kind).toBe('failed');
     if (routed.outcome.kind === 'failed') expect(routed.outcome.truncated).toBe(true);
+  });
+
+  it('a recovered call gets an id that a restarted process does not give again', async () => {
+    const callIdIn = async (): Promise<string | undefined> => {
+      vi.resetModules();
+      const fresh = await import('../src');
+      const routed = fresh.routeRejection(
+        { name: 'run_action', args: {}, argsText: '{}', truncated: false },
+        { declared: DECLARED, responseStrategies: NO_STRATEGIES },
+      );
+      return routed.outcome.kind === 'tool_calls' ? routed.outcome.calls[0]?.id : undefined;
+    };
+    const before = await callIdIn();
+    const after = await callIdIn();
+    expect(before).toBeDefined();
+    expect(after).not.toBe(before);
   });
 });
 
