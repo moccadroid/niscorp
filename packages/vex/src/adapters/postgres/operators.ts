@@ -262,19 +262,17 @@ export const compileFilter = (
     const col = columnOf(fieldPath, ctx);
 
     const queryRef = filter.semantic.query;
-    const key = '$context' in queryRef ? queryRef.$context : queryRef.$scope;
     if ('$context' in queryRef) assertNotReserved(queryRef.$context);
 
     const res = ctx.resolvedPaths.get(fieldPath);
     const dimensions = res?.schema.vectorDimensions;
 
     ctx.paramCounter.value += 1;
-    ctx.paramSlots.push({
-      key,
-      kind: 'semantic',
-      type: 'string',
-      dimensions,
-    });
+    ctx.paramSlots.push(
+      '$context' in queryRef
+        ? { key: queryRef.$context, kind: 'semantic', type: 'string', dimensions }
+        : { key: queryRef.$scope, kind: 'scope', type: 'string', dimensions, embed: true },
+    );
 
     const paramRef = `$${ctx.paramCounter.value}`;
     const minScore = numberLiteral(filter.semantic.minScore ?? 0);

@@ -35,17 +35,18 @@ export const resolveParams = async (
       continue;
     }
 
-    if (slot.kind === 'scope') {
+    if (slot.kind === 'scope' && slot.embed !== true) {
       results.push(scope[slot.key]);
       continue;
     }
 
+    const from = slot.kind === 'scope' ? 'scope' : 'context';
     if (embed === undefined) {
       throw new Error(`Semantic parameter "${slot.key}" requires an embed function`);
     }
-    const text = context[slot.key];
+    const text = (from === 'scope' ? scope : context)[slot.key];
     if (typeof text !== 'string') {
-      throw new Error(`Semantic parameter "${slot.key}" requires a string value in context`);
+      throw new Error(`Semantic parameter "${slot.key}" requires a string value in ${from}`);
     }
     const vector = await embed(text, slot.dimensions);
     results.push(`[${vector.join(',')}]`);

@@ -291,7 +291,7 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
     read: async (dsl) => {
       const { compiled, warnings } = runPipeline(pruneOptional(dsl, 'all'), policy);
       requireScope(compiled, scope);
-      if (compiled.paramSlots.some((slot) => slot.kind === 'semantic')) {
+      if (compiled.paramSlots.some((slot) => slot.kind === 'semantic' || slot.embed === true)) {
         return { rows: [], sql: compiled.sql, warnings: [...warnings, 'Semantic params present — execution skipped, SQL structure validated only'] };
       }
       // `$context` binds NULL: a probe asks whether the query runs, and NULL

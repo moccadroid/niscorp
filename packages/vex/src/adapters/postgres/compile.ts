@@ -116,7 +116,7 @@ const compileLevel = (resolved: ResolvedQuery, paramSlots: ParamSlot[], paramCou
     sqlParts.push(`ORDER BY ${orderByParts.join(', ')}`);
   } else if (resolved.semantic !== undefined) {
     const { field, contextPath } = resolved.semantic;
-    const position = paramSlots.findIndex((slot) => slot.kind === 'semantic' && slot.key === contextPath) + 1;
+    const position = paramSlots.findIndex((slot) => (slot.kind === 'semantic' || slot.embed === true) && slot.key === contextPath) + 1;
     if (position > 0) sqlParts.push(`ORDER BY ${field.alias}.${sqlName(field.column)} <=> $${position} ASC`);
   }
 
