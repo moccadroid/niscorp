@@ -1,7 +1,7 @@
 import type { JsonValue, EvalContext, EvaluateFn } from '../types';
 import type { RefNode, ConstNode, VarNode, GetNode, WithNode } from '../schemas';
 import { ErrorCode, failAt } from '../errors';
-import { INDEX_TEXT, parseJsonPath, getByPath, jsonPathUpTo, whereStopped, type JsonPathSegment, type Step } from '../utils/jsonpath';
+import { INDEX_TEXT, parseJsonPathCached, getByPath, jsonPathUpTo, whereStopped, type JsonPathSegment, type Step } from '../utils/jsonpath';
 import { isJsonObject, isJsonArray } from '../schemas/guards';
 import { measure } from '../engine/budget';
 import { readOwnKey, writeOwnKey } from '../utils/own-keys';
@@ -10,21 +10,9 @@ export const SEGMENTS_KEY = '__segments';
 
 const isSegmentsArray = (value: unknown): value is JsonPathSegment[] => Array.isArray(value);
 
-const parsedPaths = new WeakMap<RefNode, JsonPathSegment[]>();
-
-const segmentsOf = (node: RefNode): JsonPathSegment[] => {
-  const attached = Reflect.get(node, SEGMENTS_KEY);
-  if (isSegmentsArray(attached)) return attached;
-  let parsed = parsedPaths.get(node);
-  if (parsed === undefined) {
-    parsed = parseJsonPath(node.$ref);
-    parsedPaths.set(node, parsed);
-  }
-  return parsed;
-};
-
 export const opRef = (node: RefNode, context: EvalContext, _evaluate: EvaluateFn): JsonValue => {
-  const segments = segmentsOf(node);
+  const attached = Reflect.get(node, SEGMENTS_KEY);
+  const segments = isSegmentsArray(attached) ? attached : parseJsonPathCached(node.$ref);
   const resolved = getByPath(context.source, segments);
   if (resolved === undefined) {
     const steps = segments.map((s) => (s.type === 'key' ? s.key : s.index));

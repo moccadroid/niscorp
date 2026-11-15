@@ -72,6 +72,20 @@ export const parseJsonPath = (path: string): JsonPathSegment[] => {
   return segments;
 };
 
+// Bounded: paths come from configs, and a host that builds configs per
+// request would otherwise grow it for as long as it runs.
+const MAX_CACHED_PATHS = 1000;
+const parsedPaths = new Map<string, JsonPathSegment[]>();
+
+export const parseJsonPathCached = (path: string): JsonPathSegment[] => {
+  const cached = parsedPaths.get(path);
+  if (cached !== undefined) return cached;
+  const parsed = parseJsonPath(path);
+  if (parsedPaths.size >= MAX_CACHED_PATHS) parsedPaths.clear();
+  parsedPaths.set(path, parsed);
+  return parsed;
+};
+
 export type Step = string | number;
 
 export const INDEX_TEXT = /^(0|[1-9][0-9]*)$/;

@@ -6,12 +6,13 @@ import { loopScope } from './scope';
 import { readOwnKey, writeOwnKey } from '../utils/own-keys';
 
 export const opMerge = (node: MergeNode, context: EvalContext, evaluate: EvaluateFn): JsonValue => {
-  let result: JsonObject = {};
+  const result: JsonObject = {};
   for (let index = 0; index < node.$merge.length; index++) {
     const part = node.$merge[index];
     const evaluated = evaluate(part, context);
     if (!isJsonObject(evaluated)) return refuseType({ node, op: '$merge', field: String(index), needs: 'an object', got: evaluated, written: part, contextOp: '$merge' });
-    result = { ...result, ...evaluated };
+    if (Object.hasOwn(evaluated, '__proto__')) for (const [key, value] of Object.entries(evaluated)) writeOwnKey(result, key, value);
+    else Object.assign(result, evaluated);
   }
   return result;
 };

@@ -90,9 +90,9 @@ The schema and the evaluator share one rule: a `$` name is an op's. The template
 
 Prism supports `$.key.nested[0].deep` — dot notation for object keys, bracket notation for array indices. No filters, recursive descent, or unions. These omissions are intentional: `$filter`, `$map`, and `$merge` cover those use cases through the op system, which is composable and type-safe.
 
-A `$ref` node's parsed path is kept by the node in a `WeakMap` (`ops/core.ops.ts`), so it is parsed once for as long as the node lives and nothing outlives the config. An optimized or compiled tree carries it on the node instead: `optimize` and `rehydrate` attach it.
+Parsed paths are cached by their text (`utils/jsonpath.ts`), up to 1,000 of them: a full cache is emptied and starts again, so a host that builds configs per request does not grow it without end. An optimized or compiled tree does not use it: `optimize` and `rehydrate` attach each `$ref`'s parsed path to the node.
 
-A key is read from data only when the data has it as its own (`utils/own-keys.ts`): `$.constructor` on `{}` is a missing path, not `Object`. A key is written the same way, so a `__proto__` key from `JSON.parse` stays a key of the result instead of replacing its prototype. zod drops a `__proto__` key while it parses a config, so a template or a `$const` cannot carry one.
+A key is read from data only when the data has it as its own (`utils/own-keys.ts`): `$.constructor` on `{}` is a missing path, not `Object`. Only a value that could be inherited, a function or the value at `__proto__`, is asked about, so a read costs what a plain one does. A key is written the same way, so a `__proto__` key from `JSON.parse` stays a key of the result instead of replacing its prototype. zod drops a `__proto__` key while it parses a config, so a template or a `$const` cannot carry one.
 
 ---
 

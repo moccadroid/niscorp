@@ -8,4 +8,4 @@ Prism reads and writes only the data's own keys: `$.constructor` on `{}` is a mi
 
 A source nested deeper than the call stack reaches is stopped with `E_BUDGET` instead of a bare `RangeError`.
 
-A `$ref`'s parsed path is kept with its config, instead of in a process-wide cache that grew with every distinct path it saw.
+The cache of parsed `$ref` paths keeps at most 1,000 paths; it grew with every distinct path a process saw.
