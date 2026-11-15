@@ -2,9 +2,9 @@
 "@niscorp/moss": patch
 ---
 
-A webhook sent chunked, or with `Expect`, `Keep-Alive` or `Upgrade`, now reaches the integration's service instead of answering `502`: the door leaves those four headers behind.
+A webhook sent chunked (`Transfer-Encoding`), or with `Expect` or `Keep-Alive`, or with an `Upgrade` header but no `Connection: upgrade`, reaches the integration's service instead of answering `502`: the door leaves those four headers behind. A request with `Connection: upgrade` and `Upgrade` is a socket upgrade and never reaches the door; one with `Connection: upgrade` alone is answered `502`, since Node's fetch refuses that header.
 
-A dev sign-in (`/dev/as/<who>`) that a proxy on this machine, such as a tunnel, carried for an address elsewhere is said in the dev log. It is answered as before.
+A dev sign-in (`/dev/as/<who>`) that a proxy on this machine, such as a tunnel, carried for an address elsewhere, or for no address (`for=unknown`), writes a line in the dev log. The sign-in is answered: nothing is refused.
 
 A `Host` that writes out the scheme's own port (`app.example.com:443` for a page on `https://app.example.com`) no longer turns off cookie sign-in on the socket.
 
@@ -14,7 +14,7 @@ A server shell's endpoint that declares its own lower-case `authorization` heade
 
 A principal called `toString`, `constructor`, `__proto__` or `valueOf` is no longer answered `500` on every request: the assignments are read by their own keys, so such a principal is `public` unless they name it. A socket event for a canvas called `constructor` or `toString` is dropped, as one for any canvas the shell does not have, instead of reaching every action.
 
-In `nisc dev` (`mossDev`), what the charter does not read as written (a misspelt `denny`: the `shape` warnings of `server.charterReport()`) is shown over the page on vite's error overlay each time a browser connects. The app runs under it, and boot is unchanged.
+In `nisc dev` (`mossDev`), what the charter does not read as written (a misspelt `denny`: the `shape` warnings of `server.charterReport()`) is shown over the page on vite's error overlay each time a browser connects. The app runs under it. While the overlay is open it covers the page, and vite turns the next live update into a full reload.
 
 DOCS says that a channel is not a trusted lane: the person's own terminal can publish any channel with any payload into their own shell, as `deliver` does.
 

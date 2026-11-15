@@ -2512,7 +2512,9 @@ Requires the optional `vite` peer.
   keeps it. What the charter does not read as written (its `shape` warnings
   in `server.charterReport()`, such as a misspelt `denny`) is shown over the
   page on vite's error overlay each time a browser connects, one line for
-  each; the app runs under it. The connections of an app that is let go are closed (`1001`), so
+  each; the app runs under it. While the overlay is open, it covers the page,
+  and vite turns the next live update into a full reload. An app whose
+  charter has no `shape` warning never sees it. The connections of an app that is let go are closed (`1001`), so
   a terminal that is not a page connects again, to the app that is booted.
   - `options.app(load): Promise<DevApp>` — stand the app up. `load` is vite's
     `ssrLoadModule`. `DevApp = { server, close?, draw?, htmlAttributes?,
@@ -2529,8 +2531,10 @@ Requires the optional `vite` peer.
     and is this machine's. A tunnel (ngrok, cloudflared, a dev tunnel) is such
     a proxy: anybody who has its address signs in as anybody. When
     `X-Forwarded-For`, `X-Real-IP` or `Forwarded: for=` names an address other
-    than this machine, the sign-in is answered as before and the dev log says
-    so.
+    than this machine, the sign-in is answered (`302`, with the session) and
+    the dev log says so. A proxy that names no address (`Forwarded:
+    for=unknown`, or a hidden name such as `for=_hidden`) gets the same line in
+    the log; nothing is refused for it.
   - `signInFromNetwork?: boolean` (default `false`) answers the sign-in to
     every device that can reach the dev server, for trying a signed-in screen
     on a phone. It hands out a session for whoever the address names: with it
@@ -2779,7 +2783,10 @@ bundle whole: the last good import keeps serving.
   and the integration checks the vendor's signature itself. The headers that
   frame one connection (`transfer-encoding`, `keep-alive`, `expect`,
   `upgrade`) stay behind too: the request to the service is framed anew from
-  the body that arrived. An integration
+  the body that arrived. A request that asks to upgrade its connection
+  (`Connection: upgrade` with `Upgrade`) is a socket upgrade, which the door
+  never sees. One that carries `Connection: upgrade` without `Upgrade` is
+  answered `502`: Node's fetch refuses to send that header. An integration
   that is unknown or not approved answers `404`. **The door has a limit, and
   it is a limit per process**: 240 calls a minute for each integration,
   counted in the memory of the process that takes them, in windows of a minute

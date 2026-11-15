@@ -112,7 +112,7 @@ describe('the dev server’s sign-in', () => {
       expect(answer.asked).toEqual([]);
     });
 
-    it('a request a proxy on this machine carried for somebody elsewhere, as a tunnel does, is signed in as before, and said in the log', async () => {
+    it('a request a proxy on this machine carried for somebody elsewhere, as a tunnel does, is signed in, and said in the log', async () => {
       const answer = await signInAt('ada', { host: 'abc.tunnel.example', 'x-forwarded-for': '203.0.113.9' });
       expect(answer.status).toBe(302);
       expect(answer.said.join(' ')).toContain('/dev/as/ada was answered for a request a proxy on this machine carried for 203.0.113.9');
