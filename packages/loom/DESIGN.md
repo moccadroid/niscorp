@@ -287,8 +287,11 @@ Each directory under `src/` is reached through its `index.ts`: `compile/` (the
 compiler: `parse`, `toNova`, roles, the field model), `editor/` (the editor
 host), `react/` (the React surface), and `react/kit/` for the kit's parts the
 plugins draw with (`JsonEditor`, `KeyInput`, `JsonPane`, the menus, `COLORS`).
-Each plugin's `index.ts`, and its `react/index.ts`, is an entry point of the
-package. `validate.ts` sits beside `src/index.ts`.
+Each plugin under `plugins/` is reached through its `index.ts` and its
+`react/index.ts`. Those of `prism`, `vex` and `nova` are entry points of the
+package (`@niscorp/loom/plugins/<name>` and `…/react`); `jsonviewer` and
+`validation` are not, and reach a host through `defaultPlugins`. `validate.ts`
+sits beside `src/index.ts`, so `pnpm check:modules` does not cover loom.
 
 ## Locked decisions
 
