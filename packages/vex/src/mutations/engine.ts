@@ -7,7 +7,7 @@ import type { ScopePolicy, ScopeValues, ScopeMatch, ScopeRule } from '../scope/s
 import { isSetMatch } from '../scope/scope.types.js';
 import { VexScopeError } from '../scope/apply.js';
 import { VexError } from '../errors.js';
-import { isFieldPathShape } from '../schemas/identifier.schema.js';
+import { isFieldPathShape, sqlName } from '../schemas/identifier.schema.js';
 import { resolveParams } from '../utils/context.js';
 import { requireScope } from '../engine/executor.js';
 import { MutationDefinitionSchema } from './schema.js';
@@ -290,10 +290,14 @@ const newCtx = (): WriteContext => ({
   returned: new Map(),
 });
 
-// A single-table statement needs no aliases, so each path maps to itself. Only
-// for a filter assertFilterColumns has already held to the table's real columns.
+// A single-table statement needs no aliases, so each path names its table and
+// column. Only for a filter whose paths assertFilterColumns has already checked
+// against the table's real columns.
 const indexFilterFields = (filter: Filter, aliasMap: Map<string, string>): void => {
-  for (const path of filterColumns(filter)) aliasMap.set(path, path);
+  for (const path of filterColumns(filter)) {
+    const dot = path.indexOf('.');
+    aliasMap.set(path, `${sqlName(path.slice(0, dot))}.${sqlName(path.slice(dot + 1))}`);
+  }
 };
 
 // A `$returned` slot is declared like a `$context` one, but the run loop binds
@@ -303,7 +307,7 @@ const compileValue = (v: MutationValue, ctx: WriteContext): string => {
   if (isLookup(v)) {
     indexFilterFields(v.$lookup.where, ctx.aliasMap);
     const where = compileFilter(v.$lookup.where, ctx);
-    return `(SELECT ${v.$lookup.field} FROM ${v.$lookup.from} WHERE ${where})`;
+    return `(SELECT ${sqlName(v.$lookup.field)} FROM ${sqlName(v.$lookup.from)} WHERE ${where})`;
   }
   if (isReturned(v)) {
     ctx.paramCounter.value += 1;
@@ -328,35 +332,36 @@ const compileColumnValue = (table: string, column: string, v: MutationValue, ctx
 const compileConflict = (m: { table: string; onConflict?: ResolvedOnConflict }, ctx: WriteContext, schema: DatabaseSchema): string => {
   const c = m.onConflict;
   if (c === undefined) return '';
-  if (c.set === undefined) return ` ON CONFLICT (${c.target.join(', ')}) DO NOTHING`;
-  const sets = Object.entries(c.set).map(([col, v]) => `${col} = ${compileColumnValue(m.table, col, v, ctx, schema)}`);
+  const target = c.target.map(sqlName).join(', ');
+  if (c.set === undefined) return ` ON CONFLICT (${target}) DO NOTHING`;
+  const sets = Object.entries(c.set).map(([col, v]) => `${sqlName(col)} = ${compileColumnValue(m.table, col, v, ctx, schema)}`);
   let where = '';
   if (c.where !== undefined) {
     indexFilterFields(c.where, ctx.aliasMap);
     where = ` WHERE ${compileFilter(c.where, ctx)}`;
   }
-  return ` ON CONFLICT (${c.target.join(', ')}) DO UPDATE SET ${sets.join(', ')}${where}`;
+  return ` ON CONFLICT (${target}) DO UPDATE SET ${sets.join(', ')}${where}`;
 };
 
 const compileMutation = (m: ResolvedMutation, schema: DatabaseSchema): Compiled => {
   const ctx = newCtx();
   if (m.op === 'insert') {
     const entries = Object.entries(m.values);
-    const cols = entries.map(([c]) => c);
+    const cols = entries.map(([c]) => sqlName(c));
     const vals = entries.map(([c, v]) => compileColumnValue(m.table, c, v, ctx, schema));
-    return { sql: `INSERT INTO ${m.table} (${cols.join(', ')}) VALUES (${vals.join(', ')})${compileConflict(m, ctx, schema)} RETURNING *`, slots: ctx.paramSlots, returned: ctx.returned };
+    return { sql: `INSERT INTO ${sqlName(m.table)} (${cols.join(', ')}) VALUES (${vals.join(', ')})${compileConflict(m, ctx, schema)} RETURNING *`, slots: ctx.paramSlots, returned: ctx.returned };
   }
   if (m.op === 'insertEach') {
     const types = new Map(findEntity(m.table, schema)?.fields.map((f) => [f.name, f.type]));
     const entries = Object.entries(m.values);
-    const cols = entries.map(([c]) => c);
+    const cols = entries.map(([c]) => sqlName(c));
     const itemKeys: Record<string, string> = {};
     const itemColumns: string[] = [];
     const exprs = entries.map(([col, v]) => {
       if (isItemRef(v)) {
         itemKeys[col] = v.$item;
-        itemColumns.push(`${col} ${String(types.get(col))}`);
-        return `item.${col}`;
+        itemColumns.push(`${sqlName(col)} ${String(types.get(col))}`);
+        return `item.${sqlName(col)}`;
       }
       return isReturned(v) ? compileColumnValue(m.table, col, v, ctx, schema) : compileValue(v, ctx);
     });
@@ -365,21 +370,21 @@ const compileMutation = (m: ResolvedMutation, schema: DatabaseSchema): Compiled 
     const items = `$${ctx.paramCounter.value}::jsonb`;
     const source = itemColumns.length === 0 ? `jsonb_array_elements(${items}) AS item` : `jsonb_to_recordset(${items}) AS item(${itemColumns.join(', ')})`;
     return {
-      sql: `INSERT INTO ${m.table} (${cols.join(', ')}) SELECT ${exprs.join(', ')} FROM ${source}${compileConflict(m, ctx, schema)} RETURNING *`,
+      sql: `INSERT INTO ${sqlName(m.table)} (${cols.join(', ')}) SELECT ${exprs.join(', ')} FROM ${source}${compileConflict(m, ctx, schema)} RETURNING *`,
       slots: ctx.paramSlots,
       returned: ctx.returned,
       itemKeys,
     };
   }
   if (m.op === 'update') {
-    const sets = Object.entries(m.set).map(([c, v]) => `${c} = ${compileColumnValue(m.table, c, v, ctx, schema)}`);
+    const sets = Object.entries(m.set).map(([c, v]) => `${sqlName(c)} = ${compileColumnValue(m.table, c, v, ctx, schema)}`);
     indexFilterFields(m.where, ctx.aliasMap);
     const where = compileFilter(m.where, ctx);
-    return { sql: `UPDATE ${m.table} SET ${sets.join(', ')} WHERE ${where} RETURNING *`, slots: ctx.paramSlots, returned: ctx.returned };
+    return { sql: `UPDATE ${sqlName(m.table)} SET ${sets.join(', ')} WHERE ${where} RETURNING *`, slots: ctx.paramSlots, returned: ctx.returned };
   }
   indexFilterFields(m.where, ctx.aliasMap);
   const where = compileFilter(m.where, ctx);
-  return { sql: `DELETE FROM ${m.table} WHERE ${where} RETURNING *`, slots: ctx.paramSlots, returned: ctx.returned };
+  return { sql: `DELETE FROM ${sqlName(m.table)} WHERE ${where} RETURNING *`, slots: ctx.paramSlots, returned: ctx.returned };
 };
 
 const SUGAR: { [K in Mutation['op']]?: (m: Extract<Mutation, { op: K }>, context: Record<string, unknown>) => CoreMutation } = {

@@ -8,7 +8,7 @@ import type { ResolvedExists, ResolvedJoin } from '../../engine/engine.types.js'
 import { RESERVED_CONTEXT_KEYS } from '../../schemas/request.schema.js';
 import { refuseOptional } from '../../engine/optional.js';
 import { VexError } from '../../errors.js';
-import { isFieldPathShape } from '../../schemas/identifier.schema.js';
+import { isFieldPathShape, sqlName } from '../../schemas/identifier.schema.js';
 
 const assertNotReserved = (key: string): void => {
   if (RESERVED_CONTEXT_KEYS.has(key))
@@ -28,9 +28,9 @@ type CompilationContext = {
   existsMap?: Map<object, ResolvedExists>;
 };
 
-// An authored string reaches SQL text only as a column that resolved against
-// the schema (`columnOf`), a quoted literal (`quoteLiteral`) or a quoted output
-// name (`quoteIdent`). A request's values never do: they bind as parameters.
+// An authored string reaches SQL text only as a table or column that resolved
+// against the schema (`sqlName`), a quoted literal (`quoteLiteral`) or a quoted
+// output name (`quoteIdent`). A request's values never do: they bind as parameters.
 export const quoteLiteral = (s: string): string => {
   const doubled = s.replace(/'/g, "''");
   // With standard_conforming_strings off, a backslash in '…' is an escape, and
@@ -38,8 +38,6 @@ export const quoteLiteral = (s: string): string => {
   // backslashes explicitly, so the literal means the same under either setting.
   return s.includes('\\') ? `E'${doubled.replace(/\\/g, '\\\\')}'` : `'${doubled}'`;
 };
-
-export const quoteIdent = (name: string): string => `"${name.replace(/"/g, '""')}"`;
 
 // A number that is not finite has no SQL spelling: `NaN` would read as a name.
 export const numberLiteral = (n: number): string => {
@@ -51,7 +49,7 @@ const columnOf = (path: string, ctx: CompilationContext): string => {
   const mapped = ctx.aliasMap.get(path);
   if (mapped !== undefined) return mapped;
   const res = ctx.resolvedPaths.get(path);
-  if (res !== undefined) return `${res.alias}.${res.column}`;
+  if (res !== undefined) return `${res.alias}.${sqlName(res.column)}`;
   throw new VexError('invalid_dsl', `"${path}" is not a column this query reads.`);
 };
 
@@ -114,7 +112,7 @@ export const compileJoinPairs = (join: ResolvedJoin): string[] =>
         `The join from "${join.fromAlias}" to "${join.toAlias}" pairs "${column}" with no column.`,
       );
     }
-    return `${join.fromAlias}.${column} = ${join.toAlias}.${to}`;
+    return `${join.fromAlias}.${sqlName(column)} = ${join.toAlias}.${sqlName(to)}`;
   });
 
 const compileComparisonFilter = (
@@ -146,7 +144,7 @@ export const compileFilter = (
 
     const parts: string[] = ['SELECT 1'];
     const first = resolved.sources[0];
-    if (first?.table !== undefined) parts.push(`FROM ${first.table} AS ${first.alias}`);
+    if (first?.table !== undefined) parts.push(`FROM ${sqlName(first.table)} AS ${first.alias}`);
     for (const join of resolved.joins) {
       const source = resolved.sources.find((s) => s.alias === join.toAlias);
       if (source?.table === undefined) continue;
@@ -155,7 +153,7 @@ export const compileFilter = (
         ...compileJoinPairs(join),
         ...(join.on ?? []).map((extra) => compileFilter(extra.original, inner)),
       ];
-      parts.push(`${keyword} ${source.table} AS ${join.toAlias} ON ${conditions.join(' AND ')}`);
+      parts.push(`${keyword} ${sqlName(source.table)} AS ${join.toAlias} ON ${conditions.join(' AND ')}`);
     }
     if (resolved.filter !== undefined) parts.push(`WHERE ${compileFilter(resolved.filter.original, inner)}`);
 
