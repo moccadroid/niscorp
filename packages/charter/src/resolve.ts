@@ -8,8 +8,11 @@ export class CharterError extends Error {
   }
 }
 
+// A charter read from JSON may carry a string where its type says a list: it is a list of that one string.
+const listOf = (list: string[] | undefined): string[] => (typeof list === 'string' ? [list] : (list ?? []));
+
 const asSelection = (s: Selection | undefined): { allow: string[]; deny: string[] } =>
-  s === undefined ? { allow: [], deny: [] } : Array.isArray(s) ? { allow: s, deny: [] } : { allow: s.allow ?? [], deny: s.deny ?? [] };
+  s === undefined ? { allow: [], deny: [] } : Array.isArray(s) ? { allow: s, deny: [] } : { allow: listOf(s.allow), deny: listOf(s.deny) };
 
 export const normalizeRole = (
   def: RoleDef,
@@ -20,10 +23,10 @@ export const normalizeRole = (
       ? { allow: def, deny: [], extends: [], without: [] }
       : { allow: [], deny: [], extends: [], without: [] };
   }
-  const composition = { extends: def.extends ?? [], without: def.without ?? [] };
+  const composition = { extends: listOf(def.extends), without: listOf(def.without) };
   const sel =
     section === 'actions' && def.actions === undefined
-      ? { allow: def.allow ?? [], deny: def.deny ?? [] }
+      ? { allow: listOf(def.allow), deny: listOf(def.deny) }
       : asSelection(def[section]);
   return { ...sel, ...composition };
 };

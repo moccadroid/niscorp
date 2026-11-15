@@ -1,6 +1,7 @@
 import type { Charter, Section } from './types';
 import { matchAll } from './glob';
 import { CharterError, normalizeRole, resolveRole } from './resolve';
+import { charterShape } from './shape';
 
 export type VerifyIssue = { level: 'error' | 'warning'; rule: string; detail: string };
 
@@ -33,7 +34,7 @@ export const verifyCharter = (
   };
 
   const errors: VerifyIssue[] = [];
-  const warnings: VerifyIssue[] = [];
+  const warnings: VerifyIssue[] = charterShape(charter).map((detail) => ({ level: 'warning', rule: 'shape', detail }));
   const perRole: RoleClosure[] = [];
 
   const resolved: Record<Section, Map<string, ReadonlySet<string>>> = { actions: new Map(), data: new Map(), layouts: new Map(), functions: new Map() };
@@ -120,10 +121,7 @@ export const verifyCharter = (
   }
 
   const subtractive = new Set<string>();
-  for (const def of Object.values(charter)) {
-    if (Array.isArray(def)) continue;
-    for (const sub of def.without ?? []) subtractive.add(sub);
-  }
+  for (const def of Object.values(charter)) for (const sub of normalizeRole(def, 'actions').without) subtractive.add(sub);
   const worn = new Set(wearable.flat());
   for (const role of subtractive) {
     if (worn.has(role)) {

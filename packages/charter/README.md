@@ -46,7 +46,7 @@ if (report.errors.length > 0) throw new Error('charter is incoherent');
 - **A small algebra.** `resolved(role) = (∪ extends ∪ match(allow)) − match(deny) − ∪ without`. Order-independent, deny wins within a role, denies don't inherit. Roles compose whole roles; each section resolves independently.
 - **Reach is named, not composed.** A role may carry `scoping` — a name the governed target resolves (vex: which scope behaviors apply). Unlike every section it is not inherited through `extends`: `resolveScoping(charter, role)` is that role's own answer or none, and a principal with several roles is resolved one role at a time.
 - **One glob rule.** `*` matches any run of characters including dots — `crm.*` matches `crm.deal.form`. No `**`, no braces, no regex. When a pattern can't be expressed, the fix is a better id.
-- **A verifier that refuses.** `verifyCharter` runs the opinions the grammar deliberately omits: a dead deny is an **error** (a typo'd deny fails silent, and silent means unprotected); a dead allow is a warning; ambiguous selections, namespace-as-action, orphan actions, re-allowed ancestor denies all surface. "If it boots, it's coherent."
+- **A verifier that refuses.** `verifyCharter` runs the opinions the grammar deliberately omits: a dead deny is an **error** (a typo'd deny fails silent, and silent means unprotected); a dead allow is a warning; ambiguous selections, namespace-as-action, orphan actions, re-allowed ancestor denies, misspelt keys all surface. "If it boots, it's coherent."
 
 ## What it is not
 

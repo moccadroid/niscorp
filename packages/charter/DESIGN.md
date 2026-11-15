@@ -422,6 +422,8 @@ verifier carries the opinions:
   reported
 - flags re-allows of an ancestor's deny (F1)
 - flags roles referenced in `without` that are also assigned (F2)
+- reports a key it does not read and a string where a list belongs (`shape`):
+  a misspelt `deny` is ignored by resolution, so it is said
 - enforces id conventions (leaves only); overlay rules (no shadowing) are not
   built — there are no overlays yet (F7)
 - checks `assert` invariants (F6) — not built: `verifyCharter` takes no

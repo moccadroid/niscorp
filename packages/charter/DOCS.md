@@ -216,6 +216,7 @@ type RoleClosure = { role: string; actions: string[]; data: string[]; layouts: s
 | `orphan` | warning | an action (or, when handed in, a layout variant or a function) granted by no role — deployed but unreachable. An ungranted `data` id is not reported |
 | `re-allow` | warning | a role re-allows an id an ancestor denied |
 | `subtractive-assigned` | warning | a role used in `without` also appears in a `wearable` combination |
+| `shape` | warning | a key the charter does not read, in a role or in a section (`denny`, `Deny`, `actions.alow`): what it lists does not apply. Or a string where a list belongs: in `allow`, `deny`, `extends` and `without` it is read as a list of that one string; a role or a section that is a string grants nothing |
 | *(closure)* | via `RoleClosure.issues` | cross-action wiring problems from the injected auditor |
 
 ---

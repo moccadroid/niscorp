@@ -162,3 +162,40 @@ describe('verifier', () => {
     expect(seen).toEqual([['a.one.basic']]);
   });
 });
+
+describe('a charter as it is read from JSON', () => {
+  const crm = ['crm.deal.view', 'crm.deal.edit', 'crm.deal.delete', 'hr.pay'];
+  const fromJson = (text: string): Charter => JSON.parse(text);
+  const shapeOf = (charter: Charter): string[] =>
+    verifyCharter(charter, { actions: crm, data: [] }).warnings.flatMap((warning) => (warning.rule === 'shape' ? [warning.detail] : []));
+
+  it('a key the charter does not read is said, in a role and in a section', () => {
+    const charter = fromJson('{"admin":{"allow":["crm.*"],"denny":["crm.deal.delete"]},"desk":{"actions":{"allow":["crm.*"],"Deny":["crm.deal.delete"]}}}');
+    expect(shapeOf(charter)).toEqual([
+      'role "admin" has the key "denny", which the charter does not read: what it lists does not apply',
+      'role "desk" has the key "actions.Deny", which the charter does not read: what it lists does not apply',
+    ]);
+  });
+
+  it('a string where a list of globs belongs is that one glob, and never each of its characters', () => {
+    expect(sorted(resolvePrincipal(fromJson('{"viewer":{"allow":"crm.deal.view*"}}'), crm, ['viewer']))).toEqual(['crm.deal.view']);
+    expect(sorted(resolvePrincipal(fromJson('{"viewer":{"actions":{"allow":"crm.deal.view*"}}}'), crm, ['viewer']))).toEqual(['crm.deal.view']);
+    expect(sorted(resolvePrincipal(fromJson('{"editor":{"allow":["crm.*"],"deny":"crm.deal.delete"}}'), crm, ['editor']))).toEqual(['crm.deal.edit', 'crm.deal.view']);
+    expect(shapeOf(fromJson('{"viewer":{"allow":"crm.deal.view*"},"all":["*"]}'))).toEqual(['role "viewer": "allow" is the string "crm.deal.view*", read as the list ["crm.deal.view*"]']);
+  });
+
+  it('a string where a list of roles belongs is that one role', () => {
+    const charter = fromJson('{"base":["crm.deal.view","crm.deal.edit"],"muzzle":["crm.deal.edit"],"child":{"extends":"base","without":"muzzle"},"all":["*"]}');
+    expect(sorted(resolveRole(charter, crm, 'child', 'actions'))).toEqual(['crm.deal.view']);
+    expect(verifyCharter(charter, { actions: crm, data: [] }).errors).toEqual([]);
+  });
+
+  it('a role or a section that is a string grants nothing, and is said', () => {
+    const charter = fromJson('{"viewer":"crm.*","reader":{"actions":"crm.*"},"all":["*"]}');
+    expect(sorted(resolvePrincipal(charter, crm, ['viewer', 'reader']))).toEqual([]);
+    expect(shapeOf(charter)).toEqual([
+      'role "viewer" is the string "crm.*", which grants nothing: a role is a list of globs or an object',
+      'role "reader": "actions" is the string "crm.*", which grants nothing: a section is a list of globs or { allow, deny }',
+    ]);
+  });
+});
