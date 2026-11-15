@@ -569,6 +569,36 @@ describe('socket — revalidating a live connection', () => {
     }
   });
 
+  it('a question the verifier never answers keeps only its own connection unchecked: the others are still asked, and closed when they expire', async () => {
+    vi.useFakeTimers();
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      let hung = false;
+      let alive = true;
+      const session: SocketConfig['session'] = (token) => {
+        if (token === 'stuck' && hung) return new Promise<string | null>(() => {});
+        return alive ? (token === 'stuck' ? 'usr_2' : 'usr_1') : null;
+      };
+      const accept = createSocket(ctxWith({ session, revalidateMs: 1000 }));
+      const stuck = new FakeConnection();
+      const next = new FakeConnection();
+      await accept(SOCKET, stuck.offering('stuck'));
+      await accept(SOCKET, next.offering('good'));
+      hung = true;
+
+      await vi.advanceTimersByTimeAsync(1000);
+      alive = false;
+      await vi.advanceTimersByTimeAsync(1000);
+
+      expect(next.closed?.code).toBe(CLOSE_INVALID_TOKEN);
+      expect(stuck.closed).toBeUndefined();
+      accept.stop();
+    } finally {
+      logged.mockRestore();
+      vi.useRealTimers();
+    }
+  });
+
   it('a verifier that cannot be asked is said in the log, once for a pass', async () => {
     vi.useFakeTimers();
     const logged = vi.spyOn(console, 'error').mockImplementation(() => {});

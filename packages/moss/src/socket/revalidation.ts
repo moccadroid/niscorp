@@ -18,6 +18,7 @@ export type Revalidation = {
 
 export const createRevalidation = (config: Pick<SocketConfig, 'session' | 'revalidateMs'>): Revalidation => {
   const live = new Map<Connection, Credential>();
+  const revalidateMs = config.revalidateMs ?? DEFAULT_REVALIDATE_MS;
 
   const expire = (connection: Connection): void => {
     live.delete(connection);
@@ -32,15 +33,34 @@ export const createRevalidation = (config: Pick<SocketConfig, 'session' | 'reval
     }
   };
 
+  // A question still out is not asked again: a verifier that never answers is asked once for each connection.
+  const asking = new Set<Connection>();
+
+  // An answer not in by the time the next pass is due is one the pass does not wait for.
+  const answerOf = async (connection: Connection, token: string): Promise<string | null> => {
+    asking.add(connection);
+    const question = (async () => config.session(token))().finally(() => asking.delete(connection));
+    let late: ReturnType<typeof setTimeout> | undefined;
+    const waited = new Promise<never>((_resolve, reject) => {
+      late = setTimeout(() => reject(new Error(`the session verifier did not answer within ${revalidateMs} ms`)), revalidateMs);
+      late.unref?.();
+    });
+    try {
+      return await Promise.race([question, waited]);
+    } finally {
+      clearTimeout(late);
+    }
+  };
+
   const revalidate = async (): Promise<void> => {
     let asked = 0;
     const unanswered: unknown[] = [];
     for (const [connection, credential] of [...live]) {
-      if (credential === null) continue;
+      if (credential === null || asking.has(connection)) continue;
       asked += 1;
       let resolved: string | null;
       try {
-        resolved = await config.session(credential.token);
+        resolved = await answerOf(connection, credential.token);
       } catch (error) {
         // An unreachable verifier is not evidence that a session ended: the
         // connection stays, and is asked about again next pass.
@@ -69,7 +89,6 @@ export const createRevalidation = (config: Pick<SocketConfig, 'session' | 'reval
     }
   };
 
-  const revalidateMs = config.revalidateMs ?? DEFAULT_REVALIDATE_MS;
   let sweeper: ReturnType<typeof setInterval> | undefined;
   if (revalidateMs > 0 && revalidateMs <= MAX_INTERVAL_MS) {
     sweeper = setInterval(() => void pass(), revalidateMs);
