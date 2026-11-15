@@ -1,4 +1,4 @@
-import { compileFilter, compileFieldOrValue } from '../adapters/postgres/operators.js';
+import { compileFilter, compileFieldOrValue, sqlName } from '../adapters/postgres/operators.js';
 import type { CompilationContext } from '../adapters/postgres/operators.js';
 import type { ParamSlot, Row } from '../adapters/adapter.types.js';
 import type { Filter } from '../schemas/filter.schema.js';
@@ -8,7 +8,7 @@ import { isSetMatch } from '../scope/scope.types.js';
 import { VexScopeError, readRulesOf } from '../scope/apply.js';
 import type { Refusal } from '../scope/apply.js';
 import { VexError } from '../errors.js';
-import { isFieldPathShape, sqlName } from '../schemas/identifier.schema.js';
+import { isFieldPathShape } from '../schemas/identifier.schema.js';
 import { resolveParams } from '../utils/context.js';
 import { requireScope } from '../engine/executor.js';
 import { MutationDefinitionSchema } from './schema.js';
@@ -287,14 +287,11 @@ const newCtx = (): WriteContext => ({
   returned: new Map(),
 });
 
-// A single-table statement needs no aliases, so each path names its table and
-// column. Only for a filter whose paths assertFilterColumns has already checked
-// against the table's real columns.
+// A single-table statement needs no aliases, so each path maps to itself. Only
+// for a filter whose paths assertFilterColumns has already checked against the
+// table's real columns.
 const indexFilterFields = (filter: Filter, aliasMap: Map<string, string>): void => {
-  for (const path of filterColumns(filter)) {
-    const dot = path.indexOf('.');
-    aliasMap.set(path, `${sqlName(path.slice(0, dot))}.${sqlName(path.slice(dot + 1))}`);
-  }
+  for (const path of filterColumns(filter)) aliasMap.set(path, path);
 };
 
 // A `$returned` slot is declared like a `$context` one, but the run loop binds

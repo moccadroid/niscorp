@@ -15,7 +15,7 @@ import type {
   ResolvedExists,
 } from './engine.types.js';
 import { VexError } from '../errors.js';
-import { isFieldPathShape, isIdentifier, sqlName } from '../schemas/identifier.schema.js';
+import { isFieldPathShape, isIdentifier } from '../schemas/identifier.schema.js';
 
 const levenshtein = (a: string, b: string): number => {
   const la = a.length;
@@ -164,8 +164,6 @@ const findJoinBetween = (
 type PathResolution = { alias: string; column: string; schema: FieldSchema };
 type EntityLookup = Map<string, { entity: EntitySchema; alias: string }>;
 
-const columnSql = (res: { alias: string; column: string }): string => `${res.alias}.${sqlName(res.column)}`;
-
 const resolveFieldPath = (
   path: string,
   entityLookup: EntityLookup,
@@ -301,7 +299,7 @@ const collectFilterPaths = (
       innerFilter = { original: filter.exists.filter, resolvedPaths: innerPaths };
       for (const [path, res] of innerPaths) {
         const owner = path.slice(0, path.indexOf('.'));
-        if (filter.exists.from.includes(owner)) innerAliasMap.set(path, columnSql(res));
+        if (filter.exists.from.includes(owner)) innerAliasMap.set(path, `${res.alias}.${res.column}`);
         else resolvedPaths.set(path, res);
       }
     }
@@ -483,7 +481,7 @@ export const resolve = (dsl: Query, schema: DatabaseSchema): ResolvedQuery => {
     if (typeof ref !== 'string') assertName(ref.as, 'field alias');
     const { resolved } = resolveFieldPath(path, entityLookup, schema);
     fields.push(typeof ref === 'string' ? resolved : { ...resolved, outputName: ref.as });
-    aliasMap.set(path, columnSql(resolved));
+    aliasMap.set(path, `${resolved.alias}.${resolved.column}`);
   }
 
   let resolvedFilter: ResolvedFilter | undefined;
@@ -497,7 +495,7 @@ export const resolve = (dsl: Query, schema: DatabaseSchema): ResolvedQuery => {
     resolvedFilter = { original: dsl.filter, resolvedPaths };
 
     for (const [path, res] of resolvedPaths) {
-      aliasMap.set(path, columnSql(res));
+      aliasMap.set(path, `${res.alias}.${res.column}`);
     }
 
     semantic = extractSemantic(dsl.filter, entityLookup, schema);
@@ -530,7 +528,7 @@ export const resolve = (dsl: Query, schema: DatabaseSchema): ResolvedQuery => {
     for (const path of dsl.groupBy) {
       const { resolved } = resolveFieldPath(path, entityLookup, schema);
       groupBy.push(resolved);
-      aliasMap.set(path, columnSql(resolved));
+      aliasMap.set(path, `${resolved.alias}.${resolved.column}`);
     }
   }
 
@@ -546,7 +544,7 @@ export const resolve = (dsl: Query, schema: DatabaseSchema): ResolvedQuery => {
         sort.push({ field: entry.field, dir });
       } else {
         const { resolved } = resolveFieldPath(entry.field, entityLookup, schema);
-        aliasMap.set(entry.field, columnSql(resolved));
+        aliasMap.set(entry.field, `${resolved.alias}.${resolved.column}`);
         sort.push({ field: resolved, dir });
       }
     }
@@ -581,7 +579,7 @@ const resolveComputePaths = (
     if (typeof fov === 'string' && isFieldPath(fov)) {
       if (!aliasMap.has(fov)) {
         const { resolved } = resolveFieldPath(fov, entityLookup, schema);
-        aliasMap.set(fov, columnSql(resolved));
+        aliasMap.set(fov, `${resolved.alias}.${resolved.column}`);
       }
     }
   };
@@ -611,7 +609,7 @@ const resolveComputePaths = (
       const resolvedPaths = new Map<string, PathResolution>();
       collectFilterPaths(when.condition, entityLookup, schema, resolvedPaths, existsOut, aliasCounter);
       for (const [path, res] of resolvedPaths) {
-        aliasMap.set(path, columnSql(res));
+        aliasMap.set(path, `${res.alias}.${res.column}`);
       }
       resolveFieldOrValue(when.then);
     }
@@ -641,6 +639,6 @@ const resolveAggregatePaths = (
 
   if (!aliasMap.has(arg)) {
     const { resolved } = resolveFieldPath(arg, entityLookup, schema);
-    aliasMap.set(arg, columnSql(resolved));
+    aliasMap.set(arg, `${resolved.alias}.${resolved.column}`);
   }
 };

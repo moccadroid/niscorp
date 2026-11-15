@@ -4,7 +4,6 @@ import type { ResolvedQuery, ResolvedFilter, ResolvedSource, ResolvedJoin } from
 import type { ScopePolicy, ScopeMatch } from './scope.types.js';
 import { isSetMatch } from './scope.types.js';
 import { VexError } from '../errors.js';
-import { sqlName } from '../schemas/identifier.schema.js';
 
 export class VexScopeError extends VexError {
   readonly entity: string;
@@ -96,7 +95,7 @@ const placeInto = (level: ScopeLevel, policy: ScopePolicy): void => {
       const predicate = predicateFor(entity.name, source.alias, match, entity.fields);
       if (predicate === undefined) continue;
 
-      level.aliasMap.set(`${source.alias}.${match.match}`, `${source.alias}.${sqlName(match.match)}`);
+      level.aliasMap.set(`${source.alias}.${match.match}`, `${source.alias}.${match.match}`);
 
       if (join !== undefined && join.kind === 'left') join.on = [...(join.on ?? []), predicate];
       else whereAdditions.push(predicate);

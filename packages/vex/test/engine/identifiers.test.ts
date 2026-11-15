@@ -56,6 +56,15 @@ beforeAll(async () => {
       },
     },
     {
+      fingerprint: 'orders/through-a-named-subquery',
+      shape: [{}],
+      dsl: {
+        from: [{ as: 'Picked', query: { from: ['order'], fields: ['order.userName'] } }, { as: 'limit', query: { from: ['Line'], fields: ['Line.lineQty'] } }],
+        fields: ['Picked.userName', 'limit.lineQty'],
+        sort: [{ field: 'Picked.userName', dir: 'asc' }],
+      },
+    },
+    {
       fingerprint: 'orders/with-a-line',
       shape: [{}],
       dsl: { from: ['order'], fields: ['order.userName'], filter: { exists: { from: ['Line'], filter: { eq: ['Line.orderId', 'order.id'] } } } },
@@ -91,6 +100,13 @@ describe('a read names tables and columns as the database spells them', () => {
 
   it('reads a subquery column with capitals from the outer query', async () => {
     expect(await replay('orders/through-a-subquery')).toEqual([{ userName: 'ada' }, { userName: 'bob' }]);
+  });
+
+  it('reads subqueries named with capitals or a reserved word', async () => {
+    expect(await replay('orders/through-a-named-subquery')).toEqual([
+      { userName: 'ada', lineQty: 3 },
+      { userName: 'bob', lineQty: 3 },
+    ]);
   });
 
   it('reads a table with capitals inside an exists', async () => {
