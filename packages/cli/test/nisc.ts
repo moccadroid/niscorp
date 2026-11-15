@@ -6,7 +6,7 @@ import { pathToFileURL } from 'node:url';
 const require = createRequire(import.meta.url);
 
 // The command from its source, so a test never runs a dist built before the change it tests.
-export const NISC: readonly string[] = ['--import', pathToFileURL(require.resolve('tsx')).href, join(import.meta.dirname, '..', 'src', 'cli.ts')];
+export const NISC: readonly string[] = ['--import', pathToFileURL(require.resolve('tsx')).href, join(import.meta.dirname, '..', 'src', 'command', 'index.ts')];
 
 // A temporary app finds a package the way an app finds its own: in its node_modules.
 export const linkPackage = (folder: string, name: string): void => {

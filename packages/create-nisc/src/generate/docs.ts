@@ -1,4 +1,4 @@
-import type { Part } from './catalog';
+import type { Part } from '../catalog';
 
 export type DocFacts = {
   name: string;

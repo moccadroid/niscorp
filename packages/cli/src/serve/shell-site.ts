@@ -8,7 +8,7 @@ import type { Shell } from '@niscorp/nova';
 import { headOf, placeHead } from '@niscorp/nova/document';
 import type { ScreenHead } from '@niscorp/nova/document';
 import { livenessOf } from '@niscorp/nova/reflect';
-import type { NiscShellProject } from './project';
+import type { NiscShellProject } from '../project';
 
 const DEFAULT_BUILD_WAIT_MS = 5000;
 export const DEFAULT_ROOT = '<div id="root"></div>';
@@ -91,7 +91,7 @@ const adoptAll = (root: string, pages: readonly { path: string; screen: string }
   if (pages.length === 0) return [];
   const here = dirname(fileURLToPath(import.meta.url));
   // built: beside this file. From source (the package's own tests): in dist.
-  const entry = [join(here, 'adopt.js'), join(here, '..', 'dist', 'adopt.js')].find((candidate) => existsSync(candidate));
+  const entry = [join(here, 'adopt.js'), join(here, '..', '..', 'dist', 'adopt.js')].find((candidate) => existsSync(candidate));
   if (entry === undefined) throw new Error('nisc: the adoption check is not built (packages/cli/dist/adopt.js).');
   const scratch = mkdtempSync(join(tmpdir(), 'nisc-adopt-'));
   try {
@@ -186,7 +186,7 @@ export const shellRouteTable = (routes: readonly ShellRouteReport[]): string => 
   }
   lines.push('');
   lines.push('○  a file: the first screen, drawn for nobody in particular; the page’s own shell picks it up');
-  lines.push('✗  not written: a check did not hold');
+  lines.push('✗  not written: a check failed');
   return lines.join('\n');
 };
 
@@ -210,10 +210,20 @@ const TYPES: Record<string, string> = {
   '.txt': 'text/plain; charset=utf-8',
 };
 
+const decodedPath = (pathname: string): string | undefined => {
+  try {
+    const path = decodeURIComponent(pathname);
+    return path.includes('\0') ? undefined : path;
+  } catch {
+    return undefined;
+  }
+};
+
 export const shellSite = (project: NiscShellProject, dist: string): ((request: Request) => Promise<Response>) => {
   const base = resolve(dist);
   return async (request) => {
-    const path = decodeURIComponent(new URL(request.url).pathname);
+    const path = decodedPath(new URL(request.url).pathname);
+    if (path === undefined) return new Response('not a path', { status: 400 });
     if (path !== '/' && path !== '/index.html') {
       const file = resolve(base, `.${path}`);
       const stats = file === base || file.startsWith(base + sep) ? statSync(file, { throwIfNoEntry: false }) : undefined;

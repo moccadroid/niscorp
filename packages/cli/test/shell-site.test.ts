@@ -5,7 +5,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, describe, expect, it } from 'vitest';
 import { placeScreen } from '../src';
-import { shellSite } from '../src/shell-site';
+import { shellSite } from '../src/serve';
 import { project } from './fixtures/own-shell/nisc.config';
 import { NISC } from './nisc';
 
@@ -26,7 +26,7 @@ const nisc = (args: readonly string[], fault = ''): { code: number | null; out: 
 };
 
 describe('nisc build — an app with its own shell', () => {
-  it('draws every path, every check holds, and says what the first screen is made of', () => {
+  it('draws every path, every check passes, and says what the first screen is made of', () => {
     const { code, out } = nisc(['build']);
     expect(out).toContain('drawn · whole · same twice · adopted');
     expect(out).toContain('opened with rooms.load (/api/rooms) — in the file as answered at build');
@@ -39,6 +39,7 @@ describe('nisc build — an app with its own shell', () => {
   it('fails a screen that draws to nothing', () => {
     const { code, out } = nisc(['build'], 'empty');
     expect(out).toContain('drawn: it drew to nothing');
+    expect(out).toContain('✗  not written: a check failed');
     expect(code).toBe(1);
   }, SLOW);
 
@@ -63,7 +64,7 @@ describe('nisc build — an app with its own shell', () => {
 });
 
 describe('nisc export — an app with its own shell', () => {
-  it('writes each path as a file holding its first screen', () => {
+  it('writes each path as a file with its first screen', () => {
     const out = join(scratch, 'site');
     const { code } = nisc(['export', '--out', out]);
     expect(code).toBe(0);
@@ -75,11 +76,11 @@ describe('nisc export — an app with its own shell', () => {
     expect(readFileSync(join(out, 'rooms', 'index.html'), 'utf8')).toContain('Rooms &amp; &lt;suites&gt;');
   }, SLOW);
 
-  it('writes nothing when a check did not hold', () => {
+  it('writes nothing when a check failed', () => {
     const out = join(scratch, 'broken');
     const { code, out: said } = nisc(['export', '--out', out], 'adopt');
     expect(code).toBe(1);
-    expect(said).toContain('Nothing was written.');
+    expect(said).toContain('nisc: 2 of 2 paths failed a check (/, /rooms). Nothing was written.');
     expect(existsSync(out)).toBe(false);
   }, SLOW);
 });

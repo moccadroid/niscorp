@@ -17,8 +17,7 @@
       "strata": "tsx src/dev/strata.ts"
     },
     "devDependencies": {
-      "@types/jsdom": "^30.0.0",
-      "jsdom": "^25.0.1"
+      "@types/jsdom": "^30.0.0"
     }
   },
   "docs": {

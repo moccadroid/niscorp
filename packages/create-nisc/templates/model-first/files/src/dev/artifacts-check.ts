@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { verifyApp } from '@niscorp/moss';
 import { ActionDefinitionSchema, LayoutNodeSchema } from '@niscorp/nova';
 import type { LayoutNode } from '@niscorp/nova';
 import { componentsOf, walkNodes } from '@niscorp/nova/reflect';
@@ -38,6 +39,9 @@ pure('the charter', charter);
 pure('the assignments', assignments);
 pure('the shell', shell);
 if (shell.layout !== undefined) parses('the shell’s frame', () => LayoutNodeSchema.parse(shell.layout));
+
+const unread = verifyApp({ charter, assignments, actions, shell }, []).charter.warnings.flatMap((warning) => (warning.rule === 'shape' ? [warning.detail] : []));
+check('the charter reads every key it is given', unread.length === 0, unread.join('; '));
 
 for (const [id, definition] of Object.entries(actions)) {
   check(`action "${id}" is catalogued under its own id`, definition.id === id, `its id is "${definition.id}"`);

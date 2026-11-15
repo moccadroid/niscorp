@@ -131,4 +131,10 @@ describe('nisc start — what a browser may keep, and how it travels', () => {
     expect(answer.status).toBe(404);
     expect(answer.headers['cache-control']).toBeUndefined();
   });
+
+  it.each(['/%E0%A4%A', '/a%00b', '/%'])('an address that does not decode to a path (%s) is a 400', async (path) => {
+    const answer = await ask(path);
+    expect(answer.status).toBe(400);
+    expect(answer.bytes.toString()).toBe('not a path');
+  });
 });

@@ -50,7 +50,7 @@ The structure the rulebook describes, and a first screen that works:
   is picked up by the page;
 - `npm run dev`, `build`, `check` and `start` — and, with the shell in the
   page, `export` — all the `nisc` command; `nisc dev` runs a moss app's server inside vite, so its
-  `vite.config.ts` holds nothing but the framework's plugin;
+  `vite.config.ts` has nothing but the framework's plugin;
 - four checks: the artifacts are pure, schema-valid JSON; the app keeps nisc's
   shape (`shape-check`); the source is at the installed grammars
   (`strata.lock.json`); the welcome screen is served, drawn and pressed — with
@@ -95,7 +95,7 @@ And the documents:
 
 ## A folder that already exists
 
-It never overwrites. A folder that already holds something is fine — a fresh
+It never overwrites. A folder that already has something in it is fine — a fresh
 repository's `.git`, a `LICENSE` — as long as nothing a new app would write is
 there. Your `README.md` is kept; your `.gitignore` gets the lines it lacks. If
 anything else it would write already exists, or a file stands where it needs a
@@ -136,7 +136,7 @@ templates/
 | `default` | the answer taken when nobody gives one: exactly one per question |
 | `requires` | `{ question: item }` — what another question must be answered with; that question is then not asked |
 | `package` | a `package.json` fragment: fields, `scripts`, `dependencies`, `devDependencies` (`workspace:^` for a nisc package) |
-| `env` | the keys it asks for: `{ name, message, required? }`, or `{ choose, message, options: [{ value, label, keys? }] }` |
+| `env` | the keys it asks for: `{ name, message, required? }`, or `{ choose, message, options: [{ value, label, hint?, keys? }] }` |
 | `docs` | its lines in AGENTS.md and PLAN.md: `is`, `where`, `runs`, `decisions`, `answered`, `open`, `order` |
 | `with` | `{ <other item>: { package, env, docs } }` — added only when that other item is chosen too |
 
@@ -152,7 +152,7 @@ An item that needs keys asks for them after the questions, masked, and they go
 into `.env`; `.env.example` gets the names alone. A key left empty is filled in
 `.env` later. Keys are never flags — a flag stays in the shell's history — so
 with no terminal to ask in, they are read from the environment. A `.env` that
-is already there keeps what it holds and gains only the lines it lacks.
+is already there keeps what it has and gains only the lines it lacks.
 
 ## Why it can be trusted to work
 

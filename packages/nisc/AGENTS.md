@@ -1,8 +1,8 @@
 # Building an application on nisc
 
-> **Reading this from `node_modules/@niscorp/nisc/`?** It is the rulebook for the nisc version installed beside it, shipped with it. Where it names a path in the nisc repository, look here instead: `packages/<name>/README.md` and `DESIGN.md` are `node_modules/@niscorp/<name>/`; `/STYLE_GUIDE.md` is beside this file; the lab apps it points to as examples (`apps/lab/lyceum`, …) and `docs/` are at [github.com/moccadroid/niscorp](https://github.com/moccadroid/niscorp). An app made by `npm create nisc` points its own `AGENTS.md` here.
+> **Reading this from `node_modules/@niscorp/nisc/`?** It is the rulebook for the nisc version installed beside it, shipped with it. Where it names a path in the nisc repository, look here instead: `packages/<name>/README.md` and `DESIGN.md` are `node_modules/@niscorp/<name>/`; the lab apps it points to as examples (`apps/lab/lyceum`, …) and `docs/` are at [github.com/moccadroid/niscorp](https://github.com/moccadroid/niscorp). An app made by `npm create nisc` points its own `AGENTS.md` here.
 
-> **Changing nisc itself — a package, not an app built on it?** The `@niscorp` packages are live on npm and may be in use by third parties. No change may break an app that works today, and a breaking change is never yours to decide: it is a last resort that needs the maintainer's explicit approval *before* it is written. Read `/STYLE_GUIDE.md`, "The packages are live", first, and then `CHANGING_A_PACKAGE.md`, beside this file (`packages/nisc/` in the repository): where a new thing goes, and the builds that fail when it goes somewhere else.
+> **Changing nisc itself — a package, not an app built on it?** The `@niscorp` packages are live on npm and may be in use by third parties. No change may break an app that works today, and a breaking change is never yours to decide: it is a last resort that needs the maintainer's explicit approval *before* it is written. Read `STYLE_GUIDE.md`, beside this file, "The packages are live", first, and then `CHANGING_A_PACKAGE.md`, beside this file (`packages/nisc/` in the repository): where a new thing goes, and the builds that fail when it goes somewhere else.
 
 > **Build with this file; review with `REVIEW.md`, beside it.** A review checks the app's shape — reads replayed as entries, words in Prism, the charter gating what a person reaches — which the app's own checks do not see. Run one after each step of the order of work, not only at the end: drift found early is one file, found late it is everything built on it.
 
@@ -141,6 +141,7 @@ Pick per need; every piece works standalone. Nova is the only mandatory one for 
 - Shaping is declared on the endpoint. A static request body is plain JSON; a body derived from the action's data is a Prism config, kept in a sibling `.prism.ts`.
 - Prefer plain JSON when no mapping is required.
 - Components never shape data.
+- Prism's `$ref` indexes as `$.rows[0].title`; a layout binding, a trigger's `set … from` and an `@event` path index with a dot, `$.rows.0.title` (nova splits on `.`). The wrong spelling reads nothing and draws empty, with no error.
 
 **6.** Nova doesn't know Prism: the shell's injected `transform` is the socket that makes Prism endpoint configs work.
 
@@ -226,7 +227,7 @@ Pick per need; every piece works standalone. Nova is the only mandatory one for 
 
 **10.** The charter is the app's policy document: role names → glob selections over the app's universes.
 
-- The universes: `actions` (which action ids exist for a principal), `data` (`table.verb` capabilities, compiled into the Vex `ScopePolicy`), `functions` (which of the app's functions a principal's shell has: a role with none may call none) and `layouts` (which served layout variants a principal gets, rule 11).
+- The universes: `actions` (which action ids exist for a principal), `data` (`table.verb` capabilities, compiled into the Vex `ScopePolicy`; the verbs: `read`, `write.insert`, `write.update`, `write.delete` — `todos.write.update`, not `todos.update`), `functions` (which of the app's functions a principal's shell has: a role with none may call none) and `layouts` (which served layout variants a principal gets, rule 11).
 - Grant each role the functions its actions call, deliberately. Moss refuses to boot and lists every call whose grants miss — for each role on its own, each combination people wear, and `public` — and says where a role allows every function (`'*'`).
 - `server.checkFunctions()` is called once the app has the server and has mounted every route of its own, before it listens (nobody's shell makes its reads in-process, and the server takes no route once it has answered one). It builds nobody's shell once to read the functions and refuses every call to one the app does not have. The `nisc` command calls it itself wherever it boots the app's server.
 - The charter compiles; it never enforces and never shapes. Moss resolves it per principal and refuses to boot incoherent.
@@ -284,7 +285,7 @@ Pick per need; every piece works standalone. Nova is the only mandatory one for 
 
 ### Code
 
-**16.** `/STYLE_GUIDE.md` applies in full, with two app-level overrides:
+**16.** `STYLE_GUIDE.md`, beside this file, applies in full, with two app-level overrides:
 
 - It is written for the packages, so its "custom error classes for domain errors" does **not** apply here: an app declares no classes at all and throws plain `Error`.
 - "Package prompts serve every app" binds packages, not apps: an app's prompts may be about the app. What an app measures against a package's agent is fixed in that package only in general form (see that section).
@@ -339,7 +340,7 @@ export const todosAction: ActionDefinition = {
   id: 'todos.list',
   title: 'Todos',
   // endpoint-fed slots + UI state — every key present, every key defaulted
-  data: { rows: [], toggleTodoId: '', toggleDone: false, loading: true },
+  data: { rows: [], toggleTodoId: '', toggleDone: false, loading: true, error: '' },
   layout: todosLayout,
   // a contract, not an implementation (rule 7): the same action runs
   // unchanged against moss or against a degrade app's own endpoints
@@ -356,8 +357,9 @@ export const todosAction: ActionDefinition = {
       do: [
         { set: 'toggleTodoId', value: '@event.payload.todo_id' },
         { set: 'toggleDone', value: '@event.payload.next' },
+        { set: 'error', value: '' },
         // writers announce…
-        { call: 'setDone', onSuccess: [{ call: 'load' }, { emit: { channel: 'todos-changed' } }] },
+        { call: 'setDone', onSuccess: [{ call: 'load' }, { emit: { channel: 'todos-changed' } }], onError: [{ set: 'error', value: '{{@error.message}}' }] },
       ],
     },
     // …viewers react — this action displays todos too, so it listens to its own
@@ -388,6 +390,7 @@ export const todosLayout: LayoutNode = {
         ],
       },
     },
+    { if: '$.error', then: { component: 'Text', children: '{{$.error}}' } },
   ],
 };
 ```
@@ -455,6 +458,7 @@ export const todosOpen: SeedEntry = {
   - Prewarm at boot through the cache backend's own `set()`: key = the entry's `fingerprint`, `prismIr` = `await compile(mapping ?? { $ref: '$.result' })` (`@niscorp/prism`), plus the shape, the schema fingerprint, and `protected: true` — a seeded entry can never be replaced by a stray request.
   - Seed the identity IR for mapping-less entries explicitly — a NULL IR falls through to the LLM mapper.
   - Throw on duplicate names while seeding.
+  - vex's `seedCache(cache, entries)` compiles each mapping (the identity where there is none) and writes it `protected: true`, but it neither stamps the schema fingerprint nor refuses two entries of one fingerprint (the later replaces the earlier), so a degrade app writes its rows itself, as mythos's `src/vex/prewarm.ts` does.
 - **The fingerprint is the cache key.** Every entry replays as `{ fingerprint, context }` — no shape, no intent on the wire. Id fields still follow `<entity>_id` (self-describing rows); never a shared `{ value, label }`.
 - **The mapping owns the result shape.** Vex evaluates it over `{ result, context, scope }` and returns the output verbatim — array, object, or scalar. The entry's stored shape picks what `$.result` is:
   - an **array** shape → `$.result` is the rows (map with `$map`, or `{ $ref: '$.result' }` for identity);
@@ -488,7 +492,7 @@ Stack-independent conventions:
   - Shell state is the truth of what is on screen now (rule 4); it is not kept.
 - **What a lost connection looks like is the kit's.** When the socket drops, the last screen stays up while the terminal reconnects, and looks exactly like a live one. Every render target is told the connection's status: a browser target says it on its root element (`data-wire-status`: `connecting`, `open`, `closed`, `incompatible`, `static`) and draws nothing, so the kit's stylesheet decides what `closed` looks like. No action, layout or component prop carries it: the connection is the terminal's, not the app's data.
 - **Seeds choose their clock.** A seed pins a fixed reference date or shifts with the wall clock — per what the seed is for: a regression fixture pins, a demo that must look alive today shifts. Either way the app compares against injected context (`$.today`, per request under moss) — never a wall-clock read inside a transform, query, or layout.
-- **The app is a manifest; only degrade shells are factories.** Under moss the app is `defineApp({...})` and the server builds one durable shell per principal — dev checks boot the same manifest with a dev runtime. A client-degrade app builds its shell as `createAppShell(deps)` (see "The client-degrade path").
+- **The app is a manifest; only degrade shells are factories.** Under moss the app is `defineApp({...})` and the server builds one durable shell per principal — dev checks boot the same manifest with a dev runtime. A client-degrade app builds its shell in the app's own boot (`boot()` in an app `npm create nisc` makes; mythos's `createAppShell`) — see "The client-degrade path".
 
 ## Before working around a limitation
 
@@ -549,7 +553,7 @@ src/
   dev/                     headless checks; strata.ts lists the artifacts for the `strata` script
   main.tsx                 the terminal entry
 nisc.config.ts             what the app tells the `nisc` command: how it boots, how a screen is
-                           drawn — only if its pages are drawn on the server or built to files
+                           drawn. Every `nisc` command reads it
 strata.lock.json           which grammar version the source is written in (rule 20) — committed,
                            moved only by the `strata` script's `verify`
 ```
@@ -572,7 +576,7 @@ The degrade is for offline, zero-backend and portable apps — a demo that must 
 
 What changes is only who assembles and serves:
 
-- **The shell is a factory, not a manifest.** `createAppShell(deps)` builds it in the browser with everything environmental injected — the fetch seam, the app's `today`, the transform socket (rule 6). Nothing environmental is read from module scope, so a check constructs the real app with real deps and nothing leaks between runs.
+- **The shell is a factory, not a manifest.** The app's own boot (`boot()` in an app `npm create nisc` makes; mythos's `createAppShell`) builds it in the browser with everything environmental injected — the fetch seam, the app's `today`, the transform socket (rule 6). Nothing environmental is read from module scope, so a check constructs the real app with real deps and nothing leaks between runs.
 - **`server/` is replaced by whatever serves the endpoints** (D2): in-memory fixtures, PGlite in the browser, a real backend, or a mix. Endpoints keep their URLs and shapes — that is what makes the posture invisible upstream. The client-side `fn` registry is the escape hatch here and only here (rule 7).
 - **The app boots its own Vex engine**, prewarming and locking replay itself — see "Using Vex" for the exact seeding contract. Under moss the server does all of this; here the app does.
 - **`inputs`, `seeds`, `scope`, `onSession` and `runs` have no host.** Whatever they derived, the factory derives at construction. There is no durable per-principal shell and no server-side resolution.

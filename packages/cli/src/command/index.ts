@@ -1,6 +1,10 @@
 import { resolve } from 'node:path';
-import { build, check, dev, exportSite, migrate, portOf, start } from './commands';
-import type { CommandOptions } from './commands';
+import { build, exportSite } from '../build';
+import { dev } from '../dev';
+import { migrate } from '../migrate';
+import type { CommandOptions } from '../project';
+import { portOf, start } from '../serve';
+import { check } from './check';
 
 const USAGE = `nisc — the command for a nisc application
 

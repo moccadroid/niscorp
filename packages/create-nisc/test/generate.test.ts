@@ -107,6 +107,40 @@ describe('generate — every app the questions can make', () => {
     expect(page).toContain('plain DOM');
   });
 
+  it('what `nisc start` loads is a dependency, so an install of the dependencies alone can start the app', () => {
+    const manifestOf = (picks: Picks, name: string): { dependencies: Record<string, string>; devDependencies: Record<string, string> } =>
+      JSON.parse(read(make(picks, name).dir, 'package.json'));
+    const pageDom = manifestOf(completed(catalog, { shell: 'page', kit: 'dom' }), 'start-page-dom');
+    expect(pageDom.dependencies['@niscorp/cli']).toBe('^0.4.2');
+    expect(pageDom.devDependencies['@niscorp/cli']).toBeUndefined();
+    expect(pageDom.dependencies['jsdom']).toBe('^25.0.1');
+    expect(pageDom.devDependencies['jsdom']).toBeUndefined();
+    const pageReact = manifestOf(completed(catalog, { shell: 'page', kit: 'react' }), 'start-page-react');
+    expect(pageReact.devDependencies['jsdom']).toBe('^25.0.1');
+    expect(pageReact.dependencies['jsdom']).toBeUndefined();
+    expect(manifestOf(completed(catalog, { shell: 'moss', kit: 'react' }), 'start-moss-react').dependencies['@niscorp/cli']).toBe('^0.4.2');
+  });
+
+  it('an app behind moss does not depend on tide, which nothing in it imports', () => {
+    const manifest = JSON.parse(read(make(completed(catalog, { shell: 'moss' }), 'no-tide').dir, 'package.json'));
+    expect(manifest.dependencies['@niscorp/moss']).toBe('^0.4.3');
+    expect(manifest.dependencies['@niscorp/tide']).toBeUndefined();
+  });
+
+  it('a model-first PLAN.md leaves open who may ask the model: today everyone, and everyone spends the key', () => {
+    const plan = read(make(completed(catalog, { kind: 'model-first' }), 'plan-model').dir, 'PLAN.md');
+    const open = plan.slice(plan.indexOf('## The dial-in — open'), plan.indexOf('## Order of work'));
+    expect(open).toContain('- Who may ask the model: today everyone (`public`, `src/app/charter/charter.ts`), so anybody who can reach the deployed app spends your Groq key, with no limit. Before deploying: sign-in and a role that may ask, or a limit in `ask`.');
+  });
+
+  it('a model-first app’s words match its code: what `ask` is sent, and where a lasting conversation goes', () => {
+    const { dir } = make(completed(catalog, { kind: 'model-first' }), 'model-words');
+    expect(read(dir, 'src/server/compose/index.ts')).toContain("const AskSchema = z.looseObject({ asked: z.string() });");
+    expect(read(dir, 'src/server/compose/index.ts')).toContain('Send { asked: <the message> }.');
+    expect(read(dir, 'AGENTS.md')).toContain('`begin` and `said` in `src/server/compose/index.ts` are where it goes');
+    expect(read(dir, 'AGENTS.md')).toContain('It lives in four places (step 1) and is named in seven files and the two documents (steps 2–8):');
+  });
+
   it('inside the nisc repository it depends on the packages next door', () => {
     const { dir } = make(completed(catalog, {}), 'in-workspace', { workspace: true });
     expect(read(dir, 'package.json')).toContain('"@niscorp/nova": "workspace:^"');
@@ -162,6 +196,49 @@ describe('generate — a folder that already holds something', () => {
     writeFileSync(join(dir, 'src'), 'mine');
     expect(() => generate({ dir, name: 'blocked', picks: completed(catalog, {}), versions: SET, today: TODAY })).toThrow(/already has a file a new app would write — nothing was written:\n {2}src \(a file, where the app needs a folder\)\n/);
     expect(readdirSync(dir)).toEqual(['src']);
+  });
+});
+
+describe('generate — a folder where the app reads or writes a file', () => {
+  it('.gitignore, which it adds to: nothing is written, and it says which', () => {
+    const dir = join(scratch, 'ignore-folder');
+    mkdirSync(join(dir, '.gitignore'), { recursive: true });
+    expect(() => generate({ dir, name: 'ignore-folder', picks: completed(catalog, {}), versions: SET, today: TODAY })).toThrow('already has a file a new app would write — nothing was written:\n  .gitignore (a folder, where the app needs a file)\n');
+    expect(readdirSync(dir)).toEqual(['.gitignore']);
+  });
+
+  it('.env, for an app that asks for keys: nothing is written, and it says which', () => {
+    const dir = join(scratch, 'env-folder');
+    mkdirSync(join(dir, '.env'), { recursive: true });
+    expect(() => generate({ dir, name: 'env-folder', picks: completed(catalog, { kind: 'model-first' }), versions: SET, today: TODAY })).toThrow('already has a file a new app would write — nothing was written:\n  .env (a folder, where the app needs a file)\n');
+    expect(readdirSync(dir)).toEqual(['.env']);
+  });
+
+  it('.env, for an app that asks for no keys, is not read, and is no reason to refuse', () => {
+    const dir = join(scratch, 'env-folder-classic');
+    mkdirSync(join(dir, '.env'), { recursive: true });
+    expect(generate({ dir, name: 'env-folder-classic', picks: completed(catalog, {}), versions: SET, today: TODAY }).files).toContain('package.json');
+  });
+});
+
+describe('generate — an .env that already sets a key, in a form Node reads', () => {
+  const withEnv = (name: string, theirs: string, env: Record<string, string>): string => {
+    const dir = join(scratch, name);
+    mkdirSync(dir);
+    writeFileSync(join(dir, '.env'), theirs);
+    generate({ dir, name, picks: completed(catalog, { kind: 'model-first' }), versions: SET, today: TODAY, env });
+    return read(dir, '.env');
+  };
+
+  it.each([
+    ['spaced-key', 'GROQ_API_KEY = sk-x\n'],
+    ['exported-key', 'export GROQ_API_KEY=sk-x\n'],
+  ])('%s, the key left empty: no empty line is added after it to hide it', (name, theirs) => {
+    expect(withEnv(name, theirs, {})).toBe(theirs);
+  });
+
+  it('a key given is added after theirs, as before, and is the one Node reads', () => {
+    expect(withEnv('given-key', 'GROQ_API_KEY = old\n', { GROQ_API_KEY: 'sk-new' })).toBe('GROQ_API_KEY = old\nGROQ_API_KEY=sk-new\n');
   });
 });
 

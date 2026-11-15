@@ -6,13 +6,14 @@ import type { NiscMossProject } from '../../../src';
 
 // Nobody's shell reads `/hello` as it mounts, so checking the functions answers a request in-process.
 const app = defineApp({
-  charter: { public: { actions: ['home'], functions: ['greet'] } },
+  charter: { public: { actions: ['home'], functions: ['greet'], ...(process.env['NISC_FIXTURE_CHARTER'] === 'misspelt' ? { denny: ['home'] } : {}) } },
   actions: {
     home: {
       id: 'home',
       data: { said: '' },
       endpoints: { load: { url: '/hello', method: 'GET', target: 'said' } },
       lifecycle: { mount: [{ call: 'load' }] },
+      ...(process.env['NISC_FIXTURE_LIVE'] === '1' ? { triggers: [{ message: 'hello-changed', do: [{ call: 'load' }] }] } : {}),
     },
   },
   shell: { canvases: [{ id: 'main', initial: 'home' }] },

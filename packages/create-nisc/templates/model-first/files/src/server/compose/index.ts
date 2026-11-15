@@ -27,8 +27,8 @@ export const firstScreen: NonNullable<ShellManifest['seeds']> = () => ({ screen:
 export const composer =
   (models: Models): ((session: FunctionSession) => FunctionDefinition[]) =>
   (session) => {
-    const held = new Set(session.actions);
-    const catalog: Catalog = { actions: CATALOG.actions.filter((action) => held.has(action.id)) };
+    const granted = new Set(session.actions);
+    const catalog: Catalog = { actions: CATALOG.actions.filter((action) => granted.has(action.id)) };
     // The conversation lives as long as this shell: the turns on its `talk` canvas, and what they said, here.
     const said: Said[] = [];
 
@@ -82,12 +82,12 @@ export const composer =
       const screen = SCREENS.find((candidate) => candidate.id === OpenSchema.parse(data).opening);
       if (screen === undefined) throw new Error('There is no such screen.');
       for (const shown of session.shell.getState().canvases['screen']?.stack ?? []) session.shell.removeInstance('screen', shown.id);
-      for (const card of screen.cards) if (held.has(card.action)) session.shell.push('screen', card.action, card.input, undefined, { history: false });
+      for (const card of screen.cards) if (granted.has(card.action)) session.shell.push('screen', card.action, card.input, undefined, { history: false });
       return { screen: screen.id };
     };
 
     return [
-      { id: 'ask', description: 'Answers a message with a turn of the conversation: a sentence, and the cards under it. Send { text }.', execute: ask },
+      { id: 'ask', description: 'Answers a message with a turn of the conversation: a sentence, and the cards under it. Send { asked: <the message> }.', execute: ask },
       { id: 'screens.open', description: 'Shows one of the screens in the dock: its cards, one under another. Send { opening: <screen id> }; answers { screen }.', execute: open },
     ];
   };

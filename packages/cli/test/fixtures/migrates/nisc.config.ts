@@ -36,6 +36,7 @@ export const project: NiscMossProject = {
       pool,
       db: pool,
       session: 'sessions',
+      ...(process.env['NISC_FIXTURE_MIGRATIONS'] === 'apply' ? { migrations: 'apply' as const } : {}),
       tables: [{ id: 'fixture.app', migrations: [{ description: 'things', steps: [{ kind: 'sql', sql: 'CREATE TABLE things (id serial PRIMARY KEY)' }] }] }],
       close: () => say('let go'),
     };

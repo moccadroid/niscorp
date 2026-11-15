@@ -1,8 +1,8 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, extname, join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { envOf, isChoice, itemsOf, partsOf, readCatalog } from './catalog';
-import type { EnvKey, EnvSpec, Item, Part, Picks } from './catalog';
+import { envOf, isChoice, itemsOf, partsOf, readCatalog } from '../catalog';
+import type { EnvKey, EnvSpec, Item, Part, Picks } from '../catalog';
 import { agentsDoc, gitignoreLines, planDoc } from './docs';
 
 export type CreateOptions = {
@@ -25,7 +25,9 @@ export type Created = {
   extended: string[];
 };
 
-export const TEMPLATES = fileURLToPath(new URL('../templates', import.meta.url));
+const BUILT_TEMPLATES = fileURLToPath(new URL('../templates', import.meta.url));
+// From source (the package's own tests) this file sits a folder deeper than in dist/.
+export const TEMPLATES = existsSync(BUILT_TEMPLATES) ? BUILT_TEMPLATES : fileURLToPath(new URL('../../templates', import.meta.url));
 
 const TOKEN = 'nisc-template-app';
 const SKIP = new Set(['node_modules', 'dist', 'out', '.turbo']);
@@ -191,8 +193,10 @@ export const generate = (options: CreateOptions): Created => {
     if (file !== undefined) return [`${relative(options.dir, file).split(sep).join('/')} (a file, where the app needs a folder)`];
     return !KEEP_THEIRS.has(rel) && there(rel) ? [rel] : [];
   };
+  const folderInTheWay = (rel: string): string[] => (there(rel) && statSync(join(options.dir, rel)).isDirectory() ? [`${rel} (a folder, where the app needs a file)`] : []);
+  const addedTo = ['.gitignore', ...(envs !== undefined ? ['.env'] : [])];
   const kept = [...planned.keys()].filter((rel) => KEEP_THEIRS.has(rel) && there(rel));
-  const collisions = [...new Set([...planned.keys()].flatMap(inTheWay))].sort();
+  const collisions = [...new Set([...[...planned.keys()].flatMap(inTheWay), ...addedTo.flatMap(folderInTheWay)])].sort();
   if (collisions.length > 0) {
     throw new Error(
       `create-nisc: ${options.dir} already has ${collisions.length === 1 ? 'a file' : 'files'} a new app would write — nothing was written:\n  ${collisions.join('\n  ')}\nMake the app in an empty folder, or in a subfolder of this one.`,
@@ -200,7 +204,7 @@ export const generate = (options: CreateOptions): Created => {
   }
   for (const rel of kept) planned.delete(rel);
 
-  // A .gitignore or .env that is there is added to, never replaced: what it holds is theirs.
+  // A .gitignore or .env that is there is added to, never replaced: what it contains is theirs.
   const extended: string[] = [];
   const addTo = (rel: string, fresh: string, lines: readonly string[], has: (line: string, theirs: ReadonlySet<string>) => boolean): void => {
     const path = join(options.dir, rel);
@@ -218,7 +222,11 @@ export const generate = (options: CreateOptions): Created => {
   addTo('.gitignore', `${gitignoreLines.join('\n')}\n`, gitignoreLines, (line, have) => have.has(line));
   if (envs !== undefined) {
     const named = (line: string): string => line.slice(0, line.indexOf('=') + 1);
-    addTo('.env', envs.env, envs.assigned, (line, have) => [...have].some((theirs) => theirs.startsWith(named(line))));
+    // Node also reads `NAME = value` and `export NAME=value`; an empty `NAME=` after either would win and hide it.
+    const sets = (name: string, theirs: string): boolean => new RegExp(`^(export\\s+)?${name}\\s*=`).test(theirs);
+    addTo('.env', envs.env, envs.assigned, (line, have) =>
+      [...have].some((theirs) => theirs.startsWith(named(line)) || (line === named(line) && sets(line.slice(0, -1), theirs))),
+    );
   }
 
   for (const [rel, content] of planned) {

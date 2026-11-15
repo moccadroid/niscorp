@@ -46,6 +46,19 @@ describe('nisc migrate', () => {
     expect(run.stdout).toContain('fixture: let go');
   }, SLOW);
 
+  const EMPTY_EVERY_TIME = "nisc: this runtime's database starts empty every time (migrations: 'apply') — what is applied here is gone when the command ends. A real database is migrated by pointing runtime at it.";
+
+  it.each([[[]], [['--check']], [['--status']]])('%j on a database that starts empty every time says so first, and runs as before', (args) => {
+    const run = migrate('migrates', args, { NISC_FIXTURE_MIGRATIONS: 'apply' });
+    expect(run.status).toBe(0);
+    expect(run.stdout.startsWith(`${EMPTY_EVERY_TIME}\n`)).toBe(true);
+    expect(run.stdout).toContain('  fixture.app/1  things');
+  }, SLOW);
+
+  it('a database that lasts is not told so', () => {
+    expect(migrate('migrates').stdout).not.toContain('starts empty every time');
+  }, SLOW);
+
   it('a refusal exits 1 and names the entry; nothing is committed, and the environment is still let go', () => {
     const run = migrate('migrates', [], { NISC_FIXTURE_FAULT: 'misfit' });
     expect(run.status).toBe(1);

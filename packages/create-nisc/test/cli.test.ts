@@ -26,6 +26,12 @@ describe('npm create nisc — the command line', () => {
     expect(existsSync(join(scratch, 'my-app', 'package.json'))).toBe(true);
   });
 
+  it('a folder whose path has a space is quoted in the line to go there', () => {
+    const { code, out } = create([join('with space', 'app'), '--yes']);
+    expect(code).toBe(0);
+    expect(out).toContain(`cd "${join('with space', 'app')}"`);
+  });
+
   it('--help prints every flag, and makes nothing', () => {
     const { code, out } = create(['--help']);
     expect(code).toBe(0);

@@ -4,7 +4,7 @@ import type { DomComponent } from '@niscorp/nova/adapters/dom';
 // nova's DOM adapter wires the clicks of an element with a `ref` (its `value` the payload), and the input and keys of
 // one with a `model`, itself.
 
-// A value a component does not take falls back to its default on its own; the others still hold.
+// A value a component does not take falls back to its default on its own; the others still apply.
 const parsed = <S extends z.ZodRawShape>(schema: z.ZodObject<S>, props: Record<string, unknown>, fallback: z.output<z.ZodObject<S>>): z.output<z.ZodObject<S>> => {
   const taken = Object.fromEntries(
     Object.entries(props).filter(([key, value]) => {

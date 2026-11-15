@@ -20,7 +20,6 @@
       "@electric-sql/pglite": "^0.5.1",
       "@niscorp/charter": "workspace:^",
       "@niscorp/moss": "workspace:^",
-      "@niscorp/tide": "workspace:^",
       "@niscorp/vex": "workspace:^"
     }
   },

@@ -1,9 +1,9 @@
 import { existsSync, readdirSync } from 'node:fs';
 import { basename, relative, resolve } from 'node:path';
 import { cancel, confirm, intro, isCancel, note, outro, password, select, text } from '@clack/prompts';
-import { envOf, isChoice, itemsOf, offered, readCatalog } from './catalog';
-import type { Catalog, EnvKey, Item, Question } from './catalog';
-import { TEMPLATES, generate, refuseFileInTheWay, validName } from './generate';
+import { envOf, isChoice, itemsOf, offered, readCatalog } from '../catalog';
+import type { Catalog, EnvKey, Item, Question } from '../catalog';
+import { TEMPLATES, generate, refuseFileInTheWay, validName } from '../generate';
 import { testedSet } from './set';
 
 const DEFAULT_DIR = 'my-nisc-app';
@@ -101,10 +101,10 @@ const main = async (): Promise<void> => {
   if (!validName(name)) refuse(`"${name}" cannot be a package name — the folder’s name becomes it: lowercase letters, digits, - . _`);
   refuseFileInTheWay(dir);
 
-  const holds = existsSync(dir) ? readdirSync(dir).length : 0;
-  if (holds > 0 && ask) {
+  const present = existsSync(dir) ? readdirSync(dir).length : 0;
+  if (present > 0 && ask) {
     const proceed = answered<boolean>(
-      await confirm({ message: `${relative(process.cwd(), dir) || '.'} already holds ${holds} ${holds === 1 ? 'thing' : 'things'}. Nothing there will be overwritten — make the app in it?`, initialValue: true }),
+      await confirm({ message: `${relative(process.cwd(), dir) || '.'} already has ${present} ${present === 1 ? 'thing' : 'things'} in it. Nothing there will be overwritten — make the app in it?`, initialValue: true }),
     );
     if (!proceed) {
       cancel('Nothing was made.');
@@ -163,7 +163,8 @@ const main = async (): Promise<void> => {
 
   const run = manager();
   const where = relative(process.cwd(), dir) || '.';
-  const next = [...(where === '.' ? [] : [`cd ${where}`]), `${run} install`, `${run} run dev`].join('\n');
+  const quoted = /^[\w./\\:-]+$/.test(where) ? where : `"${where}"`;
+  const next = [...(where === '.' ? [] : [`cd ${quoted}`]), `${run} install`, `${run} run dev`].join('\n');
   const left = [...made.kept.map((file) => `kept your ${file}`), ...made.extended.map((file) => `added to your ${file}`)];
   const what = items.flatMap((item) => item.summary ?? []).join(', ');
   const summary = `${name} — ${what} — ${made.files.length} files${left.length > 0 ? ` (${left.join('; ')})` : ''}`;

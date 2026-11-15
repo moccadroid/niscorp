@@ -1,4 +1,4 @@
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { createServer } from 'node:net';
 import type { Server } from 'node:net';
 import { join } from 'node:path';
@@ -48,6 +48,22 @@ describe('nisc start — the port', () => {
     const { code, out } = nisc(['start'], { PORT: '99999' });
     expect(out).toContain('nisc: PORT "99999" is not a port');
     expect(code).toBe(1);
+  }, SLOW);
+
+  it('an empty $PORT is said: read as 0, any free port, as before', async () => {
+    const child = spawn(process.execPath, [...NISC, 'start', '--root', OWN_SHELL], { env: { ...process.env, PORT: '' }, stdio: ['ignore', 'pipe', 'pipe'] });
+    let said = '';
+    child.stdout.on('data', (chunk: Buffer) => (said += chunk.toString()));
+    child.stderr.on('data', (chunk: Buffer) => (said += chunk.toString()));
+    try {
+      const deadline = Date.now() + 30_000;
+      while (!said.includes('nisc: serving') && Date.now() < deadline) await new Promise((done) => setTimeout(done, 100));
+      expect(said).toContain('nisc: PORT is set but empty, read as 0: any free port. Unset it for 8787.');
+      expect(said).not.toContain('localhost:8787');
+      expect(said).toMatch(/nisc: serving http:\/\/localhost:\d+/);
+    } finally {
+      child.kill();
+    }
   }, SLOW);
 
   it('a command that takes no port still ignores --port, as it always has', () => {

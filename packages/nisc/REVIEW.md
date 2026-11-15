@@ -9,7 +9,7 @@ A review answers one question: **does the app do what it does as data, or did co
 ## How to run it
 
 1. **The gates.** The app's typecheck and its check suite (`npm run typecheck`, `npm run check`), which runs its shape check (`src/dev/shape-check.ts`) beside its own checks. An app without one is a finding: copy it from a new app (`npm create nisc`). Read what its `functions` and `allow` say, too: an allowance with a weak reason is a finding the gate cannot see. A red gate is the first finding; a boot refusal is a finding, not an environment problem. Then take the counts in "Measure first": they say where to read.
-2. **Read in this order:** the charter, the entries, three actions of different kinds (a list, a form, a screen only some roles hold), the server's functions, the kit. The order follows where a fault costs most.
+2. **Read in this order:** the charter, the entries, three actions of different kinds (a list, a form, a screen only some roles are granted), the server's functions, the kit. The order follows where a fault costs most.
 3. **Go through the checklist,** then **what to look for**.
 4. **Verify before you report.** A finding is a hypothesis until the code shows it: open the file and quote the line.
 5. **Never adjust a check to make a finding go away.** A check that has to change is rewritten to protect what it protected (the rulebook's failure mode 4).
@@ -38,7 +38,7 @@ These numbers are not rules. They say where a design has drifted. In the lab app
 6. No layout or component branches on roles or capability data (rule 11) — per-principal difference is existence or a served variant.
    - **a.** Every artifact the manifest carries is pure JSON and parses its schema — a function, a `Date`, an `undefined`, or a class instance in an artifact is a code file masquerading as data. The manifest's declared code fields (`scope`, `identity`, `phrases`, `functions`, `onSession`, `runs`, `reconcilers`, a reaction's `run`, `features`, and the shell's `inputs` and `seeds` hooks) are the only exceptions; they live outside the artifact tree and are validated by running, not by this check. Moss reads the manifest by a schema when it is handed to `createServer` and refuses to boot on one that does not parse, a code field that is not a function included; this check finds it before a boot does.
    - **b.** Session code sits in the seam that describes it (rule 7a): no handler registered on `functions` that nothing calls. Tenancy resolves through `scope` and engine-side behaviors, never from a request field.
-   - **c.** No role holding a data wildcard reaches the engine's tables, and the charter check resolves against the universe boot does (rule 10a).
+   - **c.** No role with a data wildcard reaches the engine's tables, and the charter check resolves against the universe boot does (rule 10a).
    - **d.** Where pages are drawn on the server: a check opens the drawn page with the real wire and target and the terminal adopts it with nothing said (rule 2a), at every window width the kit distinguishes; a page drawn for somebody goes out `private, no-store`; and every sign-in the app answers over HTTP sets the session cookie on its response and hands the page nothing (rule 12).
 7. Style guide bans (rule 16): `any`, `enum`, classes, default exports, `function` declarations, type assertions and non-null `!` — read by the compiler, not by grep, which cannot tell negation from assertion. Declared shim exceptions are honored.
 8. Decision points: each of D1–D5 is recorded in the app's `PLAN.md` with its tier — answered, delegated by name, or derived — never assumed silently.
@@ -54,7 +54,7 @@ These numbers are not rules. They say where a design has drifted. In the lab app
 
 **Formatting (rule 9).** Dates, times, counts, money and sentences built from data are Prism, in an entry's `mapping` or an endpoint's `response`. The app's "today" is in the reads' scope (the `scope` seam), never a wall-clock read.
 
-**Per-principal UI (rule 11).** A flag a function computes from the person's roles (`canChange`, `isStaff`) that a layout branches on is a conditional. It is existence (an action only some hold) or a served variant.
+**Per-principal UI (rule 11).** A flag a function computes from the person's roles (`canChange`, `isStaff`) that a layout branches on is a conditional. It is existence (an action only some are granted) or a served variant.
 
 **`src/app` is data (checklist 6a).** Every export there is a value that serializes. A function exported from `src/app` that runs while the app runs — a layout builder called per request, a helper the server imports — is code in the artifact tree, even if everything the manifest carries passes the purity check. A builder run once as its module loads is allowed but is not row-ready: note it, as minor.
 
