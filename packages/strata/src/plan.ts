@@ -38,7 +38,8 @@ export const prepare = async (sequences: readonly Sequence[]): Promise<readonly 
     const parsed = SequenceSchema.safeParse(input);
     if (!parsed.success) {
       const issues = parsed.error.issues.map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`);
-      throw new StrataError('INVALID_SEQUENCE', `A sequence does not parse${typeof input.id === 'string' ? ` ("${input.id}")` : ''}.`, issues);
+      const id: unknown = typeof input === 'object' && input !== null ? input.id : undefined;
+      throw new StrataError('INVALID_SEQUENCE', `A sequence does not parse${typeof id === 'string' ? ` ("${id}")` : ''}.`, issues);
     }
     const sequence = parsed.data;
     if (seen.has(sequence.id)) {
