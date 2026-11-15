@@ -21,6 +21,9 @@ export type SourceUpgradeOptions = {
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
 
+// Digits are taken as well as a number: `Number` read them correctly before this was checked.
+const isMigrationCount = (value: unknown): boolean => (typeof value === 'number' && Number.isInteger(value) && value >= 0) || (typeof value === 'string' && /^\d+$/.test(value));
+
 const stampText = (s: Stamp): string => Object.entries(s).map(([k, v]) => `${k} ${v}`).join(', ') || '(nothing)';
 
 const filesUnder = (dir: string): string[] =>
@@ -211,7 +214,8 @@ export const runSourceUpgrade = async (options: SourceUpgradeOptions, argv: read
   const readLock = (): Stamp | undefined => {
     if (!existsSync(lockPath)) return undefined;
     const raw: unknown = JSON.parse(readFileSync(lockPath, 'utf8'));
-    if (!isRecord(raw) || !isRecord(raw['grammar'])) throw new StrataError('INVALID_SEQUENCE', `${rel(lockPath)} is not a lock: expected { "grammar": { … } }.`);
+    if (!isRecord(raw) || !isRecord(raw['grammar']) || !Object.values(raw['grammar']).every(isMigrationCount))
+      throw new StrataError('INVALID_SEQUENCE', `${rel(lockPath)} is not a lock: expected { "grammar": { "<grammar id>": <how many of its migrations the source is written at> } }.`);
     return Object.fromEntries(Object.entries(raw['grammar']).map(([k, v]) => [k, Number(v)]));
   };
 
@@ -238,11 +242,7 @@ export const runSourceUpgrade = async (options: SourceUpgradeOptions, argv: read
     behind = upgrader.behind(lock);
   } catch (error) {
     log(`[fail] ${error instanceof Error ? error.message.split('\n').join('\n       ') : String(error)}`);
-    log(
-      error instanceof StrataError && error.code === 'TOO_NEW'
-        ? '       The lock is ahead of the installed grammars — install the newer packages, or the lock is wrong.'
-        : `       ${rel(lockPath)} is wrong: each grammar's entry is the number of its migrations the source is written at.`,
-    );
+    log('       The lock is ahead of the installed grammars — install the newer packages, or the lock is wrong.');
     return 1;
   }
 

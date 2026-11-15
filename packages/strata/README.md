@@ -195,11 +195,8 @@ const { document, stamp, applied } = upgrader.upgrade(storedAction, { kind: 'nis
   The source is `{ document, path }`.
 - **No stamp** (`{}`, `null`) reads as the start of every grammar. **Ahead of
   the code** on any grammar the code was given is refused, `TOO_NEW`: the reader
-  upgrades first. An entry that is not a number on any grammar the code was
-  given is refused too, `STEP_FAILED`, whether it is a document's stamp, a
-  row's in `upgradeStore` or `strata.lock.json`'s. A stamp entry for a grammar
-  the code was not given is neither ahead nor behind: it is kept on the stamp as
-  it was, for code that has it.
+  upgrades first. A stamp entry for a grammar the code was not given is neither
+  ahead nor behind: it is kept on the stamp as it was, for code that has it.
 
 | | |
 |---|---|
@@ -243,7 +240,9 @@ pnpm strata upgrade          # .strata/upgrade/: expected JSON + REPORT.md (file
 pnpm strata verify           # the edited source must equal it; then strata.lock.json moves
 ```
 
-`strata.lock.json` (committed) is the source's stamp. `upgrade` plans from it:
+`strata.lock.json` (committed) is the source's stamp: each grammar's entry is
+how many of its migrations the source is written at, a whole number (digits in
+a string are read too); any other entry is refused (`INVALID_SEQUENCE`). `upgrade` plans from it:
 artifacts a migration changes get their expected JSON and a positional diff;
 the rest are recorded as untouched. `verify` passes only when every planned
 artifact equals its expected JSON (key order aside) and passes its kind's

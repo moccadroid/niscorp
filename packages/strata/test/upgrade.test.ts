@@ -150,11 +150,19 @@ describe('strata upgrade — the loop', () => {
     expect(a.lines.join('\n')).toContain('ahead of the installed grammars');
   });
 
-  it('a lock whose entry is not a number of migrations is refused, not read as current', async () => {
+  it.each([['"x"', 'x'], ['an empty string', ''], ['-1', -1], ['null', null], ['true', true], ['1.5', 1.5]])(
+    'a lock whose entry is %s is refused, not read as a number of migrations',
+    async (_name, entry) => {
+      const a = app();
+      writeFileSync(join(a.root, 'strata.lock.json'), JSON.stringify({ grammar: { 'acme.forms': entry } }));
+      await expect(a.run([forms([renameTitle])], 'status', '--check')).rejects.toMatchObject({ code: 'INVALID_SEQUENCE' });
+    },
+  );
+
+  it('a lock entry written as digits is read as the number', async () => {
     const a = app();
-    writeFileSync(join(a.root, 'strata.lock.json'), JSON.stringify({ grammar: { 'acme.forms': 'one' } }));
-    expect(await a.run([forms([renameTitle])], 'status', '--check')).toBe(1);
-    expect(a.lines.join('\n')).not.toContain('ahead of the installed grammars');
+    writeFileSync(join(a.root, 'strata.lock.json'), JSON.stringify({ grammar: { 'acme.forms': '1' } }));
+    expect(await a.run([forms([renameTitle])], 'status', '--check')).toBe(0);
   });
 });
 

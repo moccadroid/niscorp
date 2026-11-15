@@ -6,6 +6,6 @@
 
 `strata upgrade` and `strata verify` remove only the files a plan wrote (`plan.json`, `REPORT.md`, `expected/`), and a directory only once it is empty: a `workDir` that is the project itself, or lies outside it, no longer has its contents deleted, and `verify` keeps anything else in `.strata`.
 
-A stamp entry that is not a number (a lock's `"x"`, a stored row's `"one"`) is refused with `STEP_FAILED` instead of passing as current: `strata status` fails on such a lock, and `upgradeStore` refuses the pass.
-
 The README says what to do when a migration renames the key a kind is embedded under: keep the old path in `embeds` beside the new one.
+
+`strata.lock.json` is refused (`INVALID_SEQUENCE`, as for a lock that is not an object) when a grammar's entry is not a whole number of migrations, written as a number or as digits: `"x"`, `""`, `-1`, `null`, `true` and `1.5` no longer pass as current or re-run migrations.
