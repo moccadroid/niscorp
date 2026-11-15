@@ -163,7 +163,8 @@ socket, and revocation is the same push with a smaller set.
 
 ### Globs
 
-One wildcard rule, no more: `*` matches any run of characters, including dots.
+One wildcard rule, no more: `*` matches any run of characters, including dots
+and line breaks.
 `crm.*` matches `crm.deal.form`. There is no `**`, no brace expansion, no regex.
 The day a pattern cannot be expressed, the answer is a better id, not a richer
 glob.

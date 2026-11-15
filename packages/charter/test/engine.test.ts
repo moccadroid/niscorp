@@ -199,3 +199,10 @@ describe('a charter as it is read from JSON', () => {
     ]);
   });
 });
+
+describe('glob — a line break is a character like any other', () => {
+  it('* matches across it, so a deny of a namespace covers an id with one', () => {
+    expect(matchGlob('crm.*', 'crm.a\nb')).toBe(true);
+    expect(sorted(resolvePrincipal({ r: { allow: ['crm.a\nb', 'crm.view'], deny: ['crm.a*'] } }, ['crm.a\nb', 'crm.view'], ['r']))).toEqual(['crm.view']);
+  });
+});

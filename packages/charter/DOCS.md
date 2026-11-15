@@ -109,7 +109,7 @@ functions (moss's too). A role with no `functions` may call none.
 
 ### `matchGlob(pattern, id): boolean`
 
-One wildcard: `*` matches any run of characters, including dots. `matchGlob('crm.*', 'crm.deal.form')` is `true`. No `**`, no braces, no regex.
+One wildcard: `*` matches any run of characters, including dots and line breaks. `matchGlob('crm.*', 'crm.deal.form')` is `true`. No `**`, no braces, no regex.
 
 ### `matchAll(patterns, ids): Set<string>`
 

@@ -1,6 +1,6 @@
 const escapeRegExp = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-const toRegExp = (pattern: string): RegExp => new RegExp(`^${pattern.split('*').map(escapeRegExp).join('.*')}$`);
+const toRegExp = (pattern: string): RegExp => new RegExp(`^${pattern.split('*').map(escapeRegExp).join('.*')}$`, 's');
 
 export const matchGlob = (pattern: string, id: string): boolean => toRegExp(pattern).test(id);
 
