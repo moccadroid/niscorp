@@ -10,20 +10,11 @@ import {
 import { makeError, throwConfig } from '../errors/cortex.errors';
 import { createEventChannel } from '../events/channel';
 import type { CortexEvent } from '../events/types';
-import {
-  assembleContext,
-  inputMessages,
-  toolGuidesMessage,
-  type ContextEntry,
-  type Producer,
-  type ProducerArgs,
-  type RunInput,
-} from '../context/assemble';
-import { resolveTransport, RESPOND_TOOL_NAME } from '@niscorp/signal';
-import { schemaDoc } from '../context/schema-doc';
+import type { ContextEntry, Producer, RunInput } from '../context/assemble';
+import { RESPOND_TOOL_NAME } from '@niscorp/signal';
 import { runLoop, type LoopState, type PendingApproval } from '../loop/loop';
 import { createPartialTracker } from '../loop/partials';
-import { envelopeAcceptSchema, envelopeLooseWireSchema, envelopeWireSchema } from '../schemas/envelope.schema';
+import { envelopeAcceptSchema, envelopeWireSchema } from '../schemas/envelope.schema';
 import { createApprovalBridge } from '../gates/approval';
 import { policyGate } from '../gates/policy';
 import type { ToolGate, ToolResultHook } from '../gates/types';
@@ -32,6 +23,7 @@ import { DEFAULT_STOP_CONDITIONS } from '../gates/stop';
 import { newRunId } from '../utils/id';
 import { trustErased } from '../utils/trust';
 import type { AgentDefinition } from './define-agent';
+import { assemblePrefix, resolveAgentTransport, responseModeOf } from './prefix';
 
 export type RunOptions<TDeps> = {
   llm?: SignalClient;
@@ -98,19 +90,8 @@ const wireRun = <TData, TDeps>(wiring: Wiring<TData, TDeps>): RunHandle<TData> =
   }
 
   const outputSchema = config.output?.schema;
-  const responseMode = config.output?.response ?? (outputSchema ? 'optional' : 'required');
-  const resolved = resolveTransport(
-    {
-      wire: envelopeWireSchema({ ...(outputSchema && { schema: outputSchema }), responseMode }),
-      looseWire: envelopeLooseWireSchema({ hasData: outputSchema !== undefined, responseMode }),
-      responseMode,
-      hasData: outputSchema !== undefined,
-      hasTools: tools.length > 0,
-      ...(config.output?.strategy && { choice: config.output.strategy }),
-      ...(config.output?.forceTool && { forceTool: true }),
-    },
-    llm.describe().capabilities,
-  );
+  const responseMode = responseModeOf(config);
+  const resolved = resolveAgentTransport(config, tools, llm.describe().capabilities);
   if (resolved.respondDescriptor && taken.has(RESPOND_TOOL_NAME)) {
     throwConfig(`agent "${config.id}": a tool named "respond" collides with the transport's exit tool`);
   }
@@ -166,37 +147,7 @@ const wireRun = <TData, TDeps>(wiring: Wiring<TData, TDeps>): RunHandle<TData> =
     let outcome: RunResult<TData>;
     try {
       if (!wiring.seeded) {
-        const args: ProducerArgs<TDeps> = {
-          deps,
-          input,
-          agent: { id: config.id, ...(config.description !== undefined && { description: config.description }) },
-        };
-        // Tool guides, schema doc and finish protocol are fixed for the life of an
-        // agent, so they go ahead of the context and producers, which are not: a
-        // provider's prefix cache stops at the first byte that changed.
-        const items: ReadonlyArray<ContextEntry | Producer<TDeps>> = [
-          config.instructions,
-          ...(config.context ?? []),
-          ...(options?.producers ?? []),
-        ];
-        const contextMessages = await assembleContext(items, args);
-        const doc = config.output?.doc ?? 'auto';
-        const docMessage: Message[] =
-          resolved.injectSchemaDoc && doc !== 'off' && outputSchema
-            ? [{ role: 'system', content: typeof doc === 'string' && doc !== 'auto' ? doc : schemaDoc(outputSchema) }]
-            : [];
-        const finishMessage: Message = { role: 'system', content: resolved.finishProtocol };
-        // `instructions` stays first: a provider that special-cases a leading
-        // system turn sees the agent's identity there.
-        const [identity, ...rest] = contextMessages;
-        state.messages = [
-          ...(identity ? [identity] : []),
-          ...toolGuidesMessage(tools),
-          ...docMessage,
-          finishMessage,
-          ...rest,
-          ...inputMessages(input),
-        ];
+        state.messages = await assemblePrefix({ config, resolved, tools, producers: options?.producers ?? [], deps, input });
       }
 
       outcome = await runLoop<TData, TDeps>({
