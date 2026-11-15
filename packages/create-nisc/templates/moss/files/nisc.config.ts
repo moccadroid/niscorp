@@ -1,5 +1,5 @@
 import type { NiscMossProject } from '@niscorp/cli';
-import { boot } from './src/server/boot';
+import { app, boot, runtime } from './src/server/boot';
 import { drawing } from './src/server/document';
 
 export const project: NiscMossProject = {
@@ -7,5 +7,7 @@ export const project: NiscMossProject = {
     const { server } = await boot();
     return { server, close: () => server.close() };
   },
+  app,
+  runtime,
   ...drawing,
 };

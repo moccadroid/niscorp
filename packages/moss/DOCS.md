@@ -786,7 +786,7 @@ type NiscRuntime = {
   vexConfig?: QueryEngineConfig['config'];  // the query engine's settings (limits, read timeout); default vex's own
   session: SessionVerifier | 'sessions' | 'dev-open';  // REQUIRED — no default
   origins?: readonly string[];     // origins that are the app's own page, beside the host a request names (a proxy that rewrites `Host`)
-  migrations?: 'apply' | 'verify'; // the boot's ledgered run; default 'apply'
+  migrations?: 'apply' | 'verify'; // the boot's ledgered run; default 'verify'
   tables?: readonly Sequence[];    // the app's own table sequences, in that same run
   shellIdleMs?: number;            // idle shell eviction; default 30 min, `0` disables
   artifactsUnusedMs?: number;      // delete what a person generated once nobody has loaded it for this long; default never
@@ -874,6 +874,14 @@ it does nothing else:
   has every place, and every other visitor with nobody signed in is sent
   `at_capacity` until one of those closes. People who are signed in go on
   being served.
+- A connection whose other end went away without closing — a phone killed, out
+  of battery, out of signal — keeps its place for at most a minute. The Node
+  transport sends every connection the WebSocket protocol's own ping every 30
+  seconds, and closes one that has not answered the last one. A browser that is
+  awake answers it by itself, whatever its moss; one that is asleep (a phone
+  that has put the page away) does not, and its connection is closed too. That
+  close is like any other: the place is given back, a shell for nobody is
+  disposed, and a signed-in person's shell starts its idle time.
 - It is counted by the process that takes the connection. A deployment of N
   processes holds up to N times the limit.
 - Moss builds no limit for each address, because the address is not moss's
@@ -921,9 +929,9 @@ the row.
   this is for signing out somebody else (an owner removes a member).
   No exported call deletes one token and leaves the principal's others.
 - Who a token is, is asked of the server: `server.principalOf(token)`. The
-  table is made by `createServer`, and by `migrateTables`, under
-  `session: 'sessions'` and only then. Nothing else is exported of the stored
-  credential.
+  table is made by `migrateTables` (`nisc migrate`), and by `createServer`
+  under `migrations: 'apply'`, under `session: 'sessions'` and only then.
+  Nothing else is exported of the stored credential.
 - **They are for a deployment whose `session` is `'sessions'`, and for no
   other.** The stored sessions are what that verifier reads, and nothing else
   reads them.
@@ -953,11 +961,16 @@ await revokeAllFor(runtime.pool, 'usr_ada');
 integrations, their actions, the generation pointer, the two tables of what
 was saved) and the sessions table's
 (`nisc.moss.sessions`; the sequence itself is not exported) — and
-`createServer` applies them with the vex cache's sequence in
-one ledgered run before introspection: once, recorded in `strata_ledger`, and
-refused if the ledger was edited or written by newer code. `migrations` on the
-runtime picks the posture: `'apply'` (default) runs what is pending; `'verify'`
-refuses to boot if anything is, for a deployment that migrates as a deploy step.
+`createServer` checks them with the vex cache's sequence in
+one ledgered run before introspection: refused if the ledger was edited, written
+by newer code, or records a sequence the run does not name (strata's
+`complete`). `migrations` on the runtime picks the posture: `'verify'` (default)
+refuses to boot while anything is pending, naming each migration and the two
+commands that apply it (`npx nisc migrate --check`, then `npx nisc migrate`) —
+a real database's tables change only through `nisc migrate`; `'apply'` runs what
+is pending, for a database that starts empty every time (PGlite in memory).
+On a database that is up to date the check only reads the ledger, so the app's
+database role needs no right to change tables.
 
 The run's order is: `MOSS_SEQUENCE`, the sessions table's under
 `session: 'sessions'`, the vex cache's, the tables the app's features keep (in
@@ -965,12 +978,15 @@ the order the app named the features), then `runtime.tables`.
 
 `tables` on the runtime hands over the app's own table sequences. They join
 that run last — one transaction, one lock, one posture, so `'verify'`
-covers them. Absent, the app migrates its own tables itself, as before. Another
-owner's tables the app keeps go in the same list (tide's: `TIDE_SEQUENCE`,
-from `@niscorp/tide/postgres`), and a
-runtime that hands tables over does not also migrate them itself.
+covers them. Every sequence that has run on the database is named there:
+another owner's tables the app keeps (tide's: `TIDE_SEQUENCE`, from
+`@niscorp/tide/postgres`, with the store made `migrate: false`), and a sequence
+the app no longer uses — a removed feature's, or the sessions table's after the
+app stopped storing sessions. To remove a sequence's tables, append a migration
+that drops them. The runtime migrates nothing itself and calls no
+`cache.init()`: the server does both, in that order.
 
-#### `migrateTables(runtime, app, { dryRun? })`
+#### `migrateTables(runtime, app, { dryRun?, allowRemoval? })`
 
 The step that changes tables, for a deployment that migrates before it starts
 (`nisc migrate` calls it). It applies everything pending in the one run,
@@ -999,6 +1015,21 @@ columns the run takes away), `retyped` (columns whose type it changes, as
 `table.column (was → now)`) and `alreadyBroken`. `dryRun` does all of it and
 rolls it back.
 
+A run that removes a table or a column, or changes a column's type, is refused
+(`DOES_NOT_FIT`, a sentence each) unless `allowRemoval` is given. It sees what
+vex reads off the schema: not rows a step deletes, not keys a step takes out of
+a document. The picture before the run is read before the run's lock, so a
+removal another run made meanwhile can be refused here too; running again
+passes. moss's own sequence removes columns (`nisc.moss/4`): a database that
+has not run it needs `allowRemoval` once.
+
+#### `tableStatus(runtime, app) : Plan`
+
+What `migrateTables` would act on, read and nothing else — no lock, no
+transaction, nothing created: strata's plan (`applied` per sequence, `pending`
+in order, `problems`) over the same sequences. `nisc migrate --status` prints
+it.
+
 It sees entries and nothing else: not SQL written by hand, not a column a scope
 rule stamps, not what a value means.
 
@@ -1013,7 +1044,8 @@ parsing them, stores them stamped current, and refuses a bundle built on newer
 grammars than the host (*the host must be updated first*). Reads upgrade too:
 a row another process wrote since boot is read current, and one it cannot read
 is left out with a logged sentence. Migration 1 of each sequence is the DDL
-boots used to run, so a database from before the ledger adopts on its next boot.
+boots used to run, so a database from before the ledger adopts on its next
+`nisc migrate`.
 
 `shellFrameDelta` and `socketCompression` are the two wire-size knobs. They are
 environment settings, not manifest ones — an operational decision about a
@@ -1053,7 +1085,8 @@ does nothing. Returns a Hono app extended with the `MossServer` members below.
 `createServer` wires, and answers no question of its own (`src/server/`). In
 order: the manifest is read and frozen; who a token is is resolved
 (`runtime.session`; unset, the boot is refused here, before a table exists);
-the tables are migrated and the data module stands; the running manifest is
+the tables are checked (migrated under `migrations: 'apply'`) and the data
+module stands; the running manifest is
 created, which is the boot check, and the data module is told to ask it for an
 entry (it compiles the ones it holds, and one vex cannot run refuses the boot);
 identity; the server's own routes (the
@@ -1739,9 +1772,10 @@ it answers `undefined`, nothing is minted.
 `createTideStore(pool, options?)`, `TIDE_SEQUENCE`, `TIDE_TABLES` and
 `TIDE_DDL` are exported by `@niscorp/tide/postgres`. They were moss's, and do
 what they did: see tide's [DOCS.md](../tide/DOCS.md), "The driver" and "The
-Postgres store". `createTideStore(runtime.pool)` takes the pool the runtime
-holds, and its tables are ordinary tables to moss: introspected, grantable,
-and scoped by a behavior like any other.
+Postgres store". `createTideStore(runtime.pool, { migrate: false })` takes the
+pool the runtime holds, with `TIDE_SEQUENCE` in `runtime.tables`, and its tables
+are ordinary tables to moss: migrated by `nisc migrate`, introspected,
+grantable, and scoped by a behavior like any other.
 
 ### Features
 
@@ -1761,8 +1795,9 @@ app share a name. What a feature routes, keeps and serves is documented under
 its entry point.
 
 A feature names the tables that are its own and the strata sequences that make
-them. The sequences are migrated in the one ledgered run, before the feature
-starts, and `migrateTables` runs them too. A feature reads and writes those
+them. The sequences are checked in the one ledgered run, before the feature
+starts (migrated there under `migrations: 'apply'`), and `migrateTables`
+applies them. A feature reads and writes those
 tables through vex, as an app does, with entries of its own: they are seeded into a
 cache of their own, held by an engine no route is handed, so `/api/vex`
 answers `cache_miss` for one of them whatever the charter grants whoever asks,
@@ -2133,8 +2168,8 @@ server.nudge('usr_ada', 'notes-changed');
   has `upgrade` (below) and `seal`. `seal` is set by the socket, on a
   connection whose browser holds a seal: a transport leaves it out.
 - `ServerMessage` (`@niscorp/moss/protocol`) — what the server sends: `hello | catalog | frame | render |
-  render-delta | session | error`.
-- What a terminal sends is `event | publish | resync | reset | back | popTo`,
+  render-delta | session | pong | error`.
+- What a terminal sends is `event | publish | resync | reset | back | popTo | ping`,
   each with exactly the fields the protocol names (`src/protocol/messages.ts`;
   the type of these is not exported, a terminal written by hand sends the
   object).
@@ -2159,6 +2194,10 @@ server.nudge('usr_ada', 'notes-changed');
   with whole frames, the state both ends can always agree on. Distinct from
   `reset`: the shell is fine, only this connection's copy drifted, so nothing
   is torn down and no other terminal notices.
+- `ping` is answered `pong`, with a shell or without one, and reaches no shell:
+  it is how a terminal finds out whether a socket that has gone quiet is still
+  there. It came without a protocol of its own: a server from before it answers
+  `invalid_message`, which a terminal takes as an answer all the same.
 - `reset` names no canvas, deliberately: it is the recovery for a session whose
   canvases are the broken thing, so it must not travel through one. It is
   protocol-level, not app-level — no action declares it and no charter grants
@@ -2197,7 +2236,9 @@ server.nudge('usr_ada', 'notes-changed');
     for as long as it is refused.
   - `4426`: the two ends speak protocols the other cannot (below).
 - `error` codes: `invalid_token`, `session_failed`, `at_capacity`,
-  `client_too_old`, `server_too_old`, `no_shell` (the app serves no shell),
+  `client_too_old`, `server_too_old`, `no_shell` (the app serves no shell: it
+  sends an empty `frame` once it listens, as a server with a shell sends its
+  first, and answers every message with this),
   `invalid_message`
   (what was sent is not JSON, not one of the messages above, or one of them
   with a field it does not have: nothing of it is acted on), `message_failed`
@@ -2855,7 +2896,12 @@ goes around moss: see [`FunctionSession`](#functionsession).
   identical either way. See [Wire size](#wire-size). `env` defaults to
   `browserEnv()`, and `url` (the socket's address) to `env.defaultUrl()`.
 - `WireEnv` — the host seam: `{ tokens: { load, save, clear, held?, key? },
-  socket({ url, offered }), defaultUrl() }`. The socket API is WHATWG-standard
+  socket({ url, offered }), defaultUrl(), onResume?, visible? }`. `onResume(resumed)`
+  calls `resumed` when the page is shown again or the network comes back and
+  returns the unsubscribe; `browserEnv` listens for `visibilitychange`, a
+  `pageshow` from the back-forward cache and `online`. `visible()` says
+  whether the page is on screen (`browserEnv`: not `document.hidden`); absent,
+  it always is. `nodeEnv` has neither. The socket API is WHATWG-standard
   in every host (browser, Node ≥22, Bun); an env only constructs it —
   `new WebSocket(url, offered)`. What is offered is who the terminal is, so an
   env that drops it connects as nobody. `held()` is for a host whose browser
@@ -2889,15 +2935,22 @@ goes around moss: see [`FunctionSession`](#functionsession).
 - **A page with nothing left to happen opens no socket.** When `initial.live`
   is `false`, the wire does not connect and `status()` is `'static'`. `reset()`,
   or a token arriving, connects after all.
-- `Wire` — `{ subscribe, snapshot, status, dispatch(canvas, event), publish,
-  reset, back, popTo(canvas, instance), dispose }`. `snapshot()` is a
-  `WireSnapshot`, `{ frame, trees }`, where `trees` is a map from a canvas's id
-  to its tree. `status()` is a `WireStatus`,
+- `Wire` — `{ subscribe, snapshot, status, droppedEvents?, dispatch(canvas,
+  event), publish, reset, back, popTo(canvas, instance), dispose }`.
+  `snapshot()` is a `WireSnapshot`, `{ frame, trees }`, where `trees` is a map
+  from a canvas's id to its tree. `status()` is a `WireStatus`,
   `'connecting' | 'open' | 'closed' | 'incompatible' | 'static'`, and changes notify subscribers like
   snapshot changes do (a renderer must be able to tell a dead socket from an
-  empty app). Hand it to a renderer.
+  empty app). It is `'open'` from the connection's first frame, not from the
+  socket opening: the server sends that frame once it listens, and a message
+  before it would be lost. `droppedEvents()` is how many events the wire kept
+  while it could not send them and then dropped (below); it only grows, and
+  subscribers are told when it does. `createWire` always gives it; it is
+  optional on the type so that a wire an app makes itself, a stand-in in a
+  check, need not count. Hand it to a renderer.
 
-Reconnect is exponential backoff with jitter, capped at 30s, reset when a
+Reconnect is exponential backoff with jitter, capped at 30s (or at once when
+the page comes back, below), reset when a
 connection is served its first frame and on any principal change (a session
 grant or a close-code recovery starts the backoff clean). Not when the socket
 opens: a server opens a connection before it refuses it (`4503`, `4500`), so
@@ -2926,13 +2979,54 @@ already, may have carried another principal, or may be a connect still in
 flight when `reset()` was called; whichever, nothing it says afterwards is
 heard, and its closing schedules nothing.
 
-**Nothing is sent on a socket that is not open, and nothing is queued.**
-`dispatch` and `publish` are dropped unless `status()` is `'open'` — the posture
-`back` and `popTo` always had. A server-drawn page is on screen before its
-socket is, so there is a moment in which something can be pressed with nothing
-to send it over; an intention replayed against a screen that may have moved is
-worse than one lost, and a browser socket that is still connecting throws on
-`send`.
+**When the page comes back, the wire checks its socket.** A phone that puts a
+page away may kill its socket without the page hearing of it until later. On
+`onResume`, a closed connection is made again at once instead of after the
+backoff, and one that still reads open is sent `{ type: 'resync' }`. Until
+anything is heard on it, events are kept (below) and `publish`, `back` and
+`popTo` are dropped; one that answers nothing within 2 seconds is replaced, and
+one that closes meanwhile is made again at once. `status()` stays `'open'`
+through it: on a live socket it is over in a round trip, and saying otherwise
+would flicker every target on every return to the page. `reset()` is still sent
+on that socket. A connection still being made is left to finish.
+
+**A socket that has gone quiet is pinged.** A socket can also die while its
+page is on screen — a network that switches, a router that drops a connection
+that says nothing. When nothing has been heard on an open connection for 25
+seconds and `visible()` is not `false`, the wire sends `{ type: 'ping' }`.
+Anything heard is the answer; one that has heard nothing 10 seconds later is
+replaced, and one that closes meanwhile is made again at once. Unlike a page
+coming back, nothing is kept while a ping is answered: the screen of a quiet
+socket is current, so presses, `back` and `publish` are sent as ever, and one
+sent onto a socket that turns out dead is lost. Nobody waits on the answer, so
+it is given long enough to spare a socket that works on a slow link. A server
+that keeps talking is never pinged; a hidden page is not pinged, and is checked
+when it comes back. 25 seconds is below the 30 to 60 seconds after which
+proxies and NATs commonly drop a quiet connection, so the ping also keeps it
+from being dropped.
+
+**A screen sent again draws nothing.** A reconnect, and a page coming back,
+is sent every screen whole. A frame or a canvas whose text is the same as the
+one on screen changes nothing and tells no subscriber; a sign-in or sign-out,
+which blanks the screen, draws the next one whatever it is.
+
+**Nothing is sent on a socket that is not open. An event is kept, and sent
+only onto the screen it was pressed on.** A server-drawn page is on screen
+before its socket is, and a page that comes back is on screen before its
+connection is, so there is a moment in which something can be pressed with
+nothing to send it over. `dispatch` then keeps the event with the tree of the
+canvas it names, as the terminal showed it. Once the connection is open and
+every canvas the kept events name has come back on it, they are sent, in the
+order they were pressed, if each of those canvases came back exactly as it
+was; otherwise all of them are dropped. They are also dropped when that has
+not happened 5 seconds after the first was pressed, and when a sign-in or
+sign-out changes who the terminal is. Dropped together, because an intention
+replayed against a screen that has moved since is worse than one lost, and so
+is half of a sequence. `droppedEvents()` counts them, for an app that tells
+the person. An event pressed while nothing can carry it joins the kept ones;
+one pressed once the connection is open drops them and is sent, because it was
+pressed on the screen the person sees now. `publish`, `back` and `popTo` name
+no canvas to check against, and are dropped unless the connection is open.
 
 `back()` sends `{ type: 'back' }` and nothing else — no location is held here,
 so what comes back is whatever canvases moved, over the same stream every other

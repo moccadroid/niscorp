@@ -14,4 +14,4 @@ export type { ShellHost, ShellSnapshot } from './shells';
 export { renderDocument, exportDocuments } from './documents';
 export { sessionCookies } from './identity';
 export type { DocumentConfig, DrawnDocument, ExportedDocument } from './documents';
-export { migrateTables } from './data';
+export { migrateTables, tableStatus } from './data';

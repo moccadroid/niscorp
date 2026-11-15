@@ -2,6 +2,7 @@ export type StrataErrorCode =
   | 'INVALID_SEQUENCE'
   | 'EDITED'
   | 'TOO_NEW'
+  | 'UNKNOWN_SEQUENCE'
   | 'UNKNOWN_DEPENDENCY'
   | 'CYCLE'
   | 'PENDING'

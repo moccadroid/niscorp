@@ -102,7 +102,13 @@ export const bootOn = async <R extends LyceumRuntime>(runtime: R, options: BootO
     components: Object.fromEntries(Object.entries(KIT_PROPS.shape).map(([name, propsSchema]) => [name, { meta: { propsSchema } }])),
   });
   built = await createServer(app, { ...runtime, operatorKey });
-  timingUp = await startTiming(built, runtime);
+  try {
+    await runtime.seed();
+    timingUp = await startTiming(built, runtime);
+  } catch (error) {
+    built.close();
+    throw error;
+  }
 
   return {
     server: built,

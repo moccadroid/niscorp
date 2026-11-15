@@ -165,7 +165,12 @@ describe('the ws transport — a server’s socket says how it is to be attached
   const greeted = (url: string): Promise<WebSocket> =>
     new Promise((resolve, reject) => {
       const client = new WebSocket(url);
-      client.once('message', () => resolve(client));
+      const listening = (data: unknown): void => {
+        if ((JSON.parse(String(data)) as { type?: string }).type !== 'frame') return;
+        client.off('message', listening);
+        resolve(client);
+      };
+      client.on('message', listening);
       client.once('error', reject);
     });
 
@@ -370,6 +375,36 @@ describe('the ws transport — an upgrade that is not a session', () => {
       expect(said).toHaveBeenCalledWith('[moss/node] a connection escaped accept:', expect.objectContaining({ message: 'the accept failed' }));
     } finally {
       said.mockRestore();
+    }
+  });
+});
+
+describe('the ws transport — a connection that stops answering', () => {
+  it('is pinged every 30 seconds and closed once it has not answered a ping; one that answers stays', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    try {
+      const url = await listening();
+      const answering = await opened(url);
+      const gone = await new Promise<WebSocket>((resolve, reject) => {
+        const client = new WebSocket(url, { autoPong: false });
+        client.once('open', () => resolve(client));
+        client.once('error', reject);
+      });
+      const goneClosed = new Promise<void>((resolve) => gone.once('close', () => resolve()));
+
+      const pinged = new Promise<void>((resolve) => answering.once('ping', () => resolve()));
+      vi.advanceTimersByTime(30_000);
+      await pinged;
+      // The pong goes up before this message, so it has been heard once the answer comes back.
+      expect(await answered(answering, 'x')).toBe('1');
+      expect(gone.readyState).toBe(WebSocket.OPEN);
+
+      vi.advanceTimersByTime(30_000);
+      await goneClosed;
+      expect(await answered(answering, 'still here')).toBe('10');
+      answering.close();
+    } finally {
+      vi.useRealTimers();
     }
   });
 });

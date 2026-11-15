@@ -4,7 +4,6 @@ import type { EffectRegistry } from '../types';
 
 export type Edge = { from: string; to: string; via: string };
 
-// Each refusal names the reflexes it is about: a host that loads them one by one leaves those out.
 export type GraphRefusal = { code: 'unknown_reflex' | 'unknown_effect' | 'unguarded_cycle'; message: string; reflexIds: readonly string[] };
 
 export type GraphReport = {

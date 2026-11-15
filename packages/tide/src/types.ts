@@ -151,7 +151,6 @@ export type AdvanceReport = {
   parked: number;
 };
 
-// A reflex a load left out, under `isolate`: its id where it had one, and why.
 export type LoadRefusal = { reflexId: string | undefined; code: TideErrorCode; message: string };
 
 export type LoadReport = {

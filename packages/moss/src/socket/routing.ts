@@ -21,6 +21,10 @@ export const messageHandler = (session: ShellSession | undefined, connection: Co
       send({ type: 'error', code: 'invalid_message', message: INVALID_MESSAGE });
       return;
     }
+    if (message.type === 'ping') {
+      send({ type: 'pong' });
+      return;
+    }
     if (session === undefined) {
       send({ type: 'error', code: 'no_shell', message: 'This app serves no shell.', ...(message.type === 'event' ? { canvas: message.canvas } : {}) });
       return;

@@ -1,5 +1,34 @@
 # @niscorp/cli
 
+## 0.9.1
+
+### Patch Changes
+
+- a7b2a05: A shape check, `runShapeCheck` from the new entry `@niscorp/cli/shape`: it reads an app's source and its actions for what its own checks cannot see — rule 16 by the TypeScript compiler, formatting outside Prism, roles read in server code, the kit reading files, the address or the document, code in `src/app` called while the app runs — and fails on every server function an action calls that the app has not named with why it is not a vex read or write. What an app allows, it names per rule and per file, each with its reason. It reads with the app's own TypeScript (6.x) and adds no dependency.
+
+  `create-nisc` writes it into every app as `src/dev/shape-check.ts`, run by `npm run check`. The rulebook's "Verification" and `REVIEW.md` say what it does.
+
+  **What to change:** nothing; an app that does not call it is not checked. To check an app made before this, copy `src/dev/shape-check.ts` from a new one, add it to `src/dev/all-checks.ts`, and name what it reports.
+
+## 0.9.0
+
+### Minor Changes
+
+- 2780c56: A real database's tables change only through `nisc migrate`. `migrations` on the runtime defaults to `'verify'`: `createServer` — and so `nisc dev`, `nisc build` and `nisc start` — checks the tables and refuses to start while a migration is pending, naming each one and the two commands that apply it (`npx nisc migrate --check`, then `npx nisc migrate`). On a database that is up to date the check only reads the ledger, so the app's database role needs `SELECT` on `strata_ledger` and no right to change tables. A runtime whose database starts empty every time (PGlite in memory) writes `migrations: 'apply'` and is migrated at boot as before.
+
+  The boot and `migrateTables` refuse a database whose ledger records a sequence they do not name (`UNKNOWN_SEQUENCE`): a sequence that has run stays in `runtime.tables`.
+
+  `migrateTables` and `nisc migrate` refuse a run that removes a table or a column, or changes a column's type, unless `allowRemoval` / `--allow-removal` is given; the refusal names each. A run that applied nothing, because another run had already applied it, is not refused.
+
+  `tableStatus(runtime, app)` and `nisc migrate --status`: what is applied and what is pending, read and nothing else.
+
+  BREAKING — approved by moccadroid, 2026-11-07: a runtime on a real database runs `nisc migrate` before the app starts (on Railway, the service's pre-deploy command `pnpm exec nisc migrate`); a runtime on in-memory PGlite writes `migrations: 'apply'`; every sequence that has run on the database is in `runtime.tables` (`TIDE_SEQUENCE` with the store made `migrate: false`), and the runtime migrates nothing itself and calls no `cache.init()`; a database that has not yet run `nisc.moss/4` is migrated once with `--allow-removal`.
+
+### Patch Changes
+
+- Updated dependencies [2780c56]
+  - @niscorp/moss@0.9.0
+
 ## 0.8.2
 
 ### Patch Changes

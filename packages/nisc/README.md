@@ -24,8 +24,9 @@ refuses a plan that is missing either the approval or this.
 ## The rulebook
 
 It also carries the rules a nisc application is built by, for the versions it
-pins: [`AGENTS.md`](AGENTS.md) — the decision points, the rules, the order of
-work, what a review checks — and [`STYLE_GUIDE.md`](STYLE_GUIDE.md). They are
+pins: [`AGENTS.md`](AGENTS.md) (the decision points, the rules, the order of
+work), [`REVIEW.md`](REVIEW.md) (what a review checks) and
+[`STYLE_GUIDE.md`](STYLE_GUIDE.md). They are
 written for the coding agent building the app as much as for a person. An app
 made by `npm create nisc` has a short `AGENTS.md` of its own that points here,
 so the rules it follows are always the ones for what it has installed.

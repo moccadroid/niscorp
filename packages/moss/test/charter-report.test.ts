@@ -39,7 +39,7 @@ const quietly = async <T>(run: () => Promise<T>): Promise<T> => {
 
 const boot = async (app: ReturnType<typeof manifest>) => {
   const pool = createPglitePool(freshDatabase());
-  return quietly(() => createServer(app, { pool, db: pool, session: 'dev-open' }));
+  return quietly(() => createServer(app, { pool, db: pool, session: 'dev-open', migrations: 'apply' }));
 };
 
 const unservable: Record<string, ActionDefinition> = { 'home.sub': { id: 'home.sub' } };

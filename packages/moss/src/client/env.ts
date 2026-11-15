@@ -15,6 +15,30 @@ export type WireEnv = {
   // `offered` are the subprotocols to construct it with: they say who the terminal is.
   socket: (upgrade: { url: string; offered: string[] }) => WebSocket;
   defaultUrl: () => string;
+  // Calls back when the page is shown again or the network comes back; returns the unsubscribe.
+  onResume?: (resumed: () => void) => () => void;
+  // Absent: always visible.
+  visible?: () => boolean;
+};
+
+const browserResume = (resumed: () => void): (() => void) => {
+  // A host with no page to show (a worker) is never told.
+  if (typeof document === 'undefined' || typeof document.addEventListener !== 'function' || typeof window === 'undefined') return () => {};
+  const shown = (): void => {
+    if (document.visibilityState === 'visible') resumed();
+  };
+  // Only a page restored from the back-forward cache: the first `pageshow` is the page loading.
+  const restored = (event: PageTransitionEvent): void => {
+    if (event.persisted) resumed();
+  };
+  document.addEventListener('visibilitychange', shown);
+  window.addEventListener('pageshow', restored);
+  window.addEventListener('online', resumed);
+  return () => {
+    document.removeEventListener('visibilitychange', shown);
+    window.removeEventListener('pageshow', restored);
+    window.removeEventListener('online', resumed);
+  };
 };
 
 const browserTokens = (tokenKey: string, named: boolean): WireTokenStore => ({
@@ -62,6 +86,8 @@ export const browserEnv = (config: { tokenKey?: string; cookie?: boolean } = {})
     const scheme = window.location.protocol === 'https:' ? 'wss' : 'ws';
     return `${scheme}://${window.location.host}/socket`;
   },
+  onResume: browserResume,
+  visible: () => typeof document === 'undefined' || document.visibilityState !== 'hidden',
 });
 
 export const readDocumentSnapshot = (doc: Pick<Document, 'getElementById'> = document): DocumentSnapshot | undefined => {

@@ -8,7 +8,7 @@ type ProviderEntryBase = {
 };
 
 export type ChatProviderEntry = ProviderEntryBase & {
-  adapter: 'openai-compatible' | 'anthropic' | 'google';
+  adapter: 'openai-compatible' | 'openai-responses' | 'anthropic' | 'google';
   endpoint: EndpointCapabilities;
   wire?: string[];
   reasoningRequest?: Record<string, unknown>;
@@ -54,6 +54,20 @@ export const providerRegistry: Record<string, ProviderEntry> = {
       supportsEmbedding: true,
     },
     adapter: 'openai-compatible',
+    wire: ['jsonl-lines'],
+  },
+  'openai-responses': {
+    id: 'openai-responses',
+    baseUrl: 'https://api.openai.com/v1',
+    envKey: 'OPENAI_API_KEY',
+    defaultModel: 'gpt-4o',
+    endpoint: {
+      nativeTools: true,
+      nativeJsonMode: true,
+      validatesToolArgs: false,
+      supportsEmbedding: true,
+    },
+    adapter: 'openai-responses',
     wire: ['jsonl-lines'],
   },
   openrouter: {

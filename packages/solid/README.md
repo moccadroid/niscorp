@@ -13,7 +13,7 @@ Solid takes a different approach:
 - **Reference equality** — change detection is `===`, not deep comparison. O(1).
 - **Always-valid invariant** — the parser kind-checks every value against the schema at the moment its type is known, so a value of the wrong JSON kind is never written into `current()`, whatever the LLM sends. (`trust` mode switches the check off, and a field whose schema is `z.lazy`, an intersection or a pipe is not kind-checked.)
 
-The result: linear scaling, 44x faster than naive repair+parse on a 10 KB payload, a clean subscription API that tells you exactly when each subtree finalizes, and a structural contract that holds even when the model hallucinates the wrong type for a field.
+The result: linear scaling, about 3x faster than naive repair+parse on a 10 KB payload (table below), a clean subscription API that tells you exactly when each subtree finalizes, and a structural contract that holds even when the model hallucinates the wrong type for a field.
 
 ```
 Payload scaling (50-byte chunks):
@@ -157,7 +157,7 @@ stream.close(): void
 // Tear down all listeners and reject pending promises
 stream.destroy(): void
 
-// Read current merged state (always structurally valid)
+// Read current merged state (values kind-checked against the schema; see Validation modes)
 stream.current(): T
 
 // Promise that resolves when root JSON object closes.

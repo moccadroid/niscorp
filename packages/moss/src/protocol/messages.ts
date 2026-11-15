@@ -53,6 +53,7 @@ const ServerMessageByTypeSchema = z.discriminatedUnion('type', [
   }),
   z.strictObject({ type: z.literal('catalog'), actions: catalogActions, hash: z.string() }),
   z.strictObject({ type: z.literal('frame'), tree: z.array(RenderNodeSchema) }),
+  z.strictObject({ type: z.literal('pong') }),
   z.strictObject({ type: z.literal('render'), canvas: z.string(), tree: z.array(RenderNodeSchema) }),
   z.strictObject({ type: z.literal('render-delta'), canvas: z.string(), ops: z.array(DeltaOpSchema), hash: z.number() }),
   z.strictObject({ type: z.literal('error'), code: z.string(), message: z.string(), canvas: z.string().optional() }),
@@ -71,6 +72,9 @@ export const ClientMessageSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('event'), canvas: z.string(), event: z.record(z.string(), z.unknown()) }),
   z.strictObject({ type: z.literal('publish'), channel: z.string(), payload: z.unknown().optional() }),
   z.strictObject({ type: z.literal('resync') }),
+  // Added without a protocol of its own: a server from before it answers `invalid_message`, which
+  // is an answer all the same.
+  z.strictObject({ type: z.literal('ping') }),
   z.strictObject({ type: z.literal('back') }),
   z.strictObject({ type: z.literal('popTo'), canvas: z.string(), instance: z.string() }),
   z.strictObject({ type: z.literal('reset') }),

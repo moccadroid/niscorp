@@ -22,7 +22,7 @@ const app = defineApp({
 export const project: NiscMossProject = {
   boot: async () => {
     const db = new PGlite();
-    const server = await createServer(app, { db, pool: createPglitePool(db), session: 'dev-open' });
+    const server = await createServer(app, { db, pool: createPglitePool(db), session: 'dev-open', migrations: 'apply' });
     return {
       server,
       close: async () => {

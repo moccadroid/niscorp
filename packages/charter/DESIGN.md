@@ -220,6 +220,7 @@ two:
 | `actions` | action ids | the action map, filtered by ids | Nova's shell |
 | `data` | `SCOPE_VERBS` leaves (`deals.write.insert`) | `createScopePolicy(grants, behaviors, scoping)` | Vex |
 | `layouts` | variant ids | substitute the variant's layout on the definition | moss / Nova |
+| `functions` | function names | a call is allowed when its name is in the resolved set | moss |
 | (future) | tool names | a `ToolPolicy` constructor | Cortex's `policyGate` |
 
 Each side stays pure and standalone: the charter is a string-set engine always

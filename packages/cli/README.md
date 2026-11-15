@@ -15,7 +15,7 @@ nisc build     # bundle the app, draw every path, and check what was drawn
 nisc export    # build, then write every path as a file — the site as a folder
 nisc start     # serve the built app, each path's first screen drawn
 nisc check     # the app's check suite
-nisc migrate   # apply the tables' pending migrations, if the app's entries fit the result
+nisc migrate   # apply the tables' pending migrations, if the app's entries fit the result — the only command that changes a real database
 ```
 
 An app is one of two things, and the command runs both. **Behind moss**, the
@@ -347,11 +347,75 @@ server. An app with its own shell is a vite app and nothing more.
 The app's check suite (`src/dev/all-checks.ts`, or `checks` in the config), run
 with the app's own `tsx`. Its exit code is the suite's.
 
+## The shape check — `@niscorp/cli/shape`
+
+An app's own checks test what it does. The shape check reads how it does it:
+its source and its actions, for what nisc's rulebook (`AGENTS.md` in
+`@niscorp/nisc`) says an app is made of. An app runs it from its suite, as
+`src/dev/shape-check.ts`; `npm create nisc` writes that file. An app that does
+not call it is not checked.
+
+```ts
+import { fileURLToPath } from 'node:url';
+import { runShapeCheck } from '@niscorp/cli/shape';
+import { actions } from '../app/action-catalog';
+import { ENTRIES } from '../app/vex';
+
+process.exit(
+  runShapeCheck({
+    root: fileURLToPath(new URL('../..', import.meta.url)),
+    actions: Object.values(actions),
+    entries: ENTRIES,
+    functions: { ask: 'the model composes the answer to a message' },
+    allow: { formatting: { 'src/server/today.ts': 'the studio’s day, put in every read’s scope' } },
+  }),
+);
+```
+
+It prints one `[pass]` or `[fail]` line per rule and answers the exit code, 0
+or 1. It fails when:
+
+| Rule | It fails on |
+|---|---|
+| `style` (rule 16) | in `src/`: an `as` or `<T>` assertion other than `as const`, a non-null `!`, a `function` declaration, a class, an enum, `any`, a default export. `.d.ts` files are not read |
+| `formatting` (rule 9) | `Intl.` or a `.toLocale…()` call in `src/`, but `src/dev/` |
+| `roles` (rule 11) | `session.roles` or `principal.roles` in `src/server/` |
+| `files` (rule 9a) | `FileReader` or a `readAs…` call in `src/ui/` |
+| `address` (rule 4) | `location.…`, `history.pushState` or `history.replaceState` in `src/ui/` |
+| `dom` (rule 2) | `document.querySelector` and its kin in `src/ui/` |
+| `data` | a file in `src/` outside `src/app/` and `src/dev/` imports a function from `src/app/` — resolved by the app's `tsconfig.json`, so a path alias counts. A function that answers the manifest (`NiscApp`) is setup, and passes |
+
+Each is read off the syntax tree, so a word in a comment or a string is never a
+finding.
+
+`allow` names, per rule, the files that may do what the rule refuses, each with
+why: the file that finds the app's day, the identity seam that reads roles, a
+routing adapter, a shim. An allowance fails when it gives no reason, names a
+file that is not there, or allows nothing in that file.
+
+`functions` names every server function an action calls (an endpoint with
+`fn`), each with what it does that a vex read or write replayed by the action
+cannot: mail, a model, files, what lives in the person's shell. A function an
+action calls that is not named fails, and so does a name no action calls.
+
+It also prints, failing on nothing, how often the actions call functions
+against how often they replay vex, how many reads word their rows with a Prism
+`mapping`, and the `refresh: 'reactive'` reads no action replays by name.
+
+It reads the source with the app's own TypeScript, 6.x, found from `root`, and
+the app as its `tsconfig.json` there says. On lyceum it takes under three
+seconds.
+
 ## `nisc migrate`
 
 For an app behind moss whose config hands over `app` and `runtime`. It is the
-step a deployment runs before the new version starts, when its runtime says
-`migrations: 'verify'`.
+only command that changes a real database's tables: `nisc dev`, `nisc build`
+and `nisc start` boot the app, and a boot only checks the tables — with a
+migration pending it refuses to start and names it — unless the runtime says
+`migrations: 'apply'`, which a database that starts empty every time (PGlite in
+memory) does. A deployment runs it before the new version starts; on Railway,
+as the service's pre-deploy command (`pnpm exec nisc migrate`): a failure stops
+the deploy, and the running version keeps serving.
 
 In one transaction it applies every pending table migration — moss's, and the
 app's own (`runtime.tables`) — then checks that every entry of the manifest
@@ -366,19 +430,39 @@ nisc: applied 1
 nisc: this run removes notes.stars
 ```
 
-A run that lands says what it took away (tables and columns removed, column
-types changed). An entry that already did not fit before the run, and is
-already seeded as it is, is listed and does not refuse the run.
+A run that takes something away — a table or a column removed, a column's
+type changed — is refused, each named, unless `--allow-removal` is given; then
+it lands and says what it took away. It sees tables and columns, not rows a
+step deletes. An entry that already did not fit before the run, and is already
+seeded as it is, is listed and does not refuse the run.
 
 `--check` does all of it and rolls it back. It takes the locks the real run
 will take, for as long.
 
+`--status` reads and changes nothing: how many migrations of each sequence the
+database records and what is pending (exit 0), and anything that would refuse
+a run — an edited migration, a database migrated by newer code, a sequence
+nobody names (exit 1).
+
+```
+nisc: applied nisc.moss 6, nisc.moss.sessions 1, nisc.vex.cache 2, acme.app 2
+nisc: 1 pending
+  acme.app/3  notes lose their stars
+```
+
+A run waits for another one running at the same time, up to an hour, and a
+step that waits more than 10 s for a table another query holds gives up — the
+run is rolled back, and running it again is safe.
+
 `runtime` only opens the environment. It migrates nothing and seeds nothing:
 tables it changes itself are changed before the step can check them, and
-`--check` would then change the database. Every table an entry reads or writes
-comes from a sequence in the run — the app's own go in `runtime.tables`, and so
-does tide's (`TIDE_SEQUENCE`, from `@niscorp/tide/postgres`) when the app keeps
-tide's tables.
+`--check` would then change the database. So it calls no `cache.init()` (the
+server does, after its check), and a tide store under moss is made
+`migrate: false`. Every table an entry reads or writes comes from a sequence in
+the run — the app's own go in `runtime.tables`, and so does tide's
+(`TIDE_SEQUENCE`, from `@niscorp/tide/postgres`) when the app keeps tide's
+tables. A sequence that has run stays there: the run refuses a database that
+records one nobody names.
 
 It checks entries. It does not see SQL written by hand, and it does not know
 what a value means.
@@ -392,6 +476,8 @@ what a value means.
 | `--allow-live` | `export`: write even though some path wants a server |
 | `--skip-bundle` | `build`, `export`: the terminal is already built — it is neither bundled nor has its stylesheet written into its page |
 | `--check` | `migrate`: do all of it, then roll it back |
+| `--status` | `migrate`: what is applied and pending — reads, changes nothing |
+| `--allow-removal` | `migrate`: apply a run that removes a table or column, or changes a column's type |
 | `--port <n>` | `dev`, `start`: the port (`start`: `$PORT`, then 8787) |
 
 ## License

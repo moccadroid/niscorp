@@ -31,8 +31,7 @@ export const devRuntime = async (): Promise<DevRuntime> => {
   // Two pools on one db: app queries get raw date strings (Prism formats them);
   // the cache needs Dates (it calls .getTime() on its own timestamps).
   const cache = unstamped(createPostgresCache({ pool: createPglitePool(db) }));
-  await cache.init?.();
 
   // 'dev-open': every token is trusted, and moss says so at boot.
-  return { db, pool: createPglitePool(db, RAW_DATE_PARSERS), cache, session: 'dev-open' };
+  return { db, pool: createPglitePool(db, RAW_DATE_PARSERS), cache, session: 'dev-open', migrations: 'apply' };
 };

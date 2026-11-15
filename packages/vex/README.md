@@ -81,6 +81,8 @@ engine.test(dsl, scope?);         // Promise<TestResult> — compile + run with 
 engine.getDslSchema();            // object — the DSL as JSON Schema (draft-7)
 engine.getSchema();               // DatabaseSchema | undefined — last introspected schema
 engine.cache;                     // CacheBackend — the live cache
+engine.invalidate(tables);        // these tables were written: reactive reads over them refetch
+engine.rows;                      // the reactive rows cache: stats(), stop()
 ```
 
 ## What's in the box
@@ -94,6 +96,7 @@ engine.cache;                     // CacheBackend — the live cache
 | Writes | Mutation entries in the same cache — a closed grammar, replay-only by fingerprint, never generated; `lintMutation` checks a statement at seed |
 | Seeding and freshness | `seedCache` turns authored `SeedEntry` / `SeedMutation` rows into protected cache entries; an entry's `refresh` is `'snapshot'` or `'reactive'` |
 | Safety | Server-side scope policies, query analyzer (cartesian/nesting/index checks), parameterized SQL only |
+| Stored entries | `@niscorp/vex/migrations`: `VEX_SEQUENCE`, the strata sequence an entry is stamped with as a stored document |
 | Its own table | The Postgres cache's table is a [strata](../strata/README.md) sequence (`cache.sequence`, `nisc.vex.cache`): `cache.init()` applies it through the ledger once, instead of `IF NOT EXISTS` on every boot. Requires a pool with `transaction` (the PGlite pool and `createPgPool`'s have one; a bare `pg.Pool` does not). |
 
 ## License

@@ -1,5 +1,13 @@
 # @niscorp/vex
 
+## 0.4.4
+
+### Patch Changes
+
+- d70f22c: The docs say entries are keyed by fingerprint (a minted one is replaced like a named one when the request differs), `MapToShape` takes `intent`, the mapping agent retries up to three times, and list `exists`, `optional`, `countDistinct`, `invalidate`, `rows` and the `./migrations` entry.
+
+  **What to change:** nothing. Documentation only.
+
 ## 0.4.3
 
 ### Patch Changes

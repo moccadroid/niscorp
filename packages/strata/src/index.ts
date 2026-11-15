@@ -5,7 +5,7 @@ export type { Sequence, Migration, Step, SqlStep, DocumentStep, DocumentKind } f
 export { createUpgrader } from './documents';
 export type { Stamp, Location, Transform, Upgrader, UpgradeResult } from './documents';
 export { prepare, planMigrations, refuseProblems, orderPending } from './plan';
-export type { Plan, Problem, PreparedMigration, PreparedSequence, LedgerRow } from './plan';
+export type { Plan, PlanOptions, Problem, PreparedMigration, PreparedSequence, LedgerRow } from './plan';
 export { checksumOf } from './checksum';
 export { sqlSteps } from './sql';
 export { DOCUMENT_DEPTH_LIMIT, exceedsDepth, depthRefusal } from './depth';

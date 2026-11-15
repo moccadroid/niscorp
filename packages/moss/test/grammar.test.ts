@@ -66,7 +66,7 @@ const quietly = <T>(run: () => Promise<T>): Promise<T> => {
 
 const deploymentWith = async (stamp: Record<string, number>) => {
   const pool = createPglitePool(freshDatabase());
-  await quietly(() => createServer({ charter: {}, actions: {} }, { pool, db: pool, session: 'dev-open' }));
+  await quietly(() => createServer({ charter: {}, actions: {} }, { pool, db: pool, session: 'dev-open', migrations: 'apply' }));
   await pool.query(`INSERT INTO integrations (id, url, status) VALUES ('acme', 'https://acme.example', 'approved')`);
   await pool.query(`INSERT INTO integration_actions (integration_id, action_id, definition, grammar) VALUES ('acme', 'acme.list', $1::jsonb, $2::jsonb)`, [
     JSON.stringify(oldAction),
@@ -78,7 +78,7 @@ const deploymentWith = async (stamp: Record<string, number>) => {
 describe('stored documents — upgraded at boot, by the feature that keeps them', () => {
   it('a row written before the rename is rewritten at every depth and stamped current', async () => {
     const pool = await deploymentWith({ 'nisc.nova': 0, 'nisc.prism': 0 });
-    await quietly(() => createServer({ charter: {}, actions: {}, grammars: [kit], features: [createIntegrations()] }, { pool, db: pool, session: 'dev-open' }));
+    await quietly(() => createServer({ charter: {}, actions: {}, grammars: [kit], features: [createIntegrations()] }, { pool, db: pool, session: 'dev-open', migrations: 'apply' }));
     const { rows } = await pool.query(`SELECT definition, grammar FROM integration_actions`);
     const stored = JSON.stringify(rows[0]?.['definition']);
     expect(stored).toContain('"text":"Add"');
@@ -89,14 +89,14 @@ describe('stored documents — upgraded at boot, by the feature that keeps them'
 
   it('a row from before stamps (`{}`) is read as the start of every grammar', async () => {
     const pool = await deploymentWith({});
-    await quietly(() => createServer({ charter: {}, actions: {}, grammars: [kit], features: [createIntegrations()] }, { pool, db: pool, session: 'dev-open' }));
+    await quietly(() => createServer({ charter: {}, actions: {}, grammars: [kit], features: [createIntegrations()] }, { pool, db: pool, session: 'dev-open', migrations: 'apply' }));
     const { rows } = await pool.query(`SELECT grammar FROM integration_actions`);
     expect(rows[0]?.['grammar']).toEqual(await currentStamp());
   });
 
   it('a row written by newer code refuses the boot — TOO_NEW, and the row is left as it was', async () => {
     const pool = await deploymentWith({ 'acme.kit': 4 });
-    const error = await quietly(() => createServer({ charter: {}, actions: {}, grammars: [kit], features: [createIntegrations()] }, { pool, db: pool, session: 'dev-open' })).catch((e: unknown) => e);
+    const error = await quietly(() => createServer({ charter: {}, actions: {}, grammars: [kit], features: [createIntegrations()] }, { pool, db: pool, session: 'dev-open', migrations: 'apply' })).catch((e: unknown) => e);
     expect(error).toMatchObject({ code: 'TOO_NEW' });
     const { rows } = await pool.query(`SELECT grammar FROM integration_actions`);
     expect(rows[0]?.['grammar']).toEqual({ 'acme.kit': 4 });

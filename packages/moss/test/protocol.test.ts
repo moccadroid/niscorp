@@ -41,6 +41,7 @@ describe('protocol — the messages', () => {
       { type: 'render-delta', canvas: 'main', ops: [[0, 0, 16], [1, 'x']], hash: 7 },
       { type: 'session', token: 'st_1' },
       { type: 'session', sealed: 'c2VhbGVk' },
+      { type: 'pong' },
       { type: 'error', code: 'no_shell', message: 'This app serves no shell.' },
       { type: 'error', code: 'no_shell', message: 'This app serves no shell.', canvas: 'main' },
     ];
@@ -56,6 +57,7 @@ describe('protocol — the messages', () => {
       { type: 'back' },
       { type: 'resync' },
       { type: 'reset' },
+      { type: 'ping' },
     ];
     for (const message of said) expect(ClientMessageSchema.parse(JSON.parse(JSON.stringify(message)))).toEqual(message);
   });

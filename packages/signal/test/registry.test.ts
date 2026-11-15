@@ -6,6 +6,7 @@ import { createSignal } from '../src';
 const UNMEASURED_DEFAULTS: Record<string, string> = {
   anthropic: 'no ANTHROPIC_API_KEY on 2026-09-24, and the probe speaks openai-compatible only',
   google: 'no GOOGLE_API_KEY on 2026-09-24, and the probe speaks openai-compatible only',
+  'openai-responses': 'the probe speaks chat completions only',
 };
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;

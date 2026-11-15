@@ -2,8 +2,8 @@
 
 **Status: Proposed (2026-10-12), ready to build from. What it has to do
 (part 2) and its ten design decisions (part 9) are the owner's and are
-settled. Steps 1 to 9 of part 6 are built (2026-10-14), on the branch
-`worktree-artifactory`. Step 10 is struck (2026-10-14). Part 0 is for whoever builds it, part 6 is the
+settled. Steps 1 to 9 of part 6 are built (2026-10-14), on main
+(`packages/moss/src/artifactory`). Step 10 is struck (2026-10-14). Part 0 is for whoever builds it, part 6 is the
 build, step by step, and part 7 is what needs the owner's word before it is
 touched.**
 

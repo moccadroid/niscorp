@@ -1,7 +1,7 @@
 export { startAging } from './aging';
 export { createData } from './data';
 export type { Data } from './data';
-export { featureTablesOf, migrateTables } from './migrate';
+export { featureTablesOf, migrateTables, tableStatus } from './migrate';
 export type { ExecuteAs } from './policy';
 export type { ExistingQuery, Intent, QueryWriters } from './routes';
 export { MOSS_SEQUENCE } from './tables';

@@ -22,7 +22,7 @@ const rebuiltFrame = (base: string, ops: readonly DeltaOp[], hash: number): { te
 
 export type Screen = {
   snapshot: () => WireSnapshot;
-  frame: (tree: RenderNode[]) => void;
+  frame: (tree: RenderNode[], text: string) => void;
   render: (canvas: string, tree: RenderNode[], text: string) => void;
   renderDelta: (canvas: string, ops: readonly DeltaOp[], hash: number) => boolean;
   blank: () => void;
@@ -38,17 +38,29 @@ export const createScreen = (config: {
   let snapshot: WireSnapshot = initial === undefined ? EMPTY : { frame: initial.frame, trees: new Map(Object.entries(initial.trees)) };
   // Each canvas's last render message, byte for byte as it arrived: what the next delta is written against.
   const bases = new Map<string, string>();
+  // What is on screen, as the text it arrived as. Unlike the bases it outlives a reconnect: a
+  // reconnect, or a page coming back, is sent every screen again, and the same one draws nothing.
+  const shown = new Map<string, string>();
+  let shownFrame: string | undefined;
   const show = (next: WireSnapshot): void => {
     snapshot = next;
     config.changed();
   };
-  const showTree = (canvas: string, tree: RenderNode[]): void => show({ ...snapshot, trees: new Map(snapshot.trees).set(canvas, tree) });
+  const showTree = (canvas: string, tree: RenderNode[], text: string): void => {
+    if (shown.get(canvas) === text) return;
+    shown.set(canvas, text);
+    show({ ...snapshot, trees: new Map(snapshot.trees).set(canvas, tree) });
+  };
   return {
     snapshot: () => snapshot,
-    frame: (tree) => show({ ...snapshot, frame: tree }),
+    frame: (tree, text) => {
+      if (shownFrame === text) return;
+      shownFrame = text;
+      show({ ...snapshot, frame: tree });
+    },
     render: (canvas, tree, text) => {
       if (config.delta) bases.set(canvas, text);
-      showTree(canvas, tree);
+      showTree(canvas, tree, text);
     },
     renderDelta: (canvas, ops, hash) => {
       const base = bases.get(canvas);
@@ -58,10 +70,14 @@ export const createScreen = (config: {
         return false;
       }
       bases.set(canvas, rebuilt.text);
-      showTree(canvas, rebuilt.tree);
+      showTree(canvas, rebuilt.tree, rebuilt.text);
       return true;
     },
-    blank: () => show(EMPTY),
+    blank: () => {
+      shown.clear();
+      shownFrame = undefined;
+      show(EMPTY);
+    },
     forgetBases: () => bases.clear(),
   };
 };

@@ -24,6 +24,8 @@ export type CommandOptions = {
   port?: number;
   skipBundle?: boolean;
   dryRun?: boolean;
+  status?: boolean;
+  allowRemoval?: boolean;
   print?: (line: string) => void;
 };
 
@@ -213,12 +215,23 @@ export const migrate = async (options: CommandOptions): Promise<void> => {
   if (isShellProject(project) || project.app === undefined || project.runtime === undefined) {
     throw new Error('nisc: `nisc migrate` needs `app` and `runtime` in nisc.config.ts — the manifest, and the environment it runs on.');
   }
-  const { migrateTables } = await import('@niscorp/moss');
+  const { migrateTables, tableStatus } = await import('@niscorp/moss');
   const print = say(options);
   const isDryRun = options.dryRun === true;
   const runtime = await project.runtime();
   try {
-    const report = await migrateTables(runtime, project.app, isDryRun ? { dryRun: true } : {});
+    if (options.status === true) {
+      const plan = await tableStatus(runtime, project.app);
+      print(`nisc: applied ${Object.entries(plan.applied).map(([sequence, n]) => `${sequence} ${n}`).join(', ')}`);
+      print(plan.pending.length === 0 ? 'nisc: nothing pending' : `nisc: ${plan.pending.length} pending`);
+      for (const migration of plan.pending) print(`  ${migration.ref}  ${migration.description}`);
+      if (plan.problems.length > 0) {
+        const problems = plan.problems.map((problem) => `  ${problem.code}: ${problem.detail}`);
+        throw new Error(['nisc: this database cannot be migrated or booted as it is:', ...problems].join('\n'));
+      }
+      return;
+    }
+    const report = await migrateTables(runtime, project.app, { ...(isDryRun ? { dryRun: true } : {}), ...(options.allowRemoval === true ? { allowRemoval: true } : {}) });
     if (report.applied.length === 0) print('nisc: nothing to migrate');
     else print(isDryRun ? `nisc: would apply ${report.applied.length} — rolled back, nothing changed` : `nisc: applied ${report.applied.length}`);
     for (const migration of report.applied) print(`  ${migration.ref}  ${migration.description}`);

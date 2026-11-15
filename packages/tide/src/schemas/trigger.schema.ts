@@ -6,7 +6,6 @@ const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
 const MMDD = /^(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
 const LOCAL_DATETIME = /^\d{4}-\d{2}-\d{2}T([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/;
 
-// A zone Intl does not know throws wherever a clock is read, on every advance: it is refused where the reflex is parsed.
 const knownZone = (tz: string): boolean => {
   try {
     return new Intl.DateTimeFormat('en-US', { timeZone: tz }).resolvedOptions().timeZone !== '';

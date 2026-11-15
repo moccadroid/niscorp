@@ -81,7 +81,7 @@ html, body, #root { margin: 0; min-height: 100%; }
   cursor: pointer;
 }
 .k-button:active { transform: translateY(1px); }
-.k-button.k-suggestion, .k-button.k-choice, .k-button.k-chosen, .k-button.k-summary, .k-button.k-step {
+.k-button.k-suggestion, .k-button.k-choice, .k-button.k-chosen, .k-button.k-step {
   padding: 5px 12px;
   border-radius: 999px;
   font-weight: 500;
@@ -89,8 +89,7 @@ html, body, #root { margin: 0; min-height: 100%; }
   flex-shrink: 0;
 }
 .k-button.k-suggestion, .k-button.k-chosen { background: var(--k-accent-soft); color: var(--k-accent); }
-.k-button.k-choice, .k-button.k-summary, .k-button.k-step { background: var(--k-surface); color: var(--k-ink); border: 1px solid var(--k-line); }
-.k-button.k-summary { flex-shrink: 1; min-width: 0; max-width: 42vw; overflow: hidden; text-overflow: ellipsis; }
+.k-button.k-choice, .k-button.k-step { background: var(--k-surface); color: var(--k-ink); border: 1px solid var(--k-line); }
 .k-button.k-step { padding: 5px 10px; }
 .k-button.k-link { padding: 0; background: none; color: var(--k-accent); font-weight: 600; }
 .k-button.k-link:hover { text-decoration: underline; }
@@ -135,37 +134,15 @@ html, body, #root { margin: 0; min-height: 100%; }
   background: var(--k-bg);
   border-top: 1px solid var(--k-line);
 }
-.k-dock > .k-row { justify-content: space-between; flex-wrap: nowrap; gap: 12px; }
-.k-dock > .k-row > .k-row { flex-wrap: nowrap; gap: 6px; min-width: 0; }
-.k-dock > .k-row > .k-row:first-child { overflow-x: auto; scrollbar-width: none; }
+.k-dock > .k-row { flex-wrap: nowrap; gap: 6px; overflow-x: auto; scrollbar-width: none; }
 
-.k-menu {
-  position: absolute;
-  bottom: calc(100% + 6px);
-  right: 24px;
-  z-index: 2;
-  width: min(380px, calc(100vw - 32px));
-  max-height: 60vh;
-  overflow-y: auto;
-  box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 8px;
-  background: var(--k-surface);
-  border: 1px solid var(--k-line);
-  border-radius: calc(var(--k-radius) + 4px);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.1);
-}
-.k-menu .k-button { text-align: left; overflow: hidden; text-overflow: ellipsis; border-radius: var(--k-radius); }
-.k-menu > .k-text { padding: 0 10px; }
-.k-menu > .k-text + .k-button, .k-menu > .k-muted { margin-bottom: 4px; }
-.k-menu > .k-muted { padding-bottom: 10px; border-bottom: 1px solid var(--k-line); }
-
-.k-area-changed .k-card { box-shadow: 0 0 0 2px var(--k-accent); }
+/* The conversation: it scrolls inside the dock, and a reversed column keeps its newest turn in view. */
+.k-talk { max-height: 45vh; overflow-y: auto; display: flex; flex-direction: column-reverse; }
+.k-talk > div { display: flex; flex-direction: column; gap: 10px; padding-bottom: 4px; }
+.k-talk:not(:has(.k-card)) { display: none; }
 
 /* nova's DOM adapter wraps a canvas and an action in elements of its own; React does not. They take no room, so the
-   dock sticks and the areas lay out the same under either kit. */
+   dock sticks and the cards lay out the same under either kit. */
 [data-canvas], [data-component='ActionSlot'] { display: contents; }
 
 .k-grid {
@@ -182,11 +159,6 @@ html, body, #root { margin: 0; min-height: 100%; }
 .k-columns-1 { grid-template-columns: minmax(0, 1fr); }
 .k-columns-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .k-columns-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.k-area { min-width: 0; }
-.k-span-2 { grid-column: span 2; }
-.k-span-3 { grid-column: span 3; }
-/* An area with nothing in it takes no room. */
-.k-area:not(:has(.k-card)) { display: none; }
 
 .k-card {
   display: flex;
@@ -223,10 +195,5 @@ html, body, #root { margin: 0; min-height: 100%; }
 @media (max-width: 720px) {
   .k-point { grid-template-columns: 1fr; gap: 4px; }
   .k-grid { grid-template-columns: 1fr; padding: 16px; }
-  .k-area { grid-column: auto; }
   .k-dock { padding-left: 16px; padding-right: 16px; }
-  .k-dock > .k-row { flex-wrap: wrap; gap: 8px; }
-  .k-dock > .k-row > .k-row { width: 100%; }
-  .k-button.k-summary { flex: 1; max-width: none; }
-  .k-menu { right: 16px; }
 }

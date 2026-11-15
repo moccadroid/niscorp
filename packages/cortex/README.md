@@ -86,7 +86,7 @@ How the envelope travels from model to runtime. One field,
 
 | Strategy | Mechanism | Fits |
 |---|---|---|
-| `native` | provider `response_format: json_schema`, in-loop | small strict-compatible schemas on capable providers (auto-picked) |
+| `native` | provider `response_format: json_schema`, in-loop | an output schema whose envelope converts to JSON Schema with no `$ref` in ≤ 8,192 characters, on a model with `nativeJsonSchema` (auto-picked; sent with `strict: false`) |
 | `respond` | a synthesized `respond` tool; the envelope is its arguments | where the tool params can ENFORCE the contract — the endpoint does not validate tool args itself, the schema is small, the model carries nested args intact (auto-picked there) |
 | `emit` | the model's completion IS the envelope (content channel) | everything else — auto-picked wherever neither of the above enforces anything: all of Groq, big schemas, models that mangle nested tool args |
 

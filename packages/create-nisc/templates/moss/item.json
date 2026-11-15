@@ -33,7 +33,7 @@
     "runs": ["`npm run dev`", "`npm run build`", "`npm run check`", "`npm start`"],
     "decisions": [
       "| D1 Posture | answered | **A moss server app.** The shell runs on the server, one per person; the browser is a canvas terminal over a socket. The charter is enforced there: a principal reaches only the actions and the data it is granted. |",
-      "| D2 Environment | derived · **open for deployment** | Development and the checks run on PGlite, an in-memory Postgres that starts empty every boot (`src/server/runtime.ts`). Open: the Postgres a deployment hands it, and where it runs. |",
+      "| D2 Environment | derived · **open for deployment** | Development and the checks run on PGlite, an in-memory Postgres that starts empty every boot (`src/server/runtime.ts`), so its tables are migrated at boot (`migrations: 'apply'`). Open: the Postgres a deployment hands it, and where it runs — a real database is migrated by `nisc migrate` before the app starts, and a boot only checks it. |",
       "| D5 Routing | derived · **partly open** | The first screen is drawn on the server and adopted by the terminal — it costs nothing while nobody can sign in. Open: once sign-in exists, the browser keeps the session in a cookie no script can read, and the page is drawn for whoever it says (AGENTS.md rule 12) — a page drawn for somebody is theirs alone (`private, no-store`). Open: which paths are **pages** rather than the app, and whether the app's shell state syncs to the address bar. |"
     ]
   }

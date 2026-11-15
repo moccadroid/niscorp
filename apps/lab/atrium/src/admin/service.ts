@@ -16,9 +16,8 @@ const adminRuntime = async (): Promise<NiscRuntime> => {
   const db = new PGlite();
   const pool = createPglitePool(db);
   const cache = createPostgresCache({ pool });
-  await cache.init();
   // Every token is trusted, and moss says so at boot.
-  return { db, pool, cache, session: 'dev-open' };
+  return { db, pool, cache, session: 'dev-open', migrations: 'apply' };
 };
 
 export const buildAdminServer = async (seam?: Seam): Promise<{ server: MossServer; runtime: NiscRuntime }> => {

@@ -10,9 +10,6 @@ export type Admitted = { reflexes: readonly Reflex[]; graph: GraphReport; refuse
 const idOf = (candidate: unknown): string | undefined =>
   typeof candidate === 'object' && candidate !== null && 'id' in candidate && typeof candidate.id === 'string' ? candidate.id : undefined;
 
-// What a load may hold. By default the first reflex that does not parse, a duplicate id, or a graph that does not hold
-// refuses the whole load, as it always has. `isolate` refuses each such reflex alone, with its reason, and admits the
-// rest: for a host whose reflexes are its people's rows, where one person's bad row must not stop everybody else's.
 export const admitReflexes = (input: readonly ReflexInput[], effectsOf: (reflexes: readonly Reflex[]) => EffectRegistry, isolate: boolean): Admitted => {
   const parsed: Reflex[] = [];
   const refused: LoadRefusal[] = [];

@@ -36,7 +36,7 @@ export const Heading: DomComponent = ({ children }) => element('h1', 'k-heading'
 const TextProps = z.object({ tone: z.enum(['default', 'lead', 'muted', 'strong', 'display', 'right', 'wrong', 'error']).optional() });
 export const Text: DomComponent = ({ props, children }) => element('p', toned('k-text', parsed(TextProps, props, {}).tone, 'default'), children);
 
-const ButtonProps = z.object({ label: z.string().optional(), tone: z.enum(['primary', 'suggestion', 'link', 'choice', 'chosen', 'right', 'wrong', 'summary', 'step']).optional() });
+const ButtonProps = z.object({ label: z.string().optional(), tone: z.enum(['primary', 'suggestion', 'link', 'choice', 'chosen', 'right', 'wrong', 'step']).optional() });
 export const Button: DomComponent = ({ props, children }) => {
   const { label, tone } = parsed(ButtonProps, props, {});
   const button = element('button', toned('k-button', tone, 'primary'), label !== undefined ? [text(label)] : children);
@@ -46,16 +46,10 @@ export const Button: DomComponent = ({ props, children }) => {
 
 export const Frame: DomComponent = ({ children }) => element('div', 'k-frame', children);
 export const Dock: DomComponent = ({ children }) => element('footer', 'k-dock', children);
-export const Menu: DomComponent = ({ children }) => element('nav', 'k-menu', children);
+export const Talk: DomComponent = ({ children }) => element('section', 'k-talk', [element('div', '', children)]);
 
 const GridProps = z.object({ columns: z.number().int().min(1).max(3).optional() });
 export const Grid: DomComponent = ({ props, children }) => element('main', `k-grid k-columns-${parsed(GridProps, props, {}).columns ?? 2}`, children);
-
-const AreaProps = z.object({ name: z.string(), span: z.number().int().min(1).max(3).optional(), changed: z.boolean().optional() });
-export const Area: DomComponent = ({ props, children }) => {
-  const { span, changed } = parsed(AreaProps, props, { name: '' });
-  return element('section', `k-area k-span-${span ?? 1}${changed === true ? ' k-area-changed' : ''}`, children);
-};
 
 const CardProps = z.object({ title: z.string().optional(), tone: z.enum(['default', 'hero']).optional() });
 export const Card: DomComponent = ({ props, children }) => {

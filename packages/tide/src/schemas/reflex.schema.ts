@@ -42,8 +42,6 @@ const reflexRules = (reflex: { on: object; when?: unknown; select?: { mode: stri
 
 export const ReflexSchema = z.object(reflexFields).strict().superRefine(reflexRules);
 
-// The trigger kinds a stored reflex may name. A host that keeps reflexes its people wrote parses them with only the kinds
-// it offers, as a draft is parsed with `draftSchemaOf`: what it never offered is refused where it is read.
 export const REFLEX_TRIGGERS = {
   clock: ClockTriggerSchema,
   write: WriteTriggerSchema,
@@ -53,11 +51,11 @@ export const REFLEX_TRIGGERS = {
 } as const;
 export type ReflexTrigger = keyof typeof REFLEX_TRIGGERS;
 
-export const reflexSchemaOf = (choice: { triggers?: readonly ReflexTrigger[] } = {}): z.ZodType<z.infer<typeof ReflexSchema>, z.input<typeof ReflexSchema>> => {
+export const reflexSchemaOf = (choice: { triggers?: readonly ReflexTrigger[] } = {}): z.ZodType<Reflex, ReflexInput> => {
   if (choice.triggers === undefined) return ReflexSchema;
-  const [first, ...rest] = choice.triggers.map((kind): z.ZodType<z.infer<typeof TriggerSchema>, z.input<typeof TriggerSchema>> => REFLEX_TRIGGERS[kind]);
+  const [first, ...rest] = choice.triggers.map((kind): z.ZodType<Reflex['on'], ReflexInput['on']> => REFLEX_TRIGGERS[kind]);
   if (first === undefined) throw new Error('tide: a reflex needs at least one trigger kind');
-  const on: z.ZodType<z.infer<typeof TriggerSchema>, z.input<typeof TriggerSchema>> = rest.length === 0 ? first : z.union([first, ...rest]);
+  const on: z.ZodType<Reflex['on'], ReflexInput['on']> = rest.length === 0 ? first : z.union([first, ...rest]);
   return z.object({ ...reflexFields, on }).strict().superRefine(reflexRules);
 };
 

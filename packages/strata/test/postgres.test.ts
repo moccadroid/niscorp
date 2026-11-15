@@ -100,6 +100,63 @@ describe('migrate — the ledger', () => {
     await expect(migrate(pool, [cache], { mode: 'verify' })).resolves.toMatchObject({ applied: [] });
   });
 
+  it('verify needs no DDL rights: it reads the ledger and creates nothing', async () => {
+    const pool = freshPool();
+    await pool.db.exec('CREATE ROLE app_runtime; GRANT USAGE ON SCHEMA public TO app_runtime; REVOKE CREATE ON SCHEMA public FROM PUBLIC');
+    await pool.db.exec('SET ROLE app_runtime');
+    await expect(migrate(pool, [cache], { mode: 'verify' })).rejects.toMatchObject({ code: 'PENDING' });
+    expect(await columnsOf(pool, 'strata_ledger')).toEqual([]);
+    await pool.db.exec('RESET ROLE');
+    await migrate(pool, [cache]);
+    await pool.db.exec('GRANT SELECT ON strata_ledger TO app_runtime; SET ROLE app_runtime');
+    await expect(migrate(pool, [cache], { mode: 'verify' })).resolves.toMatchObject({ applied: [] });
+  });
+
+  it('applying to a database that is up to date only reads — no lock, no transaction, no DDL', async () => {
+    const pool = freshPool();
+    await migrate(pool, [cache]);
+    const sent: string[] = [];
+    const watched: StrataPool = {
+      query: (text, values) => {
+        sent.push(text);
+        return pool.query(text, values);
+      },
+      transaction: () => Promise.reject(new Error('a run with nothing to do opened a transaction')),
+    };
+    expect((await migrate(watched, [cache])).applied).toEqual([]);
+    expect(sent.length).toBeGreaterThan(0);
+    expect(sent.every((text) => /^\s*SELECT\b/i.test(text))).toBe(true);
+  });
+
+  it('a run leaves no timeout of its own on the connection', async () => {
+    const db = new PGlite();
+    const before = (await db.query<{ lock_timeout: string }>('SHOW lock_timeout')).rows[0];
+    const statementBefore = (await db.query<{ statement_timeout: string }>('SHOW statement_timeout')).rows[0];
+    await migrate(db, [cache], { lockTimeoutMs: 1234, statementTimeoutMs: 5678 });
+    expect((await db.query('SHOW lock_timeout')).rows[0]).toEqual(before);
+    expect((await db.query('SHOW statement_timeout')).rows[0]).toEqual(statementBefore);
+  });
+
+  it('with `complete`, a sequence the ledger records and the code does not name is refused', async () => {
+    const pool = freshPool();
+    const notes: Sequence = { id: 'acme.notes', migrations: [{ description: 'Notes', steps: [sql('CREATE TABLE notes (id text PRIMARY KEY)')] }] };
+    await migrate(pool, [cache, notes]);
+    await expect(migrate(pool, [cache])).resolves.toMatchObject({ applied: [] });
+    const error = await migrate(pool, [cache], { complete: true }).catch((e: unknown) => e);
+    expect(error).toMatchObject({ code: 'UNKNOWN_SEQUENCE' });
+    expect(String(error)).toContain('acme.notes: the database records 1 of its migration');
+    await expect(migrate(pool, [cache], { complete: true, mode: 'verify' })).rejects.toMatchObject({ code: 'UNKNOWN_SEQUENCE' });
+    expect((await status(pool, [cache], { complete: true })).problems.map((p) => p.code)).toEqual(['UNKNOWN_SEQUENCE']);
+  });
+
+  it('with `complete`, a renamed sequence is refused instead of running its first migration again', async () => {
+    const pool = freshPool();
+    await migrate(pool, [cache]);
+    const renamed: Sequence = { ...cache, id: 'nisc.vex.entries' };
+    await expect(migrate(pool, [renamed], { complete: true })).rejects.toMatchObject({ code: 'UNKNOWN_SEQUENCE' });
+    expect((await readLedger(pool)).map((row) => row.sequence)).toEqual(['nisc.vex.cache', 'nisc.vex.cache']);
+  });
+
   it('a pool that cannot transact is refused with the reason', async () => {
     const pool = freshPool();
     await expect(migrate({ query: pool.query }, [cache])).rejects.toMatchObject({ code: 'NO_TRANSACTION' });
@@ -151,14 +208,17 @@ describe('migrate — a guard, and a dry run', () => {
   it('the guard is asked inside the run, after the last step, and sees what the steps left', async () => {
     const pool = freshPool();
     const seen: boolean[] = [];
-    const report = await migrate(pool, [cache], {
-      guard: async (tx) => {
-        seen.push(await sees(tx, 'vex_cache'));
-        return [];
-      },
-    });
+    const told: string[][] = [];
+    const guard = async (tx: { query: StrataQuery }, run: { applied: readonly { ref: string }[] }) => {
+      seen.push(await sees(tx, 'vex_cache'));
+      told.push(run.applied.map((m) => m.ref));
+      return [];
+    };
+    const report = await migrate(pool, [cache], { guard });
     expect(seen).toEqual([true]);
     expect(report.applied.map((m) => m.ref)).toEqual(['nisc.vex.cache/1', 'nisc.vex.cache/2']);
+    await migrate(pool, [cache], { guard });
+    expect(told).toEqual([['nisc.vex.cache/1', 'nisc.vex.cache/2'], []]);
   });
 
   it('a sentence from the guard refuses the run — tables and ledger untouched', async () => {

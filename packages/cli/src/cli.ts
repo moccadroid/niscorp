@@ -10,6 +10,7 @@ const USAGE = `nisc — the command for a nisc application
   nisc start               serve the built app, each path's first screen drawn
   nisc check               the app's check suite
   nisc migrate             apply the tables' pending migrations, if the app's entries fit the result
+                           (the only command that changes a real database's tables; boot only checks them)
 
   --root <dir>             the app's root (default: here) — where nisc.config.ts is
   --out <dir>              export: where the files go (default: out)
@@ -17,6 +18,8 @@ const USAGE = `nisc — the command for a nisc application
   --port <n>               dev, start: the port (start: $PORT, then 8787)
   --skip-bundle            build, export: the terminal is already built
   --check                  migrate: do all of it, then roll it back
+  --status                 migrate: what is applied and what is pending — reads, changes nothing
+  --allow-removal          migrate: apply a run that removes a table or column or changes a column's type
 
 An app says in nisc.config.ts how it boots and how one of its screens is drawn.
 Behind moss (boot + draw): which paths exist and what each needs is read off the
@@ -51,7 +54,7 @@ const main = async (): Promise<number> => {
   }
   if (command === 'check') return check(options);
   if (command === 'migrate') {
-    await migrate({ ...options, dryRun: args.includes('--check') });
+    await migrate({ ...options, dryRun: args.includes('--check'), status: args.includes('--status'), allowRemoval: args.includes('--allow-removal') });
     return 0;
   }
   if (command === 'build') {

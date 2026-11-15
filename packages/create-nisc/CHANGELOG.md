@@ -1,5 +1,64 @@
 # create-nisc
 
+## 0.9.4
+
+### Patch Changes
+
+- fddbeaf: A model-first app answers each message with a turn of a conversation: a sentence, and up to three of the app's cards under it, filled in. It no longer rewrites the screen area by area.
+  - **One run of the model a message.** gpt-oss-120b on Groq, as a cortex agent, is told the cards the person may be shown, the last four turns and the message. The answer is checked — every card one the app has, its input one its schema takes, nothing shown twice — and sent back when it fails, five tries in all. Jev and the TypeSafe key are gone, and so are streaming, the reads, writes and arrangements in the prompt, and the bypass around moss that swapped layouts.
+  - **The conversation is in the dock**, above the screens and the line to ask in. The question shows at once, still being answered; messages are answered one at a time, in order; a turn and its cards never take a step Back. The conversation lasts as long as the person's shell. An answer that does not come is a turn saying why.
+  - **A screen is its cards, one under another**, the ones the person's roles reach, opened from the dock or by a card's link. The arrangements, the six areas and the answer stack with back and forward are gone.
+  - **The kits** lose `Area`, `Menu` and the `summary` button tone, which only the old model-first used, and gain `Talk`, the conversation's scroll box.
+  - **AGENTS.md** says how the assistant answers, how to remove the tour, and the first steps from there to a full app. `live-ask` fails on a miss.
+
+  **What to change:** nothing. An app already made keeps its files; this is what `npm create nisc --model-first` makes from now on.
+
+## 0.9.3
+
+No changes in this release.
+
+## 0.9.2
+
+### Patch Changes
+
+- af2ea3c: The README says a new app runs four checks (the shape check included), what removing the model-first tour takes, and that every app gets a README and the `nisc-reviewer` agent. A classic app's PLAN.md names the shape check among its checks.
+
+  **What to change:** nothing. Documentation only.
+
+## 0.9.1
+
+### Patch Changes
+
+- a7b2a05: A shape check, `runShapeCheck` from the new entry `@niscorp/cli/shape`: it reads an app's source and its actions for what its own checks cannot see — rule 16 by the TypeScript compiler, formatting outside Prism, roles read in server code, the kit reading files, the address or the document, code in `src/app` called while the app runs — and fails on every server function an action calls that the app has not named with why it is not a vex read or write. What an app allows, it names per rule and per file, each with its reason. It reads with the app's own TypeScript (6.x) and adds no dependency.
+
+  `create-nisc` writes it into every app as `src/dev/shape-check.ts`, run by `npm run check`. The rulebook's "Verification" and `REVIEW.md` say what it does.
+
+  **What to change:** nothing; an app that does not call it is not checked. To check an app made before this, copy `src/dev/shape-check.ts` from a new one, add it to `src/dev/all-checks.ts`, and name what it reports.
+
+- 8fa42d1: Every app it makes ships a reviewer: `.claude/agents/nisc-reviewer.md`, a Claude Code agent with read-only tools that follows `node_modules/@niscorp/nisc/REVIEW.md` and reports by rule number. The app's `AGENTS.md` says to run it after each step of the order of work.
+
+  The model-first tour now reads data the way an app should: its new packages card replays the vex read `guide/packages` over the app's own `packages` table, whose rows a migration step writes, and the read's Prism `mapping` words each row. The charter grants `packages.read` to `public`, the reads-and-writes card shows that entry, and "Remove the tour" in the app's `AGENTS.md` lists what goes with it.
+
+  **What to change:** nothing. An app made before this can copy `.claude/agents/nisc-reviewer.md` from a new one.
+
+## 0.9.0
+
+### Patch Changes
+
+- 2780c56: A moss app's `nisc.config.ts` hands over `app` and `runtime`, so `nisc migrate` works the day the app moves to a real database; `boot` uses the same `runtime`, so the tables `nisc migrate` applies are the ones the boot checks. The in-memory runtime writes `migrations: 'apply'` and no longer calls `cache.init()`.
+
+  AGENTS.md rule 17: a real database's tables change only through `nisc migrate`; a boot checks them; only a runtime whose database starts empty every time writes `migrations: 'apply'`; every sequence that has run stays in `runtime.tables`; one app per database schema.
+
+  **What to change:** an app already made from the moss template writes `migrations: 'apply'` in its in-memory runtime when it takes this release (see the moss changeset): without it, its boot refuses with `PENDING`. A new app gets all of the above.
+
+## 0.8.12
+
+No changes in this release.
+
+## 0.8.11
+
+No changes in this release.
+
 ## 0.8.10
 
 No changes in this release.

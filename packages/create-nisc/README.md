@@ -10,28 +10,27 @@ Four questions, because they are what shape the files:
 
 1. **Where should it go?** The folder's name becomes the app's name.
 2. **Who leads?** You — classic: you build the screens, and a first one that
-   works is there. Or a model — model-first: there is no navigation; a person
-   types a message, and the answer is a screen composed from the app's actions
-   (below).
+   works is there. Or a model — model-first: a person types a message, and the
+   answer is a sentence and the app's own cards, in a conversation (below).
 3. **Where does the shell run?** On a server — moss: one shell per person on
    the server, the charter enforced there. Or in the page — no server: offline,
    static hosting, and the charter is not a security boundary. A model-first
    app is behind moss, and is not asked.
 4. **What draws the screen?** React, or plain DOM (no framework in the page).
 
-A model-first app then asks for its keys, masked (see "Keys" below): Groq for
-gpt-oss-120b, and TypeSafe for Jev.
+A model-first app then asks for its key, masked (see "Keys" below): Groq for
+gpt-oss-120b.
 
 ```bash
 npm create nisc my-app -- --page --dom     # flags answer the questions
-npm create nisc my-app -- --model-first    # a model leads; the keys are asked
+npm create nisc my-app -- --model-first    # a model leads; the key is asked
 npm create nisc my-app -- --yes            # the defaults: classic, moss, React
 ```
 
 | | |
 |---|---|
 | `dir` | where the app goes (default `my-nisc-app`) |
-| `--classic` / `--model-first` | you build the screens (the default), or a model composes one for every message |
+| `--classic` / `--model-first` | you build the screens (the default), or a model answers every message with the app's cards |
 | `--moss` / `--page` | the shell on a server (the default), or in the page |
 | `--react` / `--dom` | React draws the screen (the default), or plain DOM |
 | `--yes` | take the defaults for anything not given, and ask nothing |
@@ -52,9 +51,10 @@ The structure the rulebook describes, and a first screen that works:
 - `npm run dev`, `build`, `check` and `start` — and, with the shell in the
   page, `export` — all the `nisc` command; `nisc dev` runs a moss app's server inside vite, so its
   `vite.config.ts` holds nothing but the framework's plugin;
-- three checks: the artifacts are pure, schema-valid JSON; the source is at the
-  installed grammars (`strata.lock.json`); the welcome screen is served, drawn
-  and pressed;
+- four checks: the artifacts are pure, schema-valid JSON; the app keeps nisc's
+  shape (`shape-check`); the source is at the installed grammars
+  (`strata.lock.json`); the welcome screen is served, drawn and pressed — with
+  the shell in the page, whole and pressed;
 - every `@niscorp` package at **the release this create-nisc was built and
   checked against** — a caret range from each one's version (such as `^0.2.0`), not
   whatever is newest — and `@niscorp/nisc` itself, which pins that set
@@ -62,32 +62,36 @@ The structure the rulebook describes, and a first screen that works:
 
 A model-first app has, instead of the welcome screen:
 
-- a frame: the answer, six areas laid out in an arrangement, and one dock at
-  the bottom — the screens, a chip naming the answer shown with back, forward
-  and every answer to go back to, and the line to ask in;
-- **the message loop** (`src/server/compose/`): Jev reads the message and the
-  open screen and says which actions likely belong; gpt-oss-120b composes the
-  screen as a cortex agent, naming only the areas that change, checked against
-  the app's actions and their input schemas and corrected inside the run when
-  it does not hold. The answer streams in. What a person pressed, ticked or
-  picked stays, the model sees it, and an answer gone back to shows it as it
-  was left;
+- a frame: the screen — cards one under another — and one dock at the bottom
+  with the conversation, the screens and the line to ask in;
+- **the message loop** (`src/server/compose/`), one run of the model a message:
+  gpt-oss-120b, as a cortex agent, is told the cards the person may be shown
+  and the conversation so far, and answers with one sentence and up to three
+  cards, filled in. The answer is checked against the app's actions and their
+  input schemas, and sent back inside the run when it fails. The turn
+  goes into the conversation; the screen behind is never changed by an answer.
+  The conversation lasts as long as the person's shell;
 - **a tour of nisc** to start from: five screens of cards to read, and a
   counter, a checklist and a quick check to use, which the model can fill in
   too. A card's link opens a screen at once; only what is typed, or a thing to
   ask pressed, goes to the model. Its `AGENTS.md` says how to remove the tour —
-  a folder, a check, and edits in five files — and what to build next;
-- checks that run the loop offline with a scripted decision model and chat
-  model, one for the loop and one for the tour, and `src/dev/live-ask.ts`,
-  which asks the real models a run of cases.
+  a folder, a check, its vex entries and its migration, and edits in seven
+  files and the two documents — and the first steps from there to a full app;
+- checks that run the loop offline with a scripted model, one for the loop and
+  one for the tour, and `src/dev/live-ask.ts`, which asks the real model a run
+  of cases and fails on a miss.
 
-And two documents:
+And the documents:
 
+- **`README.md`** — the app's commands, and what to read before building.
 - **`PLAN.md`** — what was decided when it was made (the posture with its
   consequences, the renderer), and everything else the rulebook's interview
   asks, written down as **open**. Nothing gets built on an open decision.
 - **`AGENTS.md`** — where the rules are: `node_modules/@niscorp/nisc/AGENTS.md`,
   the rulebook for the version installed. It does not copy them.
+- **`.claude/agents/nisc-reviewer.md`** — an agent that reviews the app against
+  nisc's rules and reports findings by rule number, changing nothing; for after
+  each step of PLAN.md's order of work.
 
 ## A folder that already exists
 

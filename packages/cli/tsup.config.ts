@@ -4,7 +4,7 @@ const EXTERNAL = ['@niscorp/moss', '@niscorp/moss/node', '@niscorp/moss/vite', '
 
 export default defineConfig([
   {
-    entry: { index: 'src/index.ts' },
+    entry: { index: 'src/index.ts', shape: 'src/shape/index.ts' },
     format: ['esm', 'cjs'],
     dts: true,
     sourcemap: true,

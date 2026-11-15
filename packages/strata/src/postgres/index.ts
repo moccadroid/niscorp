@@ -1,4 +1,4 @@
-import { prepare, planMigrations, refuseProblems, type LedgerRow, type Plan, type PreparedMigration, type PreparedSequence } from '../plan';
+import { prepare, planMigrations, refuseProblems, type LedgerRow, type Plan, type PlanOptions, type PreparedMigration, type PreparedSequence } from '../plan';
 import type { Sequence } from '../schema';
 import type { UpgradeResult, Upgrader } from '../documents';
 import { StrataError } from '../errors';
@@ -17,13 +17,19 @@ export type LedgerOptions = {
   schema?: string;
 };
 
-export type MigrateGuard = (tx: { query: StrataQuery }) => Promise<readonly string[]>;
+export type MigrateGuard = (tx: { query: StrataQuery }, run: { applied: readonly PreparedMigration[] }) => Promise<readonly string[]>;
 
-export type MigrateOptions = LedgerOptions & {
-  mode?: 'apply' | 'verify';
-  guard?: MigrateGuard;
-  dryRun?: boolean;
-};
+export type MigrateOptions = LedgerOptions &
+  PlanOptions & {
+    mode?: 'apply' | 'verify';
+    guard?: MigrateGuard;
+    dryRun?: boolean;
+    lockTimeoutMs?: number;
+    statementTimeoutMs?: number;
+  };
+
+const LOCK_TIMEOUT_MS = 10_000;
+const STATEMENT_TIMEOUT_MS = 3_600_000;
 
 export type MigrateReport = {
   applied: readonly PreparedMigration[];
@@ -74,8 +80,8 @@ export const readLedger = async (pool: StrataPool, options: LedgerOptions = {}):
   return readRows(pool, qualified);
 };
 
-export const status = async (pool: StrataPool, sequences: readonly Sequence[], options: LedgerOptions = {}): Promise<Plan> =>
-  planMigrations(await prepare(sequences), await readLedger(pool, options));
+export const status = async (pool: StrataPool, sequences: readonly Sequence[], options: LedgerOptions & PlanOptions = {}): Promise<Plan> =>
+  planMigrations(await prepare(sequences), await readLedger(pool, options), options);
 
 const refuseGrammars = (prepared: readonly PreparedSequence[]): void => {
   const grammars = prepared.filter((s) => s.grammar);
@@ -88,9 +94,27 @@ const refuseGrammars = (prepared: readonly PreparedSequence[]): void => {
   }
 };
 
+const refusePending = (plan: Plan): void => {
+  if (plan.pending.length === 0) return;
+  throw new StrataError(
+    'PENDING',
+    `${plan.pending.length} migration${plan.pending.length === 1 ? ' is' : 's are'} not applied, and this boot only verifies. Run the migrations first.`,
+    plan.pending.map((m) => `${m.ref}  ${m.description}`),
+  );
+};
+
 export const migrate = async (pool: StrataPool, sequences: readonly Sequence[], options: MigrateOptions = {}): Promise<MigrateReport> => {
   const prepared = await prepare(sequences);
   refuseGrammars(prepared);
+  // Read before anything is locked or created: on a database that is up to
+  // date a run is a read, which a role without DDL rights can make.
+  const read = planMigrations(prepared, await readLedger(pool, options), options);
+  refuseProblems(read);
+  if (options.mode === 'verify') {
+    refusePending(read);
+    return { applied: [], plan: read };
+  }
+  if (read.pending.length === 0 && options.guard === undefined && options.dryRun !== true) return { applied: [], plan: read };
   if (pool.transaction === undefined) {
     throw new StrataError(
       'NO_TRANSACTION',
@@ -105,21 +129,19 @@ export const migrate = async (pool: StrataPool, sequences: readonly Sequence[], 
   let dryRunReport: MigrateReport | undefined;
 
   const run = pool.transaction(async (tx) => {
-    // The lock first: two processes creating the ledger at once would race in
-    // the catalog before either reached a row.
+    // The wait for another run is bounded by the statement timeout alone: a
+    // lock timeout, the pool's or the run's own, would cut it short.
+    await tx.query("SELECT set_config('statement_timeout', $1, true)", [`${options.statementTimeoutMs ?? STATEMENT_TIMEOUT_MS}ms`]);
+    await tx.query("SELECT set_config('lock_timeout', '0', true)");
+    // The lock before the ledger's DDL: two processes creating the ledger at
+    // once would race in the catalog before either reached a row.
     await tx.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`strata:${qualified}`]);
+    await tx.query("SELECT set_config('lock_timeout', $1, true)", [`${options.lockTimeoutMs ?? LOCK_TIMEOUT_MS}ms`]);
     if (schema !== undefined) await tx.query(`CREATE SCHEMA IF NOT EXISTS ${schema}`);
     await tx.query(ledgerDdl(options));
 
-    const plan = planMigrations(prepared, await readRows(tx, qualified));
+    const plan = planMigrations(prepared, await readRows(tx, qualified), options);
     refuseProblems(plan);
-    if (options.mode === 'verify' && plan.pending.length > 0) {
-      throw new StrataError(
-        'PENDING',
-        `${plan.pending.length} migration${plan.pending.length === 1 ? ' is' : 's are'} not applied, and this boot only verifies. Run the migrations first.`,
-        plan.pending.map((m) => `${m.ref}  ${m.description}`),
-      );
-    }
 
     const applied: PreparedMigration[] = [];
     for (const migration of plan.pending) {
@@ -146,7 +168,7 @@ export const migrate = async (pool: StrataPool, sequences: readonly Sequence[], 
       applied.push(migration);
     }
 
-    const reasons = options.guard === undefined ? [] : await options.guard(tx);
+    const reasons = options.guard === undefined ? [] : await options.guard(tx, { applied });
     if (reasons.length > 0) {
       throw new StrataError('DOES_NOT_FIT', 'What this run leaves does not fit what has to run on it. Nothing from this run was applied.', reasons);
     }

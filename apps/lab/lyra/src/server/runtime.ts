@@ -17,7 +17,6 @@ export const devRuntime = async (): Promise<DevRuntime> => {
   await db.exec(buildSeedSql());
 
   const cache = createPostgresCache({ pool: createPglitePool(db) });
-  await cache.init();
 
   const operatorKey = process.env['OPERATOR_KEY'] ?? '';
 
@@ -26,6 +25,7 @@ export const devRuntime = async (): Promise<DevRuntime> => {
     pool: createPglitePool(db, RAW_DATE_PARSERS),
     cache,
     session: 'dev-open',
+    migrations: 'apply',
     ...(operatorKey === '' ? {} : { operatorKey }),
   };
 };

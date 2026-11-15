@@ -329,6 +329,30 @@ describe('socket — the authority channel', () => {
     expect(conn.first('error')).toBeUndefined();
   });
 
+  it('a ping is answered pong and reaches no shell — with a shell host or without one', async () => {
+    const session = recordingSession();
+    const withShell = new FakeConnection();
+    await createSocket(ctxWith({ shells: hostFor(session) }))(SOCKET, withShell.offering('good'));
+    const callsBefore = [...session.calls];
+    withShell.sent.length = 0;
+    withShell.emit({ type: 'ping' });
+    expect(withShell.sent.map((message) => message.type)).toEqual(['pong']);
+    expect(session.calls).toEqual(callsBefore);
+
+    const without = new FakeConnection();
+    await createSocket(ctxWith())(SOCKET, without.offering('good'));
+    without.sent.length = 0;
+    without.emit({ type: 'ping' });
+    expect(without.sent.map((message) => message.type)).toEqual(['pong']);
+  });
+
+  it('without a shell host, the connection is still sent a frame once it listens: an empty one', async () => {
+    const conn = new FakeConnection();
+    await createSocket(ctxWith())(SOCKET, conn.offering('good'));
+    expect(conn.sent.map((message) => message.type)).toEqual(['hello', 'frame']);
+    expect(conn.first('frame')).toEqual({ type: 'frame', tree: [] });
+  });
+
   it('a resync without a shell host is answered no_shell', async () => {
     const accept = createSocket(ctxWith());
     const conn = new FakeConnection();

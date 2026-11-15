@@ -44,8 +44,9 @@ path with no model and no network beyond the database.
 server-minted (`fp_…`, returned in `meta.cache.fingerprint`) or caller-chosen
 (a name like `deals/list`). Replaying a fingerprint skips generation entirely
 and re-runs only the deterministic path — so scope and context stay current
-while LLM cost drops to zero. A minted fingerprint is an immutable pin; a
-named one is a mutable slot whose content follows your request. Design and
+while LLM cost drops to zero. A fingerprint sent alone replays its generation;
+sent with a request that differs, minted or named, it is regenerated and its
+content replaced. Design and
 rationale: [DESIGN.md](./DESIGN.md) **Cache v2 — fingerprints**.
 
 **Scope is separate from context.** `context` is caller data, visible to the
@@ -157,7 +158,7 @@ type QueryEngineConfig = {
   cache?: CacheBackend;                     // default: createMemoryCache()
   onEvent?: VexEventHandler;                // pipeline event stream
   generateDsl?: (request, schema, caller) => Promise<Query>;
-  mapToShape?: (rows, shape) => Promise<{ ir: CompiledIr; config: unknown; transformed: JsonValue }>;
+  mapToShape?: (rows, shape, intent?) => Promise<{ ir: CompiledIr; config: unknown; transformed: JsonValue }>;
   embed?: (text, dimensions?) => Promise<number[]>;  // text→vector for semantic filters
   behaviors?: ScopeBehaviors;               // which columns a scope key is bound to (see below)
   rows?: LiveRowsConfig;                    // the rows cache behind `refresh: 'reactive'`
@@ -1161,8 +1162,9 @@ The positive cache is keyed by the request's `fingerprint` (see the request
 contract above). There are no cache modes — the body's posture says
 everything:
 
-- **No fingerprint** → generate, cache, mint (`fp_…`). The mint is an
-  immutable pin: embed it and replay that exact generation forever.
+- **No fingerprint** → generate, cache, mint (`fp_…`). Sent alone, the mint
+  replays that generation; sent with a differing request, it is replaced like
+  any named fingerprint.
 - **Fingerprint alone** → replay-or-`cache_miss`. Never generates. Context
   values may vary per call — sorting and parameterized reloads are legal
   against one cached DSL.
@@ -1402,7 +1404,7 @@ free-form requests.
 
 ```typescript
 type GenerateDsl = (request: QueryRequest, schema: DatabaseSchema, caller: GenerationCaller) => Promise<Query>;
-type MapToShape  = (rows: Row[], shape: unknown) =>
+type MapToShape  = (rows: Row[], shape: unknown, intent?: string) =>
   Promise<{ ir: CompiledIr; config: unknown; transformed: JsonValue }>;
 
 type GenerationCaller = {

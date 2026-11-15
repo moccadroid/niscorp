@@ -113,7 +113,7 @@ try {
     if (stray.length > 0) throw new Error(`in the tarball, and should not be:\n${stray.slice(0, 12).join('\n')}`);
     const templates = join(packagesDir, 'create-nisc', 'templates');
     const items = readdirSync(templates, { withFileTypes: true }).filter((entry) => entry.isDirectory()).map((entry) => entry.name);
-    for (const file of ['package/templates/questions.json', ...items.map((item) => `package/templates/${item}/item.json`)]) {
+    for (const file of ['package/templates/questions.json', 'package/templates/base/files/.claude/agents/nisc-reviewer.md', ...items.map((item) => `package/templates/${item}/item.json`)]) {
       if (!entries.includes(file)) throw new Error(`${file} is not in the tarball`);
     }
   });
@@ -143,6 +143,12 @@ try {
       if (named === undefined) throw new Error('AGENTS.md does not say where the rules are');
       if (!existsSync(join(dir, named))) throw new Error(`${named} does not exist after install`);
       if (!existsSync(join(dir, 'node_modules/@niscorp/nisc/STYLE_GUIDE.md'))) throw new Error('STYLE_GUIDE.md is not beside it');
+    });
+    step(`${kind.name}: its reviewer agent reads a REVIEW.md that is installed`, () => {
+      const reviewer = readFileSync(join(dir, '.claude', 'agents', 'nisc-reviewer.md'), 'utf8');
+      const named = reviewer.match(/node_modules\/@niscorp\/nisc\/REVIEW\.md/)?.[0];
+      if (named === undefined) throw new Error('.claude/agents/nisc-reviewer.md does not say where the review guide is');
+      if (!existsSync(join(dir, named))) throw new Error(`${named} does not exist after install`);
     });
     step(`${kind.name}: typechecks`, () => void pnpm(['run', 'typecheck'], dir));
     step(`${kind.name}: its checks pass`, () => void pnpm(['run', 'check'], dir));

@@ -23,6 +23,7 @@
   "docs": {
     "where": [
       "src/dev/        the checks (`npm run check`) — a new feature adds its own",
+      "                shape-check.ts reads the app's shape (rulebook, \"Verification\"): each server function an action calls is named there with why, and each allowance with why",
       "nisc.config.ts  how the app boots and how its screens are drawn, for the `nisc` command",
       "strata.lock.json  the grammar versions the source is written at (rule 20) — moved only",
       "                by `npm run strata verify`, never by hand"

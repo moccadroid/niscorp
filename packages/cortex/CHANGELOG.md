@@ -1,5 +1,28 @@
 # @niscorp/cortex
 
+## 0.1.6
+
+### Patch Changes
+
+- 41ac0c7: DESIGN.md and the README say what the code does: the loop streams unless `transport: 'step'`, no event carries per-step usage, the schema check is conversion, no `$ref` and at most 8,192 characters (native also needs `nativeJsonSchema` and is sent with `strict: false`), `onRun` is an option of `createManifold`, and `agent.run` takes `agentPath`.
+
+  **What to change:** nothing. Documentation only.
+
+- Updated dependencies [a2d2df0]
+  - @niscorp/solid@0.1.3
+
+## 0.1.5
+
+### Patch Changes
+
+- e7c45c3: A tool call whose arguments fail their schema is told which field is wrong, as an output is. The loop printed zod's top-level issues as they were, so a union in a tool's input came back as `: Invalid input`; it now goes through `flattenSchemaIssues`, as output does (`view.title: Invalid input: expected string, received undefined`).
+
+  `flattenSchemaIssues` reports a record key that breaks its rule with the rule's own message (`scores.Bad: keys are lower-case letters`) instead of zod's outer `Invalid key in record`. `SchemaIssue` gains two optional fields, `issues` and `origin`, which zod's issues already carry.
+
+  How a branch of a failed union is chosen is unchanged.
+
+  **What to change:** nothing.
+
 ## 0.1.4
 
 ### Patch Changes

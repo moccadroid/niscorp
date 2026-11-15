@@ -3,6 +3,8 @@ import { createMemoryCache, createPostgresAdapter, createQueryEngine } from '@ni
 import type { ScopePolicy } from '@niscorp/vex';
 import { createQueryDsl, createShapeMapper } from '@niscorp/vex/agent';
 import { createSignal } from '@niscorp/signal';
+import { createPglitePool } from '@niscorp/vex/pglite';
+import { migrate } from '@niscorp/strata/postgres';
 import { devRuntime } from '@lyceum/server/runtime';
 import { createQuerier } from '@lyceum/server/querying';
 import { createTracer } from '@lyceum/server/generation';
@@ -363,6 +365,9 @@ const main = async (): Promise<void> => {
     return;
   }
   const runtime = await devRuntime();
+  // No server here, so nothing else migrates this in-memory database.
+  await migrate(createPglitePool(runtime.db), runtime.tables ?? []);
+  await runtime.seed();
   await runtime.db.exec(seedRoom());
 
   const base = createSignal('groq', { options: { reasoningEffort: EFFORT === 'none' ? 'none' : EFFORT === 'low' ? 'low' : EFFORT === 'medium' ? 'medium' : 'default' } });

@@ -1,6 +1,7 @@
 import type { Context, Env, Hono } from 'hono';
 import { migrate, upgradeStore } from '@niscorp/strata/postgres';
 import { handleDiscovery } from '@niscorp/vex';
+import { StrataError } from '@niscorp/strata';
 import type { Sequence, Upgrader } from '@niscorp/strata';
 import type { DocumentStore } from '@niscorp/strata/postgres';
 import type { CacheBackend, CacheEntry, DatabaseAdapter, ExecuteRecord, MutationClient, PgPool, Query, QueryEngine, QueryEngineConfig, QueryResponse, ScopePolicy } from '@niscorp/vex';
@@ -85,7 +86,17 @@ export type PreparedEngine = Pick<Data, 'grants' | 'grammars'> & {
 const prepareEngine = async (config: DataConfig): Promise<PreparedEngine> => {
   // The tables exist before the engine introspects: a table created after
   // that is one no grant can reach, and nothing says so.
-  await migrate(config.pool, tableSequencesOf(config), { mode: config.migrations ?? 'apply' });
+  await migrate(config.pool, tableSequencesOf(config), { mode: config.migrations ?? 'verify', complete: true }).catch((error: unknown) => {
+    if (!(error instanceof StrataError) || error.code !== 'PENDING') throw error;
+    throw new StrataError(
+      'PENDING',
+      `The database is ${error.details.length} migration${error.details.length === 1 ? '' : 's'} behind this code, and the server only checks its tables at boot. ` +
+        'Rehearse them with `npx nisc migrate --check`, then apply them with `npx nisc migrate`. ' +
+        "A database that starts empty every time (PGlite in memory) is migrated at boot instead: its runtime sets `migrations: 'apply'`.",
+      error.details,
+      { cause: error },
+    );
+  });
   const grammars = await createGrammarUpgrader({ grammars: config.grammars });
   const layer = await createDataLayer(config);
   return {

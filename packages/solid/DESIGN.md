@@ -98,9 +98,9 @@ write(chunk)
 
 **Why:** The repair+parse approach re-scans the entire accumulated buffer on every `write()`. Over N total characters in ~N/100 chunks, total work is O(N²). For a 20 KB response that's measurably slow (~38ms). The incremental parser maintains scanner state between calls and processes only new characters — O(N) total.
 
-**Trade-off:** We own the parser. If a JSON edge case breaks, it's our bug. We mitigate this with thorough tests (192 unit/integration tests + e2e streaming tests).
+**Trade-off:** We own the parser. If a JSON edge case breaks, it's our bug. We mitigate this with thorough tests (unit, integration and e2e streaming, in `test/`).
 
-**Result:** 44x faster for character-by-character streaming of a 10 KB payload.
+**Result:** about 3x faster than repair+parse on a 10 KB payload in 50-byte chunks (the README's table), and the gap grows with the payload: repair+parse is quadratic.
 
 ### 2. Structural sharing, not deep cloning
 

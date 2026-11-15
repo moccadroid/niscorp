@@ -178,14 +178,15 @@ never in moss core.
 
 moss creates no table on its own: its tables (`MOSS_SEQUENCE`, plus the
 sessions table's sequence when the runtime's `session` is `'sessions'`), the
-vex cache's and the ones the app's features keep go through one
-[strata](../strata/README.md) ledger run at boot — once,
-recorded, refused if the ledger was edited or written by newer code. Tide's
-tables are tide's (`TIDE_SEQUENCE`, from `@niscorp/tide/postgres`): they go
-through the same ledger when `createTideStore(pool)` is called, or in moss's
-own run when the app hands the sequence over in `runtime.tables`.
-`migrations: 'verify'` on the
-runtime refuses to boot with anything pending. Stored integration actions carry
+vex cache's, the ones the app's features keep and the app's own
+(`runtime.tables`) are [strata](../strata/README.md) sequences in one ledger.
+A real database's tables change only through `nisc migrate`; a boot checks
+them and refuses to start while a migration is pending, or when the ledger was
+edited, written by newer code, or records a sequence nobody names. A runtime
+whose database starts empty every time (PGlite in memory) writes
+`migrations: 'apply'` and is migrated at boot. Tide's tables are tide's
+(`TIDE_SEQUENCE`, from `@niscorp/tide/postgres`): the app hands the sequence
+over in `runtime.tables` and makes the store `migrate: false`. Stored integration actions carry
 a grammar stamp and are upgraded at boot, at intake and on read — through
 nova's and Prism's grammars plus the app's own (`NiscApp.grammars`); a bundle or
 row written by newer grammars is refused. See [DOCS.md](DOCS.md).

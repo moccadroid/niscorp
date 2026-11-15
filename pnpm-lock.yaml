@@ -260,6 +260,9 @@ importers:
       '@niscorp/charter':
         specifier: workspace:^
         version: link:../../../packages/charter
+      '@niscorp/cli':
+        specifier: workspace:^
+        version: link:../../../packages/cli
       '@niscorp/cortex':
         specifier: workspace:^
         version: link:../../../packages/cortex

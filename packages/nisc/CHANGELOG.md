@@ -1,5 +1,108 @@
 # @niscorp/nisc
 
+## 0.9.4
+
+### Patch Changes
+
+- Updated dependencies [5b2538d]
+  - @niscorp/tide@0.1.11
+
+## 0.9.3
+
+### Patch Changes
+
+- Updated dependencies [a740e2a]
+  - @niscorp/moss@0.9.2
+
+## 0.9.2
+
+### Patch Changes
+
+- efd576c: The rulebook catches up: `REVIEW.md`'s versions item names the check an app runs (`strata status --check`), not this repository's scripts; `AGENTS.md` lists moss's `artifacts` and `artifact_saves` among the engine's tables and vex's entries among the document kinds, and no longer speaks of exemplars; the README lists `REVIEW.md`.
+
+  **What to change:** nothing. Documentation only.
+
+- Updated dependencies [febd8b7]
+- Updated dependencies [41ac0c7]
+- Updated dependencies [efd5d03]
+- Updated dependencies [501e355]
+- Updated dependencies [e4dfb25]
+- Updated dependencies [4e76fe8]
+- Updated dependencies [a2d2df0]
+- Updated dependencies [2a44642]
+- Updated dependencies [2fc1bf0]
+- Updated dependencies [d70f22c]
+  - @niscorp/charter@0.1.5
+  - @niscorp/cortex@0.1.6
+  - @niscorp/moss@0.9.1
+  - @niscorp/nova@0.5.2
+  - @niscorp/prism@0.3.3
+  - @niscorp/signal@0.1.9
+  - @niscorp/solid@0.1.3
+  - @niscorp/strata@0.1.9
+  - @niscorp/tide@0.1.10
+  - @niscorp/vex@0.4.4
+
+## 0.9.1
+
+### Patch Changes
+
+- a7b2a05: A shape check, `runShapeCheck` from the new entry `@niscorp/cli/shape`: it reads an app's source and its actions for what its own checks cannot see — rule 16 by the TypeScript compiler, formatting outside Prism, roles read in server code, the kit reading files, the address or the document, code in `src/app` called while the app runs — and fails on every server function an action calls that the app has not named with why it is not a vex read or write. What an app allows, it names per rule and per file, each with its reason. It reads with the app's own TypeScript (6.x) and adds no dependency.
+
+  `create-nisc` writes it into every app as `src/dev/shape-check.ts`, run by `npm run check`. The rulebook's "Verification" and `REVIEW.md` say what it does.
+
+  **What to change:** nothing; an app that does not call it is not checked. To check an app made before this, copy `src/dev/shape-check.ts` from a new one, add it to `src/dev/all-checks.ts`, and name what it reports.
+
+- f826860: `REVIEW.md`, beside `AGENTS.md`: a guide for an agent reviewing a nisc app, written to be run on its own — how to run a review, the counts that say where an app has drifted, the checklist, what to look for, and how to report by rule number. The checklist is the one `AGENTS.md`'s "Verification" carried; "Verification" now points to it. `AGENTS.md` says near its top to build with it and review with `REVIEW.md`, after each step of the order of work, not only at the end.
+
+  **What to change:** nothing. To review an app, point the reviewing agent at `node_modules/@niscorp/nisc/REVIEW.md`.
+
+- Updated dependencies [a7b2a05]
+  - @niscorp/cli@0.9.1
+
+## 0.9.0
+
+### Minor Changes
+
+- 2780c56: A real database's tables change only through `nisc migrate`. `migrations` on the runtime defaults to `'verify'`: `createServer` — and so `nisc dev`, `nisc build` and `nisc start` — checks the tables and refuses to start while a migration is pending, naming each one and the two commands that apply it (`npx nisc migrate --check`, then `npx nisc migrate`). On a database that is up to date the check only reads the ledger, so the app's database role needs `SELECT` on `strata_ledger` and no right to change tables. A runtime whose database starts empty every time (PGlite in memory) writes `migrations: 'apply'` and is migrated at boot as before.
+
+  The boot and `migrateTables` refuse a database whose ledger records a sequence they do not name (`UNKNOWN_SEQUENCE`): a sequence that has run stays in `runtime.tables`.
+
+  `migrateTables` and `nisc migrate` refuse a run that removes a table or a column, or changes a column's type, unless `allowRemoval` / `--allow-removal` is given; the refusal names each. A run that applied nothing, because another run had already applied it, is not refused.
+
+  `tableStatus(runtime, app)` and `nisc migrate --status`: what is applied and what is pending, read and nothing else.
+
+  BREAKING — approved by moccadroid, 2026-11-07: a runtime on a real database runs `nisc migrate` before the app starts (on Railway, the service's pre-deploy command `pnpm exec nisc migrate`); a runtime on in-memory PGlite writes `migrations: 'apply'`; every sequence that has run on the database is in `runtime.tables` (`TIDE_SEQUENCE` with the store made `migrate: false`), and the runtime migrates nothing itself and calls no `cache.init()`; a database that has not yet run `nisc.moss/4` is migrated once with `--allow-removal`.
+
+### Patch Changes
+
+- 2780c56: A moss app's `nisc.config.ts` hands over `app` and `runtime`, so `nisc migrate` works the day the app moves to a real database; `boot` uses the same `runtime`, so the tables `nisc migrate` applies are the ones the boot checks. The in-memory runtime writes `migrations: 'apply'` and no longer calls `cache.init()`.
+
+  AGENTS.md rule 17: a real database's tables change only through `nisc migrate`; a boot checks them; only a runtime whose database starts empty every time writes `migrations: 'apply'`; every sequence that has run stays in `runtime.tables`; one app per database schema.
+
+  **What to change:** an app already made from the moss template writes `migrations: 'apply'` in its in-memory runtime when it takes this release (see the moss changeset): without it, its boot refuses with `PENDING`. A new app gets all of the above.
+
+- Updated dependencies [2780c56]
+- Updated dependencies [2780c56]
+  - @niscorp/moss@0.9.0
+  - @niscorp/cli@0.9.0
+  - @niscorp/strata@0.1.8
+
+## 0.8.12
+
+### Patch Changes
+
+- Updated dependencies [ab4fe9d]
+  - @niscorp/signal@0.1.8
+  - @niscorp/cortex@0.1.5
+
+## 0.8.11
+
+### Patch Changes
+
+- Updated dependencies [e7c45c3]
+  - @niscorp/cortex@0.1.5
+
 ## 0.8.10
 
 ### Patch Changes
