@@ -143,6 +143,25 @@ describe('fan-out on postgres', () => {
     expect(await tide.ledger.runs()).toHaveLength(1);
   });
 
+  it('a deferred run waits out the retry delay, and nextDue says when it is due again', async () => {
+    let attempts = 0;
+    const { tide, calls } = await harness([{ ...reflex, policy: { retry: { max: 3, backoff: 'fixed', baseMs: 60_000 } } }], { bill: noop }, {
+      select: () => {
+        attempts += 1;
+        if (attempts === 1) throw new Error('connection terminated unexpectedly');
+        return [{ id: 'm_1' }];
+      },
+    });
+
+    await tide.advance({ now: Date.UTC(2026, 2, 1, 5, 0, 0) });
+    expect(await tide.nextDue(Date.UTC(2026, 2, 1, 5, 0, 0))).toBe(Date.UTC(2026, 2, 1, 5, 1, 0));
+    await tide.advance({ now: Date.UTC(2026, 2, 1, 5, 0, 30) });
+    expect(attempts).toBe(1);
+
+    await tide.advance({ now: Date.UTC(2026, 2, 1, 5, 1, 0) });
+    expect(calls).toHaveLength(1);
+  });
+
   it('refuses a malformed reflex loudly — and the run is settled, not hanging', async () => {
     const { tide } = await harness([reflex], { bill: noop }, { select: () => [{ id: 'same' }, { id: 'same' }] });
     await tide.advance({ now: Date.UTC(2026, 2, 1, 5, 0, 0) });

@@ -9,3 +9,5 @@ A settled run and the run fact that announces it are written in one transaction:
 Facts delayed by `notBefore` no longer keep a due fact from its reflex: the matcher reads only the facts that are due.
 
 The tasks of a reflex that is not loaded are no longer claimed, so they spend no attempt while it is away.
+
+A run whose fan-out fails in a host seam now waits the reflex's `retry.baseMs` (default one minute) before it is tried again, and runs waiting so no longer keep other runs from fanning out. The Postgres store adds a `not_before` column to `tide_run` in a new migration (`nisc.moss.tide/4`).

@@ -33,6 +33,7 @@ export type Run = {
   dueAt: number;
   createdAt: number;
   settledAt?: number;
+  notBefore?: number;
   // Set when no run fact is owed: the settlement has been emitted as one, or
   // the run was skipped. Apart from `settledAt`: a retried task settles its
   // run again, and that must not emit a second fact.

@@ -47,12 +47,10 @@ const factRowsOf = async (deps: EngineDeps, run: Run): Promise<readonly Fact[]> 
 export const fanOut = async (deps: EngineDeps, now: number, limit: number): Promise<number> => {
   let created = 0;
 
-  const pending = await deps.store.query({
-    table: 'run',
-    where: { state: 'pending' },
-    order: [{ by: 'dueAt' }],
-    limit,
-  });
+  // Two reads, as the query grammar has no OR: a run with no `notBefore` has never been deferred.
+  const fresh = await deps.store.query({ table: 'run', where: { state: 'pending', notBefore: { isNull: true } }, order: [{ by: 'dueAt' }], limit });
+  const deferred = await deps.store.query({ table: 'run', where: { state: 'pending', notBefore: { lte: now } }, order: [{ by: 'dueAt' }], limit });
+  const pending = [...fresh, ...deferred].sort((left, right) => left.dueAt - right.dueAt).slice(0, limit);
 
   for (const run of pending) {
     const loaded = deps.find(run.reflexId);
@@ -77,7 +75,8 @@ export const fanOut = async (deps: EngineDeps, now: number, limit: number): Prom
         continue;
       }
 
-      await deps.store.cas('run', run.id, { state: 'pending' }, { note: `fan-out deferred: ${reason}` });
+      const notBefore = now + (loaded.reflex.policy.retry?.baseMs ?? 60_000);
+      await deps.store.cas('run', run.id, { state: 'pending' }, { notBefore, note: `fan-out deferred: ${reason}` });
       deps.emit({ type: 'run.deferred', reflexId: run.reflexId, runId: run.id, reason });
     }
   }
