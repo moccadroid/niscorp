@@ -33,10 +33,11 @@ describe('the server’s own wire — who a call is made as', () => {
     expect(await (await wire(null)('/who')).json()).toMatchObject({ authorization: null });
   });
 
-  it('an endpoint that declares its own `Authorization` is still made as the session', async () => {
+  it.each([['Authorization'], ['authorization']])('an endpoint that declares its own `%s` is still made as the session', async (name) => {
     const { wire } = serverSaying();
-    const answered = await wire('the-sessions-token')('/who', { method: 'POST', headers: { Authorization: 'Bearer somebody-elses', 'content-type': 'application/json' }, body: '{"n":1}' });
+    const answered = await wire('the-sessions-token')('/who', { method: 'POST', headers: { [name]: 'Bearer somebody-elses', 'content-type': 'application/json' }, body: '{"n":1}' });
     expect(await answered.json()).toEqual({ authorization: 'Bearer the-sessions-token', method: 'POST', sent: '{"n":1}' });
+    expect(await (await wire(null)('/who', { headers: { [name]: 'Bearer somebody-elses' } })).json()).toMatchObject({ authorization: 'Bearer somebody-elses' });
   });
 });
 

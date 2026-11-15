@@ -152,11 +152,14 @@ export const createInternalWire =
     // answering. The follower rides the in-process request's env, where no
     // network request can put one.
     const follower = isVex && init?.signal !== undefined ? createWireFollower(init.signal) : undefined;
+    const headers = new Headers(init?.headers);
+    // Whichever spelling of the name the endpoint declared, the session's token replaces it.
+    if (token !== null) headers.set('authorization', `Bearer ${token}`);
     const res = await server.request(
       url,
       {
         method: init?.method ?? 'GET',
-        headers: { ...(init?.headers ?? {}), ...(token !== null ? { Authorization: `Bearer ${token}` } : {}) },
+        headers,
         ...(init?.body !== undefined ? { body: init.body } : {}),
       },
       follower === undefined ? undefined : { [VEX_LIVE_ENV]: follower.live },

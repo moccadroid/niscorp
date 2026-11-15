@@ -610,7 +610,9 @@ fails. `inputs(session)` and
 `seeds(session)` are the app's per-principal boot hooks — boot data and boot
 instances. Endpoint calls ride the server's own HTTP surfaces
 with the session's token — the server shell is just another principal-bound
-client, enforcement included.
+client, enforcement included. The token replaces an `Authorization` the
+endpoint declares, in whatever case it is spelt; a shell for nobody sends
+what the endpoint declares.
 
 ---
 
