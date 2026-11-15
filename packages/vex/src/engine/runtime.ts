@@ -55,6 +55,16 @@ const DEFAULT_MAX_LIMIT = 1000;
 const DEFAULT_STATEMENT_TIMEOUT_MS = 10_000;
 const DEFAULT_UNSATISFIABLE_TTL_MS = 300_000;
 const DEFAULT_MAX_PRESENCE_VARIANTS = 32;
+// What the engine notes per fingerprint is only for its warnings, and a
+// fingerprint is minted for every generated query: past this many
+// fingerprints, the one noted first is forgotten.
+const REMEMBERED_FINGERPRINTS = 1024;
+
+const forgetOldest = (noted: Map<string, unknown> | Set<string>): void => {
+  if (noted.size <= REMEMBERED_FINGERPRINTS) return;
+  const oldest = noted.keys().next();
+  if (oldest.done !== true) noted.delete(oldest.value);
+};
 
 export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine => {
   const { adapter, scope: scopePolicy, generateDsl, mapToShape, embed, behaviors } = engineConfig;
@@ -90,6 +100,7 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
     if (seen === undefined) {
       seen = new Set<string>();
       variantsSeen.set(fingerprint, seen);
+      forgetOldest(variantsSeen);
     }
     if (seen.has(signature)) return;
     seen.add(signature);
@@ -184,6 +195,7 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
         : `This query asks for ${stated} rows, the engine's maxLimit is ${engineLimit}, and exactly ${engineLimit} came back — the list may have been cut. Raise \`maxLimit\` to read more.`;
     if (fingerprint !== undefined && !cutSaid.has(fingerprint)) {
       cutSaid.add(fingerprint);
+      forgetOldest(cutSaid);
       console.warn(`[vex] "${fingerprint}": ${note}`);
     }
     return note;
