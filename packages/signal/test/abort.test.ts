@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { getEventListeners } from 'node:events';
 import { createSignal, ErrorCode, type StreamEvent } from '../src';
+import { sdkOverFetch, textChunk, finishChunk } from './sdk-over-fetch';
 
 type Params = Record<string, unknown>;
 type Sent = { params: Params; signal: AbortSignal | undefined };
@@ -120,6 +121,38 @@ describe('a long-lived signal set by options()', () => {
       await llm.complete('hi');
       await llm.step({ messages: [{ role: 'user', content: 'hi' }] }, { signal: new AbortController().signal });
     }
+    expect(getEventListeners(controller.signal, 'abort')).toHaveLength(0);
+  });
+});
+
+describe('an abort while the SDK waits out a rate limit', () => {
+  it('ends stream() at the abort, with no event and no error', async () => {
+    const provider = sdkOverFetch([{ status: 429, headers: { 'retry-after': '3' } }, { chunks: [textChunk('hi'), finishChunk('stop')] }], 2);
+    const controller = new AbortController();
+    setTimeout(() => controller.abort(), 50);
+    const started = Date.now();
+    const events: StreamEvent<string>[] = [];
+    for await (const event of chatClient(provider.client).stream('hi', { signal: controller.signal })) events.push(event);
+    expect(Date.now() - started).toBeLessThan(1000);
+    expect(events).toEqual([]);
+  });
+
+  it('leaves no listener on the signal of a stream of many pieces, nor on a long-lived signal after many streams', async () => {
+    const handed: AbortSignal[] = [];
+    const create = async (_params: Params, requestOptions?: { signal?: AbortSignal }) => {
+      if (requestOptions?.signal) handed.push(requestOptions.signal);
+      return (async function* () {
+        for (let piece = 0; piece < 50; piece += 1) yield { choices: [{ delta: { content: 'x' } }] };
+        yield { choices: [{ delta: {}, finish_reason: 'stop' }] };
+      })();
+    };
+    const controller = new AbortController();
+    const llm = chatClient({ chat: { completions: { create } } }).options({ signal: controller.signal });
+    for (let call = 0; call < 20; call += 1) {
+      for await (const _event of llm.stream('hi')) { /* read to the end */ }
+    }
+    expect(handed).toHaveLength(20);
+    expect(handed.map((signal) => getEventListeners(signal, 'abort').length)).toEqual(handed.map(() => 0));
     expect(getEventListeners(controller.signal, 'abort')).toHaveLength(0);
   });
 });

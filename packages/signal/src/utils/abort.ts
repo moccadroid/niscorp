@@ -24,6 +24,27 @@ export const abortForCall = (...sources: ReadonlyArray<AbortSignal | undefined>)
   return { signal: controller.signal, release: () => removals.forEach((remove) => remove()) };
 };
 
+// A provider SDK can sleep out a rate limit's retry-after without watching the signal: the
+// caller stops waiting when the signal fires, and what the abandoned call does later is dropped.
+export const settledOrAborted = <R>(work: Promise<R>, signal: AbortSignal | undefined): Promise<{ aborted: false; value: R } | { aborted: true }> => {
+  if (signal === undefined) return work.then((value) => ({ aborted: false as const, value }));
+  if (signal.aborted) {
+    work.catch(() => {});
+    return Promise.resolve({ aborted: true as const });
+  }
+  return new Promise((resolve, reject) => {
+    const onAbort = (): void => {
+      work.catch(() => {});
+      resolve({ aborted: true });
+    };
+    signal.addEventListener('abort', onAbort, { once: true });
+    work.then(
+      (value) => { signal.removeEventListener('abort', onAbort); resolve({ aborted: false, value }); },
+      (error: unknown) => { signal.removeEventListener('abort', onAbort); reject(error); },
+    );
+  });
+};
+
 export const abortedError = (reason: unknown): SignalError =>
   new SignalError('The call was aborted', ErrorCode.PROVIDER_ERROR, { reason });
 

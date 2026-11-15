@@ -278,8 +278,8 @@ The result:
 
 A call is aborted by the `signal` set with `.options()`, the `signal` in a step request's `options`, or the `signal` handed to `stream()`, `step()` or `stepStream()`. When more than one is set, the first to fire aborts the call. A call aborted before it sends its request sends nothing; one aborted while the request is open tears it down.
 
-- `stream()` and `stepStream()` end: no `done` event, and no error.
-- `complete()`, `step()`, `embed()` and `decide()` reject with `E_PROVIDER_ERROR`.
+- `stream()` and `stepStream()` end: no `done` event, and no error. They end at the abort even while the provider's SDK waits out a rate limit's `retry-after`.
+- `complete()`, `step()`, `embed()` and `decide()` reject with `E_PROVIDER_ERROR`. `step()`, `embed()` and `decide()` reject only once such a wait is over.
 
 The caller has the signal, so `signal.aborted` tells an abort from a failed provider call.
 

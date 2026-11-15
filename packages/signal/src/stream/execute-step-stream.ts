@@ -3,7 +3,7 @@ import type {
   StepRequest, StepResult, StepStreamEvent, StepToolCall, StreamOptions,
 } from '../types';
 import { estimateUsage } from '../utils/estimate-usage';
-import { abortForCall } from '../utils/abort';
+import { abortForCall, settledOrAborted } from '../utils/abort';
 
 export type ExecuteStepStreamConfig = {
   adapter: ChatAdapter;
@@ -78,9 +78,23 @@ async function* streamStep(
   // the same frame twice on some calls.
   let totalUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0, reported: false };
 
+  let deltas: AsyncIterator<ProviderStreamDelta> | undefined;
+  let drained = false;
+  let abandoned = false;
   try {
-  for await (const delta of config.adapter.chatStream(providerRequest, abortSignal ? { signal: abortSignal } : undefined)) {
+  deltas = config.adapter.chatStream(providerRequest, abortSignal ? { signal: abortSignal } : undefined)[Symbol.asyncIterator]();
+  while (true) {
+    const next = await settledOrAborted(deltas.next(), abortSignal);
+    if (next.aborted) {
+      abandoned = true;
+      return;
+    }
     if (abortSignal?.aborted) return;
+    if (next.value.done === true) {
+      drained = true;
+      break;
+    }
+    const delta = next.value.value;
 
     switch (delta.type) {
       case 'text':
@@ -114,10 +128,16 @@ async function* streamStep(
     }
   }
   } catch (error) {
+    drained = true;
     // By the signal's state, not the error's type: the adapter wraps every iteration error
     // in a SignalError, so no AbortError arrives here.
     if (abortSignal?.aborted) return;
     throw error;
+  } finally {
+    // An abandoned read is still pending, and the iterator closes only after it settles.
+    const closing = drained ? undefined : deltas?.return?.();
+    if (abandoned) closing?.catch(() => {});
+    else await closing;
   }
   if (abortSignal?.aborted) return;
 
