@@ -36,20 +36,27 @@ const warnOfOneAddress = (options: CommandOptions, project: NiscProject, templat
   say(options)('      `site: "https://…"` in nisc.config.ts gives each path its own.');
 };
 
+const warnOfUnreadCharter = (options: CommandOptions, unread: readonly string[]): void => {
+  if (unread.length === 0) return;
+  say(options)('');
+  say(options)('nisc: the charter has what it does not read as written — the app runs, and what it lists does not apply:');
+  for (const detail of unread) say(options)(`  ${detail}`);
+};
+
 const templateOf =(options: CommandOptions, project: NiscProject): string => {
   const template = join(distOf(options.root, project), 'index.html');
   if (!existsSync(template)) throw new Error(`nisc: no built terminal at ${template} — run \`nisc build\`.`);
   return readFileSync(template, 'utf8');
 };
 
-const survey = async (options: CommandOptions, project: NiscMossProject): Promise<ExportedDocument[]> => {
+const survey = async (options: CommandOptions, project: NiscMossProject): Promise<{ routes: ExportedDocument[]; unread: string[] }> => {
   const template = templateOf(options, project);
   const { exportDocuments } = await import('@niscorp/moss');
   const booted = await project.boot();
   try {
     await booted.server.checkFunctions();
     const paths = project.paths === undefined ? defaultPaths(booted.server.pages) : await project.paths(booted.server);
-    return await exportDocuments({
+    const routes = await exportDocuments({
       server: booted.server,
       template,
       draw: project.draw,
@@ -58,6 +65,8 @@ const survey = async (options: CommandOptions, project: NiscMossProject): Promis
       ...(project.tokenKey !== undefined ? { tokenKey: project.tokenKey } : {}),
       paths,
     });
+    const unread = booted.server.charterReport().warnings.flatMap((warning) => (warning.rule === 'shape' ? [warning.detail] : []));
+    return { routes, unread };
   } finally {
     await booted.close?.();
   }
@@ -81,9 +90,10 @@ export const build = async (options: CommandOptions): Promise<BuildResult> => {
   if (options.skipBundle !== true) bundle(options, project);
   warnOfOwnAssets(options);
   if (isShellProject(project)) return buildShell(options, project);
-  const routes = await survey(options, project);
+  const { routes, unread } = await survey(options, project);
   say(options)('');
   say(options)(routeTable(routes));
+  warnOfUnreadCharter(options, unread);
   warnOfOneAddress(options, project, templateOf(options, project), routes.length);
   return { kind: 'moss', ok: routes.every((route) => route.drawn), routes };
 };

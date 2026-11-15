@@ -254,6 +254,13 @@ build.
 
 Exit code 1 if a path could not be drawn at all.
 
+After the table, the build names what the app's charter does not read as
+written — a misspelt key such as `denny`, which grants what it meant to take
+away — one line each, from the server it booted. The app runs, so the exit code
+does not change; an app that wants its check to fail on them reads them with
+`verifyApp` from `@niscorp/moss`, as the check of an app `npm create nisc`
+makes does.
+
 ## `nisc export`
 
 `nisc build`, then the site as a folder (`out/` by default, `--out <dir>`): the

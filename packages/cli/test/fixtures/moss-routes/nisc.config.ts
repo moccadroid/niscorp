@@ -6,7 +6,7 @@ import type { NiscMossProject } from '../../../src';
 
 // Nobody's shell reads `/hello` as it mounts, so checking the functions answers a request in-process.
 const app = defineApp({
-  charter: { public: { actions: ['home'], functions: ['greet'] } },
+  charter: { public: { actions: ['home'], functions: ['greet'], ...(process.env['NISC_FIXTURE_CHARTER'] === 'misspelt' ? { denny: ['home'] } : {}) } },
   actions: {
     home: {
       id: 'home',

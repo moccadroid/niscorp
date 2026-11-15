@@ -8,3 +8,4 @@ Three printed lines are worded plainly: an own-shell export that writes nothing 
 `nisc migrate` (and `--check`, `--status`) on a runtime that says `migrations: 'apply'` prints first that its database starts empty every time, so what it applies is gone when the command ends. Everything after that line is as before.
 `nisc start` with `PORT` set but empty says that it is read as 0, any free port; the port is the same as before.
 `nisc start` on an app with its own shell answers an address that does not decode to a path (`/%`, `/%E0%A4%A`, one with `%00`) with a 400 `not a path`, where it answered 500.
+`nisc build` on an app behind moss names, after the route table, what its charter does not read as written (a misspelt key such as `denny`), one line each. The exit code is the same.
