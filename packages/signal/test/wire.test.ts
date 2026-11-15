@@ -176,7 +176,7 @@ describe('routeRejection — the 400 carried the payload', () => {
     if (routed.outcome.kind === 'failed') expect(routed.outcome.truncated).toBe(true);
   });
 
-  it('a recovered call gets an id that a restarted process does not give again', async () => {
+  it('a recovered call gets an id of at most 40 characters that a restarted process does not give again', async () => {
     const callIdIn = async (): Promise<string | undefined> => {
       vi.resetModules();
       const fresh = await import('../src');
@@ -190,6 +190,7 @@ describe('routeRejection — the 400 carried the payload', () => {
     const after = await callIdIn();
     expect(before).toBeDefined();
     expect(after).not.toBe(before);
+    expect(before?.length).toBeLessThanOrEqual(40);
   });
 });
 

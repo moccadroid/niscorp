@@ -156,9 +156,9 @@ export const routeResponse = (request: RouteRequest): Routed => {
   return contentTurn(request);
 };
 
-// A browser page served over plain http has no crypto.randomUUID.
+// Sent back to the provider on the next turn, so it stays as short as a provider's own ids.
 const recoveredCallId = (): string =>
-  `recovered_${globalThis.crypto?.randomUUID?.() ?? `${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`}`;
+  `recovered_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
 
 export const routeRejection = (rejection: Rejection, request: Omit<RouteRequest, 'content' | 'toolCalls'>): Routed => {
   const name = rejection.name;

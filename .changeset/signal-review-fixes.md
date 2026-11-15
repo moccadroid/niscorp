@@ -6,4 +6,4 @@ An `AbortSignal` now aborts every call: the one set with `.options({ signal })` 
 
 A tool that takes no arguments now runs in `complete()` and `stream()` when the provider sends its call with no argument text, instead of failing its input check.
 
-A tool call recovered from a provider's rejection is named `recovered_<uuid>` instead of `recovered_<n>` from a counter that started again in every process, so a resumed conversation no longer repeats an id.
+A tool call recovered from a provider's rejection gets a short random id instead of `recovered_<n>` from a counter that started again in every process, so a resumed conversation no longer repeats an id.
