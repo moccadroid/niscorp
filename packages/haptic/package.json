@@ -39,7 +39,7 @@
     "@niscorp/signal": "workspace:^",
     "imagescript": "^3.14.0",
     "openai": "^7.51.0",
-    "zod": "^4.6.7",
+    "zod": "^4.6.5",
     "@niscorp/prism": "workspace:^",
     "@niscorp/strata": "workspace:^"
   },

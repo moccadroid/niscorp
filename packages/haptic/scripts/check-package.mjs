@@ -56,6 +56,28 @@ assert.equal(archives.length, 1);
 const archive = resolve(evidence, archives[0]);
 const pkg = JSON.parse(await readFile('package.json', 'utf8'));
 assert.equal(pkg.name, '@niscorp/haptic');
+// The nisc packages Haptic reaches are packed from the workspace too (`pnpm pack` rewrites their `workspace:`
+// ranges), and the consumer resolves every one of them to its tarball, so nothing comes from npm.
+const siblings = {};
+const nisc = (manifest) =>
+  Object.keys({ ...manifest.dependencies, ...manifest.peerDependencies }).filter((name) =>
+    name.startsWith('@niscorp/'),
+  );
+const wanted = nisc(pkg);
+while (wanted.length) {
+  const name = wanted.shift();
+  if (name in siblings) continue;
+  const dir = resolve('..', name.slice('@niscorp/'.length));
+  const manifest = JSON.parse(await readFile(resolve(dir, 'package.json'), 'utf8'));
+  assert.equal(manifest.name, name);
+  const destination = resolve(evidence, 'siblings', name.slice('@niscorp/'.length));
+  await mkdir(destination, { recursive: true });
+  await run([pnpm, 'pack', '--pack-destination', destination], dir, 'pack-' + name.slice(9));
+  const [file] = (await readdir(destination)).filter((entry) => entry.endsWith('.tgz'));
+  siblings[name] = 'file:' + resolve(destination, file);
+  wanted.push(...nisc(manifest));
+}
+const versionOf = (name) => siblings[name] ?? pkg.devDependencies[name];
 await writeFile(
   resolve(consumer, 'package.json'),
   JSON.stringify({
@@ -64,15 +86,16 @@ await writeFile(
     dependencies: {
       [pkg.name]: 'file:' + archive,
       ...Object.fromEntries(
-        Object.entries(pkg.peerDependencies)
-          .filter(([name]) => !pkg.peerDependenciesMeta?.[name]?.optional)
-          .map(([name]) => [name, pkg.devDependencies[name]]),
+        Object.keys(pkg.peerDependencies)
+          .filter((name) => !pkg.peerDependenciesMeta?.[name]?.optional)
+          .map((name) => [name, versionOf(name)]),
       ),
     },
     devDependencies: {
       typescript: pkg.devDependencies.typescript,
       '@types/node': pkg.devDependencies['@types/node'],
     },
+    pnpm: { overrides: siblings },
   }),
 );
 // Compiler platform packages are optional dependencies, not Haptic's optional peers.
@@ -185,8 +208,8 @@ await run(
     'add',
     '--offline',
     '--ignore-scripts',
-    '@niscorp/cortex@' + pkg.devDependencies['@niscorp/cortex'],
-    '@niscorp/signal@' + pkg.devDependencies['@niscorp/signal'],
+    '@niscorp/cortex@' + versionOf('@niscorp/cortex'),
+    '@niscorp/signal@' + versionOf('@niscorp/signal'),
     'openai@' + pkg.devDependencies.openai,
   ],
   consumer,
