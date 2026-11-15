@@ -1,4 +1,5 @@
 import { renderDocument } from '@niscorp/moss';
+import { walkNodes } from '@niscorp/nova/reflect';
 import { boot } from '../server/boot';
 import { drawing } from '../server/document';
 
@@ -15,9 +16,11 @@ try {
   const shells = server.shells;
   if (shells === undefined) throw new Error('the manifest has no shell');
   const snapshot = await shells.snapshot(null, null);
-  const main = JSON.stringify(snapshot.trees['main'] ?? []);
-  check('the anonymous principal is served the welcome action', main.includes('"definitionId":"welcome"'), main.slice(0, 200));
-  check('its screen has a button to press', main.includes('"ref":"press"'));
+  const main = snapshot.trees['main'] ?? [];
+  const nodes: Record<string, unknown>[] = [];
+  walkNodes(main, (node) => nodes.push(node));
+  check('the anonymous principal is served the welcome action', nodes.some((node) => node['definitionId'] === 'welcome'), JSON.stringify(main).slice(0, 200));
+  check('its screen has a button to press', nodes.some((node) => node['ref'] === 'press'));
 
   const template = '<!doctype html><html><head></head><body><div id="root"></div></body></html>';
   const page = await renderDocument({ ...drawing, server, template, request: { path: '/', cookie: null } });
