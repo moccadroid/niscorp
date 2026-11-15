@@ -30,6 +30,14 @@ const rulesOn = (policy: ScopePolicy, table: string, phase: 'read' | 'insert'): 
   return entity === undefined || 'public' in entity || 'deny' in entity ? undefined : entity[phase];
 };
 
+describe('createPolicies — a scoping that is not a name', () => {
+  it('reaches no rows, whether it is a number or null', () => {
+    const odd: Charter = JSON.parse('{"counted":{"data":["bookings.read"],"scoping":5},"blank":{"data":["bookings.read"],"scoping":null}}');
+    const policies = createPolicies({ charter: odd, behaviors, grants });
+    for (const role of ['counted', 'blank']) expect(policies.of(who(role)).entities['bookings']).toBeUndefined();
+  });
+});
+
 describe('createPolicies — the policy for a set of roles, kept', () => {
   it('compiles what the roles are granted, under the rules of their reach', () => {
     const policies = createPolicies({ charter, behaviors, grants });

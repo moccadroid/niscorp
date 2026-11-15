@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { resolveRole, resolvePrincipal, verifyCharter, CharterError, matchGlob } from '../src/index';
+import { resolveRole, resolvePrincipal, resolveScoping, verifyCharter, CharterError, matchGlob } from '../src/index';
 import type { Charter } from '../src/index';
 
 const gids = ['a.one', 'a.two', 'b.one'];
@@ -212,25 +212,38 @@ describe('a charter as it is read from JSON — a value that is neither a list n
   const fromJson = (text: string): Charter => JSON.parse(text);
 
   it('where it would grant, it grants nothing and is said; the verifier does not throw', () => {
-    const charter = fromJson('{"a":{"allow":5},"b":{"allow":["crm.deal.view",5]},"c":null,"d":{"actions":7},"all":["*"]}');
+    const charter = fromJson('{"a":{"allow":5},"b":{"allow":["crm.deal.view",5]},"c":"crm.*","d":{"actions":7},"all":["*"]}');
     const report = verifyCharter(charter, { actions: crm, data: [] });
     expect(report.errors).toEqual([]);
     expect(report.warnings.filter((warning) => warning.rule === 'shape').map((warning) => warning.detail)).toEqual([
       'role "a": "allow" is 5, which is not a list: it grants nothing',
       'role "b": "allow" lists 5, which is not a string: it grants nothing',
-      'role "c" is null, which grants nothing: a role is a list of globs or an object',
+      'role "c" is the string "crm.*", which grants nothing: a role is a list of globs or an object',
       'role "d": "actions" is 7, which grants nothing: a section is a list of globs or { allow, deny }',
     ]);
     expect(sorted(resolvePrincipal(charter, crm, ['a', 'b', 'c', 'd']))).toEqual(['crm.deal.view']);
   });
 
+  it('a scoping that is not a name is handed on as written, and is said', () => {
+    const charter = fromJson('{"counted":{"allow":["*"],"scoping":5},"blank":{"allow":["*"],"scoping":null}}');
+    expect(resolveScoping(charter, 'counted')).toBe(5);
+    expect(resolveScoping(charter, 'blank')).toBeNull();
+    expect(verifyCharter(charter, { actions: crm, data: [] }).warnings.map((warning) => warning.detail)).toEqual([
+      'role "counted": "scoping" is 5, which is not a name: the role reaches no rows',
+      'role "blank": "scoping" is null, which is not a name: the role reaches no rows',
+    ]);
+  });
+
   it('where it would take away, the role is refused: the verifier says so, and resolving it throws', () => {
-    const charter = fromJson('{"r":{"allow":["crm.*"],"deny":5},"s":{"actions":{"allow":["crm.*"],"deny":["crm.deal.delete",5]}}}');
+    const charter = fromJson(
+      '{"r":{"allow":["crm.*"],"deny":5},"s":{"actions":{"allow":["crm.*"],"deny":["crm.deal.delete",5]}},"muzzle":null,"t":{"allow":["crm.*"],"without":["muzzle"]}}',
+    );
     expect(verifyCharter(charter, { actions: crm, data: [] }).errors).toEqual([
       { level: 'error', rule: 'shape', detail: 'role "r": "deny" is 5, which is not a list: what it takes away cannot be read' },
       { level: 'error', rule: 'shape', detail: 'role "s": "actions.deny" lists 5, which is not a string: what it takes away cannot be read' },
+      { level: 'error', rule: 'shape', detail: 'role "muzzle" is null, which is not a list or an object: what it grants and takes away cannot be read' },
     ]);
-    expect(() => resolvePrincipal(charter, crm, ['r'])).toThrow(CharterError);
-    expect(() => resolvePrincipal(charter, crm, ['s'])).toThrow(CharterError);
+    for (const role of ['r', 's', 't']) expect(() => resolvePrincipal(charter, crm, [role])).toThrow(CharterError);
+    expect(verifyCharter(fromJson('{"r":{"actions":null,"allow":["crm.*"]}}'), { actions: crm, data: [] }).errors.map((error) => error.rule)).toContain('ambiguous-selection');
   });
 });

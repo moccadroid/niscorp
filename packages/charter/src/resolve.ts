@@ -65,8 +65,8 @@ export const resolveRole = (
 // One role, not a list: two roles naming different profiles are not a conflict
 // to refuse. A caller holding several resolves each and merges the results.
 export const resolveScoping = (charter: Charter, role: string): string | undefined => {
-  const scoping = fieldsOf(charter[role])?.get('scoping');
-  return typeof scoping === 'string' ? scoping : undefined;
+  const def = charter[role];
+  return !def || Array.isArray(def) ? undefined : def.scoping;
 };
 
 export const resolvePrincipal = (
