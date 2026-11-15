@@ -187,6 +187,27 @@ describe('generate — a folder where the app reads or writes a file', () => {
   });
 });
 
+describe('generate — an .env that already sets a key, in a form Node reads', () => {
+  const withEnv = (name: string, theirs: string, env: Record<string, string>): string => {
+    const dir = join(scratch, name);
+    mkdirSync(dir);
+    writeFileSync(join(dir, '.env'), theirs);
+    generate({ dir, name, picks: completed(catalog, { kind: 'model-first' }), versions: SET, today: TODAY, env });
+    return read(dir, '.env');
+  };
+
+  it.each([
+    ['spaced-key', 'GROQ_API_KEY = sk-x\n'],
+    ['exported-key', 'export GROQ_API_KEY=sk-x\n'],
+  ])('%s, the key left empty: no empty line is added after it to hide it', (name, theirs) => {
+    expect(withEnv(name, theirs, {})).toBe(theirs);
+  });
+
+  it('a key given is added after theirs, as before, and is the one Node reads', () => {
+    expect(withEnv('given-key', 'GROQ_API_KEY = old\n', { GROQ_API_KEY: 'sk-new' })).toBe('GROQ_API_KEY = old\nGROQ_API_KEY=sk-new\n');
+  });
+});
+
 describe('generate — what it refuses, before writing anything', () => {
   it('a name npm would not take', () => {
     const dir = join(scratch, 'Bad Name');

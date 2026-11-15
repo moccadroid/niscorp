@@ -222,7 +222,11 @@ export const generate = (options: CreateOptions): Created => {
   addTo('.gitignore', `${gitignoreLines.join('\n')}\n`, gitignoreLines, (line, have) => have.has(line));
   if (envs !== undefined) {
     const named = (line: string): string => line.slice(0, line.indexOf('=') + 1);
-    addTo('.env', envs.env, envs.assigned, (line, have) => [...have].some((theirs) => theirs.startsWith(named(line))));
+    // Node also reads `NAME = value` and `export NAME=value`; an empty `NAME=` after either would win and hide it.
+    const sets = (name: string, theirs: string): boolean => new RegExp(`^(export\\s+)?${name}\\s*=`).test(theirs);
+    addTo('.env', envs.env, envs.assigned, (line, have) =>
+      [...have].some((theirs) => theirs.startsWith(named(line)) || (line === named(line) && sets(line.slice(0, -1), theirs))),
+    );
   }
 
   for (const [rel, content] of planned) {
