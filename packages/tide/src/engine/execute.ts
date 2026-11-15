@@ -34,6 +34,7 @@ const claimTasks = async (deps: EngineDeps, now: number, limit: number, token: s
   return deps.store.claim({
     table: 'task',
     where: {
+      reflexId: { in: deps.reflexes().map((loaded) => loaded.reflex.id) },
       state: { in: ['pending', 'retrying', 'claimed'] },
       notBefore: { lte: now },
       claimedUntil: { lte: now },
@@ -247,30 +248,39 @@ export const reopenTask = async (deps: EngineDeps, taskId: string, now: number):
     return true;
   });
 
+// Each run's mark and its fact commit together, one run per transaction: a run whose fact cannot be
+// written stays undrained and is tried again on the next advance, and the runs after it still drain.
 export const settleRuns = async (deps: EngineDeps, now: number): Promise<number> => {
-  const settled = await deps.store.claim({
+  const settled = await deps.store.query({
     table: 'run',
     where: { state: 'settled', drained: { ne: true } },
     order: [{ by: 'settledAt' }],
     limit: 200,
-    set: { drained: true },
   });
 
+  let drained = 0;
   for (const run of settled) {
-    deps.emit({ type: 'run.settled', run });
-    const admission = await admitFact(deps.store, {
-      kind: 'run',
-      reflex: run.reflexId,
-      runId: run.id,
-      occurrence: run.occurrence,
-      stats: { total: run.total, done: run.done, failed: run.failed },
-      at: now,
-      depth: run.depth + 1,
-      cause: `run:${run.id}`,
-      as: run.as,
-    }, deps.maxChainFacts);
+    const admission = await deps.store
+      .transact(async (tx) => {
+        if (!(await tx.cas('run', run.id, { state: 'settled', drained: { ne: true } }, { drained: true }))) return undefined;
+        return admitFact(tx, {
+          kind: 'run',
+          reflex: run.reflexId,
+          runId: run.id,
+          occurrence: run.occurrence,
+          stats: { total: run.total, done: run.done, failed: run.failed },
+          at: now,
+          depth: run.depth + 1,
+          cause: `run:${run.id}`,
+          as: run.as,
+        }, deps.maxChainFacts);
+      })
+      .catch(() => undefined);
+    if (admission === undefined) continue;
+    drained += 1;
+    deps.emit({ type: 'run.settled', run: { ...run, drained: true } });
     announceFact(deps.emit, admission);
   }
 
-  return settled.length;
+  return drained;
 };

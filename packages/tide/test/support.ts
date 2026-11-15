@@ -1,6 +1,6 @@
 import { PGlite } from '@electric-sql/pglite';
 import { afterAll, beforeAll, inject } from 'vitest';
-import type { Row, TransformFn } from '../src/index';
+import type { Row, TideStore, TransformFn } from '../src/index';
 import { initialisedDirectory } from './initialised-database';
 import { TIDE_TABLES, createTideStore } from '../src/store/postgres';
 import type { TidePool } from '../src/store/postgres';
@@ -74,4 +74,20 @@ export const oneDatabase = (): { emptied: () => Promise<{ db: PGlite; pool: Tide
       return { db, pool: pglitePool(db) };
     },
   };
+};
+
+export const failingFirstRunFact = (inner: TideStore): TideStore => {
+  let failed = false;
+  const over = (store: TideStore): TideStore => ({
+    ...store,
+    appendIfAbsent: async (table, row) => {
+      if (table === 'fact' && 'kind' in row && row.kind === 'run' && !failed) {
+        failed = true;
+        throw new Error('connection reset');
+      }
+      return store.appendIfAbsent(table, row);
+    },
+    transact: (fn) => store.transact((tx) => fn(over(tx))),
+  });
+  return over(inner);
 };

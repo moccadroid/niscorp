@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { mkdtempSync, readFileSync, existsSync, writeFileSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, readFileSync, existsSync, writeFileSync, mkdirSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { z } from 'zod';
 import type { Sequence, Transform } from '../src';
 import { runSourceUpgrade } from '../src/node';
@@ -25,7 +25,7 @@ const renameTitle = {
 const forms = (migrations: Sequence['migrations']): Sequence => ({ id: 'acme.forms', documents: { form: {} }, migrations });
 const schemas = { 'acme.forms/form': z.object({ heading: z.string(), fields: z.array(z.string()) }).strict() };
 
-const app = () => {
+const app = (workDir?: string) => {
   const root = mkdtempSync(join(tmpdir(), 'strata-upgrade-'));
   mkdirSync(join(root, 'src'), { recursive: true });
   writeFileSync(join(root, 'src', 'forms.ts'), "export const signup = { id: 'signup', title: 'Sign up', fields: ['email'] };\n");
@@ -40,7 +40,7 @@ const app = () => {
     source[at] = { kind: 'acme.forms/form', id, document };
   };
   const run = (grammars: readonly Sequence[], ...argv: string[]) =>
-    runSourceUpgrade({ root, grammars, transform, schemas: { 'acme.forms/form': schemas['acme.forms/form'].extend({ id: z.string() }) }, documents: () => source, log: (l) => lines.push(l) }, argv);
+    runSourceUpgrade({ root, grammars, transform, schemas: { 'acme.forms/form': schemas['acme.forms/form'].extend({ id: z.string() }) }, documents: () => source, log: (l) => lines.push(l), ...(workDir === undefined ? {} : { workDir }) }, argv);
   return { root, source, lines, run, edit, lock: () => JSON.parse(readFileSync(join(root, 'strata.lock.json'), 'utf8')) };
 };
 
@@ -130,10 +130,91 @@ describe('strata upgrade — the loop', () => {
     expect(readFileSync(join(a.root, '.strata', 'upgrade', 'REPORT.md'), 'utf8')).toContain('## Stop: a migration is wrong');
   });
 
+  it('verify refuses an artifact that matches its migrated JSON but fails the current schema, and keeps the lock', async () => {
+    const a = app();
+    await a.run([forms([])], 'init');
+    const broken = { ...renameTitle, steps: [{ kind: 'document' as const, at: 'acme.forms/form', transform: ({ document }: { document: Record<string, unknown> }) => ({ ...document, heading: 42 }) }] };
+    await a.run([forms([broken])], 'upgrade');
+    a.edit('signup', { id: 'signup', title: 'Sign up', heading: 42, fields: ['email'] });
+    a.edit('contact', { id: 'contact', heading: 42, fields: [] });
+
+    expect(await a.run([forms([broken])], 'verify')).toBe(1);
+    expect(a.lines.join('\n')).toContain("acme.forms/form:signup does not pass acme.forms/form's current schema");
+    expect(a.lock()).toEqual({ grammar: { 'acme.forms': 0 } });
+  });
+
   it('a lock ahead of the installed grammars is refused', async () => {
     const a = app();
     writeFileSync(join(a.root, 'strata.lock.json'), JSON.stringify({ grammar: { 'acme.forms': 3 } }));
     expect(await a.run([forms([renameTitle])], 'status')).toBe(1);
     expect(a.lines.join('\n')).toContain('ahead of the installed grammars');
+  });
+
+  it.each([['"x"', 'x'], ['an empty string', ''], ['-1', -1], ['null', null], ['true', true], ['1.5', 1.5]])(
+    'a lock whose entry is %s is refused, not read as a number of migrations',
+    async (_name, entry) => {
+      const a = app();
+      writeFileSync(join(a.root, 'strata.lock.json'), JSON.stringify({ grammar: { 'acme.forms': entry } }));
+      await expect(a.run([forms([renameTitle])], 'status', '--check')).rejects.toMatchObject({ code: 'INVALID_SEQUENCE' });
+    },
+  );
+
+  it('a lock entry written as digits is read as the number', async () => {
+    const a = app();
+    writeFileSync(join(a.root, 'strata.lock.json'), JSON.stringify({ grammar: { 'acme.forms': '1' } }));
+    expect(await a.run([forms([renameTitle])], 'status', '--check')).toBe(0);
+  });
+});
+
+describe('strata upgrade — it removes only what it wrote', () => {
+  const next = [forms([renameTitle])];
+  const migrated = { id: 'signup', heading: 'Sign up', fields: ['email'] };
+
+  it('a work directory that is the project itself: upgrade and verify leave the project', async () => {
+    const a = app('.');
+    writeFileSync(join(a.root, 'notes.md'), 'mine\n');
+    await a.run([forms([])], 'init');
+
+    expect(await a.run(next, 'upgrade')).toBe(0);
+    expect(readFileSync(join(a.root, 'src', 'forms.ts'), 'utf8')).toContain('signup');
+    expect(existsSync(join(a.root, 'notes.md'))).toBe(true);
+    expect(existsSync(join(a.root, 'REPORT.md'))).toBe(true);
+
+    a.edit('signup', migrated);
+    expect(await a.run(next, 'verify')).toBe(0);
+    expect(readdirSync(a.root).sort()).toEqual(['notes.md', 'src', 'strata.lock.json']);
+  });
+
+  it('a work directory outside the project: what else is in it stays', async () => {
+    const outside = mkdtempSync(join(tmpdir(), 'strata-outside-'));
+    writeFileSync(join(outside, 'theirs.txt'), 'not strata\n');
+    const a = app(join('..', basename(outside)));
+    await a.run([forms([])], 'init');
+
+    expect(await a.run(next, 'upgrade')).toBe(0);
+    a.edit('signup', migrated);
+    expect(await a.run(next, 'verify')).toBe(0);
+    expect(readdirSync(outside)).toEqual(['theirs.txt']);
+  });
+
+  it('a plan.json that names a path outside expected/ has nothing removed for it', async () => {
+    const a = app('.');
+    writeFileSync(join(a.root, 'package.json'), '{}\n');
+    writeFileSync(join(a.root, 'plan.json'), JSON.stringify({ documents: [{ kind: '..', id: 'package' }] }));
+    await a.run([forms([])], 'init');
+
+    expect(await a.run(next, 'upgrade')).toBe(0);
+    expect(existsSync(join(a.root, 'package.json'))).toBe(true);
+  });
+
+  it('by default verify removes .strata/upgrade, and keeps anything else in .strata', async () => {
+    const a = app();
+    await a.run([forms([])], 'init');
+    await a.run(next, 'upgrade');
+    writeFileSync(join(a.root, '.strata', 'keep.json'), '{}\n');
+
+    a.edit('signup', migrated);
+    expect(await a.run(next, 'verify')).toBe(0);
+    expect(readdirSync(join(a.root, '.strata'))).toEqual(['keep.json']);
   });
 });

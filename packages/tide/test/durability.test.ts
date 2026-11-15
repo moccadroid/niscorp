@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { createMemoryStore, createTide } from '../src/index';
-import type { EffectRegistry, Fact, ReflexInput, Row, SelectFn, Tide, TideConfig, TideEvent } from '../src/index';
-import { testTransform, utc } from './support';
+import type { EffectRegistry, Fact, ReflexInput, Row, SelectFn, Tide, TideConfig, TideEvent, TideStore } from '../src/index';
+import { failingFirstRunFact, testTransform, utc } from './support';
 
 const vienna = 'Europe/Vienna';
 const T0 = utc('2026-03-01T00:00:00Z');
@@ -788,5 +788,144 @@ describe('the last tasks of a run landing at once', () => {
     const runs = await engines.a.ledger.runs({ reflexId: 'reminders.send' });
     expect(runs.map((run) => run.state)).toEqual(['settled', 'settled']);
     expect(runs.map((run) => run.done)).toEqual([6, 6]);
+  });
+});
+
+describe('a settled run and the fact that announces it', () => {
+  const settles: ReflexInput = { id: 'import.rows', intent: 'Import the rows.', on: { manual: {} }, effect: { name: 'work' } };
+  const follows: ReflexInput = { id: 'import.report', intent: 'Report the import.', on: { fact: { run: 'import.rows' } }, effect: { name: 'work' } };
+
+  it('land together: a failed fact write leaves the run to announce on the next advance', async () => {
+    const calls: unknown[] = [];
+    const tide = createTide({
+      store: failingFirstRunFact(createMemoryStore()),
+      transform: testTransform,
+      effects: { work: { run: (input) => calls.push(input) } },
+    });
+    await tide.load([settles, follows], { at: T0 });
+    await tide.fire('import.rows', { now: T0 });
+
+    await tide.advance({ now: T0 });
+    expect((await tide.ledger.runs({ reflexId: 'import.rows' }))[0]?.drained).toBeUndefined();
+    for (let tick = 1; tick <= 3; tick += 1) await tide.advance({ now: T0 + tick });
+
+    expect((await tide.ledger.facts()).filter((fact) => fact.kind === 'run' && fact.reflex === 'import.rows')).toHaveLength(1);
+    expect(await tide.ledger.runs({ reflexId: 'import.report' })).toHaveLength(1);
+    expect(calls).toHaveLength(2);
+  });
+
+  it('a run whose fact can never be written does not stop the runs after it, and no advance throws', async () => {
+    const refusing = (store: TideStore): TideStore => ({
+      ...store,
+      appendIfAbsent: async (table, row) => {
+        if (table === 'fact' && 'kind' in row && row.kind === 'run' && 'reflex' in row && row.reflex === 'bad') throw new Error('value too long');
+        return store.appendIfAbsent(table, row);
+      },
+      transact: (fn) => store.transact((tx) => fn(refusing(tx))),
+    });
+    const calls: unknown[] = [];
+    const tide = createTide({ store: refusing(createMemoryStore()), transform: testTransform, effects: { work: { run: (input) => calls.push(input) } } });
+    await tide.load(
+      [
+        { id: 'bad', intent: 'Its run fact is refused.', on: { manual: {} }, effect: { name: 'work' } },
+        { id: 'good', intent: 'Runs.', on: { manual: {} }, effect: { name: 'work' } },
+        { id: 'after.good', intent: 'Follows good.', on: { fact: { run: 'good' } }, effect: { name: 'work' } },
+      ],
+      { at: T0 },
+    );
+    await tide.fire('bad', { now: T0 });
+    await tide.fire('good', { now: T0 + 1 });
+
+    for (let tick = 2; tick < 6; tick += 1) await tide.advance({ now: T0 + tick });
+
+    expect(await tide.ledger.runs({ reflexId: 'after.good' })).toHaveLength(1);
+    expect((await tide.ledger.runs({ reflexId: 'bad' }))[0]?.drained).toBeUndefined();
+  });
+});
+
+describe('work that cannot start yet does not stop the work behind it', () => {
+  it('four hundred delayed facts do not keep a due one from its reflex', async () => {
+    const { tide, calls } = await harness(
+      [{ id: 'ping.answer', intent: 'Answer a ping.', on: { fact: { signal: 'ping' } }, effect: { name: 'work' }, policy: { overlap: 'allow' } }],
+      { work: { run: () => ({ ok: true }) } },
+    );
+    for (let n = 0; n < 400; n += 1) await tide.ingest({ kind: 'signal', name: 'ping', at: T0, notBefore: T0 + DAY });
+    await tide.ingest({ kind: 'signal', name: 'ping', at: T0 + 1 });
+
+    await tide.advance({ now: T0 + 2 });
+
+    expect(calls).toHaveLength(1);
+  });
+
+  it('a task whose reflex is not loaded is left for when it is, with no attempt spent', async () => {
+    let attempts = 0;
+    const flaky: ReflexInput = {
+      id: 'flaky',
+      intent: 'Fail, and retry a minute later.',
+      on: { manual: {} },
+      effect: { name: 'work' },
+      policy: { retry: { max: 3, backoff: 'fixed', baseMs: 60_000 } },
+    };
+    const other: ReflexInput = { id: 'other', intent: 'Anything else.', on: { manual: {} }, effect: { name: 'work' } };
+    const { tide } = await harness([flaky, other], { work: { run: () => { attempts += 1; throw new Error('provider down'); } } }, { leaseMs: 1_000 });
+    await tide.fire('flaky', { now: T0 });
+    await tide.advance({ now: T0 });
+
+    await tide.load([other]);
+    for (let tick = 1; tick <= 5; tick += 1) await tide.advance({ now: T0 + 60_000 + tick * 2_000 });
+    await tide.load([flaky, other]);
+    await tide.advance({ now: T0 + 120_000 });
+
+    const [task] = await tide.ledger.tasks({ reflexId: 'flaky' });
+    expect(attempts).toBe(2);
+    expect({ state: task?.state, attempt: task?.attempt }).toEqual({ state: 'retrying', attempt: 2 });
+  });
+
+  it('a task whose reflex is not loaded does not make nextDue answer a time already past', async () => {
+    const gone: ReflexInput = { id: 'gone', intent: 'Fail once.', on: { manual: {} }, effect: { name: 'fail' }, policy: { retry: { max: 3, backoff: 'fixed', baseMs: 60_000 } } };
+    const waiter: ReflexInput = { id: 'waiter', intent: 'Answer a ping.', on: { fact: { signal: 'ping' } }, effect: { name: 'work' } };
+    const { tide } = await harness([gone, waiter], { fail: { run: () => { throw new Error('down'); } }, work: { run: () => null } });
+    await tide.fire('gone', { now: T0 });
+    await tide.advance({ now: T0 });
+    await tide.load([waiter]);
+
+    const now = T0 + 120_000;
+    await tide.ingest({ kind: 'signal', name: 'ping', at: now, notBefore: now + 60_000 });
+    await tide.advance({ now });
+
+    expect(await tide.nextDue(now)).toBe(now + 60_000);
+  });
+});
+
+describe('reading the ledger', () => {
+  it('the facts of one reflex are read without reading every fact', async () => {
+    const inner = createMemoryStore();
+    let factsRead = 0;
+    const store: TideStore = {
+      ...inner,
+      query: async (spec) => {
+        const rows = await inner.query(spec);
+        if (spec.table === 'fact') factsRead += rows.length;
+        return rows;
+      },
+    };
+    const tide = createTide({ store, transform: testTransform, effects: { work: { run: () => null } } });
+    await tide.load([{ id: 'tally', intent: 'Count a vote.', on: { manual: {} }, effect: { name: 'work' } }], { at: T0 });
+    for (let n = 0; n < 50; n += 1) await tide.ingest({ kind: 'signal', name: 'noise', at: T0 + n });
+    await tide.fire('tally', { now: T0 + 60 });
+    await tide.fire('tally', { now: T0 + 61 });
+
+    factsRead = 0;
+    const facts = await tide.ledger.facts({ reflexId: 'tally', limit: 1 });
+
+    expect(facts.map((fact) => fact.at)).toEqual([T0 + 61]);
+    expect(factsRead).toBeLessThanOrEqual(2);
+  });
+
+  it('a fact that names the reflex twice is listed once', async () => {
+    const { tide } = await harness([{ id: 'tally', intent: 'Count a vote.', on: { manual: {} }, effect: { name: 'work' } }], { work: { run: () => null } });
+    await tide.ingest({ kind: 'manual', target: 'tally', reflex: 'tally', at: T0 });
+
+    expect(await tide.ledger.facts({ reflexId: 'tally' })).toHaveLength(1);
   });
 });

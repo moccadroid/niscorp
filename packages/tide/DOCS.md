@@ -77,7 +77,10 @@ no reflexes are loaded. Signal and manual facts are always stored.
 
 `leaseMs` is the recovery story for a process that dies between the effect and
 the record. A task still `claimed` past its lease is claimable again; the
-fencing token is what makes that safe.
+fencing token is what makes that safe. An effect whose `timeoutMs` is not
+shorter than the lease can still be running when another instance claims its
+task again, so `load` names each such reflex in `warnings`; it loads it all
+the same.
 
 ---
 
@@ -307,9 +310,8 @@ $ = { params,        // the reflex's knobs
 ```
 
 Truthiness is one predicate, shared by the matcher and by `preview`: `false`,
-`null`, `undefined`, `0`, `''` and `[]` are all falsy. They used to disagree,
-and a `when` returning an empty list previewed as "this will fire" and then
-didn't — the exact surprise preview exists to eliminate.
+`null`, `undefined`, `0`, `''` and `[]` are all falsy, so a `when` that
+previews as "this will fire" fires.
 
 The honest cost of opacity: a typo'd `$ref` cannot be caught at load. It
 surfaces at `preview()` — which is why preview is the authoring loop's inner
@@ -341,8 +343,7 @@ type FactInput = {
 refuses the key fields of the others (`entity`, `name`, `target`, `runId`; a
 `signal` also refuses `op`). The rest are not checked by kind: a `write`
 accepts `payload`, `reflex`, `stats` and `by`. `{ kind: 'write' }` with no entity
-used to parse, store, match nothing, get marked delivered and vanish, with no
-way for the producer to learn its fact was never going to wake anything.
+is refused by `ingest`, so the producer learns its fact could never wake anything.
 
 **Ops are distinct stimuli.** "Only on create" is `op: 'insert'`. Things that
 happen exactly once ride inserts naturally when the domain models intent as
@@ -370,10 +371,12 @@ Validates, hashes versions, derives and verifies the graph, and arms. `at` is
 the host's boot time; arming persists, so a restart does not reopen the past.
 `LoadReport` carries `{ loaded, cycles, blind, warnings, refused }` — guarded
 cycles are legal and reported; effects with no `writes` are reported as
-blind edges; `refused` is each reflex `isolate` left out, as
+blind edges; `warnings` names a reflex that subscribes to its own run and a
+reflex whose `timeoutMs` is not shorter than `leaseMs`; `refused` is each reflex `isolate` left out, as
 `{ reflexId, code, message }` (`reflexId` is undefined for one that had none),
 and is empty without it. Calling it again is how a host changes what is running,
-including turning one off.
+including turning one off. The tasks of a reflex left out are not claimed until
+a load brings it back, so they spend no attempt while it is away.
 
 ```typescript
 ingest(fact: FactInput, options?: { as?: string; cause?: string; depth?: number }): Promise<Fact | undefined>
@@ -516,8 +519,7 @@ States: a task moves `pending → claimed → done | retrying | failed`; a run m
 `pending → fanned → settled`, or lands on `skipped` (overlap, catch-up, a
 refused fan-out, or a reflex no longer loaded — always with a `note`).
 
-`limit` means **the most recent N**, in every store. The two stores used to
-answer opposite ends of the same list under the same filter.
+`limit` means **the most recent N**, in every store.
 
 **There is no attempt table.** Correctness needs the count and the last error,
 and both are on the task; per-attempt history is the host's log, which is where
@@ -530,9 +532,9 @@ is the only honest default when the rows are billing history:
 await tide.sweep(now, { facts: THIRTY_DAYS, runs: NINETY_DAYS });
 ```
 
-Removing a run removes its tasks with it. Keeping the tasks would destroy the
-`UNIQUE(runId, unit)` row that *is* the "this unit already ran" record, and a
-restore would then re-charge the invoice.
+`facts` removes the facts delivered before its horizon, `runs` the runs that settled or were skipped
+before its horizon and their tasks with them, and `tasks` the tasks settled
+before its horizon, whatever their run.
 
 ---
 
@@ -627,7 +629,8 @@ of one operation and diverged three ways.
   second loses the race. `onePer: { column, held, only }` lets at most one row
   per value of `column` be held at a time, counting rows that match `held`
   from an earlier claim; it applies to the values listed in `only`, and every
-  other value claims freely.
+  other value claims freely. A value in `only` with nothing to claim takes no
+  room from the others.
 - **`cas`** is the fence: a timed-out attempt finishing late finds its token
   superseded and is discarded. Setting a field to `undefined` clears it.
 - **`transact`** is required. Fan-out committing with its run's transition, and
@@ -860,7 +863,7 @@ A `TideError` is tide's own refusal — a duplicate unit key, a missing `select`
 seam — which means the reflex is wrong and will be wrong again next `advance`, so the
 run is `skipped` with a note. Anything else came out of a host seam: a
 selection, a transform, a database. That is a bad minute, not a bad reflex, so
-the run stays `pending` and is retried — a row past its due time that a query
-can see. Every throw used to skip, and because runs are idempotent on
-`(reflexId, cause)`, one database hiccup destroyed that night's billing run
-permanently.
+the run stays `pending` and is tried again on the next `advance` — a row past
+its due time that a query can see. Skipping it instead would
+lose it for good: runs are idempotent on `(reflexId, cause)`, so the occurrence
+cannot open a second run.

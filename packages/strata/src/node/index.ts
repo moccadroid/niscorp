@@ -1,9 +1,10 @@
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { join, relative, sep } from 'node:path';
-import { createUpgrader, type Stamp, type Transform } from '../documents';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { isAbsolute, join, relative, sep } from 'node:path';
+import { createUpgrader, type Stamp, type Transform, type Upgrader } from '../documents';
 import type { Sequence } from '../schema';
 import type { GrammarSchema } from '../check';
 import { changedStrings, planSourceUpgrade, renderReport, verifySourceUpgrade, type SourceDocument, type SourcePlan } from '../upgrade';
+import { schemaMisfit } from '../upgrade/fits';
 import { StrataError } from '../errors';
 
 export type SourceUpgradeOptions = {
@@ -20,6 +21,9 @@ export type SourceUpgradeOptions = {
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
 
+// Digits are taken as well as a number: `Number` read them correctly before this was checked.
+const isMigrationCount = (value: unknown): boolean => (typeof value === 'number' && Number.isInteger(value) && value >= 0) || (typeof value === 'string' && /^\d+$/.test(value));
+
 const stampText = (s: Stamp): string => Object.entries(s).map(([k, v]) => `${k} ${v}`).join(', ') || '(nothing)';
 
 const filesUnder = (dir: string): string[] =>
@@ -31,23 +35,59 @@ const filesUnder = (dir: string): string[] =>
       })
     : [];
 
-export const runSourceUpgrade = async (options: SourceUpgradeOptions, argv: readonly string[]): Promise<number> => {
-  const log = options.log ?? ((line: string) => console.log(line));
-  const command = argv.find((a) => !a.startsWith('-')) ?? 'status';
+type Workspace = {
+  options: SourceUpgradeOptions;
+  log: (line: string) => void;
+  upgrader: Upgrader;
+  lockPath: string;
+  work: string;
+  planPath: string;
+  reportPath: string;
+  rel: (path: string) => string;
+  expectedPathOf: (doc: { kind: string; id: string }) => string;
+  removeIfEmpty: (dir: string) => void;
+  removeWork: () => void;
+  writeLock: (stamp: Stamp) => void;
+  sourceText: () => Map<string, string>;
+  loadDocuments: () => Promise<SourceDocument[]>;
+};
+
+const workspaceOf = async (options: SourceUpgradeOptions): Promise<Workspace> => {
   const lockPath = join(options.root, options.lock ?? 'strata.lock.json');
   const work = join(options.root, options.workDir ?? join('.strata', 'upgrade'));
   // POSIX separators on every platform: these paths land in REPORT.md, plan.json and the log.
   const rel = (path: string): string => relative(options.root, path).split(sep).join('/');
+  const planPath = join(work, 'plan.json');
+  const reportPath = join(work, 'REPORT.md');
+  const expectedPathOf = (doc: { kind: string; id: string }): string => join(work, 'expected', doc.kind.replace(/[^a-z0-9.-]/gi, '_'), `${doc.id.replace(/[^A-Za-z0-9._-]/g, '_')}.json`);
 
-  const upgrader = await createUpgrader(options.grammars, { transform: options.transform });
-  const descriptions = new Map<string, string>(options.grammars.flatMap((g) => g.migrations.map((m, i): [string, string] => [`${g.id}/${i + 1}`, m.description])));
-
-  const readLock = (): Stamp | undefined => {
-    if (!existsSync(lockPath)) return undefined;
-    const raw: unknown = JSON.parse(readFileSync(lockPath, 'utf8'));
-    if (!isRecord(raw) || !isRecord(raw['grammar'])) throw new StrataError('INVALID_SEQUENCE', `${rel(lockPath)} is not a lock: expected { "grammar": { … } }.`);
-    return Object.fromEntries(Object.entries(raw['grammar']).map(([k, v]) => [k, Number(v)]));
+  // The work directory can be any directory, the project's own included: only the files a plan wrote
+  // are removed, and a directory only once it is empty. plan.json is read back from disk, so a path it
+  // names is removed only when it lies inside expected/.
+  const removeIfEmpty = (dir: string): void => {
+    if (existsSync(dir) && statSync(dir).isDirectory() && readdirSync(dir).length === 0) rmdirSync(dir);
   };
+  const removeWork = (): void => {
+    let planned: { kind: string; id: string }[] = [];
+    try {
+      const raw: unknown = existsSync(planPath) ? JSON.parse(readFileSync(planPath, 'utf8')) : undefined;
+      if (isRecord(raw) && Array.isArray(raw['documents']))
+        planned = raw['documents'].flatMap((d: unknown) => (isRecord(d) && typeof d['kind'] === 'string' && typeof d['id'] === 'string' ? [{ kind: d['kind'], id: d['id'] }] : []));
+    } catch {
+      planned = [];
+    }
+    const expected = join(work, 'expected');
+    const written = planned.map(expectedPathOf).filter((path) => {
+      const inside = relative(expected, path);
+      return inside !== '' && !inside.startsWith('..') && !isAbsolute(inside);
+    });
+    for (const path of written) rmSync(path, { force: true });
+    for (const path of written) removeIfEmpty(join(path, '..'));
+    removeIfEmpty(expected);
+    rmSync(planPath, { force: true });
+    rmSync(reportPath, { force: true });
+  };
+
   const writeLock = (stamp: Stamp): void =>
     writeFileSync(lockPath, `${JSON.stringify({ grammar: Object.fromEntries(Object.entries(stamp).sort(([a], [b]) => (a < b ? -1 : 1))) }, null, 2)}\n`);
 
@@ -68,6 +108,123 @@ export const runSourceUpgrade = async (options: SourceUpgradeOptions, argv: read
     });
   };
 
+  return {
+    options,
+    log: options.log ?? ((line: string) => console.log(line)),
+    upgrader: await createUpgrader(options.grammars, { transform: options.transform }),
+    lockPath,
+    work,
+    planPath,
+    reportPath,
+    rel,
+    expectedPathOf,
+    removeIfEmpty,
+    removeWork,
+    writeLock,
+    sourceText,
+    loadDocuments,
+  };
+};
+
+const upgradeSource = async (ws: Workspace, lock: Stamp): Promise<number> => {
+  const { options, log, upgrader, rel } = ws;
+  const descriptions = new Map<string, string>(options.grammars.flatMap((g) => g.migrations.map((m, i): [string, string] => [`${g.id}/${i + 1}`, m.description])));
+  const documents = await ws.loadDocuments();
+  const drafted = await planSourceUpgrade({
+    upgrader,
+    stamp: lock,
+    documents,
+    ...(options.schemas === undefined ? {} : { schemas: options.schemas }),
+    describe: (ref) => descriptions.get(ref) ?? '(no description)',
+  });
+  const text = ws.sourceText();
+  const byKey = new Map(documents.map((d) => [`${d.kind}:${d.id}`, d]));
+  const plan: SourcePlan = {
+    ...drafted,
+    documents: drafted.documents.map((doc) => {
+      const needles = changedStrings(byKey.get(`${doc.kind}:${doc.id}`)?.document, doc.expected).flatMap((s) => [`'${s}'`, `"${s}"`]);
+      const lookIn = [...text].filter(([, body]) => needles.some((n) => body.includes(n))).map(([path]) => rel(path));
+      return { ...doc, lookIn };
+    }),
+  };
+  ws.removeWork();
+  mkdirSync(ws.work, { recursive: true });
+  for (const doc of plan.documents) {
+    const path = ws.expectedPathOf(doc);
+    mkdirSync(join(path, '..'), { recursive: true });
+    writeFileSync(path, `${JSON.stringify(doc.expected, null, 2)}\n`);
+  }
+  writeFileSync(ws.planPath, `${JSON.stringify(plan, null, 2)}\n`);
+  writeFileSync(ws.reportPath, `${renderReport(plan, (d) => rel(ws.expectedPathOf(d)))}\n`);
+  log(`[plan] ${stampText(plan.from)} → ${stampText(plan.to)}: ${plan.migrations.length} migration(s)`);
+  for (const m of plan.migrations) log(`       ${m.ref}  ${m.description}`);
+  log(`       ${plan.documents.length} artifact(s) to edit, ${plan.untouched.length} untouched.`);
+  for (const d of plan.documents) log(`       ${d.file ?? '(file not found)'}  ${d.id}`);
+  log(`       Report: ${rel(ws.reportPath)} — edit, then: strata verify`);
+  for (const p of plan.problems) log(`[fail] ${p}`);
+  return plan.problems.length > 0 ? 1 : 0;
+};
+
+const verifySource = async (ws: Workspace): Promise<number> => {
+  const { options, log, upgrader, rel, planPath } = ws;
+  if (!existsSync(planPath)) {
+    log(`[fail] no plan at ${rel(planPath)} — run: strata upgrade`);
+    return 1;
+  }
+  const raw: unknown = JSON.parse(readFileSync(planPath, 'utf8'));
+  if (!isRecord(raw) || !isRecord(raw['to']) || !isRecord(raw['from']) || !Array.isArray(raw['documents']) || !Array.isArray(raw['untouched'])) {
+    log(`[fail] ${rel(planPath)} is not a plan — run: strata upgrade`);
+    return 1;
+  }
+  const plan: SourcePlan = {
+    from: Object.fromEntries(Object.entries(raw['from']).map(([k, v]) => [k, Number(v)])),
+    to: Object.fromEntries(Object.entries(raw['to']).map(([k, v]) => [k, Number(v)])),
+    migrations: [],
+    documents: raw['documents'].flatMap((d: unknown) =>
+      isRecord(d) && typeof d['kind'] === 'string' && typeof d['id'] === 'string' ? [{ kind: d['kind'], id: d['id'], applied: [], changes: [], expected: d['expected'] }] : [],
+    ),
+    untouched: raw['untouched'].map(String),
+    problems: [],
+  };
+  if (JSON.stringify(plan.to) !== JSON.stringify(upgrader.stamp)) {
+    log(`[fail] the plan was made for ${stampText(plan.to)}, but the installed grammars are at ${stampText(upgrader.stamp)} — plan again: strata upgrade`);
+    return 1;
+  }
+  const documents = await ws.loadDocuments();
+  const result = verifySourceUpgrade({ plan, upgrader, documents });
+  for (const line of result.lines) {
+    log(`[${line.ok ? 'pass' : 'fail'}] ${line.text}`);
+    for (const d of line.detail ?? []) log(`         ${d}`);
+  }
+  const planned = new Set(plan.documents.map((d) => `${d.kind}:${d.id}`));
+  const misfits: string[] = [];
+  for (const doc of documents.filter((d) => planned.has(`${d.kind}:${d.id}`))) {
+    const misfit = await schemaMisfit(options.schemas, doc.kind, doc.document);
+    if (misfit !== undefined) misfits.push(`${doc.kind}:${doc.id} does not pass ${doc.kind}'s current schema — ${misfit}`);
+  }
+  for (const misfit of misfits) log(`[fail] ${misfit}`);
+  if (!result.ok || misfits.length > 0) return 1;
+  ws.writeLock(plan.to);
+  ws.removeWork();
+  ws.removeIfEmpty(ws.work);
+  if (options.workDir === undefined) ws.removeIfEmpty(join(options.root, '.strata'));
+  log(`[pass] the source is now written at ${stampText(plan.to)} — ${rel(ws.lockPath)} updated. Commit it with the edits.`);
+  return 0;
+};
+
+export const runSourceUpgrade = async (options: SourceUpgradeOptions, argv: readonly string[]): Promise<number> => {
+  const ws = await workspaceOf(options);
+  const { log, upgrader, lockPath, rel } = ws;
+  const command = argv.find((a) => !a.startsWith('-')) ?? 'status';
+
+  const readLock = (): Stamp | undefined => {
+    if (!existsSync(lockPath)) return undefined;
+    const raw: unknown = JSON.parse(readFileSync(lockPath, 'utf8'));
+    if (!isRecord(raw) || !isRecord(raw['grammar']) || !Object.values(raw['grammar']).every(isMigrationCount))
+      throw new StrataError('INVALID_SEQUENCE', `${rel(lockPath)} is not a lock: expected { "grammar": { "<grammar id>": <how many of its migrations the source is written at> } }.`);
+    return Object.fromEntries(Object.entries(raw['grammar']).map(([k, v]) => [k, Number(v)]));
+  };
+
   const lock = readLock();
 
   if (command === 'init') {
@@ -75,7 +232,7 @@ export const runSourceUpgrade = async (options: SourceUpgradeOptions, argv: read
       log(`[fail] ${rel(lockPath)} already records ${stampText(lock)} — init only records a source that has never had a lock.`);
       return 1;
     }
-    writeLock(upgrader.stamp);
+    ws.writeLock(upgrader.stamp);
     log(`[pass] recorded: the source is written at ${stampText(upgrader.stamp)} (${rel(lockPath)}). Only true if it is — commit it.`);
     return 0;
   }
@@ -110,79 +267,10 @@ export const runSourceUpgrade = async (options: SourceUpgradeOptions, argv: read
       log(`[pass] nothing to upgrade — the source is written at the installed grammars (${stampText(lock)})`);
       return 0;
     }
-    const documents = await loadDocuments();
-    const drafted = await planSourceUpgrade({
-      upgrader,
-      stamp: lock,
-      documents,
-      ...(options.schemas === undefined ? {} : { schemas: options.schemas }),
-      describe: (ref) => descriptions.get(ref) ?? '(no description)',
-    });
-    const text = sourceText();
-    const byKey = new Map(documents.map((d) => [`${d.kind}:${d.id}`, d]));
-    const plan: SourcePlan = {
-      ...drafted,
-      documents: drafted.documents.map((doc) => {
-        const needles = changedStrings(byKey.get(`${doc.kind}:${doc.id}`)?.document, doc.expected).flatMap((s) => [`'${s}'`, `"${s}"`]);
-        const lookIn = [...text].filter(([, body]) => needles.some((n) => body.includes(n))).map(([path]) => rel(path));
-        return { ...doc, lookIn };
-      }),
-    };
-    rmSync(work, { recursive: true, force: true });
-    mkdirSync(work, { recursive: true });
-    const expectedPathOf = (doc: { kind: string; id: string }): string => join(work, 'expected', doc.kind.replace(/[^a-z0-9.-]/gi, '_'), `${doc.id.replace(/[^A-Za-z0-9._-]/g, '_')}.json`);
-    for (const doc of plan.documents) {
-      const path = expectedPathOf(doc);
-      mkdirSync(join(path, '..'), { recursive: true });
-      writeFileSync(path, `${JSON.stringify(doc.expected, null, 2)}\n`);
-    }
-    writeFileSync(join(work, 'plan.json'), `${JSON.stringify(plan, null, 2)}\n`);
-    writeFileSync(join(work, 'REPORT.md'), `${renderReport(plan, (d) => rel(expectedPathOf(d)))}\n`);
-    log(`[plan] ${stampText(plan.from)} → ${stampText(plan.to)}: ${plan.migrations.length} migration(s)`);
-    for (const m of plan.migrations) log(`       ${m.ref}  ${m.description}`);
-    log(`       ${plan.documents.length} artifact(s) to edit, ${plan.untouched.length} untouched.`);
-    for (const d of plan.documents) log(`       ${d.file ?? '(file not found)'}  ${d.id}`);
-    log(`       Report: ${rel(join(work, 'REPORT.md'))} — edit, then: strata verify`);
-    for (const p of plan.problems) log(`[fail] ${p}`);
-    return plan.problems.length > 0 ? 1 : 0;
+    return upgradeSource(ws, lock);
   }
 
-  if (command === 'verify') {
-    const planPath = join(work, 'plan.json');
-    if (!existsSync(planPath)) {
-      log(`[fail] no plan at ${rel(planPath)} — run: strata upgrade`);
-      return 1;
-    }
-    const raw: unknown = JSON.parse(readFileSync(planPath, 'utf8'));
-    if (!isRecord(raw) || !isRecord(raw['to']) || !isRecord(raw['from']) || !Array.isArray(raw['documents']) || !Array.isArray(raw['untouched'])) {
-      log(`[fail] ${rel(planPath)} is not a plan — run: strata upgrade`);
-      return 1;
-    }
-    const plan: SourcePlan = {
-      from: Object.fromEntries(Object.entries(raw['from']).map(([k, v]) => [k, Number(v)])),
-      to: Object.fromEntries(Object.entries(raw['to']).map(([k, v]) => [k, Number(v)])),
-      migrations: [],
-      documents: raw['documents'].flatMap((d: unknown) =>
-        isRecord(d) && typeof d['kind'] === 'string' && typeof d['id'] === 'string' ? [{ kind: d['kind'], id: d['id'], applied: [], changes: [], expected: d['expected'] }] : [],
-      ),
-      untouched: raw['untouched'].map(String),
-      problems: [],
-    };
-    if (JSON.stringify(plan.to) !== JSON.stringify(upgrader.stamp)) {
-      log(`[fail] the plan was made for ${stampText(plan.to)}, but the installed grammars are at ${stampText(upgrader.stamp)} — plan again: strata upgrade`);
-      return 1;
-    }
-    const result = verifySourceUpgrade({ plan, upgrader, documents: await loadDocuments() });
-    for (const line of result.lines) {
-      log(`[${line.ok ? 'pass' : 'fail'}] ${line.text}`);
-      for (const d of line.detail ?? []) log(`         ${d}`);
-    }
-    if (!result.ok) return 1;
-    writeLock(plan.to);
-    rmSync(join(options.root, options.workDir ?? '.strata'), { recursive: true, force: true });
-    log(`[pass] the source is now written at ${stampText(plan.to)} — ${rel(lockPath)} updated. Commit it with the edits.`);
-    return 0;
-  }
+  if (command === 'verify') return verifySource(ws);
 
   log(`[fail] unknown command "${command}" — status [--check] | init | upgrade | verify`);
   return 1;

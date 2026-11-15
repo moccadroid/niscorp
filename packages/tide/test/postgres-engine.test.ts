@@ -3,7 +3,7 @@ import { createTide } from '../src/index';
 import type { EffectRegistry, ReflexInput, Row, Tide, TideConfig, TideEvent } from '../src/index';
 import { createTideStore } from '../src/store/postgres';
 import type { TidePool } from '../src/store/postgres';
-import { oneDatabase } from './support';
+import { failingFirstRunFact, oneDatabase } from './support';
 
 const vienna = 'Europe/Vienna';
 const T0 = Date.UTC(2026, 2, 1, 0, 0, 0);
@@ -352,6 +352,31 @@ describe('chains and fan-in on postgres', () => {
   });
 });
 
+describe('a settled run and the fact that announces it, on postgres', () => {
+  it('land together: a failed fact write leaves the run to announce on the next advance', async () => {
+    const store = createTideStore((await database.emptied()).pool);
+    await store.ready;
+    const calls: unknown[] = [];
+    const tide = createTide({ store: failingFirstRunFact(store), transform, effects: { work: { run: (input) => calls.push(input) } } });
+    await tide.load(
+      [
+        { id: 'import.rows', intent: 'Import the rows.', on: { manual: {} }, effect: { name: 'work' } },
+        { id: 'import.report', intent: 'Report the import.', on: { fact: { run: 'import.rows' } }, effect: { name: 'work' } },
+      ],
+      { at: T0 },
+    );
+    await tide.fire('import.rows', { now: T0 });
+
+    await tide.advance({ now: T0 });
+    expect((await tide.ledger.runs({ reflexId: 'import.rows' }))[0]?.drained).toBeUndefined();
+    for (let tick = 1; tick <= 3; tick += 1) await tide.advance({ now: T0 + tick });
+
+    expect((await tide.ledger.facts()).filter((fact) => fact.kind === 'run' && fact.reflex === 'import.rows')).toHaveLength(1);
+    expect(await tide.ledger.runs({ reflexId: 'import.report' })).toHaveLength(1);
+    expect(calls).toHaveLength(2);
+  });
+});
+
 describe('the tenant boundary inside the engine, on postgres', () => {
   const pair = (tenant: string): ReflexInput[] => [
     { id: `${tenant}:writer`, intent: 'Write.', on: { manual: {} }, as: `automation@${tenant}`, effect: { name: 'write' } },
@@ -471,6 +496,37 @@ describe('overlap, order and retention on postgres', () => {
     for (let n = 0; n < 5; n += 1) await tide.advance({ now: T0 + n });
     expect(peak).toBe(1);
     expect((await tide.ledger.tasks({ state: 'done' })).length).toBe(3);
+  });
+
+  it('a hundred serial reflexes with nothing to do do not keep a parallel task from being claimed', async () => {
+    const serial = Array.from({ length: 100 }, (_, n): ReflexInput => ({
+      id: `serial.${n}`,
+      intent: 'One at a time.',
+      on: { manual: {} },
+      effect: { name: 'work' },
+      policy: { order: 'serial' },
+    }));
+    const parallel: ReflexInput = { id: 'parallel', intent: 'Any number at once.', on: { manual: {} }, effect: { name: 'work' } };
+    const { tide, calls } = await harness([...serial, parallel], { work: noop });
+
+    await tide.fire('parallel', { now: T0 });
+    await tide.advance({ now: T0 });
+
+    expect(calls).toHaveLength(1);
+  });
+
+  it('a serial task still finds room when parallel tasks fill the limit', async () => {
+    const serial: ReflexInput = { id: 'serial', intent: 'One at a time.', on: { manual: {} }, effect: { name: 'work', input: { who: 'serial' } }, policy: { order: 'serial' } };
+    const busy: ReflexInput = { id: 'busy', intent: 'Many.', on: { manual: {} }, select: { query: {}, mode: 'each', unitKey: 'id' }, effect: { name: 'work', input: { who: 'busy' } } };
+    const { tide, calls } = await harness([serial, busy], { work: noop }, {
+      select: () => Array.from({ length: 10 }, (_, n) => ({ id: String(n) })),
+    });
+
+    await tide.fire('busy', { now: T0 });
+    await tide.fire('serial', { now: T0 });
+    await tide.advance({ now: T0, limit: 3 });
+
+    expect(calls).toContainEqual({ who: 'serial' });
   });
 
   it('sweeping a run takes its tasks with it', async () => {

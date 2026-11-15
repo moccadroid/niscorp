@@ -215,3 +215,28 @@ describe('upgrade — refusals', () => {
     await expect(prepare([mixed])).rejects.toMatchObject({ code: 'INVALID_SEQUENCE' });
   });
 });
+
+describe('renaming the key a kind is embedded under', () => {
+  const relabel = step('acme.tree/node', ({ document }) => {
+    const { label, ...rest } = document;
+    return label === undefined ? document : { ...rest, text: label };
+  });
+  const renameChildren = step('acme.tree/node', ({ document }) => {
+    const { children, ...rest } = document;
+    return children === undefined ? document : { ...rest, items: children };
+  });
+  const tree = (embeds: Record<string, string>): Sequence => ({
+    id: 'acme.tree',
+    documents: { node: { embeds } },
+    migrations: [
+      { description: 'label → text', steps: [relabel] },
+      { description: 'children → items', steps: [renameChildren] },
+    ],
+  });
+  const old = { label: 'root', children: [{ label: 'leaf' }] };
+
+  it('reaches the nested documents of an old document while the embeds name the old key beside the new one', async () => {
+    const upgrader = await createUpgrader([tree({ 'children[]': 'acme.tree/node', 'items[]': 'acme.tree/node' })], { transform });
+    expect(upgrader.upgrade(old, { kind: 'acme.tree/node', stamp: {} }).document).toEqual({ text: 'root', items: [{ text: 'leaf' }] });
+  });
+});

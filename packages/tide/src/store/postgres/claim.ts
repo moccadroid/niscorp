@@ -1,4 +1,4 @@
-import type { ClaimSpec, TableName, TideStore } from '../../types';
+import type { ClaimSpec, TableName, TideStore, TideTables } from '../../types';
 import { compileOrder, compileSet, compileWhere, sortRows } from './compile';
 import type { Fields } from './compile';
 import type { Atomically, Client } from './pool';
@@ -39,8 +39,6 @@ export const claimOver =
     // instances would both be told nothing is held.
     const { column, held, only } = spec.onePer;
     const restricted = [...only];
-    // Room is reserved for the serial groups before the bulk claim, or a busy parallel reflex starves them.
-    const claimed = await take(client, { [column]: { notIn: restricted } }, spec.limit - restricted.length);
 
     const takeOneOf = (group: string) =>
       atomically(async (tx) => {
@@ -52,10 +50,14 @@ export const claimOver =
         return take(tx, { [column]: group }, 1);
       });
 
+    // The serial groups are claimed first, or a busy parallel reflex starves them; what they leave of the
+    // limit goes to the other rows, so serial groups with nothing due take no room from them.
+    const claimed: TideTables[T][] = [];
     for (const group of restricted) {
       if (claimed.length >= spec.limit) break;
       claimed.push(...(await takeOneOf(group)));
     }
+    claimed.push(...(await take(client, { [column]: { notIn: restricted } }, spec.limit - claimed.length)));
 
-    return claimed;
+    return sortRows(claimed, spec.order);
   };

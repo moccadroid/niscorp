@@ -115,7 +115,13 @@ export const createTide = (config: TideConfig): Tide => {
     loaded.clear();
     for (const [id, entry] of next) loaded.set(id, entry);
 
-    return { loaded: parsed.length, cycles: graph.cycles, blind: graph.blind, warnings: graph.warnings, refused };
+    const leaseWarnings = parsed
+      .filter((reflex) => reflex.policy.timeoutMs >= deps.leaseMs)
+      .map(
+        (reflex) =>
+          `${reflex.id}: timeoutMs ${reflex.policy.timeoutMs} is not shorter than leaseMs ${deps.leaseMs} — another instance may claim the task again while its effect still runs`,
+      );
+    return { loaded: parsed.length, cycles: graph.cycles, blind: graph.blind, warnings: [...graph.warnings, ...leaseWarnings], refused };
   };
 
   const mergedEffects = (parsed: readonly Reflex[]): EffectRegistry => {
@@ -223,13 +229,13 @@ export const createTide = (config: TideConfig): Tide => {
         }),
       task: (id) => one('task', id),
       facts: async (filter) => {
-        const found = await config.store.query({
-          table: 'fact',
-          order: [{ by: 'at', dir: 'desc' }],
-          limit: filter?.reflexId === undefined ? filter?.limit : undefined,
-        });
-        const matched = filter?.reflexId === undefined ? found : found.filter((fact) => fact.reflex === filter.reflexId || fact.target === filter.reflexId);
-        return filter?.limit === undefined ? matched : matched.slice(0, filter.limit);
+        const newest = { order: [{ by: 'at', dir: 'desc' }], limit: filter?.limit } as const;
+        if (filter?.reflexId === undefined) return config.store.query({ table: 'fact', ...newest });
+        // Two reads, as the query grammar has no OR: a run fact names its reflex, a manual fact its target.
+        const minted = await config.store.query({ table: 'fact', where: { reflex: filter.reflexId }, ...newest });
+        const aimed = await config.store.query({ table: 'fact', where: { target: filter.reflexId }, ...newest });
+        const matched = [...new Map([...minted, ...aimed].map((fact) => [fact.id, fact])).values()].sort((left, right) => right.at - left.at);
+        return filter.limit === undefined ? matched : matched.slice(0, filter.limit);
       },
       fact: (id) => one('fact', id),
       causeChain,

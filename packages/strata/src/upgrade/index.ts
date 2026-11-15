@@ -1,6 +1,7 @@
 import type { Stamp, Upgrader } from '../documents';
 import { diffJson, type GrammarSchema } from '../check';
 import { StrataError } from '../errors';
+import { schemaMisfit } from './fits';
 
 export type SourceDocument = { kind: string; id: string; document: unknown; file?: string };
 
@@ -82,13 +83,8 @@ export const planSourceUpgrade = async (options: {
       changes: diffJson(doc.document, result.document),
       expected: result.document,
     });
-    const schema = schemas?.[doc.kind];
-    if (schema !== undefined) {
-      const checked = await schema['~standard'].validate(result.document);
-      if (checked.issues !== undefined) {
-        problems.push(`${key}: the migrated artifact does not pass ${doc.kind}'s current schema — ${checked.issues.slice(0, 2).map((i) => i.message).join('; ')}`);
-      }
-    }
+    const misfit = await schemaMisfit(schemas, doc.kind, result.document);
+    if (misfit !== undefined) problems.push(`${key}: the migrated artifact does not pass ${doc.kind}'s current schema — ${misfit}`);
   }
 
   const from = stamp;

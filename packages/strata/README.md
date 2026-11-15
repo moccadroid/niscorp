@@ -183,6 +183,13 @@ const { document, stamp, applied } = upgrader.upgrade(storedAction, { kind: 'nis
   nova's `children` is a lone node or an array. Every document of a step's kind
   is found at any depth and rewritten on its own, deepest first; a transform
   only ever sees one node.
+- **Embedding paths have no version.** Every migration finds nested documents
+  through the paths `embeds` declares now, whatever the document's stamp. A
+  migration that renames the key a kind is embedded under (`children` →
+  `items`) therefore keeps the old path in `embeds` beside the new one
+  (`{ 'children[]': …, 'items[]': … }`), for good: with the new path alone, the
+  nested documents of a document written before the rename are not found, are
+  not migrated, and are stamped current with their parent.
 - **The transform is injected** — `(config, source) => unknown`, nova's socket.
   Under moss it is Prism's `evaluate`; a migration runs exactly like an endpoint.
   The source is `{ document, path }`.
@@ -233,19 +240,22 @@ pnpm strata upgrade          # .strata/upgrade/: expected JSON + REPORT.md (file
 pnpm strata verify           # the edited source must equal it; then strata.lock.json moves
 ```
 
-`strata.lock.json` (committed) is the source's stamp. `upgrade` plans from it:
+`strata.lock.json` (committed) is the source's stamp: each grammar's entry is
+how many of its migrations the source is written at, a whole number (digits in
+a string are read too); any other entry is refused (`INVALID_SEQUENCE`). `upgrade` plans from it:
 artifacts a migration changes get their expected JSON and a positional diff;
 the rest are recorded as untouched. `verify` passes only when every planned
-artifact equals its expected JSON (key order aside), every untouched one is
+artifact equals its expected JSON (key order aside) and passes its kind's
+current schema in `schemas`, every untouched one is
 still one no migration would change, and nothing was added or removed since
-the plan — then the lock moves and the work files go. A migration whose result
+the plan — then the lock moves and the files the plan wrote go. A migration whose result
 fails the current schema stops the plan: no edit could pass. `init` records a
 lock for a source that has never had one.
 
 | | |
 |---|---|
-| `@niscorp/strata/upgrade` | Pure: `planSourceUpgrade`, `verifySourceUpgrade`, `renderReport`, `changedStrings`. `planSourceUpgrade`'s `describe(ref)` returns the description of the migration `ref` names, for the report; it is asked for every migration between the source's stamp and the upgrader's. |
-| `@niscorp/strata/node` | `runSourceUpgrade(options, argv)` — the lock, the work directory, the report, "look in" hints from the source. `sources` is the directory under `root` that is searched for the files an artifact is written in (default `src`). |
+| `@niscorp/strata/upgrade` | Pure: `planSourceUpgrade`, `verifySourceUpgrade`, `renderReport`, `changedStrings`. `verifySourceUpgrade` compares JSON only; `runSourceUpgrade` checks the schemas as well. `planSourceUpgrade`'s `describe(ref)` returns the description of the migration `ref` names, for the report; it is asked for every migration between the source's stamp and the upgrader's. |
+| `@niscorp/strata/node` | `runSourceUpgrade(options, argv)` — the lock, the work directory, the report, "look in" hints from the source. `sources` is the directory under `root` that is searched for the files an artifact is written in (default `src`). `workDir` (default `.strata/upgrade`) is where `upgrade` writes `plan.json`, `REPORT.md` and `expected/`; `upgrade` and `verify` remove only those files, and a directory only once it is empty, so nothing else in it is touched. |
 
 See [DESIGN.md](./DESIGN.md) and [the plan](../../docs/plans/versioning.md).
 
