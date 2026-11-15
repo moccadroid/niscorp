@@ -39,6 +39,7 @@ type InternalRenderContext = {
   scopePaths: string[];
   pass: Pass | undefined;
   where: string;
+  refsEntered: readonly { ref: string; chain: ScopeChain }[];
 };
 
 const textNode = (value: string): RenderNode => ({ type: 'text', value });
@@ -116,7 +117,13 @@ const renderNode = (
     if (target === undefined) {
       throw new LayoutRefNotFoundError(`Layout ref not found: ${node.ref}`, { ref: node.ref });
     }
-    return renderNode(target, chain, ctx);
+    // Entered again under the same scope, a ref renders the same thing again, forever.
+    const first = ctx.refsEntered.findIndex((entered) => entered.ref === node.ref && entered.chain === chain);
+    if (first >= 0) {
+      const path = [...ctx.refsEntered.slice(first).map((entered) => entered.ref), node.ref].join(' → ');
+      throw new RenderError(`Layout ref "${node.ref}" comes back to itself: ${path}`, { ref: node.ref });
+    }
+    return renderNode(target, chain, { ...ctx, refsEntered: [...ctx.refsEntered, { ref: node.ref, chain }] });
   }
   if (isSlotNode(node)) {
     // Slots are filled when fragments merge (`fillSlots`): one that reaches a
@@ -253,6 +260,7 @@ const toInternal = (ctx: RenderContext): InternalRenderContext => ({
   strict: ctx.strict ?? false,
   onError: ctx.onError ?? noopOnError,
   scopePaths: [],
+  refsEntered: [],
   pass: passFor({
     ...(ctx.phrases === undefined ? {} : { phrases: ctx.phrases }),
     ...(ctx.phraseKeys === undefined ? {} : { keys: ctx.phraseKeys }),

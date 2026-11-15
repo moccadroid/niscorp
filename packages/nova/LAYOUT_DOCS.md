@@ -219,6 +219,7 @@ store.set('user-card', {
 
 - The referenced layout sees the **current scope** at the call site. Inside a loop, a `LayoutRef` reads from the loop variable just like an inline layout would.
 - If the ref doesn't resolve, the renderer throws `LayoutRefNotFoundError`. In lax mode it's caught and replaced with an error RenderNode; in strict mode it propagates.
+- A layout may refer to itself further down its data: a `tree` layout that loops over `$node.children` with `{ ref: 'tree' }` inside renders each level under the loop's new scope. A ref reached again under the same scope, with no loop between (`x` holding `{ ref: 'x' }`, or `x` → `y` → `x`), would render the same thing forever: the renderer throws a `RenderError` naming the refs, `Layout ref "x" comes back to itself: x → y → x`, handled as any render error.
 
 ---
 
@@ -391,7 +392,7 @@ When `strict: false` (the default), errors during rendering are caught at each s
 
 - **`ComponentNotFoundError`** — `node.component` isn't registered.
 - **`LayoutRefNotFoundError`** — `node.ref` isn't in the layout store.
-- **`RenderError`** — anything else thrown during render (binding resolution, etc.).
+- **`RenderError`** — a layout ref that comes back to itself under the same scope, and anything else thrown during render (binding resolution, etc.).
 
 All extend `NovaError` (see `DESIGN.md`).
 
