@@ -202,7 +202,7 @@ export const generate = (options: CreateOptions): Created => {
   }
   for (const rel of kept) planned.delete(rel);
 
-  // A .gitignore or .env that is there is added to, never replaced: what it holds is theirs.
+  // A .gitignore or .env that is there is added to, never replaced: what it contains is theirs.
   const extended: string[] = [];
   const addTo = (rel: string, fresh: string, lines: readonly string[], has: (line: string, theirs: ReadonlySet<string>) => boolean): void => {
     const path = join(options.dir, rel);

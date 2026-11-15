@@ -110,7 +110,7 @@ const compressedBody = (source: ReadableStream<Uint8Array>, encoding: Encoding, 
 
 export const withCompression = <Rest extends readonly unknown[]>(handler: SiteHandler<Rest>, options: SiteOptions = {}): SiteHandler<Rest> => {
   // No eviction: only an answer that says it will never change is remembered,
-  // which is bounded by what the built folder holds under assets/.
+  // which is bounded by what the built folder has under assets/.
   const remembered = new Map<string, Buffer<ArrayBuffer>>();
   return async (request, ...rest) => {
     const response = await handler(request, ...rest);

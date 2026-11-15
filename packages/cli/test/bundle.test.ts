@@ -91,7 +91,7 @@ describe('nisc build — the bundle, and then the stylesheet into the page', () 
     mkdirSync(join(app, 'public', 'assets'), { recursive: true });
     writeFileSync(join(app, 'public', 'assets', 'logo.svg'), '<svg/>');
     const { code, out } = nisc(['build', '--skip-bundle']);
-    expect(out).toContain('nisc: public/assets/ holds files of your own.');
+    expect(out).toContain('nisc: public/assets/ has files of your own.');
     expect(out).toContain('keep everything under /assets/ for a year');
     expect(code).toBe(0);
   }, SLOW);

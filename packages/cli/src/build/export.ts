@@ -38,7 +38,7 @@ export const exportSite = async (options: CommandOptions): Promise<{ written: bo
     if (!result.ok) {
       const failed = result.routes.filter((route) => route.problems.length > 0);
       say(options)('');
-      say(options)(`nisc: ${failed.length} of ${result.routes.length} paths did not hold (${failed.map((route) => route.path).join(', ')}). Nothing was written.`);
+      say(options)(`nisc: ${failed.length} of ${result.routes.length} paths failed a check (${failed.map((route) => route.path).join(', ')}). Nothing was written.`);
       return { written: false, result, out };
     }
     write(options, project, out, result.routes);

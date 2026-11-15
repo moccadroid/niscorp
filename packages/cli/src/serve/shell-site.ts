@@ -186,7 +186,7 @@ export const shellRouteTable = (routes: readonly ShellRouteReport[]): string => 
   }
   lines.push('');
   lines.push('○  a file: the first screen, drawn for nobody in particular; the page’s own shell picks it up');
-  lines.push('✗  not written: a check did not hold');
+  lines.push('✗  not written: a check failed');
   return lines.join('\n');
 };
 

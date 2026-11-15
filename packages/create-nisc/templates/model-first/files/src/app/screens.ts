@@ -31,7 +31,7 @@ export const SCREENS: readonly [Screen, ...Screen[]] = [
     cards: [
       card('guide.actions'),
       COUNTER,
-      quiz('Where does the look of a card live?', ['In its layout', 'In the model’s answer', 'In the kit’s stylesheet'], 2, 'A layout only names components; the kit in src/ui/ draws them, and its stylesheet holds the look.'),
+      quiz('Where does the look of a card live?', ['In its layout', 'In the model’s answer', 'In the kit’s stylesheet'], 2, 'A layout only names components; the kit in src/ui/ draws them, and its stylesheet has the look.'),
       card('guide.layouts'),
       { action: 'guide.checklist', input: { title: 'Try it', todo: ['Press + until the counter says 5', 'Press Reset', 'Ask for a counter that starts at 100', 'Ask what a layout is'] } },
     ],

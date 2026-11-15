@@ -98,7 +98,7 @@ The browser entry does the same two things in the page — boot, then adopt:
 ```tsx
 const app = await getApp();
 if (root.hasChildNodes()) {
-  await shellSettled(app.shell);      // reach the screen the file holds
+  await shellSettled(app.shell);      // reach the screen the file contains
   adopt(root, app.shell);             // hydrateRoot(root, <Screen shell={shell} />)
 } else {
   createRoot(root).render(<Screen shell={app.shell} />);   // dev: nothing was drawn
@@ -121,14 +121,14 @@ at all — nova's DOM adapter, `renderToString` from
 | `waitMs?` | how long a build waits for a screen to be whole (default 5000) |
 | `dist?`, `stylesheet?`, `checks?` | as above |
 
-The built `index.html` must hold the empty root, `<div id="root"></div>` — that
+The built `index.html` must contain the empty root, `<div id="root"></div>` — that
 is where a screen goes. The adoption check needs a DOM: `jsdom`, installed in
 the app.
 
 ### The head of each page
 
 Either kind. A page's `<head>` is a node in a layout — nova's `nova:head` —
-and its children are the elements a head holds, bound to the action's data
+and its children are the elements a head contains, bound to the action's data
 like everything else on the screen:
 
 ```typescript
@@ -160,10 +160,10 @@ a tag that gave up its place is kept, inert, in a `<template data-nova-own>`.
 When the screen moves on to one that no longer says it, the document's own
 comes back.
 
-**What a head may not hold fails the build.** A layout is data: a script a
+**What a head may not contain fails the build.** A layout is data: a script a
 browser would run, a stylesheet, `http-equiv`, a handler attribute are refused,
 and the path is not written. Those go in `index.html` — the app's own file,
-which holds anything — or in the kit component that needs them.
+which may contain anything — or in the kit component that needs them.
 
 **Where a page lives.** `site` in the config is the address the site is served
 at. With it, every path's document says its own canonical address
@@ -221,7 +221,7 @@ draws it, and checks what it drew:
 | **same twice** | a second boot drew different markup, or said a different head (it says where they part) — the page's boot would not match the file |
 | **adopted** | inside a DOM, a third boot ran the app's own `adopt` over the markup and the adapter complained: a hydration error, or a rebuilt root that is not what it was handed |
 
-And one that holds by construction: `shell` is handed a path and nothing else,
+And one that is true by construction: `shell` is handed a path and nothing else,
 so a file is only ever the screen **as nobody in particular sees it**.
 
 What cannot be failed is reported, read off the actions on the first screen:
@@ -230,7 +230,7 @@ at build — if one answers differently in the page, the page's shell draws that
 part again), which it **can still call**, and which channels it **waits on**.
 All of those keep working: the shell is in the page.
 
-Exit code 1 if any check did not hold.
+Exit code 1 if any check failed.
 
 **An app behind moss.** Bundles the terminal (the app's own vite), stands the app up, draws every path
 once **for nobody**, and prints how each one is served:
@@ -269,7 +269,7 @@ build, so there is nothing to leak into one.
 
 For an app with its own shell that is the whole deployment: the folder goes on
 any static host, each path answers with its screen, and the bundle's shell
-picks it up. If a check did not hold, **nothing is written**.
+picks it up. If a check failed, **nothing is written**.
 
 For an app behind moss: if any path wants a server behind it, **nothing is written** and the command
 says which paths and why (exit code 1). A folder cannot be a server. When one
@@ -344,7 +344,7 @@ and `start` do:
   another prefix names moss's and its own. All three are read when the command
   starts.
 
-The app's `vite.config.ts` holds its framework's plugin and nothing about the
+The app's `vite.config.ts` has its framework's plugin and nothing about the
 server. An app with its own shell is a vite app and nothing more.
 
 ## `nisc check`
@@ -456,7 +456,7 @@ nisc: 1 pending
 ```
 
 A run waits for another one running at the same time, up to an hour, and a
-step that waits more than 10 s for a table another query holds gives up — the
+step that waits more than 10 s for a table another query has locked gives up — the
 run is rolled back, and running it again is safe.
 
 `runtime` only opens the environment. It migrates nothing and seeds nothing:

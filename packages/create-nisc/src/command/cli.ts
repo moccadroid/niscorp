@@ -101,10 +101,10 @@ const main = async (): Promise<void> => {
   if (!validName(name)) refuse(`"${name}" cannot be a package name — the folder’s name becomes it: lowercase letters, digits, - . _`);
   refuseFileInTheWay(dir);
 
-  const holds = existsSync(dir) ? readdirSync(dir).length : 0;
-  if (holds > 0 && ask) {
+  const present = existsSync(dir) ? readdirSync(dir).length : 0;
+  if (present > 0 && ask) {
     const proceed = answered<boolean>(
-      await confirm({ message: `${relative(process.cwd(), dir) || '.'} already holds ${holds} ${holds === 1 ? 'thing' : 'things'}. Nothing there will be overwritten — make the app in it?`, initialValue: true }),
+      await confirm({ message: `${relative(process.cwd(), dir) || '.'} already has ${present} ${present === 1 ? 'thing' : 'things'} in it. Nothing there will be overwritten — make the app in it?`, initialValue: true }),
     );
     if (!proceed) {
       cancel('Nothing was made.');

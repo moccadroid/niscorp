@@ -46,7 +46,7 @@ export type NiscShellProject = Common & {
   // more inside a DOM to adopt), so it must not memoize.
   shell: (request: { path: string }) => Promise<{ shell: Shell; close?: () => void | Promise<void> }>;
   draw: (shell: Shell) => string | Promise<string>;
-  // `root` already holds the drawn markup: the browser entry's own call (`hydrateRoot`, `createSSRApp().mount`, nova's `mountShell`).
+  // `root` already contains the drawn markup: the browser entry's own call (`hydrateRoot`, `createSSRApp().mount`, nova's `mountShell`).
   adopt: (root: HTMLElement, shell: Shell) => void | Promise<void>;
   htmlAttributes?: (shell: Shell) => Record<string, string>;
   // Default: `/`.

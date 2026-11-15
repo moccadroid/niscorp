@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { useNovaDispatch } from '@niscorp/nova/adapters/react';
 import type { NovaComponent } from '@niscorp/nova/adapters/react';
 
-// A value a component does not take falls back to its default on its own; the others still hold.
+// A value a component does not take falls back to its default on its own; the others still apply.
 const parsed = <S extends z.ZodRawShape>(schema: z.ZodObject<S>, props: Record<string, unknown>, fallback: z.output<z.ZodObject<S>>): z.output<z.ZodObject<S>> => {
   const taken = Object.fromEntries(
     Object.entries(props).filter(([key, value]) => {

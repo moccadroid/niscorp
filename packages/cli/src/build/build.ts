@@ -26,7 +26,7 @@ const bundle = (options: CommandOptions, project: NiscProject): void => {
 
 const warnOfOwnAssets = (options: CommandOptions): void => {
   if (!existsSync(join(options.root, 'public', 'assets'))) return;
-  say(options)('nisc: public/assets/ holds files of your own. `nisc start` has browsers keep everything under /assets/ for a year, so a change to one of them will not be seen under the same name — keep them elsewhere in public/.');
+  say(options)('nisc: public/assets/ has files of your own. `nisc start` has browsers keep everything under /assets/ for a year, so a change to one of them will not be seen under the same name — keep them elsewhere in public/.');
 };
 
 const warnOfOneAddress = (options: CommandOptions, project: NiscProject, template: string, paths: number): void => {

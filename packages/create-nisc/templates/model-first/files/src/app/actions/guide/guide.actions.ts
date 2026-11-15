@@ -55,7 +55,7 @@ export const GUIDE: readonly ActionDefinition[] = [
     text: 'That is the counter on this screen. Actions live in src/app/actions/.',
     links: [{ label: 'Next: asking →', screen: 'asking' }],
   }),
-  card('guide.layouts', 'Layouts and the kit: a layout is JSON that names components and binds them to the action’s data, and never styles; the kit in src/ui/ draws them, and its stylesheet holds the look.', exampleLayout, {
+  card('guide.layouts', 'Layouts and the kit: a layout is JSON that names components and binds them to the action’s data, and never styles; the kit in src/ui/ draws them, and its stylesheet has the look.', exampleLayout, {
     title: 'Layouts and the kit',
     lead: 'A layout is JSON that names components and binds them to the action’s data. It never styles anything.',
     example: ['{', '  "component": "Card",', '  "props": { "title": "{{$.title}}" },', '  "children": [', '    { "component": "Text", "children": "{{$.count}}" }', '  ]', '}'].join('\n'),
@@ -84,9 +84,9 @@ export const GUIDE: readonly ActionDefinition[] = [
     },
     [asks],
   ),
-  card('guide.shell', 'The shell and moss: moss keeps one shell per person, on the server, which holds the cards and runs what they do; the browser only draws the frames moss sends over a socket.', pointsLayout, {
+  card('guide.shell', 'The shell and moss: moss keeps one shell per person, on the server, which has the cards and runs what they do; the browser only draws the frames moss sends over a socket.', pointsLayout, {
     title: 'The shell and moss',
-    lead: 'The shell holds the cards and runs what they do.',
+    lead: 'The shell has the cards and runs what they do.',
     points: [
       { title: 'One per person', text: 'moss keeps a shell for each person who signs in; until then, one a connection.' },
       { title: 'Drawn where you are', text: 'Your browser draws the frames moss sends over a socket.' },
