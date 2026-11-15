@@ -182,8 +182,10 @@ export const portOf = (text: string, from: string): number => {
 
 const listening = (httpServer: ReturnType<typeof serve>, port: number): Promise<string> =>
   new Promise((up, fail) => {
-    httpServer.once('error', (error) => fail(new Error(`nisc: cannot listen on port ${port} (${error.message}). Stop what is using it, or give another port: \`--port <n>\`.`)));
+    const refused = (error: Error): void => fail(new Error(`nisc: cannot listen on port ${port} (${error.message}). Stop what is using it, or give another port: \`--port <n>\`.`));
+    httpServer.once('error', refused);
     httpServer.once('listening', () => {
+      httpServer.off('error', refused);
       const address = httpServer.address();
       up(`http://localhost:${address !== null && typeof address === 'object' ? (address satisfies AddressInfo).port : port}`);
     });
