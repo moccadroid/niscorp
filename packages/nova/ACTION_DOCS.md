@@ -194,7 +194,7 @@ Remove an element at a specific index.
 { removeAt: 'items', index: 2 }                  // remove third
 ```
 
-The index can also be a template string (e.g. `"{{@event.payload}}"`) resolved before applying.
+The index can also be a template string (e.g. `"{{@event.payload}}"`) resolved before applying. One that does not resolve to a whole number (a missing path, a fraction, a word) leaves the array as it is, and the steps after it run.
 
 ### `move`
 
@@ -205,7 +205,7 @@ Reorder an array element from one index to another.
 { move: 'items', from: '{{@event.payload}}', to: 0 }
 ```
 
-`from` / `to` accept a number or a template string resolved before applying. An out-of-range `from` is a no-op; `to` is clamped into range.
+`from` / `to` accept a number or a template string resolved before applying. An out-of-range `from` is a no-op; `to` is clamped into range. A template that does not resolve to a whole number leaves the array as it is.
 
 ### `clear`
 

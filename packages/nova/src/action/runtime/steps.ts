@@ -58,6 +58,12 @@ export type StepContext = {
 
 export const noopOnError: OnErrorHandler = (_error: NovaError): void => {};
 
+// What is no whole number stays text: the op's own guard then leaves the array alone.
+const resolveIndex = (template: string, chain: ScopeChain, extras: ExtraScopes): number | string => {
+  const index = Number(resolve(template, chain, extras));
+  return Number.isInteger(index) ? index : String(index);
+};
+
 const resolveMutationValues = (
   list: Mutation[],
   chain: ScopeChain,
@@ -71,13 +77,13 @@ const resolveMutationValues = (
       return { ...m, value: resolve(m.value, chain, extras) };
     }
     if ('removeAt' in m && typeof m.index === 'string') {
-      return { ...m, index: Number(resolve(m.index, chain, extras)) };
+      return { ...m, index: resolveIndex(m.index, chain, extras) };
     }
     if ('move' in m) {
       return {
         ...m,
-        from: typeof m.from === 'string' ? Number(resolve(m.from, chain, extras)) : m.from,
-        to: typeof m.to === 'string' ? Number(resolve(m.to, chain, extras)) : m.to,
+        from: typeof m.from === 'string' ? resolveIndex(m.from, chain, extras) : m.from,
+        to: typeof m.to === 'string' ? resolveIndex(m.to, chain, extras) : m.to,
       };
     }
     return m;
