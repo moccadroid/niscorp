@@ -72,16 +72,6 @@ export const parseJsonPath = (path: string): JsonPathSegment[] => {
   return segments;
 };
 
-const cache = new Map<string, JsonPathSegment[]>();
-
-export const parseJsonPathCached = (path: string): JsonPathSegment[] => {
-  const cached = cache.get(path);
-  if (cached) return cached;
-  const parsed = parseJsonPath(path);
-  cache.set(path, parsed);
-  return parsed;
-};
-
 export type Step = string | number;
 
 export const INDEX_TEXT = /^(0|[1-9][0-9]*)$/;

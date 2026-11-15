@@ -15,7 +15,7 @@ import {
   isLocaleDateNode, isLocaleMoneyNode, isLocaleNumberNode,
 } from '../schemas/guards';
 
-import { opRef, opConst, opVar, opGet, opWith } from '../ops/core.ops';
+import { SEGMENTS_KEY, opRef, opConst, opVar, opGet, opWith } from '../ops/core.ops';
 import { opMap, opFilter, opReduce, opSlice, opFlatten, opUnique, opSortBy } from '../ops/array.ops';
 import { opAdd, opSub, opMul, opDiv, opMod, opRound, opToNumber } from '../ops/math.ops';
 import { opFill, opJoin, opToString, opInterpolate, opTrim, opLower, opUpper, opSplit, opReplace } from '../ops/string.ops';
@@ -28,10 +28,10 @@ import { opDate, opDateAdd, opDateDiff } from '../ops/time.ops';
 import { opLocaleDate, opLocaleMoney, opLocaleNumber } from '../ops/intl.ops';
 import { createBudget } from './budget';
 
-// Both are written as non-enumerable properties, so an optimized tree still
-// serializes as the JSON it is: the fingerprint and a stored IR carry neither.
+// The handler and a `$ref`'s segments are written as non-enumerable
+// properties, so an optimized tree still serializes as the JSON it is: the
+// fingerprint and a stored IR carry neither.
 export const HANDLER_KEY = '__op';
-export const SEGMENTS_KEY = '__segments';
 
 type OpHandler = (node: unknown, context: EvalContext, evaluate: EvaluateFn) => JsonValue;
 

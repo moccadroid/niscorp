@@ -50,7 +50,7 @@ type EvalContext = {
 };
 ```
 
-The context an op is given is never written to. A `$with` binding makes a new context via spread. A loop (`$map`, `$filter`, `$reduce`, `$sortBy`, `$groupBy`, `$keyBy`) makes one context of its own for the whole loop and sets its variable in that for each item (`ops/scope.ts`): a new one per item was a fifth of the time of a map over 10,000 rows. Nothing keeps a scope past the evaluation of one body, so ops are still pure — same input always produces same output.
+The context an op is given is never written to. A `$with` binding makes a new context via spread. A loop (`$map`, `$filter`, `$reduce`, `$sortBy`, `$groupBy`, `$keyBy`) makes one context of its own for the whole loop and sets its variable in that for each item (`ops/scope.ts`), because a new one per item is a noticeable share of the time of a long map. Nothing keeps a scope past the evaluation of one body, so ops are still pure — same input always produces same output.
 
 ---
 
@@ -64,15 +64,15 @@ Ops receive the `evaluate` function as a parameter rather than importing it. Thi
 
 ### Dispatcher (if-chain, not Map)
 
-The evaluator uses a linear if-chain with type guards:
+One linear if-chain of type guards says which op a node is: `resolveHandler` in `engine/optimize.ts`.
 
 ```typescript
-if (isRefNode(obj)) return opRef(obj, context, evaluateNode);
-if (isMapNode(obj)) return opMap(obj, context, evaluateNode);
+if (isRefNode(node)) return eraseOp(opRef);
+if (isMapNode(node)) return eraseOp(opMap);
 // ... 63 more
 ```
 
-A Map-based dispatch would be shorter but loses type narrowing — each guard narrows the node to its specific type, so the handler receives a correctly typed argument without casts.
+The interpreter asks it for every node it evaluates; the optimizer asks it once per node and attaches the answer to the node, so an optimized or compiled tree is dispatched without the chain. The handler comes back with its node type erased, which is safe because a node gets an op's handler only after it passed that op's guard. A Map from key to handler would answer a different op for a node with two `$` keys, which a tree that skipped the schema can have.
 
 ---
 
@@ -82,7 +82,7 @@ Objects without `$`-prefixed keys are output templates. Each value is recursivel
 
 This enables partial results from incomplete source data without try/catch wrapping every field.
 
-The schema and the evaluator hold one rule: a `$` name is an op's. The template branch's key pattern refuses every key that starts with `$`, which is exactly the evaluator's test for a plain object — so a `$` key that is not an op is `E_SCHEMA`, with the key's path, and not a config that validates, is stored, and fails each time it runs. Until `nisc.prism` 2 the pattern refused only the names of ops that existed, and each new op took a name away from templates; reserving the prefix means adding an op narrows nothing. Data that has `$` keys is a `$const` payload.
+The schema and the evaluator hold one rule: a `$` name is an op's. The template branch's key pattern refuses every key that starts with `$`, which is exactly the evaluator's test for a plain object — so a `$` key that is not an op is `E_SCHEMA`, with the key's path, and not a config that validates, is stored, and fails each time it runs. Because the whole prefix is reserved, adding an op takes no name away from templates. Data that has `$` keys is a `$const` payload.
 
 ---
 
@@ -90,7 +90,9 @@ The schema and the evaluator hold one rule: a `$` name is an op's. The template 
 
 Prism supports `$.key.nested[0].deep` — dot notation for object keys, bracket notation for array indices. No filters, recursive descent, or unions. These omissions are intentional: `$filter`, `$map`, and `$merge` cover those use cases through the op system, which is composable and type-safe.
 
-Parsed paths are cached in a `Map`. Compiled IR does not use it: `rehydrate` attaches each `$ref` node's parsed path to the node.
+A `$ref` node's parsed path is kept by the node in a `WeakMap` (`ops/core.ops.ts`), so it is parsed once for as long as the node lives and nothing outlives the config. An optimized or compiled tree carries it on the node instead: `optimize` and `rehydrate` attach it.
+
+A key is read from data only when the data has it as its own (`utils/own-keys.ts`): `$.constructor` on `{}` is a missing path, not `Object`. A key is written the same way, so a `__proto__` key from `JSON.parse` stays a key of the result instead of replacing its prototype. zod drops a `__proto__` key while it parses a config, so a template or a `$const` cannot carry one.
 
 ---
 
@@ -173,7 +175,7 @@ src/
 │   ├── evaluate.ts                # Dispatcher + evaluate / evaluateSafe (what a config object was found to be is kept here)
 │   ├── compile.ts                 # Config → CompiledIr
 │   ├── optimize.ts                # Compile-time passes (ref segments, handlers, constant folding)
-│   ├── budget.ts                  # Limits: steps, string length, result size
+│   ├── budget.ts                  # Limits: steps, string length, result size; a value nested past the call stack
 │   ├── execute.ts                 # CompiledIr + source → result
 │   ├── place.ts                   # On the way out: an error's position, in the author's config, and the op's form
 │   ├── validate.ts                # Config validation
@@ -206,7 +208,8 @@ src/
 │   ├── groups.ts                  # PRISM_EXAMPLE_GROUPS — id, title and description of each group
 │   └── operators.ts, sugar.ts, composition.ts, real-world.ts   # the examples
 └── utils/
-    ├── jsonpath.ts                # JSONPath parser + cache
+    ├── jsonpath.ts                # JSONPath parser
+    ├── own-keys.ts                # Reading and writing a data key as the data's own
     ├── compare.ts                 # Deep equality, ordered comparison
     └── issues.ts                  # Zod issues → the branch the config meant
 ```
@@ -232,7 +235,7 @@ and a mapping over a thousand rows would otherwise build a thousand of them.
 
 ## Design Decisions
 
-1. **Linear if-chain over Map dispatch.** Type narrowing. Each guard narrows the node type. A Map would need casts.
+1. **Linear if-chain over Map dispatch.** One chain for the interpreter and the optimizer, in the order the ops are listed; the first guard that matches answers. A Map keyed by op would answer differently for a node with two `$` keys.
 
 2. **Desugar before execution, not during.** One canonical representation. Compiler stores desugared form. An error inside a sugar op names the core op that refused and the sugar op the author wrote: `engine/place.ts` follows the position back into the author's config, and where a sugar op's keys stop matching, rewrites a copy of it with a marker in each field to see where each field went. Nothing records the rewrite while it runs; the work is done only for an error.
 
@@ -240,7 +243,7 @@ and a mapping over a thousand rows would otherwise build a thousand of them.
 
 4. **SHA256 fingerprint on IR.** Cache invalidation without version numbers. Same config = same fingerprint.
 
-5. **`evaluate` + `evaluateSafe`.** Throwing for trusted code, Result type for untrusted input. Different call sites have different needs. Both keep what a config object was found to be, by the object: a host hands the same configs over on every request, and checking each again was the whole cost of a small transform. `check: 'always'` is the call that keeps nothing, for writing and testing a config. A separate function for the kept path (`prismTransform`) existed for a while and is gone: it was the one hosts were told to use and the one that reported worst.
+5. **`evaluate` + `evaluateSafe`.** Throwing for trusted code, Result type for untrusted input. Different call sites have different needs. Both keep what a config object was found to be, by the object: a host hands the same configs over on every request, and checking each again was the whole cost of a small transform. `check: 'always'` is the call that keeps nothing, for writing and testing a config.
 
 6. **Ops receive `evaluate` as a parameter.** Breaks the circular import between ops and the dispatcher. Also enables mock-based unit testing of individual ops.
 
@@ -252,4 +255,4 @@ and a mapping over a thousand rows would otherwise build a thousand of them.
 
 10. **`compile()` is async.** Uses `crypto.subtle.digest` for SHA256, which is async in all runtimes. `evaluate()` stays sync because it doesn't need the fingerprint.
 
-11. **The node union is tried by key before it is walked.** zod tries a union's 78 members (75 ops, then primitive, array and template) in order, and a plain object is the last. One `$` key and nothing else can only be that op, and no `$` key can only be a template, so that member is tried first and a valid config never walks the union. An invalid one is walked as before, from the top, so a refusal is the union's own. The union stays a union: the JSON Schema, the profiles and loom read it as one.
+11. **The node union is tried by key before it is walked.** zod tries a union's 78 members (75 ops, then primitive, array and template) in order, and a plain object is the last. One `$` key and nothing else can only be that op, and no `$` key can only be a template, so that member is tried first and a valid config never walks the union. An invalid one is walked from the top, so a refusal is the union's own. The union stays a union: the JSON Schema, the profiles and loom read it as one.

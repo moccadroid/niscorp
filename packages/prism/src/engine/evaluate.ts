@@ -7,12 +7,10 @@ import { PrismError, ErrorCode, clip, failAt } from '../errors';
 import { depthRefusal, exceedsDepth } from '@niscorp/strata';
 import { desugar } from '../sugar/desugar';
 import { createBudget, measure, measureString, spendStep, stackRefusal, type Limits } from './budget';
-import { optimize, resolveHandler } from './optimize';
+import { HANDLER_KEY, optimize, resolveHandler } from './optimize';
 import { placeError } from './place';
 import { writeOwnKey } from '../utils/own-keys';
 import { isPlainObject } from '../schemas/guards';
-
-const HANDLER_KEY = '__op';
 
 type AttachedFn = (node: Record<string, unknown>, context: EvalContext, evaluate: EvaluateFn) => JsonValue;
 
