@@ -15,3 +15,5 @@ A stored document whose root is not an object (a list, a scalar, a tuple, a unio
 `<LoomEditor>` calls the `onChange` of its latest render, not the one it mounted with.
 
 A field with two defaults starts at the one zod applies (`.default('a').default('b')` starts at `'b'`), and a discriminated union branch whose discriminator is an enum is tagged with the first value of that enum instead of `undefined`.
+
+`LoomEditorPlugin` is now written as `LoomPlugin` plus `components`, the same shape it had.

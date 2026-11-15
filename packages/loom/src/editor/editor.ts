@@ -3,7 +3,7 @@ import { createLayoutStore, createShell, type ActionDefinition, type Shell } fro
 import { parse, buildDocument, isRecord } from '@compile/parse';
 import type { Field } from '@compile/types';
 import { toNova, ERROR_NAMESPACE } from '@compile/to-nova';
-import { attachValidation } from '../validate.js';
+import { attachValidation, stripErrors } from '../validate.js';
 import { defaultCanvasLayout } from './default.layout.js';
 import type { LoomArtifact, LoomEditor, LoomEditorConfig, LoomEvent, LoomPlugin } from './types.js';
 
@@ -17,11 +17,6 @@ const ROOT_KEY = '$root';
 // The error channel sits beside the document's own keys, so a document with
 // a field of that name is wrapped as a non-object root is.
 const needsWrap = (ir: Field): boolean => ir.kind !== 'object' || ir.fields.some((field) => field.key === ERROR_NAMESPACE);
-
-const stripErrors = (data: Record<string, unknown>): Record<string, unknown> => {
-  const { [ERROR_NAMESPACE]: _omit, ...document } = data;
-  return document;
-};
 
 export const createLoomEditor = (config: LoomEditorConfig): LoomEditor => {
   const plugins = new Map<string, LoomPlugin>();

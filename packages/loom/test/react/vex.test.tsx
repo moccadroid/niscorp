@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent, cleanup, within } from '@testing-library/react';
-import type { DatabaseSchema } from '@niscorp/vex';
+import type { DatabaseSchema, Query } from '@niscorp/vex';
 import { LoomEditor } from '../../src/react/index.js';
-import { vex } from '../../src/plugins/vex/react/index.js';
+import { vex, type VexRunResult } from '../../src/plugins/vex/react/index.js';
 
 afterEach(cleanup);
 
@@ -12,7 +12,7 @@ const db: DatabaseSchema = {
   entities: [{ name: 'orders', table: 'orders', fields: [column('id', 'string'), column('total', 'number')], relations: [], indexes: [] }],
 };
 
-const openQuery = (query: Record<string, unknown>, run = vi.fn(async () => ({ rows: [] }))) => {
+const openQuery = (query: Record<string, unknown>, run: (query: Query) => Promise<VexRunResult> = async () => ({ rows: [] })) => {
   const onChange = vi.fn();
   render(<LoomEditor plugins={[vex({ run, db })]} artifact={{ type: 'vex', documents: { query } }} onChange={onChange} />);
   const lastQuery = (): Record<string, unknown> => {
@@ -20,7 +20,7 @@ const openQuery = (query: Record<string, unknown>, run = vi.fn(async () => ({ ro
     const value = typeof documents === 'object' && documents !== null ? Reflect.get(documents, 'query') : undefined;
     return typeof value === 'object' && value !== null ? { ...value } : {};
   };
-  return { lastQuery, run };
+  return { lastQuery };
 };
 
 const aliases = (): HTMLInputElement[] => screen.getAllByPlaceholderText('alias').filter((el) => el instanceof HTMLInputElement);
@@ -71,5 +71,24 @@ describe('the vex aggregate and compute widgets', () => {
     fireEvent.change(first, { target: { value: '1.5' } });
     expect(first.value).toBe('1.5');
     expect(lastQuery()['compute']).toEqual({ net: { multiply: [1.5, ''] } });
+  });
+});
+
+describe('the vex preview', () => {
+  it('runs the query and shows its rows and warnings', async () => {
+    const run = vi.fn(async (_query: Query): Promise<VexRunResult> => ({ rows: [{ id: 'o1', total: null }], warnings: ['capped at 100 rows'] }));
+    openQuery({ from: ['orders'], fields: ['orders.id', 'orders.total'] }, run);
+    expect(await screen.findByText('o1')).toBeDefined();
+    expect(screen.getByText('∅')).toBeDefined();
+    expect(screen.getByText('capped at 100 rows')).toBeDefined();
+    expect(run).toHaveBeenLastCalledWith({ from: ['orders'], fields: ['orders.id', 'orders.total'] });
+  });
+
+  it('shows the errors a run answers, and a run that throws', async () => {
+    openQuery({ from: ['orders'], fields: ['orders.id'] }, async () => ({ rows: [], errors: ['no such column'] }));
+    expect(await screen.findByText('no such column')).toBeDefined();
+    cleanup();
+    openQuery({ from: ['orders'], fields: ['orders.id'] }, async () => Promise.reject(new Error('database is down')));
+    expect(await screen.findByText('database is down')).toBeDefined();
   });
 });
