@@ -34,10 +34,6 @@ export const NOVA_SEQUENCE: Sequence = {
       description: 'The endpoint `timeoutMs`: how long to wait for the reply before the call fails',
       steps: [],
     },
-    {
-      description: 'The HTTP endpoint `encodeValues`: encode each value placed into the url',
-      steps: [],
-    },
   ],
 };
 

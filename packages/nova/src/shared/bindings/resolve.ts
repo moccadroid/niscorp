@@ -156,12 +156,6 @@ const resolveString = (value: string, chain: ScopeChain, extras: ExtraScopes): u
   return value;
 };
 
-// A sole `{{…}}` or a bare path is the whole text, so it is resolved as `resolve` does.
-export const resolveEncodingValues = (value: string, chain: ScopeChain): unknown =>
-  SOLE_TEMPLATE_REGEX.test(value) || !value.includes('{{')
-    ? resolve(value, chain)
-    : value.replace(TEMPLATE_REGEX, (_match: string, expression: string): string => encodeURIComponent(stringify(resolvePath(expression.trim(), chain))));
-
 export const resolve = (
   value: unknown,
   chain: ScopeChain,

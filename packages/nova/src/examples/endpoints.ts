@@ -47,28 +47,6 @@ export const ENDPOINT_EXAMPLES: readonly NovaExample[] = [
     expected: { says: ['State: answered', 'Ada has a season pass.', 'Look the member up'], data: { id: 'm1', state: 'answered', member: { name: 'Ada', pass: 'season' } }, asked: [{ method: 'GET', url: '/examples/http-endpoint/members/m1' }] },
   },
   {
-    id: 'encoded-url',
-    group: 'endpoints',
-    title: 'Encoded URL values',
-    description: 'With `encodeValues`, each value placed into the URL is encoded, so a value with a `/` in it stays one segment of the address instead of becoming two.',
-    fetches: { 'GET /examples/encoded-url/folders/2024%2Freports': { status: 200, body: { count: 12 } } },
-    action: {
-      id: 'encoded-url',
-      data: { folder: '2024/reports', files: { count: 0 } },
-      layout: {
-        component: 'Stack',
-        children: [
-          { component: 'Text', children: '{{$.folder}}: {{$.files.count}} files' },
-          { component: 'Button', ref: 'count', children: 'Count the files' },
-        ],
-      },
-      endpoints: { files: { url: '/examples/encoded-url/folders/{{$.folder}}', method: 'GET', encodeValues: true, target: 'files' } },
-      triggers: [{ event: 'ui:click', ref: 'count', do: [{ call: 'files' }] }],
-    },
-    presses: [{ ref: 'count' }],
-    expected: { says: ['2024/reports: 12 files', 'Count the files'], data: { folder: '2024/reports', files: { count: 12 } }, asked: [{ method: 'GET', url: '/examples/encoded-url/folders/2024%2Freports' }] },
-  },
-  {
     id: 'endpoint-error',
     group: 'endpoints',
     title: 'Endpoint error',

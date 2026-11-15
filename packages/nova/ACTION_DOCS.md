@@ -358,7 +358,6 @@ endpoints: {
   fetchUser: {
     url: '/api/users/{{$.userId}}',
     method: 'GET',
-    encodeValues: true,
     target: 'user',
   },
   saveUser: {
@@ -379,7 +378,6 @@ endpoints: {
 - **`url`** *(required)* — template URL. Bindings work.
 - **`method`** *(required)* — `GET` | `POST` | `PUT` | `PATCH` | `DELETE`.
 - **`headers`** *(optional)* — object of header name → value. Values can be templated; names cannot.
-- **`encodeValues`** *(optional)* — `true` puts each `{{…}}` value into the `url` through `encodeURIComponent`, so `../users/42` or `7?cascade=all` stays one path segment (`..%2Fusers%2F42`, `7%3Fcascade%3Dall`) instead of changing the address. A `url` that is a single `{{…}}` or a bare `$` path is the whole address and is not encoded. Without it values go in as they are, which a value meant to carry `/` (`{{$.apiBase}}/notes`) needs; set it for every other value that comes from data or from what someone typed.
 - **`request`** *(optional)* — a transform config run by the **injected evaluator** (see below) over the action data to build the request body. Static parts are literal; dynamic parts use the evaluator's ops. A string result is sent as-is; anything else is JSON-stringified. Declaring `request` without an injected transform is a hard error — never a silent empty body. Not on a `GET`: fetch sends no body with a GET, so every call of it fails; the shell reports such an endpoint to `onError` as a `DefinitionValidationError` when `createShell` or `registerAction` loads the definition, and loads it as given.
 - **`response`** *(optional)* — a transform config run by the injected evaluator over the reply **exactly as received** (`$` is the reply — object, array, or scalar; no wrapping) to produce the value stored at `target`. Declaring it without an injected transform is a hard error — never the unshaped reply.
 - **`target`** *(optional)* — data path to write the (possibly transformed) response into on success. If unset, the response is discarded.
@@ -645,7 +643,7 @@ type Step = Mutation | Effect;
 { reload: true }
 
 // Endpoints (EndpointConfig = HTTP | Function)
-{ url: string, method: string, encodeValues?: boolean, headers?: object, request?: unknown, response?: unknown, target?: string, errorTarget?: string, timeoutMs?: number }
+{ url: string, method: string, headers?: object, request?: unknown, response?: unknown, target?: string, errorTarget?: string, timeoutMs?: number }
 { fn: string, target?: string, errorTarget?: string, timeoutMs?: number }
 ```
 
