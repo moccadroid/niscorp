@@ -35,8 +35,8 @@ export const SEGMENTS_KEY = '__segments';
 
 type OpHandler = (node: unknown, context: EvalContext, evaluate: EvaluateFn) => JsonValue;
 
-// Nothing is checked here: `resolveHandler` attaches an op only to a node that
-// has passed that op's guard.
+// Nothing is checked here: `resolveHandler` hands out an op only for a node
+// that has passed that op's guard.
 const eraseOp = <T>(op: (n: T, c: EvalContext, e: EvaluateFn) => JsonValue): OpHandler => op as OpHandler;
 
 export type OptimizeStats = {
@@ -67,7 +67,7 @@ const freezeConstant = (value: unknown): void => {
   for (const inner of Object.values(value)) freezeConstant(inner);
 };
 
-const resolveHandler = (node: Record<string, unknown>): OpHandler | undefined => {
+export const resolveHandler = (node: Record<string, unknown>): OpHandler | undefined => {
   if (isRefNode(node)) return eraseOp(opRef);
   if (isConstNode(node)) return eraseOp(opConst);
   if (isVarNode(node)) return eraseOp(opVar);
