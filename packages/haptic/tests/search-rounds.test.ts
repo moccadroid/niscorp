@@ -40,6 +40,9 @@ const fetcherFor = (
       if (!make) throw new Error(`no page ${url}`);
       return make();
     },
+    async send(request, signal) {
+      return this.get(request.url, signal);
+    },
     post: async () => assert.fail('no POST in this test'),
     close: () => {},
   };

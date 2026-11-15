@@ -57,7 +57,7 @@ const article = (n: number) =>
 const pdf = (n: number) =>
   source(`https://papers.test/pdf/${n}.pdf`, `%PDF-${n}`, 'application/pdf');
 const pages = new Map([feed, article(1), article(2), pdf(1), pdf(2)].map((s) => [s.url, s]));
-const fromPages = async (url: string) =>
+const fromPages = async ({ url }: { url: string }) =>
   pages.get(url) ?? assert.fail(`not a page of this test: ${url}`);
 
 const papers = prepareArtifact({
@@ -96,7 +96,7 @@ const papers = prepareArtifact({
   mapping: copy(['title']),
   outputSchema: { type: 'array' },
 });
-const run = await walk(papers, feed.url, { signal, pages: fromPages });
+const run = await walk(papers, { url: feed.url }, { signal, pages: fromPages });
 assert.deepEqual(run.visited, [
   'https://papers.test/feed',
   'https://papers.test/abs/1',
@@ -127,7 +127,7 @@ const items = prepareArtifact({
   mapping: copy(['title']),
   outputSchema: { type: 'array' },
 });
-assert.deepEqual((await walk(items, feed.url, { signal, pages: fromPages })).data, [
+assert.deepEqual((await walk(items, { url: feed.url }, { signal, pages: fromPages })).data, [
   { title: 'Two' },
 ]);
 
@@ -165,9 +165,9 @@ const json = prepareArtifact({
 });
 assert.deepEqual(
   (
-    await walk(json, 'https://api.test/list', {
+    await walk(json, { url: 'https://api.test/list' }, {
       signal,
-      pages: async (u) => api.get(u) ?? assert.fail(u),
+      pages: async ({ url: u }) => api.get(u) ?? assert.fail(u),
     })
   ).data,
   [{ name: 'seven' }],
@@ -225,6 +225,9 @@ const live = new Map<string, HttpSource>([
 ]);
 const web: WebTransport = {
   get: async (u) => live.get(u) ?? assert.fail(u),
+  async send(request, signal) {
+    return this.get(request.url, signal);
+  },
   post: async () => assert.fail('no POST'),
   close: () => {},
 };
@@ -255,7 +258,7 @@ const site = prepareArtifact({
   mapping: copy(['title']),
   outputSchema: { type: 'array' },
 });
-const once = await walk(site, 'https://site.test/', { signal, web });
+const once = await walk(site, { url: 'https://site.test/' }, { signal, web });
 assert.deepEqual(once.data, [{ title: 'Same' }]);
 assert.deepEqual(
   once.resources.map((r) => r.url),
@@ -266,7 +269,7 @@ assert.deepEqual(
   ['https://site.test/same', 'https://site.test/same'],
 );
 await assert.rejects(
-  walk(site, 'https://site.test/feed.xml', { signal, web }),
+  walk(site, { url: 'https://site.test/feed.xml' }, { signal, web }),
   (e: unknown) => e instanceof WalkError && e.code === 'MEDIA_TYPE',
 );
 

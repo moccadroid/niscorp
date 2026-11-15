@@ -173,13 +173,70 @@ export const PolicySchema = z
   })
   .strict();
 
-// Version 0 of the nisc.haptic grammar: link and reference stages lead to a final record stage; the program shapes
-// its records.
+const valueName = z
+  .string()
+  .regex(/^[A-Za-z_][A-Za-z0-9_]*$/, 'a name is letters, digits and "_", not starting with a digit');
+
+export const InputSchema = z
+  .object({ description: z.string().min(1).describe('What the value is, for whoever calls.') })
+  .strict();
+
+export const RequestSchema = z
+  .object({
+    method: z.enum(['GET', 'POST']),
+    url: z
+      .string()
+      .min(1)
+      .describe('The address; "{name}" is replaced by that value, percent-encoded.'),
+    headers: z
+      .record(z.string().min(1), z.string())
+      .optional()
+      .describe("Added to the transport's own; \"{name}\" is replaced by that value."),
+    body: z
+      .union([
+        z.object({ form: z.record(z.string(), z.string()) }).strict(),
+        z.object({ json: z.unknown() }).strict(),
+      ])
+      .optional()
+      .describe('Only with POST. A string that is exactly "{name}" becomes that value.'),
+    start: z
+      .record(valueName, z.union([z.string(), z.number()]))
+      .optional()
+      .describe("The first values beside the inputs that `more` changes."),
+    more: z
+      .unknown()
+      .optional()
+      .describe(
+        'A Prism program over { document, headers, values, url } answering the start values of the next request, or null to stop.',
+      ),
+  })
+  .strict();
+
+export const NextSchema = z
+  .object({
+    selector: z.string().min(1).describe('CSS over the whole page for the link to the next page.'),
+    attribute: z.string().min(1).describe('The attribute holding its address, usually "href".'),
+  })
+  .strict();
+
+// Version 1 of the nisc.haptic grammar: link and reference stages lead to a final record stage; the program shapes
+// its records. A run starts from the address it is given, or from the artifact's request filled with its inputs; the
+// first stage reads that page and the pages that continue it.
 export const ArtifactSchema = z
   .object({
     stamp: z
-      .object({ 'nisc.haptic': z.literal(0), 'nisc.prism': z.number().int().nonnegative() })
+      .object({
+        'nisc.haptic': z.number().int().nonnegative(),
+        'nisc.prism': z.number().int().nonnegative(),
+      })
       .strict(),
+    inputs: z.record(valueName, InputSchema).optional().describe('Named strings a run is given.'),
+    request: RequestSchema.optional().describe(
+      'The first request; an artifact with one is run without an address.',
+    ),
+    next: NextSchema.optional().describe(
+      'The link to the next page of the pages the run starts from; the first stage reads them all.',
+    ),
     policy: PolicySchema,
     stages: z
       .array(StageSchema)
@@ -209,4 +266,7 @@ export type XmlReferenceStage = z.infer<typeof XmlReferenceStageSchema>;
 export type JsonReferenceStage = z.infer<typeof JsonReferenceStageSchema>;
 export type Stage = z.infer<typeof StageSchema>;
 export type Policy = z.infer<typeof PolicySchema>;
+export type Input = z.infer<typeof InputSchema>;
+export type Request = z.infer<typeof RequestSchema>;
+export type Next = z.infer<typeof NextSchema>;
 export type Artifact = z.infer<typeof ArtifactSchema>;

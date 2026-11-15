@@ -20,6 +20,16 @@ export type WebTransportProfile = z.input<typeof WebTransportProfileSchema>;
 
 export interface WebTransport {
   get(url: string, signal: AbortSignal): Promise<HttpSource>;
+  // A GET or POST with the profile's request headers, under the given ones: a header named in both is the given one.
+  send(
+    request: {
+      method: 'GET' | 'POST';
+      url: string;
+      headers: Record<string, string>;
+      body: string | null;
+    },
+    signal: AbortSignal,
+  ): Promise<HttpSource>;
   // A form POST with exactly these headers (the profile's request headers are not added).
   post(
     url: string,
@@ -111,9 +121,24 @@ export const createWebTransport = (input: WebTransportProfile = {}): WebTranspor
       response.dispose();
     }
   };
+  const headersWith = (given: Record<string, string>) => {
+    const names = new Set(Object.keys(given).map((name) => name.toLowerCase()));
+    const own = Object.entries(options.requestHeaders).filter(
+      ([name]) => !names.has(name.toLowerCase()),
+    );
+    return { ...Object.fromEntries(own), ...given };
+  };
   return {
     get: (url, signal) =>
       receive(url, transport.get(new URL(url), { ...options.requestHeaders }, signal), signal),
+    send: (request, signal) =>
+      receive(
+        request.url,
+        request.method === 'GET'
+          ? transport.get(new URL(request.url), headersWith(request.headers), signal)
+          : transport.post(new URL(request.url), headersWith(request.headers), request.body ?? '', signal),
+        signal,
+      ),
     post: (url, headers, body, signal) =>
       receive(url, transport.post(new URL(url), { ...headers }, body, signal), signal),
     close: transport.close,

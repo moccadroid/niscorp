@@ -16,7 +16,8 @@ import {
   type Artifact,
   type FieldRule,
 } from './schema.js';
-import { walk, type Report, type WalkOptions, type WalkResult } from './walk.js';
+import { templateNames } from './request.js';
+import { walk, type Report, type RunInput, type WalkOptions, type WalkResult } from './walk.js';
 
 export class ArtifactError extends Error {
   constructor(
@@ -39,13 +40,16 @@ export type PreparedArtifact = {
   program: Config;
   // Each stage's checked reference program, by stage position; null for stages without one.
   references: (Config | null)[];
+  // The request's checked `more` program; null without one.
+  more: Config | null;
   // null when the data fits the output schema; otherwise what is wrong.
   checkOutput(data: unknown): string | null;
-  // One run with no model: current data from the page at this address.
-  run(input: { url: string }, options: WalkOptions): Promise<WalkResult>;
+  // One run with no model: current data from the page at this address, or from the artifact's request filled with
+  // these inputs.
+  run(input: RunInput, options: WalkOptions): Promise<WalkResult>;
   // The same run, for whoever writes the artifact: what each page gave at each stage, the records the program saw, and
   // why the run stopped instead of an exception.
-  inspect(input: { url: string }, options: WalkOptions): Promise<Inspection>;
+  inspect(input: RunInput, options: WalkOptions): Promise<Inspection>;
 };
 
 const describe = (issues: { path: readonly PropertyKey[]; message: string }[]) =>
@@ -111,6 +115,33 @@ const consistency = (artifact: Artifact) => {
     css(`${path}.selector`, field.selector);
     if (field.closest) css(`${path}.closest`, field.closest);
   };
+  const { request, inputs, next } = artifact;
+  if (next) {
+    css('next.selector', next.selector);
+    const first = artifact.stages[0];
+    if (first?.format !== 'html')
+      names.push('next: a next link is read from an HTML page, and the first stage is not HTML');
+    if (request?.more !== undefined)
+      names.push('next and request.more: an artifact reaches its next page one way');
+  }
+  if (request) {
+    const inputNames = Object.keys(inputs ?? {});
+    const startNames = Object.keys(request.start ?? {});
+    const known = [...inputNames, ...startNames];
+    for (const name of startNames)
+      if (inputNames.includes(name))
+        names.push(`request.start.${name}: ${JSON.stringify(name)} is also an input`);
+    for (const { name, at } of templateNames(request))
+      if (!known.includes(name))
+        names.push(
+          `${at}: "{${name}}" names no input and no start value; they are ${known.map((n) => JSON.stringify(n)).join(', ') || 'none'}`,
+        );
+    if (request.method === 'GET' && request.body)
+      names.push('request.body: a GET request has no body');
+    for (const [header, value] of Object.entries(request.headers ?? {}))
+      if (/[\r\n]/.test(header + value)) names.push(`request.headers.${header}: a line break`);
+  } else if (inputs && Object.keys(inputs).length)
+    names.push('inputs: an artifact without a request has nothing to fill with them');
   artifact.stages.forEach((stage, index) => {
     const at = `stages.${index}`;
     if (stage.format === 'json') return;
@@ -175,6 +206,12 @@ export const prepareArtifact = (value: unknown): PreparedArtifact => {
       throw new ArtifactError('PROGRAM', `stages.${index}.references: ${describe(checked.issues)}`);
     return checked.data;
   });
+  let more: Config | null = null;
+  if (artifact.request?.more !== undefined) {
+    const checked = checkProgram(artifact.request.more);
+    if (!checked.ok) throw new ArtifactError('PROGRAM', `request.more: ${describe(checked.issues)}`);
+    more = checked.data;
+  }
   const ajv = new Ajv2020({ allErrors: true, strict: false });
   formats.default(ajv);
   let validate: ReturnType<Ajv2020['compile']>;
@@ -187,12 +224,13 @@ export const prepareArtifact = (value: unknown): PreparedArtifact => {
     artifact,
     program: program.data,
     references,
+    more,
     checkOutput: (data) => (validate(data) ? null : ajv.errorsText(validate.errors)),
-    run: (input, options) => walk(prepared, input.url, options),
+    run: (input, options) => walk(prepared, input, options),
     inspect: async (input, options) => {
       const report: Report = { pages: [], records: null };
       try {
-        const result = await walk(prepared, input.url, options, report);
+        const result = await walk(prepared, input, options, report);
         return { ...report, result, error: null };
       } catch (error) {
         const code = (error as { code?: unknown })?.code;

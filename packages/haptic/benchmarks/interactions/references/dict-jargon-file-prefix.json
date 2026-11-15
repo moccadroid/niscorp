@@ -1,0 +1,81 @@
+{
+  "key": "url",
+  "items": [
+    {
+      "key": "https://www.dict.org/bin/Dict?Form=Dict2&Database=jargon&Query=hack",
+      "label": "Jargon File headword: hack"
+    },
+    {
+      "key": "https://www.dict.org/bin/Dict?Form=Dict2&Database=jargon&Query='hack+attack'",
+      "label": "Jargon File headword: hack attack"
+    },
+    {
+      "key": "https://www.dict.org/bin/Dict?Form=Dict2&Database=jargon&Query='hack+mode'",
+      "label": "Jargon File headword: hack mode"
+    },
+    {
+      "key": "https://www.dict.org/bin/Dict?Form=Dict2&Database=jargon&Query='hack+on'",
+      "label": "Jargon File headword: hack on"
+    },
+    {
+      "key": "https://www.dict.org/bin/Dict?Form=Dict2&Database=jargon&Query='hack+together'",
+      "label": "Jargon File headword: hack together"
+    },
+    {
+      "key": "https://www.dict.org/bin/Dict?Form=Dict2&Database=jargon&Query='hack+up'",
+      "label": "Jargon File headword: hack up"
+    },
+    {
+      "key": "https://www.dict.org/bin/Dict?Form=Dict2&Database=jargon&Query='hack+value'",
+      "label": "Jargon File headword: hack value"
+    },
+    {
+      "key": "https://www.dict.org/bin/Dict?Form=Dict2&Database=jargon&Query='hacked+off'",
+      "label": "Jargon File headword: hacked off"
+    },
+    {
+      "key": "https://www.dict.org/bin/Dict?Form=Dict2&Database=jargon&Query='hacked+up'",
+      "label": "Jargon File headword: hacked up"
+    },
+    {
+      "key": "https://www.dict.org/bin/Dict?Form=Dict2&Database=jargon&Query=hacker",
+      "label": "Jargon File headword: hacker"
+    },
+    {
+      "key": "https://www.dict.org/bin/Dict?Form=Dict2&Database=jargon&Query='hacker+ethic'",
+      "label": "Jargon File headword: hacker ethic"
+    },
+    {
+      "key": "https://www.dict.org/bin/Dict?Form=Dict2&Database=jargon&Query='hacker+humor'",
+      "label": "Jargon File headword: hacker humor"
+    },
+    {
+      "key": "https://www.dict.org/bin/Dict?Form=Dict2&Database=jargon&Query='hackers+%28the+movie%29'",
+      "label": "Jargon File headword: hackers (the movie)"
+    },
+    {
+      "key": "https://www.dict.org/bin/Dict?Form=Dict2&Database=jargon&Query='hacking+run'",
+      "label": "Jargon File headword: hacking run"
+    },
+    {
+      "key": "https://www.dict.org/bin/Dict?Form=Dict2&Database=jargon&Query='hacking+x+for+y'",
+      "label": "Jargon File headword: hacking x for y"
+    },
+    {
+      "key": "https://www.dict.org/bin/Dict?Form=Dict2&Database=jargon&Query=hackintosh",
+      "label": "Jargon File headword: hackintosh"
+    },
+    {
+      "key": "https://www.dict.org/bin/Dict?Form=Dict2&Database=jargon&Query=hackish",
+      "label": "Jargon File headword: hackish"
+    },
+    {
+      "key": "https://www.dict.org/bin/Dict?Form=Dict2&Database=jargon&Query=hackishness",
+      "label": "Jargon File headword: hackishness"
+    },
+    {
+      "key": "https://www.dict.org/bin/Dict?Form=Dict2&Database=jargon&Query=hackitude",
+      "label": "Jargon File headword: hackitude"
+    }
+  ]
+}

@@ -30,6 +30,8 @@ try {
 
 An artifact does not have to come from discovery: a person, a model or a tool can write one. `prepared.inspect({ url }, options)` runs it like `run`, but returns what each page gave at each stage (elements matched, records left out and why, fields left empty) and the records the program saw, even when the run stops. [ARTIFACTS.md](ARTIFACTS.md) is the format, with a hand-written example.
 
+An artifact can also carry its first request (GET or POST, a form or JSON body) filled with named inputs, `run({ inputs: { query } })`, and continue a list onto further pages by the page's next link or by the next request's values (a page number, an offset, a cursor). Discovery does not write these yet; authors do.
+
 ## Discover
 
 ```ts
@@ -71,6 +73,6 @@ DuckDuckGo is the shipped provider (`duckduckgo`, a `SearchProvider` value; pass
 
 ## More
 
-- [ARTIFACTS.md](ARTIFACTS.md): writing an artifact by hand, the check errors, `inspect`, every key of the grammar.
+- [ARTIFACTS.md](ARTIFACTS.md): writing an artifact by hand, the check errors, `inspect`, every key of the grammar, requests, inputs and more pages.
 - [DESIGN.md](DESIGN.md): the artifact grammar, the discovery steps, search, rendering, the modules.
 - [STATUS.md](STATUS.md): measured results, known limits, what is not built, how to check a change.

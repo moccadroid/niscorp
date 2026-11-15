@@ -1,6 +1,7 @@
 await import('./render.test.js');
 await import('./artifact.test.js');
 await import('./artifact-formats.test.js');
+await import('./interactions.test.js');
 await import('./discovery.test.js');
 await import('./search-provider.test.js');
 await import('./search-rounds.test.js');

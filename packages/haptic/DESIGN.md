@@ -35,7 +35,7 @@ Perl's free online books, as discovery wrote it (`tests/fixtures/discovery/perl.
 }
 ```
 
-- **Stages** run in order, one per level of pages: link or reference stages first, one record stage last. The program sees `{ records }`, the last level's records from all pages in page order. [ARTIFACTS.md](ARTIFACTS.md) has every key, what a record holds, what a run returns, the check errors and `inspect`.
+- **Stages** run in order, one per level of pages: link or reference stages first, one record stage last. A run starts from the address it is given, or from the artifact's request filled with its inputs; the first stage reads that page and the pages that continue it (a next link, or the next request's values). The program sees `{ records }`, the last level's records from all pages in page order. [ARTIFACTS.md](ARTIFACTS.md) has every key, what a record holds, what a run returns, the check errors and `inspect`.
 - **Versions**: `prepareArtifact` upgrades an older stamp through Strata (`HAPTIC_SEQUENCE` with Prism's sequence) before checking it. A change to the artifact schema appends a migration; `pnpm check:grammars` at the repository root holds the grammar to its snapshot and upgrades the captured artifacts in `strata/corpus/haptic`.
 
 ## Discovery

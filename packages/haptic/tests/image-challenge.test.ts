@@ -42,6 +42,9 @@ const web: WebTransport = {
       return source(url, '<div class="result">results</div>');
     return assert.fail(`unexpected GET ${url}`);
   },
+  async send(request, signal) {
+    return this.get(request.url, signal);
+  },
   post: async (url, headers, body) => {
     posts.push({ url, headers, body });
     if (posts.length === 1)

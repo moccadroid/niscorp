@@ -59,6 +59,8 @@ const seen = await prepared.inspect({ url }, { web, signal: AbortSignal.timeout(
 web.close();
 ```
 
+An artifact with a `request` is run with its inputs instead of an address: `prepared.inspect({ inputs: { query: 'haptic feedback' } }, …)` (see [Requests, inputs and more pages](#requests-inputs-and-more-pages)).
+
 `prepareArtifact` checks the artifact once, in this order, and stops at the first check that fails. The error lists every problem that check found, each with its place in the artifact:
 
 | `ArtifactError.code` | What is wrong                                                                                              | Example message                                                                                |
@@ -71,7 +73,7 @@ web.close();
 
 `inspect` runs the artifact exactly like `run`, but it does not throw when the run stops. It returns:
 
-- `pages`: one entry per page at each stage, in order.
+- `pages`: one entry per page at each stage, in order. A page the run started from also gives the `values` it was requested with, or the `link` that reached it.
   - A link or reference stage gives the addresses that page led to. For a link stage, it also gives `selected`, the number of elements its selector matched.
   - A record stage gives these counts:
     - `selected`: elements its selector matched;
@@ -83,7 +85,7 @@ web.close();
     - `empty`: for each field, how many kept records have no value for it.
 - `records`: the records the mapping received. These are there even when the mapping failed or its result did not fit `outputSchema`.
 - `result`: what `run` returns, or `null` when the run stopped.
-- `error`: why the run stopped, with the code of the error that stopped it, or `null`. Examples: `STATUS` (an HTTP status not in `policy.accept.statuses`), `NO_PAGES` (a link stage found nothing to follow), `PROGRAM` (the mapping failed on these records), `SCHEMA` (the result does not fit `outputSchema`).
+- `error`: why the run stopped, with the code of the error that stopped it, or `null`. Examples: `INPUT` (the run was not given what the artifact needs), `STATUS` (an HTTP status not in `policy.accept.statuses`), `NO_PAGES` (a link stage found nothing to follow), `MORE` (`request.more` failed, or answered something other than start values or `null`), `PROGRAM` (the mapping failed on these records), `SCHEMA` (the result does not fit `outputSchema`).
 
 A selector that matches nothing shows as `selected: 0`. A field rule that matches nothing in the kept records shows as `empty` equal to `kept`.
 
@@ -93,7 +95,10 @@ A selector that matches nothing shows as `selected: 0`. A field rule that matche
 
 | Key            | Meaning                                                                                                                                       |
 | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `stamp`        | Optional. The grammar versions it was written for, e.g. `{ "nisc.haptic": 0, "nisc.prism": 3 }`.                                              |
+| `stamp`        | Optional. The grammar versions it was written for, e.g. `{ "nisc.haptic": 1, "nisc.prism": 3 }`.                                              |
+| `inputs`       | Optional. Named strings a run is given, each `{ "description" }` (below).                                                                     |
+| `request`      | Optional. The first request, as a template; an artifact with one is run without an address (below).                                          |
+| `next`         | Optional. `{ "selector", "attribute" }`: the link to the next page of the pages the run starts from (below).                                  |
 | `policy`       | Limits of one run (below).                                                                                                                    |
 | `stages`       | One stage per level of pages: link or reference stages first, exactly one record stage last.                                                  |
 | `mapping`      | A [Prism](https://github.com/moccadroid/niscorp/blob/main/packages/prism/DOCS.md) program over `{ records }`; its result is the run's `data`. |
@@ -140,7 +145,152 @@ CSS is what [css-select](https://github.com/fb55/css-select) runs, limited to st
 
 ### What a run returns
 
-`{ data, records, visited, redirects, limited, resources, emptyPages, broken }`. `limited` means a link stage had more pages than `policy.maxPages` left room for. `broken` means a page of the last stage gave no records, so the artifact no longer fits that page.
+`{ data, records, visited, redirects, limited, resources, emptyPages, broken }`. `limited` means a stage had more pages than `policy.maxPages` left room for. `broken` means a page of the last stage gave no records, so the artifact no longer fits that page. A page that continues the start and gives nothing new only ends the paging.
+
+### Requests, inputs and more pages
+
+A run starts from the address it is given. An artifact may instead carry its **first request**, filled with **inputs** the run is given. The pages a run starts from may also **continue**, either by a next link or by the next request's values, and the first stage reads all of them. None of this needs a browser: these are plain requests.
+
+- `inputs`: name to `{ "description" }`. A run must give every input, as a string, and no other: `run({ inputs: { query: "…" } }, …)`.
+- `request`:
+  - `method`: `"GET"` or `"POST"`.
+  - `url`.
+  - `headers`, optional: on top of the transport's own; for a header named in both, the artifact's wins.
+  - `body`, optional and with POST only: `{ "form": { name: value } }` (sent form-encoded) or `{ "json": value }` (sent as JSON).
+  - `start`, optional: the values `more` changes, each a string or a number.
+  - `more`, optional (below).
+
+  How values fill the template:
+  - `{name}` in `url` and in header values is replaced by that input or start value. In `url` it is percent-encoded.
+  - In a body, only a string that is exactly `"{name}"` is replaced, by the value itself: `"first": "{n}"` with `n = 10` sends `10`. Every other string goes as written. So a GraphQL query, full of braces, is never touched; put its variables in `json.variables`.
+  - A redirect after a POST: 301, 302 and 303 are fetched with GET and no body; 307 and 308 send the request again.
+- `more`: a Prism program over `{ document, headers, values, url }` of the page just read. `document` is its JSON, or `null`; each header is a list. It answers `null` to stop, or the start values to change, and the request is filled with them and sent again. A counter, an offset and a cursor from the answer are all this one program.
+- `next`: `{ "selector", "attribute" }` over the whole page, when the first stage is HTML. It gives the next page's address, for pages whose next address can't be counted, such as a cursor in the link. An artifact uses `next` or `more`, not both. `more` belongs to `request`, so an artifact run from an address continues only by `next`. Give a JSON source that pages by a value a `request`.
+
+Paging stops at the first of these:
+- no next link;
+- `more` answers `null`;
+- the next request was already sent this run;
+- a page gives nothing the first stage hasn't already read: no new record, the same JSON document, or no new address;
+- `policy.maxPages`, which also sets `limited`.
+
+A record already read on an earlier page of the start is left out and counted as a `duplicate`. When the first stage is a link stage, its index pages continue until they hold the addresses that its `limit` and `maxPages` leave room for.
+
+Hacker News, three pages by the next link:
+
+```json
+{
+  "next": { "selector": "a.morelink", "attribute": "href" },
+  "policy": { "maxPages": 3, "maxRedirects": 3, "stripFragments": true, "accept": { "statuses": [200] } },
+  "stages": [
+    {
+      "kind": "records",
+      "format": "html",
+      "render": false,
+      "selector": "tr.athing",
+      "fields": {
+        "title": { "selector": ".titleline > a", "attribute": null },
+        "link": { "selector": ".titleline > a", "attribute": "href" }
+      },
+      "required": ["title"],
+      "where": null,
+      "limit": null
+    }
+  ],
+  "mapping": {
+    "$map": {
+      "over": { "$ref": "$.records" },
+      "as": "r",
+      "body": {
+        "title": { "$get": { "from": { "$var": "r" }, "path": ["fields", "title"] } },
+        "link": { "$get": { "from": { "$var": "r" }, "path": ["fields", "link"] } }
+      }
+    }
+  },
+  "outputSchema": { "type": "array" }
+}
+```
+
+Run with `{ url: "https://news.ycombinator.com/" }`: 30 stories a page, 90 in all, `limited: true`.
+
+dev.to's feed, a JSON page counter:
+
+```json
+{
+  "request": {
+    "method": "GET",
+    "url": "https://dev.to/search/feed_content?per_page=15&page={page}&sort_by=hotness_score&sort_direction=desc&class_name=Article",
+    "start": { "page": 0 },
+    "more": {
+      "$case": {
+        "branches": [{ "when": { "$empty": { "$ref": "$.document.result" } }, "then": { "$const": null } }],
+        "else": { "page": { "$add": [{ "$ref": "$.values.page" }, 1] } }
+      }
+    }
+  },
+  "policy": { "maxPages": 5, "maxRedirects": 3, "stripFragments": true, "accept": { "statuses": [200] } },
+  "stages": [{ "kind": "records", "format": "json" }],
+  "mapping": {
+    "$flatMap": {
+      "over": { "$ref": "$.records" },
+      "as": "r",
+      "body": {
+        "$map": {
+          "over": { "$get": { "from": { "$var": "r" }, "path": ["document", "result"] } },
+          "as": "a",
+          "body": {
+            "title": { "$get": { "from": { "$var": "a" }, "path": ["title"] } },
+            "link": { "$fill": { "phrase": "https://dev.to{path}", "slots": { "path": { "$get": { "from": { "$var": "a" }, "path": ["path"] } } } } }
+          }
+        }
+      }
+    }
+  },
+  "outputSchema": { "type": "array" }
+}
+```
+
+Run with `{}`: pages 0 to 4, 15 articles each, `limited: true`. Without the cap it stops at the first page whose `result` is empty.
+
+A search form, posted with an input:
+
+```json
+{
+  "inputs": { "query": { "description": "What to search for, in words." } },
+  "request": { "method": "POST", "url": "https://html.duckduckgo.com/html/", "body": { "form": { "q": "{query}" } } },
+  "policy": { "maxPages": 1, "maxRedirects": 3, "stripFragments": true, "accept": { "statuses": [200] } },
+  "stages": [
+    {
+      "kind": "records",
+      "format": "html",
+      "render": false,
+      "selector": ".result",
+      "fields": {
+        "title": { "selector": "a.result__a", "attribute": null },
+        "link": { "selector": "a.result__a", "attribute": "href" },
+        "snippet": { "selector": ".result__snippet", "attribute": null }
+      },
+      "required": ["title", "link"],
+      "where": null,
+      "limit": null
+    }
+  ],
+  "mapping": {
+    "$map": {
+      "over": { "$ref": "$.records" },
+      "as": "r",
+      "body": {
+        "title": { "$get": { "from": { "$var": "r" }, "path": ["fields", "title"] } },
+        "link": { "$get": { "from": { "$var": "r" }, "path": ["fields", "link"] } },
+        "snippet": { "$get": { "from": { "$var": "r" }, "path": ["fields", "snippet"] } }
+      }
+    }
+  },
+  "outputSchema": { "type": "array" }
+}
+```
+
+Run with `{ inputs: { query: "haptic feedback" } }`.
 
 ## Patterns
 

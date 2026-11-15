@@ -78,7 +78,7 @@ const records = prepareArtifact({
   mapping: copy(['name', 'file', 'tags']),
   outputSchema: anything,
 });
-const one = await walk(records, releases.url, { signal, pages: async () => releases });
+const one = await walk(records, { url: releases.url }, { signal, pages: async () => releases });
 assert.deepEqual(one.data, [
   {
     name: 'Tool 1.0 ‑ Stable',
@@ -92,7 +92,7 @@ const stable = prepareArtifact({
   ...records.artifact,
   stages: [{ ...records.artifact.stages[0], where: { in: 'text', contains: 'stable' }, limit: 2 }],
 });
-const two = await walk(stable, releases.url, { signal, pages: async () => releases });
+const two = await walk(stable, { url: releases.url }, { signal, pages: async () => releases });
 assert.deepEqual(
   (two.data as { name: string }[]).map((item) => item.name),
   ['Tool 1.0 ‑ Stable', 'Tool 0.8 - STABLE'],
@@ -142,9 +142,9 @@ const linked = prepareArtifact({
   mapping: copy(['title', 'body']),
   outputSchema: anything,
 });
-const followed = await walk(linked, index.url, {
+const followed = await walk(linked, { url: index.url }, {
   signal,
-  pages: async (url) => pages.get(url) ?? assert.fail(`not a page of this test: ${url}`),
+  pages: async ({ url }) => pages.get(url) ?? assert.fail(`not a page of this test: ${url}`),
 });
 assert.deepEqual(followed.visited, [
   index.url,
@@ -158,9 +158,9 @@ assert.equal(followed.limited, false);
 
 // The page cap cuts a link stage short, and says so.
 const capped = prepareArtifact({ ...linked.artifact, policy: { ...policy, maxPages: 2 } });
-const short = await walk(capped, index.url, {
+const short = await walk(capped, { url: index.url }, {
   signal,
-  pages: async (url) => pages.get(url) ?? assert.fail(url),
+  pages: async ({ url }) => pages.get(url) ?? assert.fail(url),
 });
 assert.deepEqual(short.visited, [index.url, 'https://example.com/news/a']);
 assert.equal(short.limited, true);
@@ -237,7 +237,7 @@ const strict = prepareArtifact({
   },
 });
 await assert.rejects(
-  walk(strict, releases.url, { signal, pages: async () => releases }),
+  walk(strict, { url: releases.url }, { signal, pages: async () => releases }),
   (error: unknown) => error instanceof WalkError && error.code === 'SCHEMA',
 );
 
@@ -266,7 +266,7 @@ assert.equal(stopped.error?.code, 'SCHEMA');
 assert.equal(stopped.records?.length, 1);
 const throughLinks = await linked.inspect(
   { url: index.url },
-  { signal, pages: async (url) => pages.get(url) ?? assert.fail(url) },
+  { signal, pages: async ({ url }) => pages.get(url) ?? assert.fail(url) },
 );
 assert.deepEqual(throughLinks.pages[0], {
   url: index.url,
@@ -290,7 +290,7 @@ const perl = JSON.parse(
 ) as { pages: HttpSource[] };
 const books = await prepareArtifact(example).inspect(
   { url: 'https://www.perl.org/books/library.html' },
-  { signal, pages: async (url) => perl.pages.find((p) => p.url === url) ?? assert.fail(url) },
+  { signal, pages: async ({ url }) => perl.pages.find((p) => p.url === url) ?? assert.fail(url) },
 );
 assert.equal(books.error, null);
 assert.equal((books.result?.data as unknown[]).length, 9);
@@ -298,6 +298,9 @@ assert.equal((books.result?.data as unknown[]).length, 9);
 // Redirects are followed within the policy; the final status must be accepted.
 const answers = (map: Record<string, HttpSource>): WebTransport => ({
   get: async (url) => map[url] ?? assert.fail(url),
+  async send(request, signal) {
+    return this.get(request.url, signal);
+  },
   post: async () => assert.fail('no POST here'),
   close: () => {},
 });

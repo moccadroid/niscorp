@@ -41,7 +41,7 @@ for (const c of cases) {
           { url: start.url },
           {
             signal: AbortSignal.timeout(120_000),
-            pages: async (url) =>
+            pages: async ({ url }) =>
               pages.get(url) ?? Promise.reject(new Error(`page not captured: ${url}`)),
           },
         );

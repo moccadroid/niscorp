@@ -2,15 +2,27 @@ import { evaluate, ConfigSchema } from '@niscorp/prism';
 import { PRISM_SEQUENCE } from '@niscorp/prism/migrations';
 import { createUpgrader, defineSequence } from '@niscorp/strata';
 
-// The nisc.haptic grammar. Version 0 has no migrations; a change to the artifact schema appends one.
+// The nisc.haptic grammar; a change to the artifact schema appends a migration.
 export const HAPTIC_SEQUENCE = defineSequence({
   id: 'nisc.haptic',
   documents: {
     artifact: {
-      embeds: { mapping: 'nisc.prism/config', 'stages[].references': 'nisc.prism/config' },
+      embeds: {
+        mapping: 'nisc.prism/config',
+        'stages[].references': 'nisc.prism/config',
+        'request.more': 'nisc.prism/config',
+      },
     },
   },
-  migrations: [],
+  migrations: [
+    {
+      // A marker without steps: a version 0 artifact means the same at version 1, and a reader at 0 must refuse
+      // an artifact that uses the additions.
+      description:
+        'inputs, a first request as a template (GET or POST, form or JSON body) and more pages: the next link, or the next request values from `more`',
+      steps: [],
+    },
+  ],
 });
 
 const upgrader = await createUpgrader([HAPTIC_SEQUENCE, PRISM_SEQUENCE], {

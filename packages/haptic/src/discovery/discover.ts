@@ -236,8 +236,10 @@ export const discover = async (
     try {
       run = await walk(
         prepared,
-        request.url,
-        options.pages ? { signal, pages: options.pages } : { signal, web: web as WebTransport },
+        { url: request.url },
+        options.pages
+          ? { signal, pages: (page) => options.pages!(page.url) }
+          : { signal, web: web as WebTransport },
       );
     } catch (error) {
       const message =

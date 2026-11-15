@@ -1,0 +1,47 @@
+{
+  "cases": [
+    {
+      "id": "wikipedia-brainfuck-first-edits",
+      "url": "https://en.wikipedia.org/w/index.php?title=Brainfuck&action=history&dir=prev&limit=50",
+      "instruction": "List the first 100 edits ever made to the Wikipedia article Brainfuck (the oldest 100), each with its date and time, the editor, and the edit summary; leave out the page's navigation and filter controls."
+    },
+    {
+      "id": "google-security-blog-2015",
+      "url": "https://security.googleblog.com/2015/",
+      "instruction": "List every post the Google Online Security Blog published in 2015, with its title, date and link; leave out posts from 2014 or earlier and the sidebar archive links."
+    },
+    {
+      "id": "pokeapi-original-151",
+      "url": "https://pokeapi.co/api/v2/pokemon",
+      "instruction": "List the original 151 Pokémon (Pokédex numbers 1 to 151) by name, with each one's detail URL; leave out any Pokémon after number 151."
+    },
+    {
+      "id": "crates-tokio-pre-1-releases",
+      "url": "https://crates.io/api/v1/crates/tokio/versions?per_page=50",
+      "instruction": "List every tokio release before 1.0 (all 0.x versions, alphas included) with its version number and publish date; leave out every 1.x release."
+    },
+    {
+      "id": "europepmc-tardigrade-2016-2018",
+      "url": "https://www.ebi.ac.uk/europepmc/webservices/rest/search?query=TITLE%3Atardigrade%20AND%20PUB_YEAR%3A%5B2016%20TO%202018%5D&format=json&pageSize=10&cursorMark=*",
+      "instruction": "List every article in this search for papers with 'tardigrade' in the title published 2016 to 2018, with title, journal and publication year."
+    },
+    {
+      "id": "rick-and-morty-characters-by-name",
+      "url": "https://rickandmortyapi.com/api/character/",
+      "instruction": "List every Rick and Morty character whose name contains the given name, with species and status; leave out characters whose name does not contain it.",
+      "inputs": { "name": "rick" }
+    },
+    {
+      "id": "dict-jargon-file-prefix",
+      "url": "https://www.dict.org/bin/Dict",
+      "instruction": "List every headword in the Jargon File dictionary that starts with the given word; leave out matches from other dictionaries.",
+      "inputs": { "word": "hack" }
+    },
+    {
+      "id": "gutenberg-books-by-author",
+      "url": "https://www.gutenberg.org/ebooks/",
+      "instruction": "List every Project Gutenberg book with the given author among its authors, with its ebook number, title and language; leave out books by other people that only mention the author.",
+      "inputs": { "author": "Lewis Carroll" }
+    }
+  ]
+}

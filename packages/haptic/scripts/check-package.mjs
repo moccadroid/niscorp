@@ -140,7 +140,7 @@ for (const sample of samples) {
   const pages = new Map(sample.pages.map((page) => [page.url, page]));
   const prepared = prepareArtifact(sample.artifact);
   for (let i = 0; i < 2; i++) {
-    const outcome = await prepared.run({ url: sample.url }, { signal: AbortSignal.timeout(60000), pages: async (url) => structuredClone(pages.get(url) ?? assert.fail('Uncaptured page: ' + url)) });
+    const outcome = await prepared.run({ url: sample.url }, { signal: AbortSignal.timeout(60000), pages: async ({ url }) => structuredClone(pages.get(url) ?? assert.fail('Uncaptured page: ' + url)) });
     assert.deepEqual(outcome.data, sample.data, sample.id);
     runs++;
   }
