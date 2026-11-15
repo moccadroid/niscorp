@@ -1,6 +1,6 @@
 import { FactInputSchema } from '../schemas';
 import { TideError } from '../errors';
-import type { AttemptOutcome, FactInput, NewFact, Run, Task, TideCtx, TideStore } from '../types';
+import type { AttemptOutcome, FactInput, NewFact, Task, TideCtx, TideStore } from '../types';
 import { evaluateTemplate, withNow } from './runtime';
 import { admitFact, announceFact } from './facts';
 import type { Admission } from './facts';
@@ -248,37 +248,39 @@ export const reopenTask = async (deps: EngineDeps, taskId: string, now: number):
     return true;
   });
 
+// Each run's mark and its fact commit together, one run per transaction: a run whose fact cannot be
+// written stays undrained and is tried again on the next advance, and the runs after it still drain.
 export const settleRuns = async (deps: EngineDeps, now: number): Promise<number> => {
-  const drained = await deps.store.transact(async (tx) => {
-    const settled = await tx.claim({
-      table: 'run',
-      where: { state: 'settled', drained: { ne: true } },
-      order: [{ by: 'settledAt' }],
-      limit: 200,
-      set: { drained: true },
-    });
-    const admitted: { run: Run; admission: Admission }[] = [];
-    for (const run of settled) {
-      const admission = await admitFact(tx, {
-        kind: 'run',
-        reflex: run.reflexId,
-        runId: run.id,
-        occurrence: run.occurrence,
-        stats: { total: run.total, done: run.done, failed: run.failed },
-        at: now,
-        depth: run.depth + 1,
-        cause: `run:${run.id}`,
-        as: run.as,
-      }, deps.maxChainFacts);
-      admitted.push({ run, admission });
-    }
-    return admitted;
+  const settled = await deps.store.query({
+    table: 'run',
+    where: { state: 'settled', drained: { ne: true } },
+    order: [{ by: 'settledAt' }],
+    limit: 200,
   });
 
-  for (const { run, admission } of drained) {
-    deps.emit({ type: 'run.settled', run });
+  let drained = 0;
+  for (const run of settled) {
+    const admission = await deps.store
+      .transact(async (tx) => {
+        if (!(await tx.cas('run', run.id, { state: 'settled', drained: { ne: true } }, { drained: true }))) return undefined;
+        return admitFact(tx, {
+          kind: 'run',
+          reflex: run.reflexId,
+          runId: run.id,
+          occurrence: run.occurrence,
+          stats: { total: run.total, done: run.done, failed: run.failed },
+          at: now,
+          depth: run.depth + 1,
+          cause: `run:${run.id}`,
+          as: run.as,
+        }, deps.maxChainFacts);
+      })
+      .catch(() => undefined);
+    if (admission === undefined) continue;
+    drained += 1;
+    deps.emit({ type: 'run.settled', run: { ...run, drained: true } });
     announceFact(deps.emit, admission);
   }
 
-  return drained.length;
+  return drained;
 };

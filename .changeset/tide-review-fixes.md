@@ -4,7 +4,7 @@
 
 `load` warns about a reflex whose `timeoutMs` is not shorter than `leaseMs`, and still loads it.
 
-A settled run and the run fact that announces it are written in one transaction: a failed write no longer loses the fact, so a reflex that waits on that run still fires.
+A settled run is marked announced in the same transaction as the run fact that announces it, one run at a time: a failed write no longer loses the fact, the run is announced on a later advance, and the runs after it are announced meanwhile.
 
 Facts delayed by `notBefore` no longer keep a due fact from its reflex: the matcher reads only the facts that are due.
 

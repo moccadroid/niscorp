@@ -805,12 +805,41 @@ describe('a settled run and the fact that announces it', () => {
     await tide.load([settles, follows], { at: T0 });
     await tide.fire('import.rows', { now: T0 });
 
-    await expect(tide.advance({ now: T0 })).rejects.toThrow('connection reset');
+    await tide.advance({ now: T0 });
+    expect((await tide.ledger.runs({ reflexId: 'import.rows' }))[0]?.drained).toBeUndefined();
     for (let tick = 1; tick <= 3; tick += 1) await tide.advance({ now: T0 + tick });
 
     expect((await tide.ledger.facts()).filter((fact) => fact.kind === 'run' && fact.reflex === 'import.rows')).toHaveLength(1);
     expect(await tide.ledger.runs({ reflexId: 'import.report' })).toHaveLength(1);
     expect(calls).toHaveLength(2);
+  });
+
+  it('a run whose fact can never be written does not stop the runs after it, and no advance throws', async () => {
+    const refusing = (store: TideStore): TideStore => ({
+      ...store,
+      appendIfAbsent: async (table, row) => {
+        if (table === 'fact' && 'kind' in row && row.kind === 'run' && 'reflex' in row && row.reflex === 'bad') throw new Error('value too long');
+        return store.appendIfAbsent(table, row);
+      },
+      transact: (fn) => store.transact((tx) => fn(refusing(tx))),
+    });
+    const calls: unknown[] = [];
+    const tide = createTide({ store: refusing(createMemoryStore()), transform: testTransform, effects: { work: { run: (input) => calls.push(input) } } });
+    await tide.load(
+      [
+        { id: 'bad', intent: 'Its run fact is refused.', on: { manual: {} }, effect: { name: 'work' } },
+        { id: 'good', intent: 'Runs.', on: { manual: {} }, effect: { name: 'work' } },
+        { id: 'after.good', intent: 'Follows good.', on: { fact: { run: 'good' } }, effect: { name: 'work' } },
+      ],
+      { at: T0 },
+    );
+    await tide.fire('bad', { now: T0 });
+    await tide.fire('good', { now: T0 + 1 });
+
+    for (let tick = 2; tick < 6; tick += 1) await tide.advance({ now: T0 + tick });
+
+    expect(await tide.ledger.runs({ reflexId: 'after.good' })).toHaveLength(1);
+    expect((await tide.ledger.runs({ reflexId: 'bad' }))[0]?.drained).toBeUndefined();
   });
 });
 

@@ -367,7 +367,8 @@ describe('a settled run and the fact that announces it, on postgres', () => {
     );
     await tide.fire('import.rows', { now: T0 });
 
-    await expect(tide.advance({ now: T0 })).rejects.toThrow('connection reset');
+    await tide.advance({ now: T0 });
+    expect((await tide.ledger.runs({ reflexId: 'import.rows' }))[0]?.drained).toBeUndefined();
     for (let tick = 1; tick <= 3; tick += 1) await tide.advance({ now: T0 + tick });
 
     expect((await tide.ledger.facts()).filter((fact) => fact.kind === 'run' && fact.reflex === 'import.rows')).toHaveLength(1);
