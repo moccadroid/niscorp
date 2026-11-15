@@ -47,6 +47,7 @@ type EvalContext = {
   source: JsonValue;                   // Root source data (immutable)
   vars: Record<string, JsonValue>;     // Scoped variables (a loop writes to its own copy only)
   budget?: Budget;                     // What this evaluation may still cost (engine/budget.ts)
+  kept?: boolean;                      // The tree is kept and run again: a `$const` is handed out as a copy
 };
 ```
 
