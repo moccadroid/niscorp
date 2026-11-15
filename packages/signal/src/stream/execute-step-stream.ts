@@ -3,7 +3,7 @@ import type {
   StepRequest, StepResult, StepStreamEvent, StepToolCall, StreamOptions,
 } from '../types';
 import { estimateUsage } from '../utils/estimate-usage';
-import { abortSignalOf } from '../utils/abort';
+import { abortForCall } from '../utils/abort';
 
 export type ExecuteStepStreamConfig = {
   adapter: ChatAdapter;
@@ -56,8 +56,19 @@ export const buildProviderRequest = (
 export async function* executeStepStream(
   config: ExecuteStepStreamConfig,
 ): AsyncGenerator<StepStreamEvent> {
+  const abort = abortForCall(config.streamOptions?.signal, config.request.options?.signal);
+  try {
+    yield* streamStep(config, abort.signal);
+  } finally {
+    abort.release();
+  }
+}
+
+async function* streamStep(
+  config: ExecuteStepStreamConfig,
+  abortSignal: AbortSignal | undefined,
+): AsyncGenerator<StepStreamEvent> {
   const providerRequest = buildProviderRequest(config.model, config.request);
-  const abortSignal = abortSignalOf(config.streamOptions?.signal, config.request.options?.signal);
   if (abortSignal?.aborted) return;
 
   let contentBuffer = '';

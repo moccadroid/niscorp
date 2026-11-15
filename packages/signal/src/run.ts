@@ -2,7 +2,7 @@ import type { ZodType } from 'zod';
 import { SignalError, ErrorCode } from './errors';
 import { bareSchemaPrompt, bareSchemaCorrection } from './transport/protocol';
 import { asOutput } from './output-trust';
-import { abortSignalOf, abortedError } from './utils/abort';
+import { abortedSource, abortedError } from './utils/abort';
 import type {
   Capabilities,
   Message,
@@ -125,7 +125,7 @@ export async function* runStream<T>(spec: RunSpec, deps: RunDeps): AsyncGenerato
       if (event.type === 'done') result = event.result;
     }
     if (!result) {
-      if (abortSignalOf(spec.streamOptions?.signal, spec.options?.signal)?.aborted) return;
+      if (abortedSource(spec.streamOptions?.signal, spec.options?.signal)) return;
       throw new SignalError('stream ended without a done event', ErrorCode.PROVIDER_ERROR);
     }
     usage = {
@@ -211,7 +211,7 @@ export const runComplete = async <T>(spec: RunSpec, deps: RunDeps): Promise<Sign
     if (event.type === 'done') return { response: event.response, history: event.history, meta: event.meta };
     if (event.type === 'error') throw event.error;
   }
-  const abort = abortSignalOf(spec.streamOptions?.signal, spec.options?.signal);
-  if (abort?.aborted) throw abortedError(abort);
+  const aborted = abortedSource(spec.streamOptions?.signal, spec.options?.signal);
+  if (aborted) throw abortedError(aborted.reason);
   throw new SignalError('run ended without a result', ErrorCode.PROVIDER_ERROR);
 };

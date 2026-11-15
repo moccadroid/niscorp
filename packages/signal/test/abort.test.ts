@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { getEventListeners } from 'node:events';
 import { createSignal, ErrorCode, type StreamEvent } from '../src';
 
 type Params = Record<string, unknown>;
@@ -98,5 +99,27 @@ describe('an aborted call ends as an abort', () => {
     const error = await rejection(chatClient(client).options({ signal: controller.signal }).embed('hi'));
     expect(error.code).toBe(ErrorCode.PROVIDER_ERROR);
     expect(embedded).toEqual([]);
+  });
+});
+
+describe('a long-lived signal set by options()', () => {
+  it('carries no listener once the calls it covered have finished', async () => {
+    const controller = new AbortController();
+    // As the OpenAI SDK does: a listener on the signal it is handed, never taken off.
+    const create = async (params: Params, requestOptions?: { signal?: AbortSignal }) => {
+      requestOptions?.signal?.addEventListener('abort', () => {});
+      if (params['stream'] === true) {
+        return (async function* () {
+          yield { choices: [{ delta: { content: 'Hello' }, finish_reason: 'stop' }] };
+        })();
+      }
+      return { choices: [{ message: { role: 'assistant', content: 'Hello' }, finish_reason: 'stop' }] };
+    };
+    const llm = chatClient({ chat: { completions: { create } } }).options({ signal: controller.signal });
+    for (let call = 0; call < 15; call += 1) {
+      await llm.complete('hi');
+      await llm.step({ messages: [{ role: 'user', content: 'hi' }] }, { signal: new AbortController().signal });
+    }
+    expect(getEventListeners(controller.signal, 'abort')).toHaveLength(0);
   });
 });

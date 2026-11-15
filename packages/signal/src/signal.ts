@@ -21,7 +21,7 @@ import { executeStepStream, buildProviderRequest } from './stream/execute-step-s
 import { runComplete, runStream } from './run';
 import { resolveWireStrategies, responseStrategies, recoverRejection, type WireStrategy } from './wire/strategies';
 import { routeResponse, routeRejection } from './wire/router';
-import { abortSignalOf, unlessAborted } from './utils/abort';
+import { unlessAborted } from './utils/abort';
 
 export type Signal<T = string> = {
   apiKey: (key: string) => Signal<T>;
@@ -272,10 +272,11 @@ const createSignalFromConfig = <T = string>(config: SignalConfig): Signal<T> => 
     const providerRequest = buildProviderRequest(resolveProvider(config).model, withOptions(request));
     assertEffort(config, providerRequest.options?.reasoningEffort);
     const declared = new Set((request.tools ?? []).map((tool) => tool.name));
-    const abort = abortSignalOf(stepOptions?.signal, providerRequest.options?.signal);
     let response: ProviderResponse;
     try {
-      response = await unlessAborted(abort, () => adapter.chat(providerRequest, abort && { signal: abort }));
+      response = await unlessAborted([stepOptions?.signal, providerRequest.options?.signal], (signal) =>
+        adapter.chat(providerRequest, signal && { signal }),
+      );
     } catch (error) {
       const recovered = recoverRejection(wireStrategies, error);
       if (!recovered) throw error;
@@ -370,8 +371,7 @@ const createSignalFromConfig = <T = string>(config: SignalConfig): Signal<T> => 
     request: DecideRequest<Qs>,
     started: number,
   ): Promise<DecideResult<Qs>> => {
-    const abort = abortSignalOf(config.options?.signal, request.options?.signal);
-    const response = await unlessAborted(abort, () =>
+    const response = await unlessAborted([config.options?.signal, request.options?.signal], (signal) =>
       adapter.decide(
         {
           model,
@@ -379,7 +379,7 @@ const createSignalFromConfig = <T = string>(config: SignalConfig): Signal<T> => 
           questions: request.questions,
           ...(request.images !== undefined && { images: request.images }),
         },
-        abort && { signal: abort },
+        signal && { signal },
       ),
     );
     const decisions = acceptCalibrated(request.questions, response.answers, response.raw);
@@ -499,9 +499,8 @@ const createSignalFromConfig = <T = string>(config: SignalConfig): Signal<T> => 
       }
       const resolved = resolveProvider(config);
       const embed = adapter.embed;
-      const abort = config.options?.signal;
-      const response = await unlessAborted(abort, () =>
-        embed({ model: resolved.model, input, dimensions: options?.dimensions }, abort && { signal: abort }),
+      const response = await unlessAborted([config.options?.signal], (signal) =>
+        embed({ model: resolved.model, input, dimensions: options?.dimensions }, signal && { signal }),
       );
       options?.onUsage?.(response.usage, resolved.model);
       if (typeof input === 'string') {

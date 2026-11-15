@@ -110,11 +110,15 @@ describe('openai-responses — a tool loop over the stream', () => {
     expect(events.at(-1)).toMatchObject({ result: { toolCalls: [{ id: 'a', args: { city: 'Vienna' } }, { id: 'b', args: { city: 'Graz' } }] } });
   });
 
-  it('hands the abort signal to the request', async () => {
-    const { client, requestOptions } = fakeClient([streamOf([completed([])])]);
+  it('hands the request a signal that aborts with the caller’s', async () => {
+    const { client, requestOptions } = fakeClient([
+      streamOf([{ type: 'response.output_text.delta', delta: 'Sunny' }, completed([])]),
+    ]);
     const controller = new AbortController();
-    await collect(createSignal('openai-responses', { apiKey: 'k', client }).stepStream({ messages: [{ role: 'user', content: 'hi' }] }, { signal: controller.signal }));
-    expect(requestOptions[0]).toEqual({ signal: controller.signal });
+    const stream = createSignal('openai-responses', { apiKey: 'k', client }).stepStream({ messages: [{ role: 'user', content: 'hi' }] }, { signal: controller.signal });
+    for await (const _event of stream) controller.abort();
+    const handed = requestOptions[0];
+    expect(handed !== null && typeof handed === 'object' && 'signal' in handed && handed.signal instanceof AbortSignal && handed.signal.aborted).toBe(true);
   });
 
   it('an error event ends the stream with a provider error', async () => {
