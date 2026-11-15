@@ -67,7 +67,10 @@ that starting document. `id` is the id of the action `toNova` returns (default
 root is not an object (a union, a scalar, an array): its one control binds at
 `$.<rootKey>` and the document is `{ [rootKey]: value }`, which you unwrap when
 you read it. Without `rootKey` a control at the root is bound to nothing, and
-`toNova` throws when the starting document is not an object. An `empty` entry
+`toNova` throws when the starting document is not an object. `attachValidation`
+writes its error tree into the document under `_errors`, so a schema with a
+top-level `_errors` field is compiled with `rootKey` and validated as
+`z.object({ [rootKey]: schema })`, as the editor does. An `empty` entry
 is a function `(field, options) => value`, and a field with a schema default
 keeps the default.
 
