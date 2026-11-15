@@ -140,6 +140,49 @@ describe('the dev server’s sign-in', () => {
   });
 });
 
+describe('the dev server — what the charter does not read', () => {
+  const connectedTo = async (warnings: readonly { level: 'warning'; rule: string; detail: string }[]): Promise<unknown[]> => {
+    const connections: (() => void)[] = [];
+    const sent: unknown[] = [];
+    const vite = {
+      config: { logger: { error: () => {}, info: () => {}, warn: () => {} }, root: '.' },
+      httpServer: null,
+      watcher: { on: () => {} },
+      ws: { send: (payload: unknown) => void sent.push(payload), on: (_event: string, fn: () => void) => void connections.push(fn) },
+      middlewares: { use: () => {} },
+      ssrLoadModule: async () => ({}),
+    } as unknown as ViteDevServer;
+    const server = { fetch: async () => new Response('app'), close: () => {}, charterReport: () => ({ errors: [], warnings, perRole: [] }) } as unknown as MossServer;
+    (mossDev({ app: async () => ({ server }) }).configureServer as (server: ViteDevServer) => void)(vite);
+    for (const connected of connections) connected();
+    await new Promise((settled) => setTimeout(settled, 0));
+    return sent;
+  };
+
+  it('is shown over the page when a browser connects, one line for each finding, and the app runs', async () => {
+    const sent = await connectedTo([
+      { level: 'warning', rule: 'shape', detail: 'role "staff" has the key "denny", which the charter does not read: what it lists does not apply' },
+      { level: 'warning', rule: 'orphan', detail: 'action "x" is granted by no role — deployed but unreachable' },
+    ]);
+    expect(sent).toEqual([
+      {
+        type: 'error',
+        err: {
+          message:
+            'The charter has what it does not read as written — the app runs, and what it lists does not apply:\n' +
+            '  role "staff" has the key "denny", which the charter does not read: what it lists does not apply',
+          stack: '',
+          plugin: 'moss',
+        },
+      },
+    ]);
+  });
+
+  it('a charter it reads whole shows nothing', async () => {
+    expect(await connectedTo([{ level: 'warning', rule: 'orphan', detail: 'action "x" is granted by no role — deployed but unreachable' }])).toEqual([]);
+  });
+});
+
 describe('the dev server — an edit', () => {
   afterEach(() => {
     vi.useRealTimers();

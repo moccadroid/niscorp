@@ -13,3 +13,5 @@ A server shell's endpoint that declares its own lower-case `authorization` heade
 `Authorization: bearer <token>` is read in any case of the scheme, as HTTP defines it, instead of being refused with `401`.
 
 A principal called `toString`, `constructor`, `__proto__` or `valueOf` is no longer answered `500` on every request: the assignments are read by their own keys, so such a principal is `public` unless they name it. A socket event for a canvas called `constructor` or `toString` is dropped, as one for any canvas the shell does not have, instead of reaching every action.
+
+In `nisc dev` (`mossDev`), what the charter does not read as written (a misspelt `denny`: the `shape` warnings of `server.charterReport()`) is shown over the page on vite's error overlay each time a browser connects. The app runs under it, and boot is unchanged.

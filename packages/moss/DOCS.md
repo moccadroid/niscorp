@@ -2498,7 +2498,10 @@ Requires the optional `vite` peer.
   (`renderDocument`); `MOSS_PATHS` go to the app server; the rest is vite's.
   An edit under a watched path re-boots the whole app and reloads the page;
   the outgoing server answers until the new one is up, and a failed re-boot
-  keeps it. The connections of an app that is let go are closed (`1001`), so
+  keeps it. What the charter does not read as written (its `shape` warnings
+  in `server.charterReport()`, such as a misspelt `denny`) is shown over the
+  page on vite's error overlay each time a browser connects, one line for
+  each; the app runs under it. The connections of an app that is let go are closed (`1001`), so
   a terminal that is not a page connects again, to the app that is booted.
   - `options.app(load): Promise<DevApp>` — stand the app up. `load` is vite's
     `ssrLoadModule`. `DevApp = { server, close?, draw?, htmlAttributes?,

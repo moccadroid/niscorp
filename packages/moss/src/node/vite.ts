@@ -217,6 +217,21 @@ export const mossDev = (options: MossDevOptions): Plugin => ({
     vite.watcher.on('unlink', reboot);
     vite.httpServer?.once('close', () => void current.then(retire, () => undefined));
 
+    // A boot line scrolls away; over the page, it comes back on every reload until the charter is fixed.
+    // Only where the server it is handed can say that a browser connected.
+    if (typeof Reflect.get(vite.ws, 'on') === 'function') {
+      vite.ws.on('connection', () => {
+        void current
+          .then(({ app }) => {
+            const unread = app.server.charterReport().warnings.flatMap((warning) => (warning.rule === 'shape' ? [`  ${warning.detail}`] : []));
+            if (unread.length === 0) return;
+            const message = ['The charter has what it does not read as written — the app runs, and what it lists does not apply:', ...unread].join('\n');
+            vite.ws.send({ type: 'error', err: { message, stack: '', plugin: label } });
+          })
+          .catch(() => undefined);
+      });
+    }
+
     vite.middlewares.use(devMiddleware(vite, options, owned, () => current));
   },
 });
