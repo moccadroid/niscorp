@@ -163,7 +163,8 @@ const main = async (): Promise<void> => {
 
   const run = manager();
   const where = relative(process.cwd(), dir) || '.';
-  const next = [...(where === '.' ? [] : [`cd ${where}`]), `${run} install`, `${run} run dev`].join('\n');
+  const quoted = /^[\w./\\:-]+$/.test(where) ? where : `"${where}"`;
+  const next = [...(where === '.' ? [] : [`cd ${quoted}`]), `${run} install`, `${run} run dev`].join('\n');
   const left = [...made.kept.map((file) => `kept your ${file}`), ...made.extended.map((file) => `added to your ${file}`)];
   const what = items.flatMap((item) => item.summary ?? []).join(', ');
   const summary = `${name} — ${what} — ${made.files.length} files${left.length > 0 ? ` (${left.join('; ')})` : ''}`;
