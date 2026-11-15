@@ -107,6 +107,12 @@ describe('generate — every app the questions can make', () => {
     expect(page).toContain('plain DOM');
   });
 
+  it('a model-first PLAN.md leaves open who may ask the model: today everyone, and everyone spends the key', () => {
+    const plan = read(make(completed(catalog, { kind: 'model-first' }), 'plan-model').dir, 'PLAN.md');
+    const open = plan.slice(plan.indexOf('## The dial-in — open'), plan.indexOf('## Order of work'));
+    expect(open).toContain('- Who may ask the model: today everyone (`public`, `src/app/charter/charter.ts`), so anybody who can reach the deployed app spends your Groq key, with no limit. Before deploying: sign-in and a role that may ask, or a limit in `ask`.');
+  });
+
   it('a model-first app’s words match its code: what `ask` is sent, and where a lasting conversation goes', () => {
     const { dir } = make(completed(catalog, { kind: 'model-first' }), 'model-words');
     expect(read(dir, 'src/server/compose/index.ts')).toContain("const AskSchema = z.looseObject({ asked: z.string() });");

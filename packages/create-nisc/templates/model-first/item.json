@@ -59,6 +59,7 @@
       "Memory: what the app keeps of a person between messages (D8).",
       "Look and feel.",
       "Where it is deployed.",
+      "Who may ask the model: today everyone (`public`, `src/app/charter/charter.ts`), so anybody who can reach the deployed app spends your Groq key, with no limit. Before deploying: sign-in and a role that may ask, or a limit in `ask`.",
       "What happens to the data long-term."
     ],
     "order": [
