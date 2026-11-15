@@ -28,6 +28,7 @@ export const start = async (options: CommandOptions): Promise<{ url: string; clo
   const project = await loadProject(options.root);
   const dist = distOf(options.root, project);
   if (!existsSync(join(dist, 'index.html'))) throw new Error(`nisc: no built terminal in ${dist} — run \`nisc build\`.`);
+  if (options.port === undefined && process.env['PORT'] === '') say(options)('nisc: PORT is set but empty, read as 0: any free port. Unset it for 8787.');
   const port = options.port ?? portOf(process.env['PORT'] ?? '8787', 'PORT');
   if (isShellProject(project)) {
     const httpServer = serve({ fetch: siteHandler(shellSite(project, dist)), port });
