@@ -169,6 +169,8 @@ A number is shown as read so far, as a string is: `{"price":19` then `99}` shows
 
 **Caching:** `select('widget')` always returns the same stream instance. The cache is a `Map<string, Stream>` on the root.
 
+A selection's `write()` and `close()` do nothing: feed the root.
+
 ### 9. Factory functions, not classes
 
 **Decision:** Follow the codebase style guide — factory functions returning explicit interfaces.

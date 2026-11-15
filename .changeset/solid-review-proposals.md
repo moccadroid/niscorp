@@ -7,3 +7,5 @@ A long reply no longer slows a stream down as it grows: a new key or a closing b
 A write into a long list copies the list once and rebuilds only the elements it changed: 20,000 streamed numbers take about half the time.
 
 README and DESIGN say that a number is shown as read so far, as a string is: `{"price":19` then `99}` shows 19, then 1999.
+
+README and DESIGN say that a selection's `write()` and `close()` do nothing: the root is fed.

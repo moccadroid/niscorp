@@ -184,7 +184,7 @@ stream.onError(listener: (err: StreamError) => void): () => void
 stream.select<P>(path: string): Stream<P>
 ```
 
-`select()` streams are cached by path — `select('widget')` always returns the same instance. Selected streams use reference equality for change detection, so `select('widget.title').on(...)` only fires when the title actually changes, not when sibling fields update.
+`select()` streams are cached by path — `select('widget')` always returns the same instance. A selection's `write()` and `close()` do nothing: feed the root. Selected streams use reference equality for change detection, so `select('widget.title').on(...)` only fires when the title actually changes, not when sibling fields update.
 
 A path separates keys with dots, so `select()` cannot reach a key that has a dot in it (`"index.ts"`). The stream itself keeps such a key and checks it against the schema; an error's `path` joins the keys with dots as given.
 
