@@ -2,7 +2,7 @@ import { z, type ZodType } from 'zod';
 import type {
   Message, ContentPart, ImageSource, Tool, SignalOptions, Capabilities, ReasoningEffort,
   SignalResult, StreamEvent, StepStreamEvent, StreamOptions,
-  ProviderAdapter, ChatAdapter, DecisionAdapter, ProviderRequest, ProviderResponse, Rejection,
+  ProviderAdapter, ChatAdapter, DecisionAdapter, ProviderResponse, Rejection,
   StepRequest, StepResult, StepToolCall, CountInput,
   EmbedOptions, Questions, DecideRequest, DecideResult,
 } from './types';
@@ -17,7 +17,7 @@ import { createGoogleAdapter } from './adapters/google.adapter';
 import { createSystemOneAdapter } from './adapters/systemone.adapter';
 import { assertQuestions, acceptCalibrated, acceptUncalibrated, uncalibratedSchemaOf } from './decide/gate';
 import { decisionEmulationPrompt, decisionImageLabel } from './transport/protocol';
-import { executeStepStream } from './stream/execute-step-stream';
+import { executeStepStream, buildProviderRequest } from './stream/execute-step-stream';
 import { runComplete, runStream } from './run';
 import { resolveWireStrategies, responseStrategies, recoverRejection, type WireStrategy } from './wire/strategies';
 import { routeResponse, routeRejection } from './wire/router';
@@ -262,30 +262,14 @@ const createSignalFromConfig = <T = string>(config: SignalConfig): Signal<T> => 
   const fork = <U = T>(override: Partial<SignalConfig>): Signal<U> =>
     createSignalFromConfig<U>({ ...config, ...override });
 
+  const withOptions = (request: StepRequest): StepRequest =>
+    defaults !== undefined || config.options !== undefined || request.options !== undefined
+      ? { ...request, options: { ...defaults, ...config.options, ...request.options } }
+      : request;
+
   const step = async (request: StepRequest, stepOptions?: StreamOptions): Promise<StepResult> => {
     const adapter = await getChatAdapter('step');
-    const resolved = resolveProvider(config);
-    const messages = request.messages.slice() as Message[];
-    const providerTools = request.tools && request.tools.length > 0
-      ? request.tools.map((tool) => ({
-          type: 'function' as const,
-          function: {
-            name: tool.name,
-            description: tool.description,
-            parameters: tool.parameters,
-          },
-        }))
-      : undefined;
-    const providerRequest: ProviderRequest = {
-      model: resolved.model,
-      messages,
-      ...(providerTools && { tools: providerTools }),
-      ...(request.toolChoice !== undefined && { toolChoice: request.toolChoice }),
-      ...(request.responseFormat !== undefined && { responseFormat: request.responseFormat }),
-      ...((defaults !== undefined || config.options !== undefined || request.options !== undefined) && {
-        options: { ...defaults, ...config.options, ...request.options },
-      }),
-    };
+    const providerRequest = buildProviderRequest(resolveProvider(config).model, withOptions(request));
     assertEffort(config, providerRequest.options?.reasoningEffort);
     const declared = new Set((request.tools ?? []).map((tool) => tool.name));
     const abort = abortSignalOf(stepOptions?.signal, providerRequest.options?.signal);
@@ -339,10 +323,7 @@ const createSignalFromConfig = <T = string>(config: SignalConfig): Signal<T> => 
       const adapter = await getChatAdapter(verb);
       const resolved = resolveProvider(config);
       const declared = new Set((request.tools ?? []).map((tool) => tool.name));
-      const merged: StepRequest =
-        defaults !== undefined || config.options !== undefined || request.options !== undefined
-          ? { ...request, options: { ...defaults, ...config.options, ...request.options } }
-          : request;
+      const merged = withOptions(request);
       assertEffort(config, merged.options?.reasoningEffort);
       try {
         for await (const event of executeStepStream({

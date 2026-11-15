@@ -29,7 +29,7 @@ const assembleToolCall = (
   if (delta.argsFragment) tc.args += delta.argsFragment;
 };
 
-const buildProviderRequest = (
+export const buildProviderRequest = (
   model: string,
   request: StepRequest,
 ): ProviderRequest => {
