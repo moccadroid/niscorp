@@ -489,17 +489,15 @@ export const createIncrementalParser = (
 
     if (Array.isArray(source)) {
       const prevArr = Array.isArray(previous) ? previous : [];
-      const result: unknown[] = new Array(source.length);
-      for (let i = 0; i < source.length; i++) {
-        const key = String(i);
-        if (dirtyKeys.has(key)) {
-          const childPath = path === '' ? key : `${path}.${key}`;
-          result[i] = dirtyParents.has(childPath)
-            ? shareStructure(source[i], prevArr[i], childPath)
-            : detachValue(source[i]);
-        } else {
-          result[i] = i < prevArr.length ? prevArr[i] : source[i];
-        }
+      const result: unknown[] = prevArr.slice(0, source.length);
+      for (let i = result.length; i < source.length; i++) result.push(source[i]);
+      for (const key of dirtyKeys) {
+        const i = Number(key);
+        if (!Number.isInteger(i) || i < 0 || i >= source.length || String(i) !== key) continue;
+        const childPath = path === '' ? key : `${path}.${key}`;
+        result[i] = dirtyParents.has(childPath)
+          ? shareStructure(source[i], prevArr[i], childPath)
+          : detachValue(source[i]);
       }
       return result;
     }
