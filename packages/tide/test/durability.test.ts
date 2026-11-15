@@ -813,3 +813,18 @@ describe('a settled run and the fact that announces it', () => {
     expect(calls).toHaveLength(2);
   });
 });
+
+describe('work that cannot start yet does not stop the work behind it', () => {
+  it('four hundred delayed facts do not keep a due one from its reflex', async () => {
+    const { tide, calls } = await harness(
+      [{ id: 'ping.answer', intent: 'Answer a ping.', on: { fact: { signal: 'ping' } }, effect: { name: 'work' }, policy: { overlap: 'allow' } }],
+      { work: { run: () => ({ ok: true }) } },
+    );
+    for (let n = 0; n < 400; n += 1) await tide.ingest({ kind: 'signal', name: 'ping', at: T0, notBefore: T0 + DAY });
+    await tide.ingest({ kind: 'signal', name: 'ping', at: T0 + 1 });
+
+    await tide.advance({ now: T0 + 2 });
+
+    expect(calls).toHaveLength(1);
+  });
+});

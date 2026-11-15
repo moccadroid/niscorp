@@ -105,14 +105,13 @@ export const matchFacts = async (deps: EngineDeps, now: number, limit: number): 
   // be out of reach of the reflexes a `load()` brings a moment later.
   if (deps.reflexes().length === 0) return report;
 
-  const due = await deps.store.query({
-    table: 'fact',
-    where: { deliveredAt: { isNull: true }, parked: { isNull: true } },
-    order: [{ by: 'at' }],
-    limit: limit * 4,
-  });
+  // Two reads, as the query grammar has no OR: a fact with no `notBefore` is due at its `at`.
+  const waiting = { deliveredAt: { isNull: true }, parked: { isNull: true } };
+  const immediate = await deps.store.query({ table: 'fact', where: { ...waiting, notBefore: { isNull: true }, at: { lte: now } }, order: [{ by: 'at' }], limit });
+  const delayed = await deps.store.query({ table: 'fact', where: { ...waiting, notBefore: { lte: now } }, order: [{ by: 'at' }], limit });
+  const due = [...immediate, ...delayed].sort((left, right) => left.at - right.at).slice(0, limit);
 
-  for (const fact of due.filter((candidate) => (candidate.notBefore ?? candidate.at) <= now).slice(0, limit)) {
+  for (const fact of due) {
     if (fact.depth > deps.maxChainDepth && fact.released !== true) {
       const reason = `chain depth ${fact.depth} exceeds maxChainDepth ${deps.maxChainDepth}`;
       await deps.store.cas('fact', fact.id, {}, { parked: reason });
