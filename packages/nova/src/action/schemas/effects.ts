@@ -35,7 +35,7 @@ export type RemoveInstanceEffect = { removeInstance: { canvas?: string; instance
 export type RemoveSelfEffect = { removeSelf: true };
 
 export type ReconcileEffect = {
-  reconcile: { to: string; action: string; input?: string; canvas?: string; own?: 'pushed' | 'canvas'; with?: string[]; keepTyped?: boolean };
+  reconcile: { to: string; action: string; input?: string; canvas?: string; own?: 'pushed' | 'canvas'; with?: string[] };
 };
 export type ReloadEffect = { reload: true };
 
@@ -201,15 +201,6 @@ const ReconcileEffectSchema = z
           .optional()
           .describe('What this step may remove: "pushed" (default) only what this action placed there; "canvas" everything on it — for an action that owns the canvas outright.'),
         with: z.array(z.string()).optional().describe('Fragment ids to compose each placed action with. See ActionFragment.'),
-        keepTyped: z
-          .boolean()
-          .optional()
-          .describe(
-            "Compare each row's input key by key with the input keepTyped reconciles have given that instance so far (a partial input updates only its own keys), " +
-              "not with the instance's current data, and write only the keys whose value changed: what someone typed into a placed action stays when the step runs again with the same rows. " +
-              'An instance no keepTyped reconcile has given an input yet is compared with its current data. ' +
-              "Default: false — each run writes the row's input over the instance's data wherever they differ.",
-          ),
       })
       .strict()
       .describe('Reconcile parameters.'),

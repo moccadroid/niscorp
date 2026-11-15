@@ -280,28 +280,4 @@ export const SHELL_EXAMPLES: readonly NovaExample[] = [
     presses: [{ ref: 'seats' }, { ref: 'sales' }],
     expected: { says: ['Sales', 'Seats', 'Sold tonight: 212', 'Looked at seats', 'Looked at sales'], stacks: { 'dashboard.bar': ['dashboard.tabs'], 'dashboard.middle': ['dashboard.sales'], 'dashboard.log': ['dashboard.line', 'dashboard.line'] } },
   },
-  {
-    id: 'keep-typed',
-    group: 'shells',
-    title: 'Reconcile, keeping what was typed',
-    description: 'A `reconcile` step places the actions a list names on a canvas. With `keepTyped`, running it again with the same rows writes nothing over what someone typed into a placed action; only a row input that changed is written.',
-    shell: {
-      canvases: [{ id: 'keep-typed.main', initial: 'keep-typed.board' }, { id: 'keep-typed.side' }],
-      actions: {
-        'keep-typed.board': {
-          id: 'keep-typed.board',
-          data: { rows: [{ id: 'keep-typed.note', input: { text: 'Draft' } }] },
-          layout: { component: 'Button', ref: 'show', children: 'Show the note' },
-          triggers: [{ event: 'ui:click', ref: 'show', do: [{ reconcile: { to: '$.rows', action: 'id', input: 'input', canvas: 'keep-typed.side', keepTyped: true } }] }],
-        },
-        'keep-typed.note': {
-          id: 'keep-typed.note',
-          data: { text: '' },
-          layout: { component: 'Stack', children: [{ component: 'Text', children: 'Note: {{$.text}}' }, { component: 'Input', ref: 'text', model: '$.text' }] },
-        },
-      },
-    },
-    presses: [{ ref: 'show' }, { ref: 'text', type: 'ui:model', payload: 'Final', canvas: 'keep-typed.side' }, { ref: 'show' }],
-    expected: { says: ['Show the note', 'Note: Final'], stacks: { 'keep-typed.main': ['keep-typed.board'], 'keep-typed.side': ['keep-typed.note'] } },
-  },
 ];

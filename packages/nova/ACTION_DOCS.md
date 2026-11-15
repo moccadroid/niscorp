@@ -332,11 +332,8 @@ Makes a canvas hold exactly the actions a list in the action's data names: missi
 - **`canvas`** *(optional)* — canvas to reconcile; defaults to the current one.
 - **`own`** *(optional)* — what the step may remove or rewrite: `'pushed'` (default) only what this action placed there, `'canvas'` everything on it.
 - **`with`** *(optional)* — fragment ids to compose each placed action with.
-- **`keepTyped`** *(optional)* — `true` compares each row's input with the input `keepTyped` reconciles have given that instance so far, not with its data, and writes only the keys whose value changed since. See below.
 
-When a listed action is already mounted and its row's input differs from the instance's data, the row's input is written into the live instance — unless the row's input carries a key (changed or not) that the action declares in its `input` and its `mount` calls read through an endpoint `request`, in which case the instance is re-opened. So by default every run puts each row's input back: a field someone typed into goes back to the row's value when the step runs again with the same rows.
-
-With `keepTyped: true`, what was typed stays. A row is compared key by key with the input this step last gave that instance, and only the keys whose value changed since are written: run again with `{ title: 'T', note: 'N' }` over a card where both were typed over, and both typed values stay; change the row to `{ title: 'U', note: 'N' }`, and `title` becomes `U` while `note` keeps what was typed. A partial input updates only its own keys of what is remembered. An instance no `keepTyped` reconcile has given an input yet (placed by a run without it) is compared with its data, as by default.
+When a listed action is already mounted and its row's input changed, the new input is written into the live instance — unless the row's input carries a key (changed or not) that the action declares in its `input` and its `mount` calls read through an endpoint `request`, in which case the instance is re-opened.
 
 That is how a canvas is reconciled when it names no reconciler. A canvas that names one (`reconcile` on the canvas, see `SHELL_DOCS.md`) is reconciled by it instead, from the same step: it is handed each row as written beside the action and input read from it, and decides what is kept, matched, moved and removed — several instances of one action included.
 

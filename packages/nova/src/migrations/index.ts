@@ -38,10 +38,6 @@ export const NOVA_SEQUENCE: Sequence = {
       description: 'The HTTP endpoint `encodeValues`: encode each value placed into the url',
       steps: [],
     },
-    {
-      description: "The `reconcile` step's `keepTyped`: compare a row with the input it gave last, so what was typed stays",
-      steps: [],
-    },
   ],
 };
 

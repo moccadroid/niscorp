@@ -21,7 +21,7 @@ export type ShellNavOps = {
   reconcile: (
     canvasId: string,
     desired: readonly { actionId: string; input?: Record<string, unknown>; row?: Record<string, unknown> }[],
-    options: { origin: string; own?: 'pushed' | 'canvas'; with?: string[]; keepTyped?: boolean },
+    options: { origin: string; own?: 'pushed' | 'canvas'; with?: string[] },
   ) => void;
 };
 
@@ -57,12 +57,11 @@ export const createNavigationHandler = (ops: ShellNavOps): NavigationHandler => 
       return;
     }
     if ('reconcile' in effect) {
-      const { canvas, desired, origin, own, with: fragments, keepTyped } = effect.reconcile;
+      const { canvas, desired, origin, own, with: fragments } = effect.reconcile;
       ops.reconcile(canvas ?? currentCanvasId, desired, {
         origin: origin ?? 'reconcile',
         ...(own === undefined ? {} : { own }),
         ...(fragments === undefined ? {} : { with: fragments }),
-        ...(keepTyped === undefined ? {} : { keepTyped }),
       });
     }
   };
