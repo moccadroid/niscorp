@@ -107,6 +107,14 @@ describe('generate — every app the questions can make', () => {
     expect(page).toContain('plain DOM');
   });
 
+  it('a model-first app’s words match its code: what `ask` is sent, and where a lasting conversation goes', () => {
+    const { dir } = make(completed(catalog, { kind: 'model-first' }), 'model-words');
+    expect(read(dir, 'src/server/compose/index.ts')).toContain("const AskSchema = z.looseObject({ asked: z.string() });");
+    expect(read(dir, 'src/server/compose/index.ts')).toContain('Send { asked: <the message> }.');
+    expect(read(dir, 'AGENTS.md')).toContain('`begin` and `said` in `src/server/compose/index.ts` are where it goes');
+    expect(read(dir, 'AGENTS.md')).toContain('It lives in four places (step 1) and is named in seven files and the two documents (steps 2–8):');
+  });
+
   it('inside the nisc repository it depends on the packages next door', () => {
     const { dir } = make(completed(catalog, {}), 'in-workspace', { workspace: true });
     expect(read(dir, 'package.json')).toContain('"@niscorp/nova": "workspace:^"');

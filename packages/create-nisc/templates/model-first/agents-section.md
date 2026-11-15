@@ -20,7 +20,7 @@ The screen fills the page and scrolls; one dock stays at the bottom (`src/app/ac
 
 The tour is a starting point, there to be deleted. First the interview: PLAN.md's open items, each answered or delegated by name (the rulebook's "Before any code").
 
-**Remove the tour.** It lives in four places and is named in seven:
+**Remove the tour.** It lives in four places (step 1) and is named in seven files and the two documents (steps 2–8):
 
 1. Delete `src/app/actions/guide/`, `src/dev/guide-check.ts` and `src/app/vex/guide.entries.ts`; in `src/db/schema.ts`, the tour's migration. Deleting a migration is safe only because no database that lasts has run it — the app runs on PGlite, which starts empty every boot. Once one has, the migration is history, and a table goes by appending a migration that drops it (rule 17).
 2. `src/app/action-catalog.ts`: drop the `GUIDE` import; `placeable` is `[]` until your own actions are in it.
@@ -43,7 +43,7 @@ What the template leaves out, so that it starts small. None of it is required, a
 - **Your data, and cards that show it.** A table in `src/db/schema.ts`, a read in `src/app/vex/`, an action that replays it — as `guide.packages` does — in `placeable`, granted in the charter, with a `live-ask` case for the question it answers. The model is told what a card shows, never the rows: to answer about your data, it shows the card.
 - **Writes.** A form card the model may open filled in (D4); the person saves it, through a vex mutation, never the model.
 - **Sign-in and roles.** Once more than one person uses the app, or anything in it is somebody's own: who is signed in is moss's (`runtime.session`), what each role may reach is the charter's. The model is offered, and a screen opens with, only the cards the person's roles reach — that filter is already there (`session.actions`). The dock lists every screen: when roles see different ones, give each person their own list through moss's `inputs`.
-- **A conversation that outlives the shell** (D8, once there is sign-in). The turns become rows the person owns, written by the server as a machine role at the person's own reach (`executeAs`), read back when their shell is built (`seeds`); `place` and `said` in `src/server/compose/index.ts` are where it goes.
+- **A conversation that outlives the shell** (D8, once there is sign-in). The turns become rows the person owns, written by the server as a machine role at the person's own reach (`executeAs`), read back when their shell is built (`seeds`); `begin` and `said` in `src/server/compose/index.ts` are where it goes.
 - **Facts the model can rely on,** as the cards need them. When a card takes a date, tell the model today's date, in the app's time zone, in `messageInput`. When it opens a record by its id, tell it the ids that exist, and refuse in `turnRefusals` an id it was not told: a model that makes up an id shows a card of nothing.
 - **Asking back, and what to ask next.** A card of choices, each one a message emitted on `ask` when tapped — as the tour's examples are — for when the message could mean two things, or to offer the next question.
 - **Deploying.** A real Postgres in `src/server/runtime.ts`, its tables applied by `nisc migrate`, never at boot (rule 17).

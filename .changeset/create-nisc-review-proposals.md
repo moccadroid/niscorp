@@ -10,3 +10,4 @@ An `.env` that already sets a key as `NAME = value` or `export NAME=value` no lo
 The "Next" lines quote a folder whose path has a space or a shell character: `cd "with space\app"`.
 The README's `env` row names an option's `hint`, which the question shows.
 A new model-first app reads its own `.env` wherever the command is run from (`nisc build --root app` from the folder above found no key before).
+A new model-first app's words match its code: the `ask` function's description says it is sent `{ asked }`, and its AGENTS.md names `begin` and `said` and counts the tour's places right.

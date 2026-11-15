@@ -87,7 +87,7 @@ export const composer =
     };
 
     return [
-      { id: 'ask', description: 'Answers a message with a turn of the conversation: a sentence, and the cards under it. Send { text }.', execute: ask },
+      { id: 'ask', description: 'Answers a message with a turn of the conversation: a sentence, and the cards under it. Send { asked: <the message> }.', execute: ask },
       { id: 'screens.open', description: 'Shows one of the screens in the dock: its cards, one under another. Send { opening: <screen id> }; answers { screen }.', execute: open },
     ];
   };
