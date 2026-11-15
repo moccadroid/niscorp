@@ -387,6 +387,17 @@ describe('LoomEditor — a document with a field named _errors', () => {
   });
 });
 
+describe('LoomEditor — fields named like built-in object members', () => {
+  it('shows the message of a field named toString and of one named constructor', () => {
+    render(<LoomForm schema={z.object({ toString: z.string().min(3, 'Too short'), constructor: z.string().min(3, 'Too short') })} />);
+    const [first, second] = screen.getAllByRole('textbox');
+    if (first === undefined || second === undefined) throw new Error('expected two text boxes');
+    fireEvent.change(first, { target: { value: 'x' } });
+    fireEvent.change(second, { target: { value: 'y' } });
+    expect(screen.queryAllByText('Too short')).toHaveLength(2);
+  });
+});
+
 describe('LoomEditor — the onChange prop', () => {
   it('calls the onChange of the latest render', () => {
     const first = vi.fn();
