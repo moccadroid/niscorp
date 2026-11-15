@@ -1671,7 +1671,7 @@ log); the engine itself emits the `query.*` and `rows.*` events.
 
 ### The execution observer
 
-`onExecute` (handler config; the hono adapter passes it through) fires once per
+`onExecute` (handler config; the hono and express adapters pass it through) fires once per
 `handleQuery`, read or write, after the outcome is known:
 
 ```typescript
