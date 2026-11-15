@@ -95,6 +95,18 @@ describe('the server, assembled — what a person generated and nobody used ages
     expect(swept).toEqual([]);
   });
 
+  it('the sweep’s clock does not keep the process alive', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const { made, outcome } = await intervalsDuring(() => assemble(appWith({}), { artifactsUnusedMs: 7 * 24 * 3_600_000 }));
+    try {
+      const keepingAlive = made.filter((handle) => handle !== null && typeof handle === 'object' && 'hasRef' in handle && typeof handle.hasRef === 'function' && Boolean(handle.hasRef()));
+      expect(made.length).toBeGreaterThan(0);
+      expect(keepingAlive).toEqual([]);
+    } finally {
+      if (outcome !== null && typeof outcome === 'object' && 'close' in outcome && typeof outcome.close === 'function') outcome.close();
+    }
+  });
+
   it('a limit under two hours, a fraction or Infinity is refused: an artifact in use is stamped once an hour, and the sweep reads whole milliseconds', async () => {
     const refusal = 'moss: `runtime.artifactsUnusedMs` is how long what a person generated may go unused before it is deleted: a whole number of milliseconds, at least 7200000 (two hours), or left out, and nothing is deleted.';
     for (const limit of [0, -1, 3_600_000, 7_199_999, 7_200_000.5, Infinity, Number.NaN]) await expect(assemble(appWith({}), { artifactsUnusedMs: limit })).rejects.toThrow(refusal);

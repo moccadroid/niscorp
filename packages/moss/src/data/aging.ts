@@ -30,5 +30,6 @@ export const startAging = (pool: PgPool, unusedMs: number, everyMs = AGING_EVERY
   };
   void sweep();
   const timer = setInterval(() => void sweep(), everyMs);
+  timer.unref?.();
   return () => clearInterval(timer);
 };
