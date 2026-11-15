@@ -6,7 +6,7 @@ import type { RunHandle } from '../agent/run';
 import type { ResolvedPreview } from '../agent/preview';
 import { throwConfig } from '../errors/cortex.errors';
 import { trustErased } from '../utils/trust';
-import { buildAgentTool } from './as-tool';
+import { buildAgentTool, DEFAULT_AGENT_TOOL_TIMEOUT_MS } from './as-tool';
 import type { ErasedAgent, ErasedRunOptions, RunTap } from './types';
 
 export type ManifoldConfig = {
@@ -36,8 +36,6 @@ export type Manifold = {
   agents: () => ReadonlyArray<ErasedAgent>;
   tools: () => ReadonlyArray<ToolDefinition>;
 };
-
-const DEFAULT_AGENT_TOOL_TIMEOUT_MS = 300_000;
 
 export const createManifold = (config: ManifoldConfig = {}): Manifold => {
   const agents = new Map<string, ErasedAgent>();

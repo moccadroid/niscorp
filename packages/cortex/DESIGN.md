@@ -292,6 +292,9 @@ full prompt and change nothing.
 Defaults: `stepCount(20)`, `outputRetries(3)`. There is no default
 duration or token cap: the right one depends on the agent.
 
+A step that ended with no envelope is corrected with `invalidOutput`
+and the router's evidence, which says what was missing.
+
 ---
 
 ## 5. Context — producers

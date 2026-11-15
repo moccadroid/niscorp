@@ -7,7 +7,7 @@ import type { AgentDefinition } from '../agent/define-agent';
 import type { RunHandle } from '../agent/run';
 import type { ErasedAgent, ErasedRunOptions } from './types';
 
-const DEFAULT_AGENT_TOOL_TIMEOUT_MS = 300_000;
+export const DEFAULT_AGENT_TOOL_TIMEOUT_MS = 300_000;
 
 export type AgentToolStartContext = {
   signal: AbortSignal;
