@@ -65,12 +65,18 @@ const main = async (): Promise<number> => {
   return command === undefined || command === 'help' || command === '--help' ? 0 : 1;
 };
 
+// The command's own sentences start `nisc:`. Anything else was thrown by the app or a library, and its stack says where.
+const reportOf = (error: unknown): unknown => {
+  if (!(error instanceof Error)) return error;
+  return error.message.startsWith('nisc: ') ? error.message : (error.stack ?? error.message);
+};
+
 main().then(
   // An explicit exit: an app's own handles (a database, a timer) would keep a
   // finished command open.
   (code) => process.exit(code),
   (error: unknown) => {
-    console.error(error instanceof Error ? error.message : error);
+    console.error(reportOf(error));
     process.exit(1);
   },
 );
