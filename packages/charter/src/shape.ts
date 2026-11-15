@@ -2,9 +2,9 @@ import type { Charter } from './types';
 
 export type RoleFields = ReadonlyMap<string, unknown>;
 
-// A charter read from JSON is whatever was written, so it is read from `unknown`. A null field is an absent one.
+// A charter read from JSON is whatever was written, so it is read from `unknown`.
 export const fieldsOf = (value: unknown): RoleFields | undefined =>
-  typeof value === 'object' && value !== null && !Array.isArray(value) ? new Map<string, unknown>(Object.entries(value).filter(([, field]) => field !== null)) : undefined;
+  typeof value === 'object' && value !== null && !Array.isArray(value) ? new Map<string, unknown>(Object.entries(value)) : undefined;
 
 export const listOf = (value: unknown): string[] =>
   typeof value === 'string' ? [value] : Array.isArray(value) ? value.flatMap((entry: unknown) => (typeof entry === 'string' ? [entry] : [])) : [];
@@ -32,7 +32,7 @@ const unreadKeys = (role: string, fields: RoleFields, known: ReadonlySet<string>
 const listShape = (role: string, key: string, value: unknown, takesAway: boolean): CharterShape => {
   const why = takesAway ? 'what it takes away cannot be read' : 'it grants nothing';
   const found = (detail: string): CharterShape => (takesAway ? { errors: [detail], warnings: [] } : { errors: [], warnings: [detail] });
-  if (value === undefined) return NOTHING;
+  if (value === undefined || value === null) return NOTHING;
   if (typeof value === 'string') return { errors: [], warnings: [`role "${role}": "${key}" is ${shown(value)}, read as the list ${JSON.stringify([value])}`] };
   if (!Array.isArray(value)) return found(`role "${role}": "${key}" is ${shown(value)}, which is not a list: ${why}`);
   return merged(value.map((entry: unknown) => (typeof entry === 'string' ? NOTHING : found(`role "${role}": "${key}" lists ${shown(entry)}, which is not a string: ${why}`))));
@@ -52,8 +52,14 @@ const sectionShape = (role: string, section: string, value: unknown): CharterSha
   ]);
 };
 
+// vex gives a scoping that names no profile no rows.
+const scopingShape = (role: string, scoping: unknown): CharterShape =>
+  scoping === undefined || typeof scoping === 'string' ? NOTHING : { errors: [], warnings: [`role "${role}": "scoping" is ${shown(scoping)}, which is not a name: the role reaches no rows`] };
+
 export const roleShape = (role: string, def: unknown): CharterShape => {
   if (Array.isArray(def)) return listShape(role, 'actions', def, false);
+  // Read as an empty role, a null one named in a "without" would take away nothing.
+  if (def === null) return { errors: [`role "${role}" is null, which is not a list or an object: what it grants and takes away cannot be read`], warnings: [] };
   const fields = fieldsOf(def);
   if (fields === undefined) return { errors: [], warnings: [`role "${role}" is ${shown(def)}, which grants nothing: a role is a list of globs or an object`] };
   return merged([
@@ -61,6 +67,7 @@ export const roleShape = (role: string, def: unknown): CharterShape => {
     ...ADDING.map((key) => listShape(role, key, fields.get(key), false)),
     ...TAKING_AWAY.map((key) => listShape(role, key, fields.get(key), true)),
     ...SECTIONS.map((section) => sectionShape(role, section, fields.get(section))),
+    scopingShape(role, fields.get('scoping')),
   ]);
 };
 
