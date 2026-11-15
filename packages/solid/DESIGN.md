@@ -131,6 +131,8 @@ write(chunk)
 
 **How:** The parser calls `setValue(valueBuffer)` on every non-escape character while inside a string. The dirty tracking and snapshot machinery handle the rest.
 
+A number is shown as read so far, as a string is: `{"price":19` then `99}` shows 19, then 1999.
+
 ### 5. Skip-if-unchanged for setValue
 
 **Decision:** The parser checks `value !== existing` before marking a path dirty.
