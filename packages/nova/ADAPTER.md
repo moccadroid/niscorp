@@ -110,7 +110,10 @@ Register two structural components under the core names `CANVAS_SLOT_NAME`
 and `ACTION_SLOT_NAME` — the shell's default layouts reference them:
 
 - **CanvasSlot** (`{ canvasId }`): renders that canvas's tree; nothing when
-  `canvasId` is missing.
+  `canvasId` is missing. A `CanvasSlot` inside the canvas it names would draw
+  that canvas forever: carry the canvases open on the way down, and draw an
+  error node there instead (`RENDER_ERROR: canvas "<id>" is placed inside
+  itself`), as nova's adapters do.
 - **ActionSlot** (`{ instanceId }`): renders that instance's tree; nothing
   when `instanceId` is missing. Wrap the dispatch handed to the instance's
   subtree with core's `scopeDispatch(dispatch, instanceId)` so its UI events

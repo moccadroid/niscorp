@@ -24,3 +24,4 @@ export type NovaRenderContextValue = {
 
 export const NovaRenderContext = createContext<NovaRenderContextValue | undefined>(undefined);
 export const NovaShellContext = createContext<Shell | undefined>(undefined);
+export const NovaOpenCanvasesContext = createContext<ReadonlySet<string>>(new Set());

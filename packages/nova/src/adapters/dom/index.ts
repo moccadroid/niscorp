@@ -33,6 +33,7 @@ type Ctx = {
   dispatch: Dispatch;
   api: DomRenderApi;
   fallback?: DomComponent;
+  openCanvases: ReadonlySet<string>;
 };
 
 type Mount = {
@@ -253,7 +254,7 @@ export const createDomView = (
   api: DomRenderApi,
   options: { fallback?: DomComponent } = {},
 ): DomView => {
-  const top: Ctx = { registry, dispatch: () => undefined, api, ...(options.fallback !== undefined ? { fallback: options.fallback } : {}) };
+  const top: Ctx = { registry, dispatch: () => undefined, api, openCanvases: new Set(), ...(options.fallback !== undefined ? { fallback: options.fallback } : {}) };
   let mounts: Mount[] = [];
   let drawn = false;
   let writes = 0;
@@ -321,9 +322,10 @@ export const createDomView = (
     }
     if (node.name === CANVAS_SLOT) {
       const canvasId = canvasIdOf(node);
+      if (ctx.openCanvases.has(canvasId)) return leaf(node, ctx, errorEl('RENDER_ERROR', `canvas "${canvasId}" is placed inside itself`));
       const host = document.createElement('div');
       host.setAttribute('data-canvas', canvasId);
-      const canvasCtx: Ctx = { ...ctx, dispatch: (event) => ctx.api.dispatch(canvasId, event) };
+      const canvasCtx: Ctx = { ...ctx, dispatch: (event) => ctx.api.dispatch(canvasId, event), openCanvases: new Set([...ctx.openCanvases, canvasId]) };
       const kids = canvasId === '' ? [] : ctx.api.canvasTree(canvasId).map((child) => build(child, canvasCtx));
       host.append(...flat(kids));
       return { node, ctx: canvasCtx, dom: [host], kids, host, cleanups: [], field: { stale: false } };
