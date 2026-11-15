@@ -131,7 +131,7 @@ In nova itself every `initial` seed is pushed, and one naming an unknown action 
 
 ### `actions`
 
-Every action the shell can mount, keyed by id. Actions are validated at shell init via `ActionDefinitionSchema`. Any malformed definition throws `DefinitionValidationError` with a list of Zod issues.
+Every action the shell can mount, keyed by id. Actions are validated at shell init via `ActionDefinitionSchema`. Any malformed definition throws `DefinitionValidationError` with a list of Zod issues. An action or fragment keyed by anything other than its id is reported to `onError` as a `DefinitionValidationError`, in strict mode too, and the shell still loads it under its key: `push` and `removeAction` then take the key, and the instance carries the id.
 
 Actions can `{push: {action: 'someId'}}` other actions — but only ones that exist in this map. Trying to push an unknown action throws `UnknownActionError`.
 
@@ -695,7 +695,7 @@ The shell can produce these:
 - **`UnknownActionError`** — `shell.push(canvas, 'foo')` where `'foo'` isn't in `actions`
 - **`UnknownFragmentError`** — a `fragments` / `with: [...]` id that isn't registered
 - **`ShellDisposedError`** — `push`, `replace`, and the registration / canvas / layout / phrase setters after `dispose()` (`pop`, `popTo`, `removeInstance`, `clear`, `removeCanvas` and `back` are no-ops instead)
-- **`DefinitionValidationError`** — at shell construction, if any action in `actions` or fragment in `fragments` fails schema validation, or an id is in both; also from `registerAction`
+- **`DefinitionValidationError`** — at shell construction, if any action in `actions` or fragment in `fragments` fails schema validation, or an id is in both; also from `registerAction`. A definition keyed by something other than its id is reported to `onError` with this error and not thrown
 - **`LifecycleError`** — a lifecycle hook step threw (in strict mode propagates, in lax mode routes via `onError`)
 
 Plus all action-level errors (from `ACTION_DOCS.md`) and layout-level errors (from `LAYOUT_DOCS.md`) bubble up through the shell's error pipeline.

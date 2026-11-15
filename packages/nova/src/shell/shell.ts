@@ -29,7 +29,7 @@ import { createChainCount, rememberChainCount } from './chains';
 import { createNavigationHandler, navigatedChannel } from './navigation';
 import type { NavigatedMessage } from './navigation';
 import { createRuntimeRegistry } from './runtime-registry';
-import { createRuntimeFactory, refuseSharedId, snapshotCanvas, validateActions, validateFragments } from './shell-internals';
+import { createRuntimeFactory, misfiledDefinitions, refuseSharedId, snapshotCanvas, validateActions, validateFragments } from './shell-internals';
 import { createTelemetry } from './telemetry';
 import type {
   CanvasChangeHandler,
@@ -53,6 +53,8 @@ export const createShell = (config: ShellConfig): Shell => {
   validateFragments(config.fragments ?? {});
   const shared = Object.keys(config.fragments ?? {}).find((fragmentId) => Object.hasOwn(config.actions, fragmentId));
   if (shared !== undefined) refuseSharedId(shared);
+  const misfiled = misfiledDefinitions({ ...config.actions, ...config.fragments });
+  if (misfiled !== undefined) config.onError?.(misfiled);
 
   const id = (config.shellIdFn ?? defaultShellIdFactory)();
   const instanceIdFn = config.instanceIdFn ?? createIdFactory('act');
