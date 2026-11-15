@@ -1,4 +1,4 @@
-import type { FC, ReactNode } from 'react';
+import { useState, type FC, type ReactNode } from 'react';
 import type { NovaComponent, NovaModelBinding } from '@niscorp/nova/adapters/react';
 import { useModelWrite } from '@react/hooks/model';
 import { JsonEditor } from '@react/kit';
@@ -19,6 +19,16 @@ const RecordRows: FC<{
   const set = useModelWrite(model);
   const entries = isRecord(value) ? Object.entries(value) : [];
   const write = (next: [string, unknown][]): void => set(Object.fromEntries(next));
+  const rename = (index: number, to: string): void => {
+    if (entries.some(([key], i) => i !== index && key === to)) return;
+    write(entries.map((entry, i) => (i === index ? [to, entry[1]] : entry)));
+  };
+  const freeAlias = (): string => {
+    const taken = new Set(entries.map(([key]) => key));
+    let n = entries.length + 1;
+    while (taken.has(`field_${n}`)) n += 1;
+    return `field_${n}`;
+  };
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: 12, border: '1px dashed #d1d5db', borderRadius: 6 }}>
       {entries.map(([key, val], index) => (
@@ -26,7 +36,7 @@ const RecordRows: FC<{
           <input
             value={key}
             placeholder="alias"
-            onChange={(event) => write(entries.map((entry, i) => (i === index ? [event.target.value, entry[1]] : entry)))}
+            onChange={(event) => rename(index, event.target.value)}
             style={{ ...fieldStyle, width: 110 }}
           />
           <div style={{ flex: 1, minWidth: 0 }}>
@@ -35,7 +45,7 @@ const RecordRows: FC<{
           <button type="button" onClick={() => write(entries.filter((_, i) => i !== index))} style={controlBtn}>✕</button>
         </div>
       ))}
-      <button type="button" onClick={() => write([...entries, [`field_${entries.length + 1}`, newEntry]])} style={{ ...controlBtn, alignSelf: 'flex-start' }}>Add</button>
+      <button type="button" onClick={() => write([...entries, [freeAlias(), newEntry]])} style={{ ...controlBtn, alignSelf: 'flex-start' }}>Add</button>
     </div>
   );
 };
@@ -48,15 +58,24 @@ const coerceLiteral = (text: string): unknown => {
   return text.trim() !== '' && Number.isFinite(n) ? n : text;
 };
 
-const ValueInput: FC<{ value: unknown; columns: string[]; onChange: (value: unknown) => void }> = ({ value, columns, onChange }) => (
-  <Combo
-    value={value === null || value === undefined ? '' : String(value)}
-    placeholder="field or value"
-    options={columns}
-    onPick={(text) => onChange(coerceLiteral(text))}
-    style={{ flex: 1, minWidth: 120 }}
-  />
-);
+// What was typed stays on screen while it still reads as the stored value:
+// "1." is shown while 1 is stored, so the next keystroke can make it 1.5.
+const ValueInput: FC<{ value: unknown; columns: string[]; onChange: (value: unknown) => void }> = ({ value, columns, onChange }) => {
+  const [typed, setTyped] = useState<string | undefined>(undefined);
+  const stored = value === null || value === undefined ? '' : String(value);
+  return (
+    <Combo
+      value={typed !== undefined && Object.is(coerceLiteral(typed), value) ? typed : stored}
+      placeholder="field or value"
+      options={columns}
+      onPick={(text) => {
+        setTyped(text);
+        onChange(coerceLiteral(text));
+      }}
+      style={{ flex: 1, minWidth: 120 }}
+    />
+  );
+};
 
 const AGG_OPS = ['count', 'sum', 'avg', 'min', 'max'];
 

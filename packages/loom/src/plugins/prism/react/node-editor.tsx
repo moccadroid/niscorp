@@ -306,7 +306,7 @@ const ListEditor: FC<{ itemField: Field; value: unknown; onChange: (next: unknow
 const TemplateEditor: FC<{ value: unknown; onChange: (next: unknown) => void }> = ({ value, onChange }) => {
   const entries = Object.entries(isObj(value) ? value : {});
   const rename = (from: string, to: string): void => {
-    if (to === from) return;
+    if (entries.some(([key]) => key === to)) return;
     onChange(Object.fromEntries(entries.map(([key, val]) => [key === from ? to : key, val])));
   };
   const addField = (): void => {
