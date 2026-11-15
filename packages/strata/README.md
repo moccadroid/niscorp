@@ -275,8 +275,10 @@ sentence says which:
 | two sequences with one id | `prepare` |
 | a ledger `table` or `schema`, or a store's table, schema or column, that is not a plain identifier | `migrate`, `status`, `readLedger`, `ledgerDdl`, `upgradeStore` |
 | a store whose `key` names no column | `upgradeStore` |
-| a `strata.lock.json` that is not a lock, or has an entry that is not a whole number of migrations | `runSourceUpgrade` |
+| a `strata.lock.json` that is JSON but not a lock, or has an entry that is not a whole number of migrations | `runSourceUpgrade` |
 | two artifacts with one kind and id | `planSourceUpgrade`, `runSourceUpgrade` |
+
+A `strata.lock.json` that is not JSON at all throws the parser's own `SyntaxError`.
 
 ## License
 
