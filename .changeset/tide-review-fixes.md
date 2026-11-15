@@ -13,3 +13,5 @@ The tasks of a reflex that is not loaded are no longer claimed, so they spend no
 A run whose fan-out fails in a host seam now waits the reflex's `retry.baseMs` (default one minute) before it is tried again, and runs waiting so no longer keep other runs from fanning out. The Postgres store adds a `not_before` column to `tide_run` in a new migration (`nisc.moss.tide/4`).
 
 The Postgres store claims tasks in order whatever the number of `order: 'serial'` reflexes: with as many serial reflexes as the advance's `limit`, other tasks were never claimed. `STORE_CONTRACT` has a check for it, which a host's own store now has to pass as well.
+
+`ledger.facts({ reflexId })` reads only that reflex's facts instead of the whole fact table. The docs describe what `sweep` removes and drop the history they carried.

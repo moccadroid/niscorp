@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { createMemoryStore, createTide } from '../src/index';
-import type { EffectRegistry, Fact, ReflexInput, Row, SelectFn, Tide, TideConfig, TideEvent } from '../src/index';
+import type { EffectRegistry, Fact, ReflexInput, Row, SelectFn, Tide, TideConfig, TideEvent, TideStore } from '../src/index';
 import { failingFirstRunFact, testTransform, utc } from './support';
 
 const vienna = 'Europe/Vienna';
@@ -878,5 +878,31 @@ describe('work that cannot start yet does not stop the work behind it', () => {
     const [task] = await tide.ledger.tasks({ reflexId: 'flaky' });
     expect(attempts).toBe(2);
     expect({ state: task?.state, attempt: task?.attempt }).toEqual({ state: 'retrying', attempt: 2 });
+  });
+});
+
+describe('reading the ledger', () => {
+  it('the facts of one reflex are read without reading every fact', async () => {
+    const inner = createMemoryStore();
+    let factsRead = 0;
+    const store: TideStore = {
+      ...inner,
+      query: async (spec) => {
+        const rows = await inner.query(spec);
+        if (spec.table === 'fact') factsRead += rows.length;
+        return rows;
+      },
+    };
+    const tide = createTide({ store, transform: testTransform, effects: { work: { run: () => null } } });
+    await tide.load([{ id: 'tally', intent: 'Count a vote.', on: { manual: {} }, effect: { name: 'work' } }], { at: T0 });
+    for (let n = 0; n < 50; n += 1) await tide.ingest({ kind: 'signal', name: 'noise', at: T0 + n });
+    await tide.fire('tally', { now: T0 + 60 });
+    await tide.fire('tally', { now: T0 + 61 });
+
+    factsRead = 0;
+    const facts = await tide.ledger.facts({ reflexId: 'tally', limit: 1 });
+
+    expect(facts.map((fact) => fact.at)).toEqual([T0 + 61]);
+    expect(factsRead).toBeLessThanOrEqual(2);
   });
 });

@@ -229,13 +229,13 @@ export const createTide = (config: TideConfig): Tide => {
         }),
       task: (id) => one('task', id),
       facts: async (filter) => {
-        const found = await config.store.query({
-          table: 'fact',
-          order: [{ by: 'at', dir: 'desc' }],
-          limit: filter?.reflexId === undefined ? filter?.limit : undefined,
-        });
-        const matched = filter?.reflexId === undefined ? found : found.filter((fact) => fact.reflex === filter.reflexId || fact.target === filter.reflexId);
-        return filter?.limit === undefined ? matched : matched.slice(0, filter.limit);
+        const newest = { order: [{ by: 'at', dir: 'desc' }], limit: filter?.limit } as const;
+        if (filter?.reflexId === undefined) return config.store.query({ table: 'fact', ...newest });
+        // Two reads, as the query grammar has no OR: a run fact names its reflex, a manual fact its target.
+        const minted = await config.store.query({ table: 'fact', where: { reflex: filter.reflexId }, ...newest });
+        const aimed = await config.store.query({ table: 'fact', where: { target: filter.reflexId }, ...newest });
+        const matched = [...minted, ...aimed].sort((left, right) => right.at - left.at);
+        return filter.limit === undefined ? matched : matched.slice(0, filter.limit);
       },
       fact: (id) => one('fact', id),
       causeChain,

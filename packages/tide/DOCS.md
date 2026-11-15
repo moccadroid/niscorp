@@ -310,9 +310,8 @@ $ = { params,        // the reflex's knobs
 ```
 
 Truthiness is one predicate, shared by the matcher and by `preview`: `false`,
-`null`, `undefined`, `0`, `''` and `[]` are all falsy. They used to disagree,
-and a `when` returning an empty list previewed as "this will fire" and then
-didn't — the exact surprise preview exists to eliminate.
+`null`, `undefined`, `0`, `''` and `[]` are all falsy, so a `when` that
+previews as "this will fire" fires.
 
 The honest cost of opacity: a typo'd `$ref` cannot be caught at load. It
 surfaces at `preview()` — which is why preview is the authoring loop's inner
@@ -344,8 +343,7 @@ type FactInput = {
 refuses the key fields of the others (`entity`, `name`, `target`, `runId`; a
 `signal` also refuses `op`). The rest are not checked by kind: a `write`
 accepts `payload`, `reflex`, `stats` and `by`. `{ kind: 'write' }` with no entity
-used to parse, store, match nothing, get marked delivered and vanish, with no
-way for the producer to learn its fact was never going to wake anything.
+is refused by `ingest`, so the producer learns its fact could never wake anything.
 
 **Ops are distinct stimuli.** "Only on create" is `op: 'insert'`. Things that
 happen exactly once ride inserts naturally when the domain models intent as
@@ -522,8 +520,7 @@ States: a task moves `pending → claimed → done | retrying | failed`; a run m
 `pending → fanned → settled`, or lands on `skipped` (overlap, catch-up, a
 refused fan-out, or a reflex no longer loaded — always with a `note`).
 
-`limit` means **the most recent N**, in every store. The two stores used to
-answer opposite ends of the same list under the same filter.
+`limit` means **the most recent N**, in every store.
 
 **There is no attempt table.** Correctness needs the count and the last error,
 and both are on the task; per-attempt history is the host's log, which is where
@@ -536,9 +533,9 @@ is the only honest default when the rows are billing history:
 await tide.sweep(now, { facts: THIRTY_DAYS, runs: NINETY_DAYS });
 ```
 
-Removing a run removes its tasks with it. Keeping the tasks would destroy the
-`UNIQUE(runId, unit)` row that *is* the "this unit already ran" record, and a
-restore would then re-charge the invoice.
+`facts` removes the facts delivered before its horizon, `runs` the runs that settled or were skipped
+before its horizon and their tasks with them, and `tasks` the tasks settled
+before its horizon, whatever their run.
 
 ---
 
@@ -867,7 +864,7 @@ A `TideError` is tide's own refusal — a duplicate unit key, a missing `select`
 seam — which means the reflex is wrong and will be wrong again next `advance`, so the
 run is `skipped` with a note. Anything else came out of a host seam: a
 selection, a transform, a database. That is a bad minute, not a bad reflex, so
-the run stays `pending` and is retried — a row past its due time that a query
-can see. Every throw used to skip, and because runs are idempotent on
-`(reflexId, cause)`, one database hiccup destroyed that night's billing run
-permanently.
+the run stays `pending` and is tried again once the reflex's `retry.baseMs` has
+passed — a row past its due time that a query can see. Skipping it instead would
+lose it for good: runs are idempotent on `(reflexId, cause)`, so the occurrence
+cannot open a second run.

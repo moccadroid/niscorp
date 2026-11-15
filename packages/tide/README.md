@@ -90,7 +90,7 @@ await tide.retry(taskId, now);                           // reopen a failed task
 await tide.preview('billing.dunning', { now });          // show me, change nothing
 ```
 
-**There is no `arm`/`disarm`.** Enablement is a property of the reflex the host hands over, so pausing one is: write your own row, `load` again. One source of truth, it survives a restart, and it leaves something to audit. There used to be a pair of methods that mutated an in-memory map; they were a second copy of a fact the host already owned, and they disagreed with it the moment either moved.
+**Pausing a reflex is an edit of its row.** Enablement is a property of the reflex the host hands over: set `enabled: false` on your own row and `load` again. It survives a restart, and it leaves something to audit.
 
 ## Storage
 
