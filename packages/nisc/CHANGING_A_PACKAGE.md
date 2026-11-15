@@ -6,8 +6,8 @@
 
 - It runs no SQL of its own: its reads and writes are vex entries, as an app's are (`AGENTS.md`, "Using Vex").
 - What crosses a boundary is parsed by a schema (`AGENTS.md` rule 13).
-- Rule 16 applies in full.
-- Its tables are strata sequences (rule 17).
+- `AGENTS.md` rule 16 applies in full.
+- Its tables are strata sequences (`AGENTS.md` rule 17).
 
 ## A package is made of modules
 
