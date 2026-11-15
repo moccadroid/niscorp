@@ -5,3 +5,4 @@
 The command's source is made of modules (`command`, `project`, `build`, `serve`, `dev`, `migrate`, `shape`); its commands, exports and built files are the same.
 Three printed lines are worded plainly: an own-shell export that writes nothing says `N of M paths failed a check`, the build's legend says `✗  not written: a check failed`, and the build says `public/assets/ has files of your own`. Exit codes and files are the same.
 `nisc export` on an app behind moss names a path that could not be drawn on a line of its own, and offers `--allow-live` only for the paths that want a server; with `--allow-live` it says which paths were written as the undrawn template. Exit codes and files are the same.
+`nisc migrate` (and `--check`, `--status`) on a runtime that says `migrations: 'apply'` prints first that its database starts empty every time, so what it applies is gone when the command ends. Everything after that line is as before.

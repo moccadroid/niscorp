@@ -11,6 +11,9 @@ export const migrate = async (options: CommandOptions): Promise<void> => {
   const isDryRun = options.dryRun === true;
   const runtime = await project.runtime();
   try {
+    if (runtime.migrations === 'apply') {
+      print("nisc: this runtime's database starts empty every time (migrations: 'apply') — what is applied here is gone when the command ends. A real database is migrated by pointing runtime at it.");
+    }
     if (options.status === true) {
       const plan = await tableStatus(runtime, project.app);
       print(`nisc: applied ${Object.entries(plan.applied).map(([sequence, n]) => `${sequence} ${n}`).join(', ')}`);
