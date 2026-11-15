@@ -340,3 +340,37 @@ describe('LoomForm — an enum', () => {
     expect(onChange).toHaveBeenLastCalledWith({ row: '2' });
   });
 });
+
+describe('LoomEditor — two recursive documents in one plugin', () => {
+  const Folder: ZodType = z.object({
+    folder: z.string(),
+    get folders() {
+      return z.array(Folder);
+    },
+  });
+  const Task: ZodType = z.object({
+    task: z.string(),
+    get subtasks() {
+      return z.array(Task);
+    },
+  });
+
+  it('renders each nested level with its own document’s template', () => {
+    render(
+      <LoomEditor
+        plugins={[{ name: 'trees', documents: { a: z.object({ root: Folder }), b: z.object({ root: Task }) } }]}
+        artifact={{
+          type: 'trees',
+          documents: {
+            a: { root: { folder: 'top', folders: [{ folder: 'inner', folders: [] }] } },
+            b: { root: { task: 'do', subtasks: [{ task: 'sub', subtasks: [] }] } },
+          },
+        }}
+      />,
+    );
+    expect(screen.getAllByText('folder')).toHaveLength(2);
+    expect(screen.getAllByText('task')).toHaveLength(2);
+    expect(screen.getByDisplayValue('inner')).toBeDefined();
+    expect(screen.getByDisplayValue('sub')).toBeDefined();
+  });
+});

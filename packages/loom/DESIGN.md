@@ -136,7 +136,8 @@ reads: a node without it gets no template.
 against `$item`; a `self` reference inside an array points back to that
 template, and Nova resolves it per render against the live data. The form is
 therefore exactly as deep as the document, and growing or shrinking it is an
-ordinary list write.
+ordinary list write. A template is named after its action (`loom:tree:<action id>:<n>`),
+so the forms of one editor, which share a layout store, never share a template.
 
 This covers recursion through a list. A self-reference that is not inside an
 array (`next: z.lazy(() => Stop).optional()`) has no list write to grow by: it
