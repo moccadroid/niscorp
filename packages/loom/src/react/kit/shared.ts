@@ -11,7 +11,7 @@ export const decodeLiteral = <T>(value: unknown): T | undefined =>
   typeof value === 'string' ? (JSON.parse(value) as T) : (value as T | undefined);
 
 export const matches = (value: unknown, pattern: Pattern): boolean => {
-  if (pattern.kind === 'tag') return isRecord(value) && value[pattern.key] === pattern.value;
+  if (pattern.kind === 'tag') return isRecord(value) && (pattern.values ?? [pattern.value]).includes(value[pattern.key]);
   if (pattern.kind === 'key') return isRecord(value) && pattern.key in value;
   if (pattern.kind === 'type') return jsType(value) === pattern.type;
   return false;

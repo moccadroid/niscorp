@@ -25,7 +25,7 @@ const errorTree = (issues: ReadonlyArray<Issue>): Doc => {
   return tree;
 };
 
-const stripErrors = (data: Doc): Doc => {
+export const stripErrors = (data: Doc): Doc => {
   const { [ERROR_NAMESPACE]: _omit, ...document } = data;
   return document;
 };

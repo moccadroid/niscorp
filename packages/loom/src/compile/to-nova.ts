@@ -233,6 +233,7 @@ const buildLayout = (field: Field, loc: Loc, ctx: BuildContext): LayoutNode => {
 
 export const toNova = (ir: Field, options: CompileOptions = {}): NovaEditor => {
   const layouts: Record<string, LayoutNode> = {};
+  const id = options.id ?? 'loom-form';
   let counter = 0;
   const matchers = options.widgets ?? [];
   const ctx: BuildContext = {
@@ -240,7 +241,7 @@ export const toNova = (ir: Field, options: CompileOptions = {}): NovaEditor => {
       layouts[name] = node;
     },
     templates: [],
-    name: () => `loom:tree:${counter++}`,
+    name: () => `loom:tree:${id}:${counter++}`,
     widgetRole: (field, path) =>
       matchers.find((matcher) =>
         matcher.match({ kind: field.kind, path, title: field.title, description: field.description }),
@@ -258,7 +259,7 @@ export const toNova = (ir: Field, options: CompileOptions = {}): NovaEditor => {
     throw new Error('loom.toNova: the root document must be an object (or use rootKey).');
   }
   const action: ActionDefinition = {
-    id: options.id ?? 'loom-form',
+    id,
     data: document,
     layout,
   };

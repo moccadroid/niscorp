@@ -6,38 +6,11 @@ import { OPTIONAL_FIELDS_KEY } from '../schemas/node.schema';
 import { PrismError, ErrorCode, clip, failAt } from '../errors';
 import { depthRefusal, exceedsDepth } from '@niscorp/strata';
 import { desugar } from '../sugar/desugar';
-import { createBudget, measure, measureString, spendStep, type Limits } from './budget';
-import { optimize } from './optimize';
+import { createBudget, measure, measureString, spendStep, stackRefusal, type Limits } from './budget';
+import { HANDLER_KEY, optimize, resolveHandler } from './optimize';
 import { placeError } from './place';
-
-import {
-  isRefNode, isConstNode, isVarNode, isGetNode, isWithNode,
-  isMapNode, isFilterNode, isReduceNode, isSliceNode, isFlattenNode, isUniqueNode, isSortByNode,
-  isAddNode, isSubNode, isMulNode, isDivNode, isModNode, isRoundNode, isToNumberNode,
-  isFillNode, isJoinNode, isToStringNode, isInterpolateNode, isTrimNode, isLowerNode, isUpperNode, isSplitNode, isReplaceNode,
-  isEqNode, isNeqNode, isGtNode, isGteNode, isLtNode, isLteNode, isEmptyNode, isStartsWithNode, isEndsWithNode, isContainsNode,
-  isNotNode, isAndNode, isOrNode,
-  isMergeNode, isCoalesceNode, isCaseNode, isEntriesOfNode, isKeyByNode, isGroupByNode,
-  isKeysNode, isValuesNode, isFromEntriesNode, isPickNode, isOmitNode, isTypeNode, isLengthNode,
-  isHasNode, isRenameKeysNode, isUpdateNode, isAssertNode, isWalkNode,
-  isDateNode, isDateAddNode, isDateDiffNode,
-  isLocaleDateNode, isLocaleMoneyNode, isLocaleNumberNode,
-  isJsonObject, isPlainObject,
-} from '../schemas/guards';
-
-import { opRef, opConst, opVar, opGet, opWith } from '../ops/core.ops';
-import { opMap, opFilter, opReduce, opSlice, opFlatten, opUnique, opSortBy } from '../ops/array.ops';
-import { opAdd, opSub, opMul, opDiv, opMod, opRound, opToNumber } from '../ops/math.ops';
-import { opFill, opJoin, opToString, opInterpolate, opTrim, opLower, opUpper, opSplit, opReplace } from '../ops/string.ops';
-import { opEq, opNeq, opGt, opGte, opLt, opLte, opEmpty, opStartsWith, opEndsWith, opContains } from '../ops/predicate.ops';
-import { opNot, opAnd, opOr } from '../ops/logic.ops';
-import { opMerge, opCoalesce, opCase, opEntriesOf, opKeyBy, opGroupBy } from '../ops/structure.ops';
-import { opKeys, opValues, opFromEntries, opPick, opOmit, opType, opLength } from '../ops/object.ops';
-import { opHas, opRenameKeys, opUpdate, opAssert, opWalk } from '../ops/transform.ops';
-import { opDate, opDateAdd, opDateDiff } from '../ops/time.ops';
-import { opLocaleDate, opLocaleMoney, opLocaleNumber } from '../ops/intl.ops';
-
-const HANDLER_KEY = '__op';
+import { writeOwnKey } from '../utils/own-keys';
+import { isPlainObject } from '../schemas/guards';
 
 type AttachedFn = (node: Record<string, unknown>, context: EvalContext, evaluate: EvaluateFn) => JsonValue;
 
@@ -70,7 +43,7 @@ const evaluateUnbudgeted = (node: unknown, context: EvalContext): JsonValue => {
   if (isPlainObject(obj)) {
     const result: Record<string, JsonValue> = {};
     if (!(OPTIONAL_FIELDS_KEY in obj)) {
-      for (const key of Object.keys(obj)) result[key] = evaluateNode(obj[key], context);
+      for (const key of Object.keys(obj)) writeOwnKey(result, key, evaluateNode(obj[key], context));
       return result;
     }
     const optionalFields = new Set<string>(
@@ -84,7 +57,7 @@ const evaluateUnbudgeted = (node: unknown, context: EvalContext): JsonValue => {
       try {
         const evaluated = evaluateNode(value, context);
         if (isOptional && (evaluated === null || evaluated === undefined)) continue;
-        result[key] = evaluated;
+        writeOwnKey(result, key, evaluated);
       } catch (error) {
         if (isOptional && error instanceof PrismError && error.code === ErrorCode.MISSING_PATH) continue;
         throw error;
@@ -94,81 +67,8 @@ const evaluateUnbudgeted = (node: unknown, context: EvalContext): JsonValue => {
     return result;
   }
 
-  if (isRefNode(obj)) return opRef(obj, context, evaluateNode);
-  if (isConstNode(obj)) return opConst(obj, context, evaluateNode);
-  if (isVarNode(obj)) return opVar(obj, context, evaluateNode);
-  if (isGetNode(obj)) return opGet(obj, context, evaluateNode);
-  if (isWithNode(obj)) return opWith(obj, context, evaluateNode);
-
-  if (isMapNode(obj)) return opMap(obj, context, evaluateNode);
-  if (isFilterNode(obj)) return opFilter(obj, context, evaluateNode);
-  if (isReduceNode(obj)) return opReduce(obj, context, evaluateNode);
-  if (isSliceNode(obj)) return opSlice(obj, context, evaluateNode);
-  if (isFlattenNode(obj)) return opFlatten(obj, context, evaluateNode);
-  if (isUniqueNode(obj)) return opUnique(obj, context, evaluateNode);
-  if (isSortByNode(obj)) return opSortBy(obj, context, evaluateNode);
-
-  if (isAddNode(obj)) return opAdd(obj, context, evaluateNode);
-  if (isSubNode(obj)) return opSub(obj, context, evaluateNode);
-  if (isMulNode(obj)) return opMul(obj, context, evaluateNode);
-  if (isDivNode(obj)) return opDiv(obj, context, evaluateNode);
-  if (isRoundNode(obj)) return opRound(obj, context, evaluateNode);
-  if (isModNode(obj)) return opMod(obj, context, evaluateNode);
-  if (isToNumberNode(obj)) return opToNumber(obj, context, evaluateNode);
-
-  if (isJoinNode(obj)) return opJoin(obj, context, evaluateNode);
-  if (isToStringNode(obj)) return opToString(obj, context, evaluateNode);
-  if (isInterpolateNode(obj)) return opInterpolate(obj, context, evaluateNode);
-  if (isFillNode(obj)) return opFill(obj, context, evaluateNode);
-  if (isTrimNode(obj)) return opTrim(obj, context, evaluateNode);
-  if (isLowerNode(obj)) return opLower(obj, context, evaluateNode);
-  if (isUpperNode(obj)) return opUpper(obj, context, evaluateNode);
-  if (isSplitNode(obj)) return opSplit(obj, context, evaluateNode);
-  if (isReplaceNode(obj)) return opReplace(obj, context, evaluateNode);
-
-  if (isEqNode(obj)) return opEq(obj, context, evaluateNode);
-  if (isNeqNode(obj)) return opNeq(obj, context, evaluateNode);
-  if (isGtNode(obj)) return opGt(obj, context, evaluateNode);
-  if (isGteNode(obj)) return opGte(obj, context, evaluateNode);
-  if (isLtNode(obj)) return opLt(obj, context, evaluateNode);
-  if (isLteNode(obj)) return opLte(obj, context, evaluateNode);
-  if (isEmptyNode(obj)) return opEmpty(obj, context, evaluateNode);
-  if (isStartsWithNode(obj)) return opStartsWith(obj, context, evaluateNode);
-  if (isEndsWithNode(obj)) return opEndsWith(obj, context, evaluateNode);
-  if (isContainsNode(obj)) return opContains(obj, context, evaluateNode);
-
-  if (isNotNode(obj)) return opNot(obj, context, evaluateNode);
-  if (isAndNode(obj)) return opAnd(obj, context, evaluateNode);
-  if (isOrNode(obj)) return opOr(obj, context, evaluateNode);
-
-  if (isMergeNode(obj)) return opMerge(obj, context, evaluateNode);
-  if (isCoalesceNode(obj)) return opCoalesce(obj, context, evaluateNode);
-  if (isCaseNode(obj)) return opCase(obj, context, evaluateNode);
-  if (isEntriesOfNode(obj)) return opEntriesOf(obj, context, evaluateNode);
-  if (isKeyByNode(obj)) return opKeyBy(obj, context, evaluateNode);
-  if (isGroupByNode(obj)) return opGroupBy(obj, context, evaluateNode);
-
-  if (isKeysNode(obj)) return opKeys(obj, context, evaluateNode);
-  if (isValuesNode(obj)) return opValues(obj, context, evaluateNode);
-  if (isFromEntriesNode(obj)) return opFromEntries(obj, context, evaluateNode);
-  if (isPickNode(obj)) return opPick(obj, context, evaluateNode);
-  if (isOmitNode(obj)) return opOmit(obj, context, evaluateNode);
-  if (isTypeNode(obj)) return opType(obj, context, evaluateNode);
-  if (isLengthNode(obj)) return opLength(obj, context, evaluateNode);
-
-  if (isHasNode(obj)) return opHas(obj, context, evaluateNode);
-  if (isRenameKeysNode(obj)) return opRenameKeys(obj, context, evaluateNode);
-  if (isUpdateNode(obj)) return opUpdate(obj, context, evaluateNode);
-  if (isAssertNode(obj)) return opAssert(obj, context, evaluateNode);
-  if (isWalkNode(obj)) return opWalk(obj, context, evaluateNode);
-
-  if (isDateNode(obj)) return opDate(obj, context, evaluateNode);
-  if (isDateAddNode(obj)) return opDateAdd(obj, context, evaluateNode);
-  if (isDateDiffNode(obj)) return opDateDiff(obj, context, evaluateNode);
-
-  if (isLocaleDateNode(obj)) return opLocaleDate(obj, context, evaluateNode);
-  if (isLocaleMoneyNode(obj)) return opLocaleMoney(obj, context, evaluateNode);
-  if (isLocaleNumberNode(obj)) return opLocaleNumber(obj, context, evaluateNode);
+  const handler = resolveHandler(obj);
+  if (handler !== undefined) return handler(obj, context, evaluateNode);
 
   const unknownKeys = Object.keys(obj).filter((k) => k.startsWith('$'));
   const preview = JSON.stringify(obj).slice(0, 100);
@@ -180,17 +80,28 @@ const evaluateUnbudgeted = (node: unknown, context: EvalContext): JsonValue => {
   );
 };
 
-const notJson = (value: unknown, at: string): string | undefined => {
+// `ancestors` holds the objects and arrays on the way down to `value`, by
+// where each is: a value reached twice from two places is still JSON.
+const notJson = (value: unknown, at: string, ancestors: Map<object, string> = new Map()): string | undefined => {
   if (value === null || typeof value === 'string' || typeof value === 'boolean') return undefined;
   if (typeof value === 'number') return Number.isFinite(value) ? undefined : `${at} is ${value}`;
+  if (typeof value !== 'object') return `${at} is ${value === undefined ? 'undefined' : `a ${typeof value}`}`;
+  const loop = ancestors.get(value);
+  if (loop !== undefined) return `${at} refers back to ${loop}`;
+  ancestors.set(value, at);
+  const found = notJsonInside(value, at, ancestors);
+  ancestors.delete(value);
+  return found;
+};
+
+const notJsonInside = (value: object, at: string, ancestors: Map<object, string>): string | undefined => {
   if (Array.isArray(value)) {
     for (const index of Object.keys(value)) {
-      const found = notJson(value[Number(index)], `${at}[${index}]`);
+      const found = notJson(value[Number(index)], `${at}[${index}]`, ancestors);
       if (found !== undefined) return found;
     }
     return undefined;
   }
-  if (typeof value !== 'object') return `${at} is ${value === undefined ? 'undefined' : `a ${typeof value}`}`;
   // A Date, a Map or an instance of a class has no fields to look at and would
   // pass for `{}`.
   const proto: unknown = Object.getPrototypeOf(value);
@@ -199,7 +110,7 @@ const notJson = (value: unknown, at: string): string | undefined => {
     return `${at} is ${tag === 'Object' ? 'an instance of a class' : `a ${tag}`}`;
   }
   for (const [key, inner] of Object.entries(value)) {
-    const found = notJson(inner, `${at}.${key}`);
+    const found = notJson(inner, `${at}.${key}`, ancestors);
     if (found !== undefined) return found;
   }
   return undefined;
@@ -240,7 +151,7 @@ const keptTrees = new WeakMap<object, Kept>();
 // tree is optimized the second time. Not the first: a config handed over once
 // would pay for an optimization nothing uses. Kept by the object, so a config
 // changed in place after its first call is not read again.
-export const evaluate = (config: Config, source: unknown, options?: EvaluateOptions): JsonValue => {
+const evaluateOnce = (config: Config, source: unknown, options?: EvaluateOptions): JsonValue => {
   if (options?.check === 'always') {
     const wrong = notJson(source, 'source');
     if (wrong !== undefined) throw new PrismError(`The source must be plain JSON: ${wrong}.`, ErrorCode.TYPE);
@@ -257,6 +168,14 @@ export const evaluate = (config: Config, source: unknown, options?: EvaluateOpti
     kept.optimized = true;
   }
   return run(kept.tree, input, options?.limits, true, config);
+};
+
+export const evaluate = (config: Config, source: unknown, options?: EvaluateOptions): JsonValue => {
+  try {
+    return evaluateOnce(config, source, options);
+  } catch (error) {
+    throw stackRefusal(error);
+  }
 };
 
 export const evaluateSafe = (config: Config, source: unknown, options?: EvaluateOptions): Result<JsonValue> => {

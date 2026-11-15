@@ -2,6 +2,7 @@ import type { JsonValue, EvalContext, EvaluateFn } from '../types';
 import type { FillNode, JoinNode, ToStringNode, InterpolateNode, TrimNode, LowerNode, UpperNode, SplitNode, ReplaceNode } from '../schemas';
 import { ErrorCode, describeValue, failAt } from '../errors';
 import { isJsonObject } from '../schemas/guards';
+import { readOwnKey } from '../utils/own-keys';
 import { TEXT_LIKE, isTextLike, refuseType, writtenNote } from './refuse';
 
 export const opJoin = (node: JoinNode, context: EvalContext, evaluate: EvaluateFn): JsonValue => {
@@ -31,7 +32,7 @@ export const opInterpolate = (node: InterpolateNode, context: EvalContext, evalu
   const values = evaluate(valuesNode, context);
   if (!isJsonObject(values)) return refuseType({ node, op: '$interpolate', field: 'values', needs: 'an object', got: values, written: valuesNode });
   return template.replace(/\{\{(\w+)\}\}/g, (_match, key: string) => {
-    const value = values[key] ?? '';
+    const value = readOwnKey(values, key) ?? '';
     if (!isTextLike(value))
       return failAt(
         `$interpolate.values needs ${TEXT_LIKE} for {{${key}}}, but "${key}" is ${describeValue(value)}.`,
@@ -48,7 +49,7 @@ const fillOne = (value: JsonValue): JsonValue => {
   const { phrase, slots } = value as { phrase?: JsonValue; slots?: JsonValue };
   if (typeof phrase !== 'string' || !isJsonObject(slots)) return value;
   return phrase.replace(/\{([A-Za-z_][A-Za-z0-9_]*)\}/g, (hole, name: string) => {
-    const slot = slots[name];
+    const slot = readOwnKey(slots, name);
     if (slot === undefined || slot === null) return hole;
     const filled = fillOne(slot);
     return typeof filled === 'object' ? hole : String(filled);

@@ -1,6 +1,7 @@
 import type { JsonValue } from '../types';
 import { isJsonArray, isJsonObject } from '../schemas/guards';
 import { PrismError, ErrorCode, describeValue } from '../errors';
+import { readOwnKey } from './own-keys';
 
 export type JsonPathSegment =
   | { type: 'key'; key: string }
@@ -71,13 +72,17 @@ export const parseJsonPath = (path: string): JsonPathSegment[] => {
   return segments;
 };
 
-const cache = new Map<string, JsonPathSegment[]>();
+// Bounded: paths come from configs, and a host that builds configs per
+// request would otherwise grow it for as long as it runs.
+const MAX_CACHED_PATHS = 1000;
+const parsedPaths = new Map<string, JsonPathSegment[]>();
 
 export const parseJsonPathCached = (path: string): JsonPathSegment[] => {
-  const cached = cache.get(path);
-  if (cached) return cached;
+  const cached = parsedPaths.get(path);
+  if (cached !== undefined) return cached;
   const parsed = parseJsonPath(path);
-  cache.set(path, parsed);
+  if (parsedPaths.size >= MAX_CACHED_PATHS) parsedPaths.clear();
+  parsedPaths.set(path, parsed);
   return parsed;
 };
 
@@ -100,12 +105,13 @@ export const whereStopped = (root: JsonValue, steps: readonly Step[], nameUpTo: 
     } else {
       if (isJsonArray(at)) return `stopped at ${shown}: the value at ${here} is ${describeValue(at)}, and a list is read by index, a number; for every item use $map.`;
       if (!isJsonObject(at)) return `stopped at ${shown}: the value at ${here} is ${describeValue(at)}, which has no keys.`;
-      if (at[step] === undefined) {
+      const value: JsonValue | undefined = readOwnKey(at, step);
+      if (value === undefined) {
         const keys = Object.keys(at);
         const listed = keys.slice(0, MAX_KEYS).join(', ') + (keys.length > MAX_KEYS ? ', …' : '');
         return `stopped at ${shown}: the object at ${here} has no key ${shown} (${keys.length === 0 ? 'it has no keys' : `its keys: ${listed}`}).`;
       }
-      at = at[step];
+      at = value;
     }
   }
   return '';
@@ -120,7 +126,7 @@ export const getByPath = (root: JsonValue, segments: JsonPathSegment[]): JsonVal
   for (const segment of segments) {
     if (segment.type === 'key') {
       if (!isJsonObject(current)) return undefined;
-      current = current[segment.key];
+      current = readOwnKey(current, segment.key);
     } else {
       if (!isJsonArray(current)) return undefined;
       current = current[segment.index];

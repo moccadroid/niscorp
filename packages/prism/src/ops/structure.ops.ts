@@ -3,6 +3,7 @@ import type { MergeNode, CoalesceNode, CaseNode, EntriesOfNode, KeyByNode, Group
 import { TEXT_LIKE, isTextLike, refuseType } from './refuse';
 import { isJsonObject, isJsonArray } from '../schemas/guards';
 import { loopScope } from './scope';
+import { readOwnKey, writeOwnKey } from '../utils/own-keys';
 
 export const opMerge = (node: MergeNode, context: EvalContext, evaluate: EvaluateFn): JsonValue => {
   const result: JsonObject = {};
@@ -10,7 +11,8 @@ export const opMerge = (node: MergeNode, context: EvalContext, evaluate: Evaluat
     const part = node.$merge[index];
     const evaluated = evaluate(part, context);
     if (!isJsonObject(evaluated)) return refuseType({ node, op: '$merge', field: String(index), needs: 'an object', got: evaluated, written: part, contextOp: '$merge' });
-    Object.assign(result, evaluated);
+    if (Object.hasOwn(evaluated, '__proto__')) for (const [key, value] of Object.entries(evaluated)) writeOwnKey(result, key, value);
+    else Object.assign(result, evaluated);
   }
   return result;
 };
@@ -45,10 +47,10 @@ export const opKeyBy = (node: KeyByNode, context: EvalContext, evaluate: Evaluat
   const result: JsonObject = {};
   const { scope, vars } = loopScope(context);
   for (const item of input) {
-    vars[as] = item;
+    writeOwnKey(vars, as, item);
     const key = evaluate(keyExpr, scope);
     if (!isTextLike(key)) return refuseType({ node, op: '$keyBy', field: 'key', needs: TEXT_LIKE, got: key, written: keyExpr, contextOp: '$keyBy' });
-    result[String(key)] = item;
+    writeOwnKey(result, String(key), item);
   }
   return result;
 };
@@ -60,12 +62,13 @@ export const opGroupBy = (node: GroupByNode, context: EvalContext, evaluate: Eva
   const result: Record<string, JsonValue[]> = {};
   const { scope, vars } = loopScope(context);
   for (const item of input) {
-    vars[as] = item;
+    writeOwnKey(vars, as, item);
     const value = evaluate(keyExpr, scope);
     if (!isTextLike(value)) return refuseType({ node, op: '$groupBy', field: 'key', needs: TEXT_LIKE, got: value, written: keyExpr, contextOp: '$groupBy' });
     const key = String(value);
-    if (!result[key]) result[key] = [];
-    result[key]!.push(item);
+    const group = readOwnKey(result, key);
+    if (group === undefined) writeOwnKey(result, key, [item]);
+    else group.push(item);
   }
   return result;
 };

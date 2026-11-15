@@ -6,6 +6,7 @@ import { compare } from '../utils/compare';
 import { measure } from '../engine/budget';
 import { loopScope } from './scope';
 import { refuseType } from './refuse';
+import { writeOwnKey } from '../utils/own-keys';
 
 const requireArray = (value: JsonValue, node: object, op: string, field: string | undefined, written: unknown): JsonValue[] => {
   if (!isJsonArray(value))
@@ -19,7 +20,7 @@ export const opMap = (node: MapNode, context: EvalContext, evaluate: EvaluateFn)
   const result: JsonValue[] = [];
   const { scope, vars } = loopScope(context);
   for (const item of input) {
-    vars[as] = item;
+    writeOwnKey(vars, as, item);
     result.push(evaluate(body, scope));
   }
   return result;
@@ -31,7 +32,7 @@ export const opFilter = (node: FilterNode, context: EvalContext, evaluate: Evalu
   const result: JsonValue[] = [];
   const { scope, vars } = loopScope(context);
   for (const item of input) {
-    vars[as] = item;
+    writeOwnKey(vars, as, item);
     const condition = evaluate(when, scope);
     if (condition) result.push(item);
   }
@@ -44,8 +45,8 @@ export const opReduce = (node: ReduceNode, context: EvalContext, evaluate: Evalu
   let accumulator = evaluate(init, context);
   const { scope, vars } = loopScope(context);
   for (const item of input) {
-    vars[as] = item;
-    vars[accName] = accumulator;
+    writeOwnKey(vars, as, item);
+    writeOwnKey(vars, accName, accumulator);
     accumulator = evaluate(body, scope);
     // Fed back each item: a body of [acc, acc] doubles it.
     measure(accumulator, context.budget, node);
@@ -109,7 +110,7 @@ export const opSortBy = (node: SortByNode, context: EvalContext, evaluate: Evalu
 
   const { scope, vars } = loopScope(context);
   const keyed = input.map((item) => {
-    vars[as] = item;
+    writeOwnKey(vars, as, item);
     return { item, key: sortKey(evaluate(by, scope), node) };
   });
 

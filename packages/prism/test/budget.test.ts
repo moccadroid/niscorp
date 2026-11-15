@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { compile, evaluate, execute } from '../src';
+import { compile, evaluate, evaluateSafe, execute, ErrorCode, type JsonValue } from '../src';
 
 const items = (n: number): { items: number[] } => ({ items: Array.from({ length: n }, (_, i) => i) });
 const doubleString = { $reduce: { over: { $ref: '$.items' }, as: 'x', init: 'ab', body: { $join: { parts: [{ $var: 'acc' }, { $var: 'acc' }] } } } };
@@ -35,5 +35,50 @@ describe('the evaluation budget', () => {
     const rows = Array.from({ length: 1000 }, (_, i) => ({ id: i, name: `n${i}` }));
     const ir = await compile({ $map: { over: { $ref: '$.rows' }, as: 'r', body: { row_id: { $get: { from: { $var: 'r' }, path: ['id'] } } } } });
     expect(execute(ir, { rows })).toHaveLength(1000);
+  });
+});
+
+describe('a source nested deeper than the stack reaches', () => {
+  let deep: JsonValue = [];
+  for (let i = 0; i < 100_000; i++) deep = [deep];
+  const source = { deep };
+
+  it.each([
+    ['$ref', { $ref: '$.deep' }],
+    ['$toString', { $toString: { $ref: '$.deep' } }],
+    ['$unique', { $unique: { $ref: '$.deep' } }],
+  ])('is stopped by the budget in %s', async (_op, config) => {
+    const result = evaluateSafe(config, source);
+    expect(result.ok ? undefined : result.error).toMatchObject({ code: ErrorCode.BUDGET });
+    const ir = await compile(config);
+    expect(() => execute(ir, source)).toThrow(expect.objectContaining({ code: ErrorCode.BUDGET }));
+  });
+
+  it('is stopped by the budget when the source is checked', () => {
+    const result = evaluateSafe({ $ref: '$.deep' }, source, { check: 'always' });
+    expect(result.ok ? undefined : result.error).toMatchObject({ code: ErrorCode.BUDGET });
+  });
+});
+
+describe('a source that refers back to itself', () => {
+  const cyclic = (): { b: number; self?: unknown } => {
+    const source: { b: number; self?: unknown } = { b: 1 };
+    source.self = source;
+    return source;
+  };
+
+  it('is refused as not JSON when the source is checked, naming where it refers back', () => {
+    const result = evaluateSafe({ $ref: '$.b' }, cyclic(), { check: 'always' });
+    expect(result.ok ? undefined : result.error).toMatchObject({ code: ErrorCode.TYPE, message: 'The source must be plain JSON: source.self refers back to source.' });
+  });
+
+  it('is stopped by the budget with a message that names the loop when it is walked unchecked', () => {
+    const result = evaluateSafe({ $walk: { over: { $ref: '$' }, as: 'n', rules: [{ when: false, then: null }] } }, cyclic());
+    expect(result.ok ? undefined : result.error).toMatchObject({ code: ErrorCode.BUDGET, message: expect.stringContaining('refers back to itself') });
+  });
+
+  it('a value reached twice without a loop is plain JSON', () => {
+    const shared = { n: 1 };
+    expect(evaluate({ $ref: '$.a' }, { a: shared, b: shared }, { check: 'always' })).toEqual({ n: 1 });
   });
 });

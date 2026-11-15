@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { OP_KEYS, evaluate, validate } from '../src';
+import { OP_KEYS, compile, evaluate, execute, validate } from '../src';
 import type { OpKey } from '../src';
 import { PRISM_EXAMPLES, PRISM_EXAMPLE_GROUPS } from '../src/examples';
 
@@ -53,6 +53,15 @@ describe('the examples', () => {
     (_id, example) => {
       expect(validate(example.config).ok).toBe(true);
       expect(evaluate(example.config, example.source)).toEqual(example.expected);
+    },
+  );
+
+  it.each(PRISM_EXAMPLES.map((example) => [example.id, example] as const))(
+    '%s answers the same once its config is optimized, and once compiled',
+    async (_id, example) => {
+      const config = structuredClone(example.config);
+      for (let run = 0; run < 3; run++) expect(evaluate(config, example.source)).toEqual(example.expected);
+      expect(execute(await compile(example.config), example.source)).toEqual(example.expected);
     },
   );
 

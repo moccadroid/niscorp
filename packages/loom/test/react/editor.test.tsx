@@ -340,3 +340,79 @@ describe('LoomForm — an enum', () => {
     expect(onChange).toHaveBeenLastCalledWith({ row: '2' });
   });
 });
+
+describe('LoomEditor — two recursive documents in one plugin', () => {
+  const Folder: ZodType = z.object({
+    folder: z.string(),
+    get folders() {
+      return z.array(Folder);
+    },
+  });
+  const Task: ZodType = z.object({
+    task: z.string(),
+    get subtasks() {
+      return z.array(Task);
+    },
+  });
+
+  it('renders each nested level with its own document’s template', () => {
+    render(
+      <LoomEditor
+        plugins={[{ name: 'trees', documents: { a: z.object({ root: Folder }), b: z.object({ root: Task }) } }]}
+        artifact={{
+          type: 'trees',
+          documents: {
+            a: { root: { folder: 'top', folders: [{ folder: 'inner', folders: [] }] } },
+            b: { root: { task: 'do', subtasks: [{ task: 'sub', subtasks: [] }] } },
+          },
+        }}
+      />,
+    );
+    expect(screen.getAllByText('folder')).toHaveLength(2);
+    expect(screen.getAllByText('task')).toHaveLength(2);
+    expect(screen.getByDisplayValue('inner')).toBeDefined();
+    expect(screen.getByDisplayValue('sub')).toBeDefined();
+  });
+});
+
+describe('LoomEditor — a document with a field named _errors', () => {
+  it('keeps the field, edits it, and does not report it missing', () => {
+    const onChange = vi.fn();
+    render(<LoomForm schema={z.object({ _errors: z.string(), name: z.string() })} options={{ value: { _errors: 'kept', name: '' } }} onChange={onChange} />);
+    expect(onChange).toHaveBeenLastCalledWith({ _errors: 'kept', name: '' });
+
+    fireEvent.change(screen.getByDisplayValue('kept'), { target: { value: 'still kept' } });
+    expect(onChange).toHaveBeenLastCalledWith({ _errors: 'still kept', name: '' });
+    expect(screen.queryByText(/expected string/i)).toBeNull();
+  });
+});
+
+describe('LoomEditor — the onChange prop', () => {
+  it('calls the onChange of the latest render', () => {
+    const first = vi.fn();
+    const second = vi.fn();
+    const { rerender } = render(<LoomForm schema={personSchema} onChange={first} />);
+    rerender(<LoomForm schema={personSchema} onChange={second} />);
+    first.mockClear();
+
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Ada' } });
+
+    expect(second).toHaveBeenLastCalledWith(expect.objectContaining({ name: 'Ada' }));
+    expect(first).not.toHaveBeenCalled();
+  });
+});
+
+describe('LoomEditor — a branch whose discriminator is an enum', () => {
+  it('opens a stored document on that branch whichever value of the enum it has', () => {
+    const schema = z.discriminatedUnion('kind', [
+      z.object({ kind: z.literal('circle'), radius: z.number() }),
+      z.object({ kind: z.enum(['square', 'box']), side: z.number() }),
+    ]);
+    const onChange = vi.fn();
+    render(<LoomForm schema={z.object({ shape: schema })} options={{ value: { shape: { kind: 'box', side: 7 } } }} onChange={onChange} />);
+    const select = screen.getByRole('combobox');
+    expect(select instanceof HTMLSelectElement ? select.selectedOptions[0]?.textContent : undefined).toBe('square');
+    expect(screen.getByRole('spinbutton')).toHaveProperty('value', '7');
+    expect(onChange).toHaveBeenLastCalledWith({ shape: { kind: 'box', side: 7 } });
+  });
+});

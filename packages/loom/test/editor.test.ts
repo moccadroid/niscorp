@@ -28,13 +28,14 @@ const ACCEPTED: ReadonlyArray<readonly [string, ZodType, unknown]> = [
   ['a union on its string branch', TEXT_OR_OBJECT, 'half past seven'],
 ];
 
-const REFUSED: ReadonlyArray<readonly [string, ZodType, unknown, unknown]> = [
-  ['a list given a string', z.array(z.string()), 'oops', []],
-  ['a list given numbers', z.array(z.string()), [1, 2], []],
-  ['a string given a number', z.string(), 42, ''],
-  ['a number given a string', z.number(), 'x', 0],
-  ['a tuple given too few', TUPLE, ['only'], ['', 0]],
-  ['a union given a number', TEXT_OR_OBJECT, 7, ''],
+const REFUSED: ReadonlyArray<readonly [string, ZodType, unknown]> = [
+  ['a list given a string', z.array(z.string()), 'oops'],
+  ['a list given numbers', z.array(z.string()), [1, 2]],
+  ['a list with one bad item', z.array(z.string()), ['ok', 5]],
+  ['a string given a number', z.string(), 42],
+  ['a number given a string', z.number(), 'x'],
+  ['a tuple given too few', TUPLE, ['only']],
+  ['a union given a number', TEXT_OR_OBJECT, 7],
 ];
 
 describe('createLoomEditor.open — the seed of a document whose root is not an object', () => {
@@ -42,8 +43,8 @@ describe('createLoomEditor.open — the seed of a document whose root is not an 
     expect(opened(schema, seed)).toEqual(seed);
   });
 
-  it.each(REFUSED)('%s opens the default', (_what, schema, seed, initial) => {
-    expect(opened(schema, seed)).toEqual(initial);
+  it.each(REFUSED)('%s opens with its seed, for validation to flag', (_what, schema, seed) => {
+    expect(opened(schema, seed)).toEqual(seed);
   });
 
   it('opens the default when there is no seed', () => {

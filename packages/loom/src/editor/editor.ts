@@ -1,8 +1,9 @@
 import { z, type ZodType } from 'zod';
 import { createLayoutStore, createShell, type ActionDefinition, type Shell } from '@niscorp/nova';
 import { parse, buildDocument, isRecord } from '@compile/parse';
+import type { Field } from '@compile/types';
 import { toNova, ERROR_NAMESPACE } from '@compile/to-nova';
-import { attachValidation } from '../validate.js';
+import { attachValidation, stripErrors } from '../validate.js';
 import { defaultCanvasLayout } from './default.layout.js';
 import type { LoomArtifact, LoomEditor, LoomEditorConfig, LoomEvent, LoomPlugin } from './types.js';
 
@@ -13,12 +14,9 @@ const formCanvas = (document: string): string => `form:${document}`;
 
 const ROOT_KEY = '$root';
 
-const needsWrap = (document: ZodType): boolean => parse(document).kind !== 'object';
-
-const stripErrors = (data: Record<string, unknown>): Record<string, unknown> => {
-  const { [ERROR_NAMESPACE]: _omit, ...document } = data;
-  return document;
-};
+// The error channel sits beside the document's own keys, so a document with
+// a field of that name is wrapped as a non-object root is.
+const needsWrap = (ir: Field): boolean => ir.kind !== 'object' || ir.fields.some((field) => field.key === ERROR_NAMESPACE);
 
 export const createLoomEditor = (config: LoomEditorConfig): LoomEditor => {
   const plugins = new Map<string, LoomPlugin>();
@@ -83,7 +81,7 @@ export const createLoomEditor = (config: LoomEditorConfig): LoomEditor => {
         action = { id: canvasId, data: isRecord(value) ? value : {}, layout: document(value) };
       } else {
         const ir = parse(document);
-        const wrap = needsWrap(document);
+        const wrap = needsWrap(ir);
         if (wrap) wrappedDocs.add(name);
         const seed = artifact.documents?.[name];
         const value = seed ?? buildDocument(ir, {});
@@ -94,7 +92,7 @@ export const createLoomEditor = (config: LoomEditorConfig): LoomEditor => {
           widgets: plugin.widgets ?? [],
         });
         for (const [id, node] of Object.entries(built.layouts)) store.set(id, node);
-        const seedsRoot = wrap && seed !== undefined && seed !== null && !isRecord(seed) && document.safeParse(seed).success;
+        const seedsRoot = wrap && seed !== undefined && seed !== null && !isRecord(seed);
         action = seedsRoot ? { ...built.action, data: { [ROOT_KEY]: seed } } : built.action;
       }
       shell.registerAction(action);

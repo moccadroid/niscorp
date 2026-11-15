@@ -95,11 +95,12 @@ import { prism } from '@niscorp/loom/plugins/prism/react';
 - `artifact` says what to edit. `type` names the plugin that handles it;
   `documents` seeds the starting values (omit it to start from the schema's
   defaults).
-- `onChange` fires with the live document values on every edit.
+- `onChange` fires with the live document values on every edit; the one
+  passed on the latest render is the one called.
 - To switch to a different artifact, give the element a new React `key`.
   `plugins` and `artifact` are read once, when the element mounts.
 
-Two things the built-in kit draws are worth knowing before you rely on them:
+Three things are worth knowing before you rely on them:
 
 - **Messages follow edits.** The inline messages and the Validations pane show
   what the schema said after the last edit. They are empty until the first one,
@@ -110,6 +111,11 @@ Two things the built-in kit draws are worth knowing before you rely on them:
 - **A select has no row for "none".** An enum with no `.default()` starts with no
   value in the document, and the select displays its first option all the same.
   Give the enum a `.default()` and the two start out agreeing.
+- **A key with a dot in it is not edited correctly.** Nova reads a binding
+  path by splitting it at each `.`, so a field such as `"a.b"` is bound as `b`
+  inside `a`: the control shows nothing and an edit writes to the wrong place.
+  Loom has no fix for it until Nova can bind such a key; keep dots out of the
+  keys of a schema you edit with Loom.
 
 A **plugin** wires one domain into the editor. It contributes the schemas to edit
 (its *documents*), optional custom field widgets, and usually a preview. The three

@@ -3,6 +3,7 @@ import type { KeysNode, ValuesNode, FromEntriesNode, PickNode, OmitNode, TypeNod
 import { ErrorCode, describeValue, failAt } from '../errors';
 import { refuseType } from './refuse';
 import { isJsonObject, isJsonArray } from '../schemas/guards';
+import { readOwnKey, writeOwnKey } from '../utils/own-keys';
 
 export const opKeys = (node: KeysNode, context: EvalContext, evaluate: EvaluateFn): JsonValue => {
   const value = evaluate(node.$keys, context);
@@ -24,7 +25,7 @@ export const opFromEntries = (node: FromEntriesNode, context: EvalContext, evalu
     const entry = value[index];
     if (!isJsonArray(entry) || entry.length < 2)
       return failAt(`$fromEntries needs a list of [key, value] pairs, but item ${index} is ${describeValue(entry)}.`, ErrorCode.TYPE, { op: '$fromEntries' }, { node, op: '$fromEntries', form: true });
-    result[String(entry[0])] = entry[1]!;
+    writeOwnKey(result, String(entry[0]), entry[1] ?? null);
   }
   return result;
 };
@@ -34,7 +35,8 @@ export const opPick = (node: PickNode, context: EvalContext, evaluate: EvaluateF
   if (!isJsonObject(value)) return refuseType({ node, op: '$pick', field: 'from', needs: 'an object', got: value, written: node.$pick.from, contextOp: '$pick' });
   const result: JsonObject = {};
   for (const key of node.$pick.keys) {
-    if (key in value) result[key] = value[key]!;
+    const picked = readOwnKey(value, key);
+    if (picked !== undefined) writeOwnKey(result, key, picked);
   }
   return result;
 };
@@ -45,7 +47,7 @@ export const opOmit = (node: OmitNode, context: EvalContext, evaluate: EvaluateF
   const keysToOmit = new Set(node.$omit.keys);
   const result: JsonObject = {};
   for (const [k, v] of Object.entries(value)) {
-    if (!keysToOmit.has(k)) result[k] = v;
+    if (!keysToOmit.has(k)) writeOwnKey(result, k, v);
   }
   return result;
 };

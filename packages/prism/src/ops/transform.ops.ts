@@ -3,6 +3,7 @@ import type { HasNode, RenameKeysNode, UpdateNode, AssertNode, WalkNode } from '
 import { PrismError, ErrorCode, describeValue, failAt } from '../errors';
 import { refuseType } from './refuse';
 import { isJsonObject, isJsonArray } from '../schemas/guards';
+import { readOwnKey, writeOwnKey } from '../utils/own-keys';
 
 type Segment = string | number;
 
@@ -30,9 +31,9 @@ export const opRenameKeys = (node: RenameKeysNode, context: EvalContext, evaluat
   const renamedTo = new Set(Object.entries(map).filter(([from]) => Object.prototype.hasOwnProperty.call(value, from)).map(([, to]) => to));
   const result: JsonObject = {};
   for (const [key, v] of Object.entries(value)) {
-    const target = map[key];
-    if (target !== undefined) result[target] = v;
-    else if (!renamedTo.has(key)) result[key] = v;
+    const target = readOwnKey(map, key);
+    if (target !== undefined) writeOwnKey(result, target, v);
+    else if (!renamedTo.has(key)) writeOwnKey(result, key, v);
   }
   return result;
 };
@@ -41,7 +42,7 @@ const current = (value: JsonValue, path: readonly Segment[]): JsonValue => {
   let at: JsonValue = value;
   for (const segment of path) {
     if (typeof segment === 'number') at = isJsonArray(at) ? (at[segment] ?? null) : null;
-    else at = isJsonObject(at) ? (at[segment] ?? null) : null;
+    else at = isJsonObject(at) ? (readOwnKey(at, segment) ?? null) : null;
   }
   return at;
 };
@@ -56,7 +57,7 @@ const setIn = (value: JsonValue, path: readonly Segment[], next: JsonValue, full
     return value.map((item, i) => (i === head ? setIn(item, rest, next, full, node) : item));
   }
   const base: JsonObject = isJsonObject(value) ? value : {};
-  return { ...base, [head]: setIn(base[head] ?? null, rest, next, full, node) };
+  return { ...base, [head]: setIn(readOwnKey(base, head) ?? null, rest, next, full, node) };
 };
 
 export const opUpdate = (node: UpdateNode, context: EvalContext, evaluate: EvaluateFn): JsonValue => {

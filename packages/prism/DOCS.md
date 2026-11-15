@@ -20,6 +20,10 @@ A key that starts with `$` is an op's name. A plain object has none: `{ "$fetch"
 
 Every evaluation takes a `source` — the data the transformation reads from via `$ref`. `evaluate` accepts any JSON value (object, array, or scalar); `"$"` is the whole of it.
 
+Prism reads only the keys the data has: `$.constructor` on `{}` is a missing path, and `toString` is not a variable unless something binds it. A key called `__proto__` in the data (as `JSON.parse` makes it) is an ordinary key, read and written like any other.
+
+A config cannot carry a key called `__proto__`. Validation drops it without a word, so `validate` answers ok and the key is gone: from a plain object, a `$const` payload, a `$with` binding or a `$renameKeys` map. Data with such a key comes in through the source.
+
 ### Bindings and Variables
 
 `$ref` reads from source. `$var` reads from scoped variables created by `$with`, `$map`, `$filter`, `$reduce`, `$sortBy`, `$keyBy`, `$groupBy`, `$update`, and `$walk`.
@@ -576,6 +580,8 @@ removal. Changes to the grammar are strata migrations on `nisc.prism`
 
 Powered by [dayjs](https://day.js.org/). Date values can be ISO 8601 strings or Unix timestamps (milliseconds). A date-only string (`YYYY-MM-DD`) is parsed and computed in UTC, so the calendar day survives the round trip.
 
+A date and time with no zone (`2026-01-01T09:00`) is read in the time zone of the machine that runs Prism: `$date` answers `2026-01-01T08:00:00.000Z` on a server in Vienna and `2026-01-01T17:00:00.000Z` in Los Angeles. A `format` without `utc: true` prints in that zone too: `2026-01-01T09:00Z` with `"format": "HH:mm"` is `10:00` in Vienna and `01:00` in Los Angeles. For the same answer on every server, write the zone into the value (`Z` or `+01:00`) and pass `utc: true` when formatting.
+
 ### `$date` — Format a date
 ```json
 { "$date": { "value": { "$ref": "$.createdAt" } } }
@@ -816,6 +822,12 @@ Past any of them the evaluation throws `E_BUDGET`. `maxValues` counts a value
 each time it appears, as it would be serialized: a `$reduce` whose body is
 `[{ "$var": "acc" }, { "$var": "acc" }]` doubles its count with every item.
 
+A source nested deeper than the call stack reaches (tens of thousands of levels
+in Node) also throws `E_BUDGET` once the evaluation walks it. That stack has no
+limit to set; in Firefox the engine's own error comes through instead. A source that contains
+itself is not JSON: with `check: 'always'` it is refused as `E_TYPE`, naming
+where it refers back; unchecked, walking it stops with the same `E_BUDGET`.
+
 ## Error Codes
 
 | Code | Meaning |
@@ -828,7 +840,7 @@ each time it appears, as it would be serialized: a `$reduce` whose body is
 | `E_VAR_NOT_FOUND` | `$var` references undefined variable |
 | `E_NODE_SHAPE` | A node no op answers to, in a tree that never went through the schema |
 | `E_ASSERT` | A config's own `$assert` refused its input |
-| `E_BUDGET` | Evaluation went past a limit (see Limits) |
+| `E_BUDGET` | Evaluation went past a limit, or nested past the call stack (see Limits) |
 
 All errors are instances of `PrismError` with `.code` and optional `.context`.
 
