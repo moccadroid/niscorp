@@ -150,6 +150,7 @@ export const Input = Object.assign(
       };
 
       const onFocus = (): void => {
+        dispatched.clear();
         draft.value = props.value ?? '';
       };
       const onBlur = (): void => {

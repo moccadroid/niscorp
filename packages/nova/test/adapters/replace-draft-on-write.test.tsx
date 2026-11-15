@@ -20,6 +20,8 @@ const search = (props: Record<string, unknown>): ActionDefinition => ({
   triggers: [
     { message: 'clear', do: [{ set: 'q', value: '' }] },
     { message: 'reset', do: [{ set: 'q', value: 'x' }] },
+    { message: 'to-z', do: [{ set: 'q', value: 'z' }] },
+    { message: 'to-abc', do: [{ set: 'q', value: 'abc' }] },
   ],
 });
 
@@ -171,5 +173,32 @@ describe.each(KITS)('a focused bound field, in $name', (kit) => {
     field.wrap(() => field.el().blur());
     await settle();
     expect(dataOf(shell)['q']).toBe('x');
+  });
+
+  it('with replaceDraftOnWrite and a debounce: a write that leaves the stored value as it was changes nothing, and leaving the field writes the typing', async () => {
+    const { shell, field, settle } = await boot(kit, { replaceDraftOnWrite: true, debounce: 10_000 });
+    await field.type('abc');
+    await publish(shell, 'clear', field.wrap);
+    await settle();
+    expect(field.el().value).toBe('abc');
+    field.wrap(() => field.el().blur());
+    await settle();
+    expect(dataOf(shell)['q']).toBe('abc');
+  });
+
+  it('with replaceDraftOnWrite: a value the field sent before it was left is not taken for its echo when the action writes it later', async () => {
+    const { shell, field, settle } = await boot(kit, { replaceDraftOnWrite: true, debounce: 10_000 });
+    await field.type('abc');
+    field.wrap(() => field.el().blur());
+    await settle();
+    expect(dataOf(shell)['q']).toBe('abc');
+    await publish(shell, 'to-z', field.wrap);
+    await settle();
+    field.wrap(() => field.el().focus());
+    await settle();
+    expect(field.el().value).toBe('z');
+    await publish(shell, 'to-abc', field.wrap);
+    await settle();
+    expect(field.el().value).toBe('abc');
   });
 });

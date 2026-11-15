@@ -86,8 +86,10 @@ export const InputPropsSchema = z
       .boolean()
       .optional()
       .describe(
-        "While the field is focused, a new value at its model path replaces what is typed and drops any dispatch still waiting on debounce; the field's own dispatched values coming back do not. " +
-          'Set it when a step must clear or reset the field while it is focused, e.g. a `set` of the model path to "". ' +
+        'While the field is focused, a change of the value at its model path replaces what is typed and drops any dispatch still waiting on debounce, ' +
+          'unless the new value equals one the field has dispatched since it was focused. ' +
+          'A write that leaves the stored value as it was is no change: with `debounce`, a `set` to "" while the typing still waits and the stored value is still "" does nothing, ' +
+          'and leaving the field then dispatches the typing. ' +
           'Default: false — while focused, the field keeps what is typed and ignores its model value.',
       ),
   })

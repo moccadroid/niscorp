@@ -220,8 +220,10 @@ export const Input: NovaComponent = ({ novaModel, ...rest }) => {
   });
 
   useEffect(() => {
-    if (isFocused) setDraft((current) => current ?? server);
-    else
+    if (isFocused) {
+      dispatched.clear();
+      setDraft((current) => current ?? server);
+    } else {
       setDraft((current) => {
         if (current !== null && timer.current !== undefined) {
           clearPending();
@@ -229,6 +231,7 @@ export const Input: NovaComponent = ({ novaModel, ...rest }) => {
         }
         return null;
       });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- focus edge only
   }, [isFocused]);
 

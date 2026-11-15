@@ -184,15 +184,20 @@ or bound inputs drop keystrokes the moment the shell is remote:
   makes a served `debounce` a no-op in your terminal, so the same layout behaves
   differently across renderers.
 - **Honour `replaceDraftOnWrite` on a `model`-bound node.** With
-  `props.replaceDraftOnWrite === true`, a focused field still ignores the
-  echoes of what it dispatched, but a new tree value that is none of them was
-  written by the action: it replaces the in-progress value, drops a pending
-  debounced dispatch (which would write the old text back), and the caret goes
-  to the end. Keep the values the field dispatched since the tree last caught
-  up; a tree value equal to the last of them empties the list, and so does a
-  written one. This is how a step clears a focused field (a `set` of its model
-  path to `""`). Without the prop, the first obligation stands as written. The
-  React, Vue, DOM and Ink adapters implement it.
+  `props.replaceDraftOnWrite === true`, a focused field still ignores a new
+  tree value equal to one it dispatched since it was focused (its echo), but
+  any other change of the tree value replaces the in-progress value, drops a
+  pending debounced dispatch (which would write the old text back), and puts
+  the caret at the end. Keep the values the field dispatched; empty the list
+  when the field is focused, when a tree value equals the last of them, and
+  when a value replaces the draft. Only a change of the tree value counts: a
+  write that leaves the stored value as it was reaches no adapter. So without
+  `debounce` (each keystroke already stored) a `set` of the model path to
+  `""` clears the field, but with `debounce`, while the typing still waits and
+  the stored value is still `""`, the same `set` does nothing, and leaving the
+  field then dispatches the typing. Without the prop, the first obligation
+  stands as written. The React, Vue, DOM and Ink adapters implement it; the
+  React, Vue and DOM ones are tested, Ink's is not.
 
 These belong to *every* adapter because they are artifacts of the transport, not
 of taste — unlike styling, hover, or animation, which *should* differ per kit.

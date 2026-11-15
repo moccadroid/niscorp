@@ -88,7 +88,10 @@ export const Input: NovaComponent<InputProps> = ({
     }
   };
 
-  const onFocus = (): void => setDraft(value ?? '');
+  const onFocus = (): void => {
+    dispatched.clear();
+    setDraft(value ?? '');
+  };
   const onBlur = (): void => {
     if (timer.current !== undefined && draft !== null) {
       clearPending();
