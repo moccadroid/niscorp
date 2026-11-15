@@ -341,8 +341,8 @@ two sizes and the width).
 **Narrow inputs and one owner are held by none of the four**: they are read
 for in review, and the table above is what a review found, not what a build
 checks. What each gate holds is said at the top of its script. The rules
-as somebody changing a package follows them are in the application guide,
-"Changing a package" (`packages/nisc/AGENTS.md`).
+as somebody changing a package follows them are in
+`packages/nisc/CHANGING_A_PACKAGE.md`.
 
 ---
 

@@ -13,8 +13,8 @@ You are adding one module to `@niscorp/moss`, the app server of nisc. You have
 none of the conversation this plan came out of, and you do not need it: what
 was decided is here.
 
-**Read first, in this order.** `packages/nisc/AGENTS.md`, whole: its last
-part, "Changing a package", binds this work. `packages/nisc/STYLE_GUIDE.md`.
+**Read first, in this order.** `packages/nisc/AGENTS.md`, whole, and
+`packages/nisc/CHANGING_A_PACKAGE.md`, which binds this work. `packages/nisc/STYLE_GUIDE.md`.
 `packages/moss/DESIGN.md`, "How the code is laid out". Then
 [moss-refactor.md](moss-refactor.md): how moss is built, and in its part 6 the
 owner's standing decisions. Then this file. Then the code part 4 names.

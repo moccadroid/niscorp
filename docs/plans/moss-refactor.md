@@ -39,7 +39,7 @@ Which module may import which is one table, in `scripts/check-modules.mts`.
 
 ## 2. The rules
 
-They are in `packages/nisc/AGENTS.md`, "Changing a package": one door per
+They are in `packages/nisc/CHANGING_A_PACKAGE.md`: one door per
 module, declared dependencies with no cycle, one owner per table and per piece
 of state, narrow inputs (never the whole manifest or runtime), parse where it
 enters, nothing at the top of `src/` but `index.ts`, and the sizes. A function

@@ -166,7 +166,7 @@ Plain `name.ts` is fine when the file's role is obvious from context or when it'
 
 ## Modules
 
-A package that holds more than one concern is made of modules. The rules, and how something new gets in, are in AGENTS.md, "Changing a package". What is longer than a rule is here.
+A package that has more than one concern is made of modules. The rules, and how something new gets in, are in `CHANGING_A_PACKAGE.md`, beside this file. What is longer than a rule is here.
 
 **A module has one door.** A module is a directory under `src/` with an `index.ts`. Code in another module imports the door (`../identity`), never a file behind it (`../identity/cache`). An entry point of the package is a door (`node/index.ts` is `@niscorp/moss/node`), or one file beside it that exports only what is published (`shells/unverified.ts` is `@niscorp/moss/unverified`). A helper is not merged into an entry file where that would export it. Which question a module answers is in the package's `DESIGN.md`, not in a comment on its door.
 
@@ -174,7 +174,7 @@ A package that holds more than one concern is made of modules. The rules, and ho
 
 **A seam belongs to the module that answers the question.** A feature reaches the core through one object it is handed when it starts. Each member is one function or one narrow value, and each is there because a feature uses it; one that stops being used is taken out, and one is not added for a feature that might want it. The object is made for the feature it is handed to. A member that reaches something owned (a table, a set of actions, the documents in a row) is bound to that feature and takes no name of one, so a feature cannot ask for what is another's; what a feature owns it says on itself, where it can be read before it runs (`Feature.tables`). No member carries a secret: a setting only one feature needs is that feature's own configuration.
 
-**What each gate reads.** What each fails on is the table in AGENTS.md, "Changing a package".
+**What each gate reads.** What each fails on is the table in `CHANGING_A_PACKAGE.md`, "The gates".
 
 - `scripts/check-modules.mts`. `PACKAGES` holds, for each package it knows, which module may import which and which modules are features. It reads the relative imports and re-exports of every `.ts` and `.tsx` file under `src/`.
 - `scripts/check-api.mts`. `ENTRIES` maps each entry point of a package to its source file, and the record is `packages/<name>/api.txt`, one line for each exported name. `pnpm check:api --write` records what is exported now; the diff of `api.txt` is what a reviewer reads.
