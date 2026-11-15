@@ -7,5 +7,5 @@ export { createScopeChain, pushScope } from './scope';
 
 export { getPath, setPath, deletePath } from './paths';
 
-export { resolve, resolvePath } from './resolve';
+export { resolve, resolveEncodingValues, resolvePath } from './resolve';
 export type { ExtraScopes } from './resolve';

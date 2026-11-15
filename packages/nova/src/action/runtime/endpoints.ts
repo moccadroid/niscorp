@@ -1,4 +1,4 @@
-import { createScopeChain, resolve } from '@shared/bindings';
+import { createScopeChain, resolve, resolveEncodingValues } from '@shared/bindings';
 import { hasKey, ownEntry } from '@shared/common';
 import type { ScopeChain } from '@shared/bindings';
 import type { EndpointConfig, FunctionEndpointConfig, HttpEndpointConfig } from '../schemas';
@@ -88,7 +88,7 @@ const callHttpEndpoint = async (
   { data, fetch: fetchFn = defaultFetch, transform, signal }: CallEndpointOptions,
 ): Promise<EndpointResult> => {
   const chain = createScopeChain(data);
-  const resolvedUrl = resolve(endpoint.url, chain);
+  const resolvedUrl = endpoint.encodeValues === true ? resolveEncodingValues(endpoint.url, chain) : resolve(endpoint.url, chain);
   const url = typeof resolvedUrl === 'string' ? resolvedUrl : String(resolvedUrl ?? '');
   const headers = resolveHeaders(endpoint.headers, chain);
 

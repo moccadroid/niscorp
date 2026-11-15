@@ -4,6 +4,14 @@ const HttpEndpointSchema = z
   .object({
     url: z.string().describe('Template URL, e.g. "/api/users/{{$.userId}}".'),
     method: z.enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']).describe('HTTP method.'),
+    encodeValues: z
+      .boolean()
+      .optional()
+      .describe(
+        'Encode each {{…}} value placed into the url with encodeURIComponent, so a `/`, `?`, `#` or `&` in it stays inside that one segment or query value; ' +
+          'leave it off for a value meant to carry `/` (a base url, a path). A url that is only one {{…}} or a bare `$` path is the whole url and is not encoded. ' +
+          'Default: false, values go in as they are.',
+      ),
     headers: z.record(z.string(), z.string()).optional().describe('Static request headers.'),
     request: z
       .unknown()
