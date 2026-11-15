@@ -315,6 +315,8 @@ Source: `{ "progress": { "phrase": "{n} of {total}", "slots": { "n": 1, "total":
 
 Takes a node that evaluates to a pattern value `{ phrase, slots }` and replaces each `{name}` hole with its slot, in the source language. A slot that is itself a pattern is filled recursively; a hole with no slot (or a null one) is left as written. Anything that is not a pattern passes through unchanged.
 
+The text is measured at each level it fills, so a pattern whose text grows past `maxStringLength` is refused (`E_BUDGET`) as soon as it does. A slot used twice in its phrase still doubles the work at each level of nesting: when the text does not grow (the innermost slot is `""`), nothing is refused, and 24 such levels take seconds.
+
 ### `$trim`
 ```json
 { "$trim": { "$const": "  hello  " } }

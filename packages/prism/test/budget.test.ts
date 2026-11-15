@@ -25,9 +25,7 @@ describe('the evaluation budget', () => {
   it('stops a $fill whose slots double the text at each level before it builds the whole text', () => {
     let phrase: unknown = 'x';
     for (let i = 0; i < 25; i++) phrase = { phrase: '{a}{a}', slots: { a: phrase } };
-    const started = Date.now();
-    expect(() => evaluate({ $fill: { $ref: '$.p' } }, { p: phrase }, { limits: { maxStringLength: 1000 } })).toThrow(/limit 1000/);
-    expect(Date.now() - started).toBeLessThan(200);
+    expect(() => evaluate({ $fill: { $ref: '$.p' } }, { p: phrase }, { limits: { maxStringLength: 1000 } })).toThrow(/a string of \d{4} characters \(limit 1000\)/);
     expect(evaluate({ $fill: { $ref: '$.p' } }, { p: { phrase: '{n} items', slots: { n: 3 } } })).toBe('3 items');
   });
 
