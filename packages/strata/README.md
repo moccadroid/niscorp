@@ -183,6 +183,13 @@ const { document, stamp, applied } = upgrader.upgrade(storedAction, { kind: 'nis
   nova's `children` is a lone node or an array. Every document of a step's kind
   is found at any depth and rewritten on its own, deepest first; a transform
   only ever sees one node.
+- **Embedding paths have no version.** Every migration finds nested documents
+  through the paths `embeds` declares now, whatever the document's stamp. A
+  migration that renames the key a kind is embedded under (`children` →
+  `items`) therefore keeps the old path in `embeds` beside the new one
+  (`{ 'children[]': …, 'items[]': … }`), for good: with the new path alone, the
+  nested documents of a document written before the rename are not found, are
+  not migrated, and are stamped current with their parent.
 - **The transform is injected** — `(config, source) => unknown`, nova's socket.
   Under moss it is Prism's `evaluate`; a migration runs exactly like an endpoint.
   The source is `{ document, path }`.
