@@ -197,6 +197,16 @@ describe('strata upgrade — it removes only what it wrote', () => {
     expect(readdirSync(outside)).toEqual(['theirs.txt']);
   });
 
+  it('a plan.json that names a path outside expected/ has nothing removed for it', async () => {
+    const a = app('.');
+    writeFileSync(join(a.root, 'package.json'), '{}\n');
+    writeFileSync(join(a.root, 'plan.json'), JSON.stringify({ documents: [{ kind: '..', id: 'package' }] }));
+    await a.run([forms([])], 'init');
+
+    expect(await a.run(next, 'upgrade')).toBe(0);
+    expect(existsSync(join(a.root, 'package.json'))).toBe(true);
+  });
+
   it('by default verify removes .strata/upgrade, and keeps anything else in .strata', async () => {
     const a = app();
     await a.run([forms([])], 'init');

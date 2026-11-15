@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { join, relative, sep } from 'node:path';
+import { isAbsolute, join, relative, sep } from 'node:path';
 import { createUpgrader, type Stamp, type Transform, type Upgrader } from '../documents';
 import type { Sequence } from '../schema';
 import type { GrammarSchema } from '../check';
@@ -62,7 +62,8 @@ const workspaceOf = async (options: SourceUpgradeOptions): Promise<Workspace> =>
   const expectedPathOf = (doc: { kind: string; id: string }): string => join(work, 'expected', doc.kind.replace(/[^a-z0-9.-]/gi, '_'), `${doc.id.replace(/[^A-Za-z0-9._-]/g, '_')}.json`);
 
   // The work directory can be any directory, the project's own included: only the files a plan wrote
-  // are removed, and a directory only once it is empty.
+  // are removed, and a directory only once it is empty. plan.json is read back from disk, so a path it
+  // names is removed only when it lies inside expected/.
   const removeIfEmpty = (dir: string): void => {
     if (existsSync(dir) && statSync(dir).isDirectory() && readdirSync(dir).length === 0) rmdirSync(dir);
   };
@@ -75,9 +76,14 @@ const workspaceOf = async (options: SourceUpgradeOptions): Promise<Workspace> =>
     } catch {
       planned = [];
     }
-    for (const doc of planned) rmSync(expectedPathOf(doc), { force: true });
-    for (const doc of planned) removeIfEmpty(join(expectedPathOf(doc), '..'));
-    removeIfEmpty(join(work, 'expected'));
+    const expected = join(work, 'expected');
+    const written = planned.map(expectedPathOf).filter((path) => {
+      const inside = relative(expected, path);
+      return inside !== '' && !inside.startsWith('..') && !isAbsolute(inside);
+    });
+    for (const path of written) rmSync(path, { force: true });
+    for (const path of written) removeIfEmpty(join(path, '..'));
+    removeIfEmpty(expected);
     rmSync(planPath, { force: true });
     rmSync(reportPath, { force: true });
   };
