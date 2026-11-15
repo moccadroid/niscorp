@@ -878,7 +878,7 @@ still refused. A mutation entry takes `reach` the same way (`SeedMutation.reach`
 and the write is compiled at that profile whoever asks.
 
 The host supplies `policyForReach(reach)` (hono: `getPolicyForReach(c, reach)`),
-because vex holds neither grants nor behaviors. **The handler fails closed both
+because vex knows neither grants nor behaviors. **The handler fails closed both
 ways:** an entry declaring a reach no host can resolve is a 500, and a host
 returning `undefined` is a 403. Falling back to the caller's own reach would be
 silent, and silence is the whole risk — the read would answer, with too much.

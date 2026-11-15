@@ -57,7 +57,7 @@ const findClosest = (target: string, candidates: string[]): string | undefined =
   return undefined;
 };
 
-// `taken` holds every name a path of this query can start with: an alias is
+// `taken` is every name a path of this query can start with: an alias is
 // never one of them, so `<alias>.<column>` never reads as a path the query wrote.
 type AliasCounter = { counts: Map<string, number>; taken: ReadonlySet<string> };
 
