@@ -107,6 +107,12 @@ describe('generate — every app the questions can make', () => {
     expect(page).toContain('plain DOM');
   });
 
+  it('an app behind moss does not depend on tide, which nothing in it imports', () => {
+    const manifest = JSON.parse(read(make(completed(catalog, { shell: 'moss' }), 'no-tide').dir, 'package.json'));
+    expect(manifest.dependencies['@niscorp/moss']).toBe('^0.4.3');
+    expect(manifest.dependencies['@niscorp/tide']).toBeUndefined();
+  });
+
   it('a model-first PLAN.md leaves open who may ask the model: today everyone, and everyone spends the key', () => {
     const plan = read(make(completed(catalog, { kind: 'model-first' }), 'plan-model').dir, 'PLAN.md');
     const open = plan.slice(plan.indexOf('## The dial-in — open'), plan.indexOf('## Order of work'));

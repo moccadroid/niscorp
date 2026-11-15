@@ -12,3 +12,4 @@ The README's `env` row names an option's `hint`, which the question shows.
 A new model-first app reads its own `.env` wherever the command is run from (`nisc build --root app` from the folder above found no key before).
 A new model-first app's words match its code: the `ask` function's description says it is sent `{ asked }`, and its AGENTS.md names `begin` and `said` and counts the tour's places right.
 A new model-first app's PLAN.md lists, as open, who may ask the model: as made, everyone (`public`), so anybody who reaches the deployed app spends the Groq key; its AGENTS.md says the same under "Deploying".
+A new app behind moss no longer depends on `@niscorp/tide`, which nothing in it imports; an app that wants tide adds it.
