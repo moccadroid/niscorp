@@ -103,7 +103,9 @@ export const WalkNodeSchema = z
   })
   .strict()
   .describe(
-    'Rewrite every node of a tree — objects, arrays and leaves, at any depth — by rules. Structural: it always terminates, and a ' +
-      'replacement is never walked again at its own level.',
+    'Rewrite every node of a tree — objects, arrays and leaves, at any depth — by rules. A replacement is never walked again at its ' +
+      'own level. With post (the default) the walk never goes into a replacement, so it always ends. With pre it goes into each ' +
+      'replacement\'s children: if every replacement again contains a node a rule matches, the walk does not end and the run stops ' +
+      'at the budget (E_BUDGET).',
   );
 export type WalkNode = z.infer<typeof WalkNodeSchema>;

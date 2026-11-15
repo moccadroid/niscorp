@@ -561,7 +561,10 @@ Visits every node — objects, arrays and leaves, at any depth — and replaces 
 with the first rule whose `when` holds (bound to `as`); no rule, the node stays.
 `"order": "post"` (default) rewrites children first, so a node's rules see them
 rewritten; `"pre"` applies the rules first and descends into the result. A
-replacement is never walked again at its own level, so it always terminates. A
+replacement is never walked again at its own level. With `post` the walk never
+goes into a replacement, so it always ends. With `pre` it goes into each
+replacement's children: if every replacement again contains a node a rule
+matches, the walk does not end, and the run stops at the budget (`E_BUDGET`). A
 walk visits objects too: guard a string op with a type check
 (`{ "$and": [{ "$eq": [{ "$type": { "$var": "n" } }, "string"] }, …] }`).
 

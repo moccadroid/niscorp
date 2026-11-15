@@ -134,6 +134,11 @@ describe('$walk — every node of a tree, any depth', () => {
     const out = await both({ $walk: { over: { $ref: '$.t' }, as: 'n', rules: [{ when: { $eq: [{ $type: { $var: 'n' } }, 'number'] }, then: [{ $var: 'n' }] }] } }, { t: [1, 2] });
     expect(out).toEqual([[1], [2]]);
   });
+
+  it('pre-order: when every replacement again contains a node a rule matches, the walk does not end and the budget stops it', () => {
+    const wrap = { $walk: { over: { $ref: '$.t' }, as: 'n', order: 'pre', rules: [{ when: { $eq: [{ $type: { $var: 'n' } }, 'string'] }, then: [{ $var: 'n' }] }] } };
+    expect(() => evaluate(wrap, { t: 'a' }, { limits: { maxSteps: 10_000 } })).toThrow(expect.objectContaining({ code: 'E_BUDGET' }));
+  });
 });
 
 describe('$ref: "$" — the whole source', () => {
