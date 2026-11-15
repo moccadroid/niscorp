@@ -1391,7 +1391,8 @@ It's a Hono app — mount it, extend it, or hand it to a listener.
 - `charterReport(): VerifyReport` — the report `verifyCharter` gave this server:
   boot's, then that of each change that passed. `{ errors, warnings,
   perRole }`, over the universes boot resolved against. Boot and `refresh` read
-  `errors` alone and print nothing of the rest, so this is where a host reads
+  `errors`, and boot prints the `shape` warnings (a key the charter does not
+  read, a string where a list belongs) and nothing else, so this is where a host reads
   it, to draw, log or hold a deploy on: `warnings` (an action no role grants, an
   `allow` that matches nothing) and each role's closure `issues`. `errors` is
   always empty here. A push whose target is a binding (`@event.payload`,
@@ -1945,7 +1946,8 @@ app that resolves people through `identity`.
   report is `{ errors, said, charter }`: `errors` is `{ check, detail }[]`,
   `check` one of `'actions'` (a definition nova's schema does not read),
   `'charter'`, `'reach'` and `'variants'`; `said` is what a boot only says (a
-  chain of steps that never ends), and `charter` is the charter engine's whole
+  chain of steps that never ends, a role that allows every function, and the
+  charter's `shape` warnings), and `charter` is the charter engine's whole
   report. A boot refuses on `errors`. A running server answers for what is in
   force with `server.charterReport()`. It verifies and does nothing else: what
   it is handed is not read by the manifest's schema and is not frozen.

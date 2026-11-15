@@ -194,6 +194,7 @@ export const verifyManifest = (candidate: ManifestCandidate): ManifestReport => 
     said: [
       ...endlessChains(read.actions).map((chain) => `a chain of steps that never ends: ${chain.path} — nova stops it at its budget when it runs (RUNAWAY_CHAIN)`),
       ...everyFunctionGranted(read.charter),
+      ...charter.warnings.flatMap((warning) => (warning.rule === 'shape' ? [`charter: ${warning.detail}`] : [])),
     ],
     charter,
   };

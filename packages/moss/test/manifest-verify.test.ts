@@ -239,6 +239,16 @@ describe('verifyApp — the check boot runs, for an app that is not booted', () 
     expect(both.errors.map((error) => error.check)).toContain('variants');
     expect(both.errors.find((error) => error.detail.includes('the combination [admin, auditor]'))?.detail).toContain('holds 2 variants of "home"');
   });
+
+  it('a key the charter does not read, or a string where a list belongs, does not refuse the boot and is said by it', () => {
+    const charter: ShippedManifest['charter'] = JSON.parse('{"public":["home"],"admin":{"allow":["*"],"denny":["admin.panel"]},"auditor":{"actions":"home"}}');
+    const report = verifyApp({ ...app, charter, layouts: {} }, grants);
+    expect(report.errors).toEqual([]);
+    expect(report.said).toEqual([
+      'charter: role "admin" has the key "denny", which the charter does not read: what it lists does not apply',
+      'charter: role "auditor": "actions" is the string "home", which grants nothing: a section is a list of globs or { allow, deny }',
+    ]);
+  });
 });
 
 describe('refusalOf — the sentence a refusal is thrown with', () => {
