@@ -387,8 +387,10 @@ resolves after the first, and the set it was given is the one loaded. Before
 the first load, `advance` matches no fact and fans out no run; both wait for it.
 `LoadReport` carries `{ loaded, cycles, blind, warnings, refused }` — guarded
 cycles are legal and reported; effects with no `writes` are reported as
-blind edges; `warnings` names a reflex that subscribes to its own run and a
-reflex whose `timeoutMs` is not shorter than `leaseMs`; `refused` is each reflex `isolate` left out, as
+blind edges; `warnings` names a reflex that subscribes to its own run, a
+reflex whose `timeoutMs` is not shorter than `leaseMs`, and a one-shot clock
+whose date does not exist (`2026-02-30`), with the day it fires on (2 March);
+`refused` is each reflex `isolate` left out, as
 `{ reflexId, code, message }` (`reflexId` is undefined for one that had none),
 and is empty without it. Calling it again is how a host changes what is running,
 including turning one off. The tasks of a reflex left out are not claimed until

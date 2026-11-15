@@ -1,4 +1,5 @@
-import { FactInputSchema, factOf } from './schemas';
+import { FactInputSchema, clockOf, factOf, isRecurring } from './schemas';
+import { occurrencesBetween, zonedParts } from './engine/occurrence';
 import type { Reflex, ReflexInput } from './schemas';
 import { TideError } from './errors';
 import type {
@@ -59,6 +60,21 @@ const DEFAULT_MAX_CHAIN_DEPTH = 24;
 const DEFAULT_MAX_CHAIN_FACTS = 10_000;
 const DEFAULT_MAX_FAN_OUT = 10_000;
 const DEFAULT_LEASE_MS = 300_000;
+
+// Such a clock loads, and fires on the day its date runs on to ("2026-02-30" → 2 March).
+const missingDateWarnings = (reflex: Reflex): string[] => {
+  const clock = clockOf(reflex.on);
+  if (clock === undefined || isRecurring(clock)) return [];
+  const named = clock.at.slice(0, 10);
+  const [year = 0, month = 0, day = 0] = named.split('-').map(Number);
+  const asWritten = new Date(Date.UTC(year, month - 1, day));
+  if (asWritten.getUTCFullYear() === year && asWritten.getUTCMonth() === month - 1 && asWritten.getUTCDate() === day) return [];
+  const [fires] = occurrencesBetween(clock, -Infinity, Infinity, 1);
+  if (fires === undefined) return [];
+  const local = zonedParts(fires.at, clock.tz);
+  const on = [local.year, local.month, local.day].map((part, index) => String(part).padStart(index === 0 ? 4 : 2, '0')).join('-');
+  return [`${reflex.id}: clock.at names ${named}, which does not exist — it fires on ${on}`];
+};
 
 export const createTide = (config: TideConfig): Tide => {
   const loaded = new Map<string, LoadedReflex>();
@@ -135,7 +151,7 @@ export const createTide = (config: TideConfig): Tide => {
         (reflex) =>
           `${reflex.id}: timeoutMs ${reflex.policy.timeoutMs} is not shorter than leaseMs ${deps.leaseMs} — another instance may claim the task again while its effect still runs`,
       );
-    return { loaded: parsed.length, cycles: graph.cycles, blind: graph.blind, warnings: [...graph.warnings, ...leaseWarnings], refused };
+    return { loaded: parsed.length, cycles: graph.cycles, blind: graph.blind, warnings: [...graph.warnings, ...leaseWarnings, ...parsed.flatMap(missingDateWarnings)], refused };
   };
 
   const mergedEffects = (parsed: readonly Reflex[]): EffectRegistry => {
