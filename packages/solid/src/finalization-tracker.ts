@@ -5,40 +5,40 @@ export type FinalizationTracker = {
   isFinal: (path: string) => boolean;
   isRootFinal: () => boolean;
   getContainerKeys: (path: string) => readonly string[] | undefined;
+  getChildIndex: (path: string, key: string) => number | undefined;
 };
+
+// `settled` counts the leading keys already marked final.
+type Container = { keys: string[]; indexOf: Map<string, number>; settled: number };
 
 export const createFinalizationTracker = (): FinalizationTracker => {
   const finalized = new Set<string>();
   let isRootFinal = false;
 
-  const keysPerContainer = new Map<string, string[]>();
+  const containers = new Map<string, Container>();
 
-  const finalizePath = (path: string): void => {
-    if (finalized.has(path)) return;
-    finalized.add(path);
+  const childPathOf = (containerPath: string, key: string): string =>
+    containerPath === '' ? key : `${containerPath}.${key}`;
+
+  const settle = (containerPath: string): void => {
+    const container = containers.get(containerPath);
+    if (!container) return;
+    const { keys } = container;
+    for (let index = container.settled; index < keys.length; index += 1) {
+      const key = keys[index];
+      if (key === undefined) continue;
+      finalized.add(childPathOf(containerPath, key));
+    }
+    container.settled = keys.length;
   };
 
-  const finalizePreviousSiblings = (containerPath: string, newKey: string): void => {
-    const keys = keysPerContainer.get(containerPath);
-    if (!keys) return;
-    for (const key of keys) {
-      if (key === newKey) break;
-      const siblingPath = containerPath === '' ? key : `${containerPath}.${key}`;
-      finalizePath(siblingPath);
-      finalizeDescendants(siblingPath);
-    }
-  };
-
-  const finalizeDescendants = (path: string): void => {
-    const prefix = path + '.';
-    for (const [containerPath, keys] of keysPerContainer) {
-      if (containerPath === path || containerPath.startsWith(prefix)) {
-        for (const key of keys) {
-          const childPath = containerPath === '' ? key : `${containerPath}.${key}`;
-          finalizePath(childPath);
-        }
-      }
-    }
+  const enterChild = (containerPath: string, key: string): void => {
+    const container = containers.get(containerPath);
+    if (!container) return;
+    if (container.indexOf.has(key)) return;
+    settle(containerPath);
+    container.indexOf.set(key, container.keys.length);
+    container.keys.push(key);
   };
 
   const process = (events: ParserEvent[]): void => {
@@ -46,41 +46,23 @@ export const createFinalizationTracker = (): FinalizationTracker => {
       switch (event.type) {
         case 'enterObject':
         case 'enterArray': {
-          if (!keysPerContainer.has(event.path)) {
-            keysPerContainer.set(event.path, []);
+          if (!containers.has(event.path)) {
+            containers.set(event.path, { keys: [], indexOf: new Map(), settled: 0 });
           }
           break;
         }
 
-        case 'enterKey': {
-          const keys = keysPerContainer.get(event.path);
-          if (keys && !keys.includes(event.key)) {
-            finalizePreviousSiblings(event.path, event.key);
-            keys.push(event.key);
-          }
+        case 'enterKey':
+          enterChild(event.path, event.key);
           break;
-        }
 
-        case 'enterIndex': {
-          const keys = keysPerContainer.get(event.path);
-          const indexStr = String(event.index);
-          if (keys && !keys.includes(indexStr)) {
-            finalizePreviousSiblings(event.path, indexStr);
-            keys.push(indexStr);
-          }
+        case 'enterIndex':
+          enterChild(event.path, String(event.index));
           break;
-        }
 
         case 'leaveObject':
         case 'leaveArray': {
-          const keys = keysPerContainer.get(event.path);
-          if (keys) {
-            for (const key of keys) {
-              const childPath = event.path === '' ? key : `${event.path}.${key}`;
-              finalizePath(childPath);
-              finalizeDescendants(childPath);
-            }
-          }
+          settle(event.path);
           if (event.path === '') {
             isRootFinal = true;
           }
@@ -97,6 +79,7 @@ export const createFinalizationTracker = (): FinalizationTracker => {
     process,
     isFinal: (path) => finalized.has(path) || isRootFinal,
     isRootFinal: () => isRootFinal,
-    getContainerKeys: (path) => keysPerContainer.get(path),
+    getContainerKeys: (path) => containers.get(path)?.keys,
+    getChildIndex: (path, key) => containers.get(path)?.indexOf.get(key),
   };
 };
