@@ -261,6 +261,20 @@ lock for a source that has never had one.
 
 See [DESIGN.md](./DESIGN.md) and [the plan](../../docs/plans/versioning.md).
 
+## `INVALID_SEQUENCE`
+
+One code covers input strata cannot read as what it was given for; the error's
+sentence says which:
+
+| Refused | Where |
+|---|---|
+| a sequence that does not parse, `null` included | `prepare` |
+| two sequences with one id | `prepare` |
+| a ledger `table` or `schema`, or a store's table, schema or column, that is not a plain identifier | `migrate`, `status`, `readLedger`, `ledgerDdl`, `upgradeStore` |
+| a store whose `key` names no column | `upgradeStore` |
+| a `strata.lock.json` that is not a lock, or has an entry that is not a whole number of migrations | `runSourceUpgrade` |
+| two artifacts with one kind and id | `planSourceUpgrade`, `runSourceUpgrade` |
+
 ## License
 
 Apache-2.0
