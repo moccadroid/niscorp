@@ -3,7 +3,7 @@ import { basename, relative, resolve } from 'node:path';
 import { cancel, confirm, intro, isCancel, note, outro, password, select, text } from '@clack/prompts';
 import { envOf, isChoice, itemsOf, offered, readCatalog } from './catalog';
 import type { Catalog, EnvKey, Item, Question } from './catalog';
-import { TEMPLATES, generate, validName } from './generate';
+import { TEMPLATES, generate, refuseFileInTheWay, validName } from './generate';
 import { testedSet } from './set';
 
 const DEFAULT_DIR = 'my-nisc-app';
@@ -99,6 +99,7 @@ const main = async (): Promise<void> => {
   const dir = resolve(dirInput === '' ? DEFAULT_DIR : dirInput);
   const name = basename(dir);
   if (!validName(name)) refuse(`"${name}" cannot be a package name — the folder’s name becomes it: lowercase letters, digits, - . _`);
+  refuseFileInTheWay(dir);
 
   const holds = existsSync(dir) ? readdirSync(dir).length : 0;
   if (holds > 0 && ask) {

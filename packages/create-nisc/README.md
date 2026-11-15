@@ -98,12 +98,15 @@ And the documents:
 It never overwrites. A folder that already holds something is fine — a fresh
 repository's `.git`, a `LICENSE` — as long as nothing a new app would write is
 there. Your `README.md` is kept; your `.gitignore` gets the lines it lacks. If
-anything else it would write already exists, it writes **nothing** and names
-the files; make the app in a subfolder instead:
+anything else it would write already exists, or a file stands where it needs a
+folder (a file named `src`), it writes **nothing** and names them; make the app
+in a subfolder instead:
 
 ```bash
 npm create nisc site -- --page --dom
 ```
+
+A folder that is a file, or inside one, is refused before anything is asked.
 
 ## How an app is put together
 

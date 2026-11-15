@@ -155,6 +155,14 @@ describe('generate — a folder that already holds something', () => {
     expect(read(dir, 'PLAN.md')).toBe('my plan');
     expect(readdirSync(dir).sort()).toEqual(['PLAN.md', 'package.json']);
   });
+
+  it('a file where the app needs a folder is in the way too: nothing is written, and it says which', () => {
+    const dir = join(scratch, 'blocked');
+    mkdirSync(dir);
+    writeFileSync(join(dir, 'src'), 'mine');
+    expect(() => generate({ dir, name: 'blocked', picks: completed(catalog, {}), versions: SET, today: TODAY })).toThrow(/already has a file a new app would write — nothing was written:\n {2}src \(a file, where the app needs a folder\)\n/);
+    expect(readdirSync(dir)).toEqual(['src']);
+  });
 });
 
 describe('generate — what it refuses, before writing anything', () => {
@@ -169,6 +177,14 @@ describe('generate — what it refuses, before writing anything', () => {
     const { '@niscorp/vex': _gone, ...short } = SET;
     expect(() => generate({ dir, name: 'short-set', picks: completed(catalog, {}), versions: short, today: TODAY })).toThrow(/no @niscorp\/vex/);
     expect(existsSync(dir)).toBe(false);
+  });
+
+  it('a folder that is a file, or inside one', () => {
+    const file = join(scratch, 'a-file');
+    writeFileSync(file, 'mine');
+    for (const dir of [file, join(file, 'app')]) {
+      expect(() => generate({ dir, name: 'app', picks: completed(catalog, {}), versions: SET, today: TODAY })).toThrow(`create-nisc: ${file} is a file, and the app needs a folder there. Make it somewhere else.`);
+    }
   });
 
   it('a question left unanswered', () => {

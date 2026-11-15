@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
-import { dirname, extname, join } from 'node:path';
+import { dirname, extname, join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { envOf, isChoice, itemsOf, partsOf, readCatalog } from './catalog';
 import type { EnvKey, EnvSpec, Item, Part, Picks } from './catalog';
@@ -35,6 +35,16 @@ const DEPENDENCIES = ['dependencies', 'devDependencies'] as const;
 
 // npm's rule for a package name.
 export const validName = (name: string): boolean => /^[a-z0-9][a-z0-9._-]*$/.test(name) && name.length <= 214;
+
+const fileInTheWayOf = (folder: string): string | undefined => {
+  if (existsSync(folder)) return statSync(folder).isDirectory() ? undefined : folder;
+  return dirname(folder) === folder ? undefined : fileInTheWayOf(dirname(folder));
+};
+
+export const refuseFileInTheWay = (folder: string): void => {
+  const file = fileInTheWayOf(folder);
+  if (file !== undefined) throw new Error(`create-nisc: ${file} is a file, and the app needs a folder there. Make it somewhere else.`);
+};
 
 const filesIn = (dir: string, base = ''): string[] =>
   existsSync(join(dir, base))
@@ -155,7 +165,7 @@ export const generate = (options: CreateOptions): Created => {
   const items = itemsOf(catalog, options.picks);
   const parts = partsOf(items);
   if (!validName(options.name)) throw new Error(`create-nisc: "${options.name}" is not a package name (lowercase letters, digits, - . _)`);
-  if (existsSync(options.dir) && !statSync(options.dir).isDirectory()) throw new Error(`create-nisc: ${options.dir} is a file`);
+  refuseFileInTheWay(options.dir);
 
   const planned = new Map<string, string | Buffer>();
   for (const [rel, { from }] of sourcesOf(catalog.root, items)) {
@@ -176,8 +186,13 @@ export const generate = (options: CreateOptions): Created => {
   if (envs !== undefined) planned.set('.env.example', envs.example);
 
   const there = (rel: string): boolean => existsSync(join(options.dir, rel));
+  const inTheWay = (rel: string): string[] => {
+    const file = fileInTheWayOf(dirname(join(options.dir, rel)));
+    if (file !== undefined) return [`${relative(options.dir, file).split(sep).join('/')} (a file, where the app needs a folder)`];
+    return !KEEP_THEIRS.has(rel) && there(rel) ? [rel] : [];
+  };
   const kept = [...planned.keys()].filter((rel) => KEEP_THEIRS.has(rel) && there(rel));
-  const collisions = [...planned.keys()].filter((rel) => !KEEP_THEIRS.has(rel) && there(rel)).sort();
+  const collisions = [...new Set([...planned.keys()].flatMap(inTheWay))].sort();
   if (collisions.length > 0) {
     throw new Error(
       `create-nisc: ${options.dir} already has ${collisions.length === 1 ? 'a file' : 'files'} a new app would write — nothing was written:\n  ${collisions.join('\n  ')}\nMake the app in an empty folder, or in a subfolder of this one.`,
