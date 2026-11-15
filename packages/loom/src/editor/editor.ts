@@ -100,6 +100,18 @@ export const createLoomEditor = (config: LoomEditorConfig): LoomEditor => {
       if (instanceId !== undefined) formInstances[name] = instanceId;
     }
 
+    // A validation writes its answer while the edit's own change is still being
+    // handed out, and that write has already published the edit: the edit's
+    // change, arriving after it, is not published again.
+    let tick = 0;
+    let lastPublished = 0;
+    const begun = new WeakMap<object, number>();
+    detach.push(
+      shell.onDataChange((change) => {
+        begun.set(change, (tick += 1));
+      }),
+    );
+
     for (const [name, instanceId] of Object.entries(formInstances)) {
       const document = plugin.documents[name];
       if (typeof document !== 'function' && document !== undefined) {
@@ -107,15 +119,12 @@ export const createLoomEditor = (config: LoomEditorConfig): LoomEditor => {
         detach.push(attachValidation(shell, instanceId, schema));
       }
     }
-    // An edit arrives twice: as itself, and as the validation it writes back.
-    let published = '';
     detach.push(
       shell.onDataChange((change) => {
         if (!Object.values(formInstances).includes(change.instanceId)) return;
+        if (lastPublished > (begun.get(change) ?? 0)) return;
+        lastPublished = tick += 1;
         refresh();
-        const now = JSON.stringify([documents, validations]);
-        if (now === published) return;
-        published = now;
         emit('change');
       }),
     );
