@@ -194,7 +194,9 @@ type QueryEngineConfig = {
   reads it there. It is not part of the schema fingerprint, so cached entries
   stay fresh when the option is turned on. Without the option, tables are named
   bare, as above: a host that points the `search_path` at a schema per tenant
-  keeps doing so.
+  keeps doing so. With the option, `adapter.introspect({ schema: 'other' })`
+  lists `other`'s tables but still names them, and reports `namespace`, with the
+  adapter's own `schema`.
 - `config.statementTimeoutMs` is enforced by the database (`statement_timeout`),
   set up at `introspect()`. A database that cannot enforce it (PGlite) runs
   reads unbounded and the engine warns each time `introspect()` runs. A `PgPool`
