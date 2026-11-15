@@ -474,8 +474,9 @@ functions: (session) => [
   theirs whose newest version was neither saved nor used within that time is
   deleted, every version of it, by a sweep that runs as the server comes up and
   then every hour. What is published for everybody never ages, and what the
-  build ships is not a row. Without the setting nothing is deleted. A limit of
-  `0` or less refuses the boot.
+  build ships is not a row. Without the setting nothing is deleted. A limit
+  that is not a whole number of milliseconds, or is under two hours
+  (7,200,000 ms), refuses the boot.
 - **It reaches its owner's open shells a moment after the save answers**, as a
   saved layout does, and not before: a function that saves an action and
   opens it in the same call finds it not there yet. One that is to be seen at
@@ -555,9 +556,10 @@ or write a row of another account.
 
 **A read vex wrote** for a request (`session.answerIntent`) is saved under
 the fingerprint vex gave it, with no body:
-`session.artifacts.save([{ kind: 'read', id: 'fp_…' }])`. Moss takes the entry
-from vex's own table and keeps it as written: the query, the Prism config of
-its mapping, its shape and its intent.
+`session.artifacts.save([{ kind: 'read', id: 'fp_…', body: undefined }])`.
+Moss takes the entry from vex's own table and keeps it as written: the query,
+the Prism config of its mapping, its shape and its intent, so a read that
+comes with a body is refused.
 
 - **It is answered to the person who saved it and to nobody else.** When one
   of their requests replays that fingerprint, moss answers it, compiled, from
@@ -1335,7 +1337,7 @@ It's a Hono app — mount it, extend it, or hand it to a listener.
   is one under `generated.`. The charter grants it by that id, so a new id
   needs a grant and one that is a shipped action's or fragment's replaces the
   build's for everybody until it is reset. **A read** vex wrote is published
-  under its fingerprint, `save([{ kind: 'read', id: '<fingerprint>' }])`, and is
+  under its fingerprint, `save([{ kind: 'read', id: '<fingerprint>', body: undefined }])`, and is
   answered to everybody after what the caller saved themselves; one under the
   fingerprint of a shipped entry is refused. `publisher` is who the publish is
   made by, kept with the save (`artifact_saves.created_by`); an empty one is

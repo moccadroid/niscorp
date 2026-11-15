@@ -17,3 +17,5 @@ A principal called `toString`, `constructor`, `__proto__` or `valueOf` is no lon
 In `nisc dev` (`mossDev`), what the charter does not read as written (a misspelt `denny`: the `shape` warnings of `server.charterReport()`) is shown over the page on vite's error overlay each time a browser connects. The app runs under it, and boot is unchanged.
 
 DOCS says that a channel is not a trusted lane: the person's own terminal can publish any channel with any payload into their own shell, as `deliver` does.
+
+DOCS shows a read saved with `body: undefined`, as `SessionArtifacts.save`'s type asks, and gives the limit `runtime.artifactsUnusedMs` refuses at boot: anything under two hours or not a whole number of milliseconds.
