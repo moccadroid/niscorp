@@ -17,7 +17,10 @@ export const createEventChannel = (
   const buffer: CortexEvent[] = [];
   let closed = false;
   let seq = 0;
-  let wake: (() => void) | undefined;
+  const waiting: Array<() => void> = [];
+  const wakeAll = (): void => {
+    for (const resolve of waiting.splice(0)) resolve();
+  };
 
   const push = (event: CortexEvent): void => {
     for (const listener of [...listeners]) {
@@ -28,7 +31,7 @@ export const createEventChannel = (
       }
     }
     buffer.push(event);
-    wake?.();
+    wakeAll();
   };
 
   const emit = (body: CortexEventBody): void => {
@@ -52,7 +55,7 @@ export const createEventChannel = (
 
   const close = (): void => {
     closed = true;
-    wake?.();
+    wakeAll();
   };
 
   const events: AsyncIterable<CortexEvent> = {
@@ -63,9 +66,8 @@ export const createEventChannel = (
           while (cursor >= buffer.length) {
             if (closed) return { done: true, value: undefined };
             await new Promise<void>((resolve) => {
-              wake = resolve;
+              waiting.push(resolve);
             });
-            wake = undefined;
           }
           const value = buffer[cursor];
           cursor += 1;
