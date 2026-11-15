@@ -210,10 +210,20 @@ const TYPES: Record<string, string> = {
   '.txt': 'text/plain; charset=utf-8',
 };
 
+const decodedPath = (pathname: string): string | undefined => {
+  try {
+    const path = decodeURIComponent(pathname);
+    return path.includes('\0') ? undefined : path;
+  } catch {
+    return undefined;
+  }
+};
+
 export const shellSite = (project: NiscShellProject, dist: string): ((request: Request) => Promise<Response>) => {
   const base = resolve(dist);
   return async (request) => {
-    const path = decodeURIComponent(new URL(request.url).pathname);
+    const path = decodedPath(new URL(request.url).pathname);
+    if (path === undefined) return new Response('not a path', { status: 400 });
     if (path !== '/' && path !== '/index.html') {
       const file = resolve(base, `.${path}`);
       const stats = file === base || file.startsWith(base + sep) ? statSync(file, { throwIfNoEntry: false }) : undefined;

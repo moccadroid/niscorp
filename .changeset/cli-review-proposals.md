@@ -7,3 +7,4 @@ Three printed lines are worded plainly: an own-shell export that writes nothing 
 `nisc export` on an app behind moss names a path that could not be drawn on a line of its own, and offers `--allow-live` only for the paths that want a server; with `--allow-live` it says which paths were written as the undrawn template. Exit codes and files are the same.
 `nisc migrate` (and `--check`, `--status`) on a runtime that says `migrations: 'apply'` prints first that its database starts empty every time, so what it applies is gone when the command ends. Everything after that line is as before.
 `nisc start` with `PORT` set but empty says that it is read as 0, any free port; the port is the same as before.
+`nisc start` on an app with its own shell answers an address that does not decode to a path (`/%`, `/%E0%A4%A`, one with `%00`) with a 400 `not a path`, where it answered 500.
