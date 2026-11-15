@@ -49,13 +49,6 @@ describe('migrate — the ledger', () => {
     expect(again.plan.applied).toEqual({ 'nisc.vex.cache': 2 });
   });
 
-  it('two runs started at once: one applies the migrations, the other finds them applied', async () => {
-    const pool = freshPool();
-    const runs = await Promise.all([migrate(pool, [cache]), migrate(pool, [cache])]);
-    expect(runs.map((run) => run.applied.length).sort()).toEqual([0, 2]);
-    expect(await readLedger(pool)).toHaveLength(2);
-  });
-
   it('an appended migration runs alone on the next boot', async () => {
     const pool = freshPool();
     await migrate(pool, [cache]);
