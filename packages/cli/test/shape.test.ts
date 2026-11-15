@@ -1,11 +1,13 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { runShapeCheck } from '../src/shape';
 import type { ShapeCheckConfig } from '../src/shape';
+import { linkPackage } from './nisc';
 
-// Inside the package, so the app's `typescript` is found the way an app's own is: from its folder up.
-const scratch = mkdtempSync(join(import.meta.dirname, '.shape-'));
+const scratch = mkdtempSync(join(tmpdir(), 'nisc-shape-'));
+linkPackage(scratch, 'typescript');
 afterAll(() => rmSync(scratch, { recursive: true, force: true }));
 
 const TSCONFIG = {

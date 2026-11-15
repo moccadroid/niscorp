@@ -6,10 +6,10 @@ import { fileURLToPath } from 'node:url';
 import { afterAll, describe, expect, it } from 'vitest';
 import { shellSite } from '../src/shell-site';
 import { project } from './fixtures/own-head/nisc.config';
+import { NISC } from './nisc';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, 'fixtures', 'own-head');
-const bin = join(here, '..', 'bin', 'nisc.js');
 const scratch = mkdtempSync(join(tmpdir(), 'nisc-own-head-'));
 
 afterAll(() => rmSync(scratch, { recursive: true, force: true }));
@@ -17,7 +17,7 @@ afterAll(() => rmSync(scratch, { recursive: true, force: true }));
 const SLOW = 60_000;
 
 const nisc = (args: readonly string[], fault = ''): { code: number | null; out: string } => {
-  const result = spawnSync(process.execPath, [bin, ...args, '--root', root, '--skip-bundle'], {
+  const result = spawnSync(process.execPath, [...NISC, ...args, '--root', root, '--skip-bundle'], {
     encoding: 'utf8',
     env: { ...process.env, NISC_FIXTURE_FAULT: fault },
   });

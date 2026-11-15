@@ -98,12 +98,15 @@ And the documents:
 It never overwrites. A folder that already holds something is fine — a fresh
 repository's `.git`, a `LICENSE` — as long as nothing a new app would write is
 there. Your `README.md` is kept; your `.gitignore` gets the lines it lacks. If
-anything else it would write already exists, it writes **nothing** and names
-the files; make the app in a subfolder instead:
+anything else it would write already exists, or a file stands where it needs a
+folder (a file named `src`), it writes **nothing** and names them; make the app
+in a subfolder instead:
 
 ```bash
 npm create nisc site -- --page --dom
 ```
+
+A folder that is a file, or inside one, is refused before any other question.
 
 ## How an app is put together
 
@@ -137,9 +140,11 @@ templates/
 | `docs` | its lines in AGENTS.md and PLAN.md: `is`, `where`, `runs`, `decisions`, `answered`, `open`, `order` |
 | `with` | `{ <other item>: { package, env, docs } }` — added only when that other item is chosen too |
 
-Two items that write the same file, or disagree about a field, a script or a
-dependency, is a mistake in the templates: it is refused before anything is
-written. In every file, `nisc-template-app` becomes the app's name.
+An `item.json` with a field of the wrong shape is refused when the templates
+are read, naming the file and the field (`in round/item.json, env[0].message is
+not a string`). Two items that write the same file, or disagree about a field, a
+script or a dependency, is a mistake in the templates: it is refused before
+anything is written. In every file, `nisc-template-app` becomes the app's name.
 
 ## Keys
 

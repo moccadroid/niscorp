@@ -2,7 +2,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import type { AddressInfo } from 'node:net';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { serve } from '@hono/node-server';
 import type { ExportedDocument } from '@niscorp/moss';
 import { devServer } from './dev';
@@ -136,10 +136,22 @@ const write = (options: CommandOptions, project: NiscProject, out: string, route
   say(options)(`nisc: ${routes.length} paths written to ${out}`);
 };
 
+const isWithin = (folder: string, path: string): boolean => {
+  const way = relative(folder, path);
+  return way === '' || (way !== '..' && !way.startsWith(`..${sep}`) && !isAbsolute(way));
+};
+
+const refuseOut = (out: string, root: string, dist: string): void => {
+  const what = isWithin(out, root) ? `the app's folder (${root}) or a folder above it` : isWithin(out, dist) || isWithin(dist, out) ? `the built app (${dist}), a folder inside it or one above it` : undefined;
+  if (what === undefined) return;
+  throw new Error(`nisc: --out ${out} is ${what}, and an export empties its folder before writing to it. Nothing was written. Give the export a folder of its own: \`--out out\`.`);
+};
+
 export const exportSite = async (options: CommandOptions): Promise<{ written: boolean; result: BuildResult; out: string }> => {
   const project = await loadProject(options.root);
-  const result = await build(options);
   const out = resolve(options.root, options.out ?? 'out');
+  refuseOut(out, options.root, distOf(options.root, project));
+  const result = await build(options);
   if (result.kind === 'shell') {
     if (!result.ok) {
       const failed = result.routes.filter((route) => route.problems.length > 0);
@@ -162,21 +174,31 @@ export const exportSite = async (options: CommandOptions): Promise<{ written: bo
   return { written: true, result, out };
 };
 
-const listening = async (httpServer: ReturnType<typeof serve>, options: CommandOptions): Promise<string> => {
-  await new Promise<void>((up) => httpServer.once('listening', () => up()));
-  const address = httpServer.address();
-  const port = address !== null && typeof address === 'object' ? (address satisfies AddressInfo).port : options.port;
-  return `http://localhost:${port}`;
+export const portOf = (text: string, from: string): number => {
+  const port = Number(text);
+  if (Number.isInteger(port) && port >= 0 && port <= 65535) return port;
+  throw new Error(`nisc: ${from} ${JSON.stringify(text)} is not a port. Give a whole number from 0 to 65535.`);
 };
+
+const listening = (httpServer: ReturnType<typeof serve>, port: number): Promise<string> =>
+  new Promise((up, fail) => {
+    const refused = (error: Error): void => fail(new Error(`nisc: cannot listen on port ${port} (${error.message}). Stop what is using it, or give another port: \`--port <n>\`.`));
+    httpServer.once('error', refused);
+    httpServer.once('listening', () => {
+      httpServer.off('error', refused);
+      const address = httpServer.address();
+      up(`http://localhost:${address !== null && typeof address === 'object' ? (address satisfies AddressInfo).port : port}`);
+    });
+  });
 
 export const start = async (options: CommandOptions): Promise<{ url: string; close: () => Promise<void> }> => {
   const project = await loadProject(options.root);
   const dist = distOf(options.root, project);
   if (!existsSync(join(dist, 'index.html'))) throw new Error(`nisc: no built terminal in ${dist} — run \`nisc build\`.`);
-  const port = options.port ?? Number(process.env['PORT'] ?? 8787);
+  const port = options.port ?? portOf(process.env['PORT'] ?? '8787', 'PORT');
   if (isShellProject(project)) {
     const httpServer = serve({ fetch: siteHandler(shellSite(project, dist)), port });
-    const url = await listening(httpServer, options);
+    const url = await listening(httpServer, port);
     say(options)(`nisc: serving ${url} — the built app, each path’s first screen drawn; the shell is the page’s own`);
     return { url, close: async () => void httpServer.close() };
   }
@@ -193,21 +215,21 @@ export const start = async (options: CommandOptions): Promise<{ url: string; clo
     });
     // After every route: the check answers requests in-process, and Hono takes no route once it has answered one.
     await booted.server.checkFunctions();
+    const httpServer = serve({ fetch: siteHandler(booted.server.fetch, { except: MOSS_PATHS }), port });
+    attachSocket(httpServer, booted.server.socket);
+    const url = await listening(httpServer, port);
+    say(options)(`nisc: serving ${url} — the built terminal, its pages drawn; the socket at /socket`);
+    return {
+      url,
+      close: async () => {
+        httpServer.close();
+        await booted.close?.();
+      },
+    };
   } catch (error) {
     await booted.close?.();
     throw error;
   }
-  const httpServer = serve({ fetch: siteHandler(booted.server.fetch, { except: MOSS_PATHS }), port });
-  attachSocket(httpServer, booted.server.socket);
-  const url = await listening(httpServer, options);
-  say(options)(`nisc: serving ${url} — the built terminal, its pages drawn; the socket at /socket`);
-  return {
-    url,
-    close: async () => {
-      httpServer.close();
-      await booted.close?.();
-    },
-  };
 };
 
 export const migrate = async (options: CommandOptions): Promise<void> => {

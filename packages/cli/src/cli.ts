@@ -1,5 +1,5 @@
 import { resolve } from 'node:path';
-import { build, check, dev, exportSite, migrate, start } from './commands';
+import { build, check, dev, exportSite, migrate, portOf, start } from './commands';
 import type { CommandOptions } from './commands';
 
 const USAGE = `nisc — the command for a nisc application
@@ -38,13 +38,13 @@ const main = async (): Promise<number> => {
   const options: CommandOptions = {
     root: resolve(valueAfter(args, '--root') ?? process.cwd()),
     ...(out !== undefined ? { out } : {}),
-    ...(port !== undefined ? { port: Number(port) } : {}),
     allowLive: args.includes('--allow-live'),
     skipBundle: args.includes('--skip-bundle'),
   };
 
   if (command === 'dev' || command === 'start') {
-    const served = command === 'dev' ? await dev(options) : await start(options);
+    const given = { ...options, ...(port !== undefined ? { port: portOf(port, '--port') } : {}) };
+    const served = command === 'dev' ? await dev(given) : await start(given);
     const stop = (): void => {
       void served.close().finally(() => process.exit(0));
     };
@@ -65,12 +65,18 @@ const main = async (): Promise<number> => {
   return command === undefined || command === 'help' || command === '--help' ? 0 : 1;
 };
 
+// The command's own sentences start `nisc:`. Anything else was thrown by the app or a library, and its stack says where.
+const reportOf = (error: unknown): unknown => {
+  if (!(error instanceof Error)) return error;
+  return error.message.startsWith('nisc: ') ? error.message : (error.stack ?? error.message);
+};
+
 main().then(
   // An explicit exit: an app's own handles (a database, a timer) would keep a
   // finished command open.
   (code) => process.exit(code),
   (error: unknown) => {
-    console.error(error instanceof Error ? error.message : error);
+    console.error(reportOf(error));
     process.exit(1);
   },
 );

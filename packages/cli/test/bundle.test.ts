@@ -1,11 +1,12 @@
 import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { linkPackage, NISC } from './nisc';
 
-const here = dirname(fileURLToPath(import.meta.url));
-const bin = join(here, '..', 'bin', 'nisc.js');
+const OWN_SHELL = pathToFileURL(join(import.meta.dirname, 'fixtures', 'own-shell', 'nisc.config.ts')).href;
 const SLOW = 60_000;
 
 const SHEET = '.rooms{color:rebeccapurple}';
@@ -24,17 +25,17 @@ console.log('bundled');
 let app = '';
 
 beforeAll(() => {
-  app = mkdtempSync(join(here, 'fixtures', 'bundled-'));
+  app = mkdtempSync(join(tmpdir(), 'nisc-bundled-'));
   writeFileSync(join(app, 'package.json'), JSON.stringify({ name: 'nisc-fixture-bundled', private: true, type: 'module' }));
   writeFileSync(
     join(app, 'nisc.config.ts'),
     [
-      "import { project as shell } from '../own-shell/nisc.config';",
-      "import type { NiscShellProject } from '../../../src';",
-      "export const project: NiscShellProject = { ...shell, ...(process.env['NISC_FIXTURE_STYLESHEET'] === 'file' ? { stylesheet: 'file' } : {}) };",
+      `import { project as shell } from ${JSON.stringify(OWN_SHELL)};`,
+      "export const project = { ...shell, ...(process.env['NISC_FIXTURE_STYLESHEET'] === 'file' ? { stylesheet: 'file' } : {}) };",
       '',
     ].join('\n'),
   );
+  linkPackage(app, 'jsdom');
   mkdirSync(join(app, 'node_modules', 'vite'), { recursive: true });
   writeFileSync(join(app, 'node_modules', 'vite', 'package.json'), JSON.stringify({ name: 'vite', version: '0.0.0', bin: { vite: 'bin.cjs' } }));
   writeFileSync(join(app, 'node_modules', 'vite', 'bin.cjs'), BUNDLER);
@@ -43,7 +44,7 @@ beforeAll(() => {
 afterAll(() => rmSync(app, { recursive: true, force: true }));
 
 const nisc = (args: readonly string[], env: Record<string, string> = {}): { code: number | null; out: string } => {
-  const result = spawnSync(process.execPath, [bin, ...args, '--root', app], { encoding: 'utf8', env: { ...process.env, ...env } });
+  const result = spawnSync(process.execPath, [...NISC, ...args, '--root', app], { encoding: 'utf8', env: { ...process.env, ...env } });
   return { code: result.status, out: `${result.stdout}\n${result.stderr}` };
 };
 const built = (): string => readFileSync(join(app, 'built', 'index.html'), 'utf8');

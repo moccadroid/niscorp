@@ -260,6 +260,10 @@ Exit code 1 if a path could not be drawn at all.
 bundle, and one `index.html` per path — `/` at the top, `/about` at
 `about/index.html` — which is what any static host serves for that path.
 
+The folder is the export's own: it is emptied before anything is written to it.
+So `--out` may not be the app's folder, a folder above it, the build, or a
+folder inside the build: each is refused before anything is drawn (exit code 1).
+
 A file is **only ever the page as nobody sees it**. No credential reaches a
 build, so there is nothing to leak into one.
 
@@ -288,7 +292,8 @@ as the app answers now, not as it answered at build. No shell is kept.
 every page **drawn for whoever is asking** — the app's own screen at `/`, a
 manifest page at its path. A signed-in person gets their screen in the markup
 (`private, no-store`); nobody gets the page as nobody sees it. `--port <n>`, or
-`$PORT`, default 8787. A name with an extension that is neither a file in
+`$PORT`, default 8787; a port that is taken, or not a port, ends the command
+with a sentence saying so (exit code 1). A name with an extension that is neither a file in
 `dist/` nor a page is a missing file, answered 404 — never a screen.
 
 **Either kind**, around the app's handler:
@@ -472,7 +477,7 @@ what a value means.
 | | |
 |---|---|
 | `--root <dir>` | the app's root (default: the current directory) |
-| `--out <dir>` | `export`: where the files go (default `out`) |
+| `--out <dir>` | `export`: where the files go (default `out`); emptied first, so never the app's folder or its build |
 | `--allow-live` | `export`: write even though some path wants a server |
 | `--skip-bundle` | `build`, `export`: the terminal is already built — it is neither bundled nor has its stylesheet written into its page |
 | `--check` | `migrate`: do all of it, then roll it back |
