@@ -69,10 +69,17 @@ const jsonType = (branch: ZodType): string | undefined => {
   return JSON_TYPES.has(type) ? type : undefined;
 };
 
+// A literal lists its values, an enum its entries; either way the first is the
+// branch's tag.
+const tagValue = (discriminator: ZodType): unknown => {
+  const def = defOf(discriminator);
+  return def.values !== undefined ? def.values[0] : Object.values(def.entries ?? {})[0];
+};
+
 const distinguish = (branch: ZodType, siblings: readonly ZodType[], tag: string | undefined): Pattern | undefined => {
   if (tag !== undefined) {
     const literal = (defOf(branch).shape ?? {})[tag];
-    return { kind: 'tag', key: tag, value: literal !== undefined ? defOf(literal).values?.[0] : undefined };
+    return { kind: 'tag', key: tag, value: literal !== undefined ? tagValue(literal) : undefined };
   }
   const elsewhere = new Set(siblings.flatMap(branchKeys));
   const key = branchKeys(branch).find((k) => !elsewhere.has(k));
@@ -169,7 +176,8 @@ const unwrap = (schema: ZodType): { core: ZodType; default?: unknown } => {
   while (WRAPPERS.has(def.type) || def.type === 'lazy') {
     const inner = def.type === 'lazy' ? resolveLazy(core) : def.innerType;
     if (inner === undefined) break;
-    if ('defaultValue' in def) fallback = def.defaultValue;
+    // The outermost default is the one zod applies.
+    if ('defaultValue' in def && fallback === undefined) fallback = def.defaultValue;
     core = inner;
     def = defOf(core);
   }
