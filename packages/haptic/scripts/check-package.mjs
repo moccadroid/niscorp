@@ -5,8 +5,9 @@ import { tmpdir } from 'node:os';
 import { dirname, isAbsolute, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-// The packed package, installed offline in a consumer outside the checkout: generated artifacts run on their saved
-// pages with every model and codec import refused, and the entry points typecheck with and without optional peers.
+// The packed package, installed in a consumer outside the checkout (from the local store where it can): generated
+// artifacts run on their saved pages with every model and codec import refused, and the entry points typecheck with and
+// without optional peers.
 const fixtures = fileURLToPath(new URL('../tests/fixtures/discovery/', import.meta.url));
 await mkdir(resolve('data/runs'), { recursive: true });
 const evidence = await mkdtemp(resolve('data/runs/package-'));
@@ -111,7 +112,7 @@ await writeFile(
   await readFile(resolve(lockRoot, 'pnpm-lock.yaml')),
 );
 await run(
-  [pnpm, 'install', '--offline', '--ignore-scripts', '--no-frozen-lockfile'],
+  [pnpm, 'install', '--prefer-offline', '--ignore-scripts', '--no-frozen-lockfile'],
   consumer,
   'install-core',
 );
@@ -206,7 +207,7 @@ await run(
   [
     pnpm,
     'add',
-    '--offline',
+    '--prefer-offline',
     '--ignore-scripts',
     '@niscorp/cortex@' + versionOf('@niscorp/cortex'),
     '@niscorp/signal@' + versionOf('@niscorp/signal'),
