@@ -15,6 +15,8 @@ export type ReconcileOptions = {
   // instance: written in place, it would leave the previous record's data on screen.
   definitionOf?: (actionId: string) => ActionDefinition | undefined;
   own?: 'pushed' | 'canvas';
+  // With it, a row is compared with the input this map says its instance was last given, not with the instance's data.
+  lastInputs?: Map<string, Record<string, unknown>>;
 };
 
 export type ReconcileResult = {
@@ -29,11 +31,11 @@ export type ReconcilerOptions = ReconcileOptions & {
 
 export type Reconciler = (shell: Shell, canvasId: string, desired: readonly Desired[], options: ReconcilerOptions) => ReconcileResult;
 
-const differs = (before: Record<string, unknown>, input: Record<string, unknown>): boolean =>
-  Object.entries(input).some(([key, value]) => JSON.stringify(before[key]) !== JSON.stringify(value));
+const changedKeys = (before: Record<string, unknown>, input: Record<string, unknown>): string[] =>
+  Object.keys(input).filter((key) => JSON.stringify(before[key]) !== JSON.stringify(input[key]));
 
 export const reconcileCanvas = (shell: Shell, canvasId: string, desired: readonly Desired[], options: ReconcileOptions): ReconcileResult => {
-  const { origin, definitionOf } = options;
+  const { origin, definitionOf, lastInputs } = options;
   const ownsCanvas = options.own === 'canvas';
   const notes: string[] = [];
   let changed = false;
@@ -63,21 +65,25 @@ export const reconcileCanvas = (shell: Shell, canvasId: string, desired: readonl
     if (existing !== undefined) {
       const runtime = shell.getRuntime(existing.id);
       const before = runtime?.getData() ?? {};
-      if (runtime === undefined || Object.keys(input).length === 0 || !differs(before, input)) continue;
+      const inputChanges = changedKeys(lastInputs?.get(existing.id) ?? before, input);
+      if (runtime === undefined || inputChanges.length === 0) continue;
 
       const definition = definitionOf?.(entry.actionId);
       const reAims = definition !== undefined && Object.keys(input).some((key) => mountInputKeys(definition).has(key));
       if (!reAims) {
-        runtime.setData({ ...before, ...input });
+        const written = lastInputs === undefined ? Object.keys(input) : inputChanges;
+        runtime.setData({ ...before, ...Object.fromEntries(written.map((key) => [key, input[key]])) });
+        lastInputs?.set(existing.id, { ...lastInputs.get(existing.id), ...input });
         changed = true;
-        notes.push(`set ${Object.keys(input).join(', ')} on ${entry.actionId}`);
+        notes.push(`set ${written.join(', ')} on ${entry.actionId}`);
         continue;
       }
       shell.removeInstance(canvasId, existing.id);
       notes.push(`re-opened ${entry.actionId}`);
     }
 
-    shell.push(canvasId, entry.actionId, input, entry.with, { origin });
+    const placed = shell.push(canvasId, entry.actionId, input, entry.with, { origin });
+    lastInputs?.set(placed, input);
     changed = true;
     notes.push(`placed ${entry.actionId}`);
   }

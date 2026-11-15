@@ -98,6 +98,7 @@ export const createShell = (config: ShellConfig): Shell => {
   const keys = new Map<string, string>();
 
   const births = new Map<string, { action: string; input?: Record<string, unknown>; with?: string[] }>();
+  const lastInputs = new Map<string, Record<string, unknown>>();
 
   const journal = createJournal(config.historyDepth ?? DEFAULT_HISTORY_DEPTH);
 
@@ -112,6 +113,7 @@ export const createShell = (config: ShellConfig): Shell => {
       origins.delete(instanceId);
       keys.delete(instanceId);
       births.delete(instanceId);
+      lastInputs.delete(instanceId);
     },
   });
 
@@ -322,6 +324,7 @@ export const createShell = (config: ShellConfig): Shell => {
       const asked = {
         origin: options.origin,
         ...(options.own === undefined ? {} : { own: options.own }),
+        ...(options.keepTyped === true ? { lastInputs } : {}),
         definitionOf: actionOf,
       };
       const named = canvasReconcilers.get(cid);
