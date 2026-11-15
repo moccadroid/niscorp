@@ -3,6 +3,7 @@ import type {
   StepRequest, StepResult, StepStreamEvent, StepToolCall, StreamOptions,
 } from '../types';
 import { estimateUsage } from '../utils/estimate-usage';
+import { abortSignalOf } from '../utils/abort';
 
 export type ExecuteStepStreamConfig = {
   adapter: ChatAdapter;
@@ -56,7 +57,8 @@ export async function* executeStepStream(
   config: ExecuteStepStreamConfig,
 ): AsyncGenerator<StepStreamEvent> {
   const providerRequest = buildProviderRequest(config.model, config.request);
-  const abortSignal = config.streamOptions?.signal;
+  const abortSignal = abortSignalOf(config.streamOptions?.signal, config.request.options?.signal);
+  if (abortSignal?.aborted) return;
 
   let contentBuffer = '';
   let finishReason = 'unknown';
@@ -106,6 +108,7 @@ export async function* executeStepStream(
     if (abortSignal?.aborted) return;
     throw error;
   }
+  if (abortSignal?.aborted) return;
 
   const toolCalls: StepToolCall[] = [...assembledToolCalls.values()].map((tc) => {
     let parsed: unknown = tc.args;

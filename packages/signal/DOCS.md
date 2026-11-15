@@ -144,7 +144,7 @@ signal.apiKey('gsk_...')
 ```
 
 ### `.options(opts)`
-Set LLM options: `temperature`, `maxTokens`, `topP`, `stopSequences`, `seed`, `signal` (an `AbortSignal`), `reasoningEffort`. Merged over any options already set. These are rarely needed. `'openai-responses'` refuses `stopSequences` and `seed`.
+Set LLM options: `temperature`, `maxTokens`, `topP`, `stopSequences`, `seed`, `signal` (an `AbortSignal`, which aborts every call the client makes: see [Abort](#abort)), `reasoningEffort`. Merged over any options already set. These are rarely needed. `'openai-responses'` refuses `stopSequences` and `seed`.
 ```typescript
 signal.options({ temperature: 0 })
 ```
@@ -240,7 +240,7 @@ Schema validation happens at the end of the stream; when the retries are spent t
 
 ### `.step(request)` / `.stepStream(request, options?)`
 
-The low-level primitives `complete()` and `stream()` are built on: one model call, no tool execution, no schema retries. The caller owns the loop. `step()` takes a `StepRequest` (`messages`, `tools`, `toolChoice`, `output`, `responseFormat`, `options`) and returns a `StepResult` (`content`, `toolCalls`, `usage`, `finishReason`, `raw`, and — when the request carried `output.accept` — the routed `outcome` and `wire` report). `stepStream()` yields `text`, `reasoning` and `tool_call_delta` events and a final `done` carrying the `StepResult`.
+The low-level primitives `complete()` and `stream()` are built on: one model call, no tool execution, no schema retries. The caller owns the loop. Both take `options.signal` (an `AbortSignal`) as their second argument. `step()` takes a `StepRequest` (`messages`, `tools`, `toolChoice`, `output`, `responseFormat`, `options`) and returns a `StepResult` (`content`, `toolCalls`, `usage`, `finishReason`, `raw`, and — when the request carried `output.accept` — the routed `outcome` and `wire` report). `stepStream()` yields `text`, `reasoning` and `tool_call_delta` events and a final `done` carrying the `StepResult`.
 
 - **`messages`** — an assistant turn carries the calls it made as `toolCalls` (`{ id, name, args }`, `args` a JSON string) and has `content: ''` when it only called tools. Each result goes back as a `tool` message whose `toolCallId` is that call's `id`.
 - **`tools`** — each is `{ name, description, parameters }`; `parameters` is the JSON Schema of the tool's input (`z.toJSONSchema()` of a Zod schema).
@@ -273,6 +273,15 @@ The result:
 - **`injectSchemaDoc`** — `true` when the contract has `data` and the transport does not carry its full schema (`emit`, and `respond` with `loose` or `permissive` params): the caller adds its own schema documentation to the prompt.
 - **`finishProtocol`** — the text that tells the model how the run ends under this transport. Add it unchanged as a system message, after any schema documentation.
 - **`corrections`** — the messages to send back when a turn did not finish (`termination`) or its output was invalid (`invalidOutput`). The caller replaces `{issues}` in `invalidOutput` with the evidence.
+
+### Abort
+
+A call is aborted by the `signal` set with `.options()`, the `signal` in a step request's `options`, or the `signal` handed to `stream()`, `step()` or `stepStream()`. When more than one is set, the first to fire aborts the call. A call aborted before it sends its request sends nothing; one aborted while the request is open tears it down.
+
+- `stream()` and `stepStream()` end: no `done` event, and no error.
+- `complete()`, `step()`, `embed()` and `decide()` reject with `E_PROVIDER_ERROR`.
+
+The caller has the signal, so `signal.aborted` tells an abort from a failed provider call.
 
 ### `.count(input)`
 

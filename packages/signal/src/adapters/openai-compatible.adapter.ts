@@ -140,12 +140,12 @@ export const createOpenAICompatibleAdapter = async (
     return params;
   };
 
-  const chat = async (request: ProviderRequest): Promise<ProviderResponse> => {
+  const chat = async (request: ProviderRequest, options?: RequestOptions): Promise<ProviderResponse> => {
     const params = buildParams(request);
 
     let completion: OpenAICompletion;
     try {
-      completion = await chatCreate(params);
+      completion = await chatCreate(params, options);
     } catch (error) {
       throw new SignalError(
         `Provider error: ${error instanceof Error ? error.message : String(error)}`,

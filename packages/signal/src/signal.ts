@@ -21,6 +21,7 @@ import { executeStepStream } from './stream/execute-step-stream';
 import { runComplete, runStream } from './run';
 import { resolveWireStrategies, responseStrategies, recoverRejection, type WireStrategy } from './wire/strategies';
 import { routeResponse, routeRejection } from './wire/router';
+import { abortSignalOf, unlessAborted } from './utils/abort';
 
 export type Signal<T = string> = {
   apiKey: (key: string) => Signal<T>;
@@ -39,7 +40,7 @@ export type Signal<T = string> = {
 
   describe: () => SignalDescription;
 
-  step: (request: StepRequest) => Promise<StepResult>;
+  step: (request: StepRequest, options?: StreamOptions) => Promise<StepResult>;
   stepStream: (request: StepRequest, options?: StreamOptions) => AsyncIterable<StepStreamEvent>;
   count: (input: CountInput) => Promise<number>;
 
@@ -261,7 +262,7 @@ const createSignalFromConfig = <T = string>(config: SignalConfig): Signal<T> => 
   const fork = <U = T>(override: Partial<SignalConfig>): Signal<U> =>
     createSignalFromConfig<U>({ ...config, ...override });
 
-  const step = async (request: StepRequest): Promise<StepResult> => {
+  const step = async (request: StepRequest, stepOptions?: StreamOptions): Promise<StepResult> => {
     const adapter = await getChatAdapter('step');
     const resolved = resolveProvider(config);
     const messages = request.messages.slice() as Message[];
@@ -287,9 +288,10 @@ const createSignalFromConfig = <T = string>(config: SignalConfig): Signal<T> => 
     };
     assertEffort(config, providerRequest.options?.reasoningEffort);
     const declared = new Set((request.tools ?? []).map((tool) => tool.name));
+    const abort = abortSignalOf(stepOptions?.signal, providerRequest.options?.signal);
     let response: ProviderResponse;
     try {
-      response = await adapter.chat(providerRequest);
+      response = await unlessAborted(abort, () => adapter.chat(providerRequest, abort && { signal: abort }));
     } catch (error) {
       const recovered = recoverRejection(wireStrategies, error);
       if (!recovered) throw error;
@@ -387,14 +389,17 @@ const createSignalFromConfig = <T = string>(config: SignalConfig): Signal<T> => 
     request: DecideRequest<Qs>,
     started: number,
   ): Promise<DecideResult<Qs>> => {
-    const response = await adapter.decide(
-      {
-        model,
-        state: request.state,
-        questions: request.questions,
-        ...(request.images !== undefined && { images: request.images }),
-      },
-      request.options?.signal !== undefined ? { signal: request.options.signal } : undefined,
+    const abort = abortSignalOf(config.options?.signal, request.options?.signal);
+    const response = await unlessAborted(abort, () =>
+      adapter.decide(
+        {
+          model,
+          state: request.state,
+          questions: request.questions,
+          ...(request.images !== undefined && { images: request.images }),
+        },
+        abort && { signal: abort },
+      ),
     );
     const decisions = acceptCalibrated(request.questions, response.answers, response.raw);
     const inputTokens = response.usage?.inputTokens ?? 0;
@@ -512,11 +517,11 @@ const createSignalFromConfig = <T = string>(config: SignalConfig): Signal<T> => 
         throw new SignalError('This provider does not support embedding', ErrorCode.PROVIDER_ERROR);
       }
       const resolved = resolveProvider(config);
-      const response = await adapter.embed({
-        model: resolved.model,
-        input,
-        dimensions: options?.dimensions,
-      });
+      const embed = adapter.embed;
+      const abort = config.options?.signal;
+      const response = await unlessAborted(abort, () =>
+        embed({ model: resolved.model, input, dimensions: options?.dimensions }, abort && { signal: abort }),
+      );
       options?.onUsage?.(response.usage, resolved.model);
       if (typeof input === 'string') {
         const vector = response.embeddings[0];

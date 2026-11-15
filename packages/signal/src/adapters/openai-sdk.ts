@@ -13,7 +13,9 @@ type OpenAIEmbeddingResponse = {
   usage?: { prompt_tokens?: number; total_tokens?: number };
 };
 
-type EmbedCreateFn = (params: Record<string, unknown>) => Promise<OpenAIEmbeddingResponse>;
+type RequestOptions = { signal?: AbortSignal };
+
+type EmbedCreateFn = (params: Record<string, unknown>, options?: RequestOptions) => Promise<OpenAIEmbeddingResponse>;
 
 const bindAt = <T>(obj: unknown, path: readonly string[]): T | undefined => {
   let parent: unknown;
@@ -64,10 +66,12 @@ const loadEmbedCreateFn = (config: OpenAISdkConfig): Promise<EmbedCreateFn> =>
     false,
   );
 
-export const createEmbed = (config: OpenAISdkConfig): ((request: EmbedRequest) => Promise<EmbedResponse>) => {
+export const createEmbed = (
+  config: OpenAISdkConfig,
+): ((request: EmbedRequest, options?: RequestOptions) => Promise<EmbedResponse>) => {
   let cachedEmbedCreate: EmbedCreateFn | undefined;
 
-  return async (request) => {
+  return async (request, options) => {
     if (!cachedEmbedCreate) cachedEmbedCreate = await loadEmbedCreateFn(config);
 
     const params: Record<string, unknown> = {
@@ -78,7 +82,7 @@ export const createEmbed = (config: OpenAISdkConfig): ((request: EmbedRequest) =
 
     let response: OpenAIEmbeddingResponse;
     try {
-      response = await cachedEmbedCreate(params);
+      response = await cachedEmbedCreate(params, options);
     } catch (error) {
       throw new SignalError(
         `Embedding error: ${error instanceof Error ? error.message : String(error)}`,
