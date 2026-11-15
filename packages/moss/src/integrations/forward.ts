@@ -138,7 +138,7 @@ const proxy = (deps: ProxyDeps, routes: Hono<FeatureEnv>): void => {
       request: async (assertion) => ({
         method: c.req.method,
         headers: { 'content-type': 'application/json', authorization: `Bearer ${assertion}` },
-        ...(c.req.method === 'GET' ? {} : { body: await c.req.text() }),
+        ...(c.req.method === 'GET' || c.req.method === 'HEAD' ? {} : { body: await c.req.text() }),
       }),
     });
     if (ended.kind === 'refused') return c.json({ message: ended.why === 'uninstalled' ? 'Not installed here.' : 'No such integration.' }, 404);

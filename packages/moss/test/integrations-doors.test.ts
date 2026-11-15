@@ -16,8 +16,9 @@ const json = { 'content-type': 'application/json' };
 const serviceAnswering = (answer: (url: string) => Response = () => new Response('<html>the page</html>', { status: 200, headers: { 'content-type': 'text/html' } })) => {
   const asked: { url: string; method: string }[] = [];
   const fetchIt = async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
-    asked.push({ url: String(input), method: init?.method ?? 'GET' });
-    return answer(String(input));
+    const request = new Request(input, init);
+    asked.push({ url: request.url, method: request.method });
+    return answer(request.url);
   };
   return { asked, fetch: fetchIt };
 };
@@ -154,6 +155,12 @@ describe('the proxy — a declared path is for whoever holds the action that dec
     const refused = await server.request('/integrations/belts/payouts');
     expect(refused.status).toBe(404);
     expect(asked.map((call) => call.url)).toEqual(['https://belts.example/roster']);
+  });
+
+  it('a HEAD reaches the endpoint as a HEAD, with no body', async () => {
+    const { server, asked } = door(['ext.member.belts.card']);
+    expect((await server.request('/integrations/belts/roster', { method: 'HEAD' })).status).toBe(200);
+    expect(asked).toEqual([{ url: 'https://belts.example/roster', method: 'HEAD' }]);
   });
 });
 
