@@ -443,7 +443,7 @@ The tasks of one claim run one after another, and their leases start at
 `now`, so a task late in a slow pass can start after its lease has run out,
 when another instance may have claimed it again. `clock` is the host's clock:
 given one, each task's lease starts again, from `clock()`, just before its
-effect, and the effect runs only if the task is still this claim's. A task
+effect (never to end before the claim's, should the clock read earlier), and the effect runs only if the task is still this claim's. A task
 another instance took back is left to it. That is one more write per task.
 The driver passes its own `now`; without `clock`, nothing is renewed. The
 guarantee assumes the instances' clocks agree to within `leaseMs − timeoutMs`,

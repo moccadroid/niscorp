@@ -943,6 +943,47 @@ describe('the fence holds across engines', () => {
 
     expect([...ran].sort()).toEqual(['1', '2', '3', '4', '5']);
   });
+
+  it("a host clock that reads earlier than the advance's now does not shorten the claim's lease", async () => {
+    const store = createMemoryStore();
+    const ran: string[] = [];
+    let open: () => void = () => undefined;
+    let reach: () => void = () => undefined;
+    const shut = new Promise<void>((resolve) => (open = resolve));
+    const reached = new Promise<void>((resolve) => (reach = resolve));
+    const reflex: ReflexInput = { id: 'slow', intent: 'Do slow work.', on: { manual: {} }, effect: { name: 'work' }, policy: { timeoutMs: 60_000 } };
+    const engine = (name: string): Tide =>
+      createTide({
+        store,
+        transform: testTransform,
+        effects: {
+          work: {
+            run: async () => {
+              ran.push(name);
+              if (name === 'a') {
+                reach();
+                await shut;
+              }
+              return null;
+            },
+          },
+        },
+      });
+    const a = engine('a');
+    const b = engine('b');
+    await a.load([reflex], { at: T0 });
+    await b.load([reflex], { at: T0 });
+    await a.fire('slow', { now: T0 });
+
+    const steppedBack = T0 - 3_600_000;
+    const aRun = a.advance({ now: T0, clock: () => steppedBack });
+    await reached;
+    await b.advance({ now: T0 + 1_000, clock: () => T0 + 1_000 });
+    open();
+    await aRun;
+
+    expect(ran).toEqual(['a']);
+  });
 });
 
 describe('the last tasks of a run landing at once', () => {

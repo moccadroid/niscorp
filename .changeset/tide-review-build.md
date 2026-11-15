@@ -10,7 +10,7 @@ An `advance` before the first `load` no longer skips pending runs as "reflex is 
 
 `load(reflexes, { at, resume: true })` is a new opt-in for the load a process makes when it starts: a reflex this engine has never loaded keeps its stored watermark, so its `catchUp` decides what the downtime runs and a one-shot clock due during a restart fires after it. Without `resume`, `load` re-baselines as before.
 
-`advance` takes an optional `clock`, and the driver passes its own `now`. Given one, each task's lease starts again just before its effect, and the effect runs only if the task is still this claim's: a task late in a slow pass, whose lease had run out and which another instance had claimed again, no longer runs twice. That is one more write per task. Without `clock`, nothing changes.
+`advance` takes an optional `clock`, and the driver passes its own `now`. Given one, each task's lease starts again just before its effect, never to end before the claim's, and the effect runs only if the task is still this claim's: a task late in a slow pass, whose lease had run out and which another instance had claimed again, no longer runs twice. That is one more write per task. Without `clock`, nothing changes.
 
 `load` warns about a one-shot clock whose date does not exist (`2026-02-30`), naming the day it fires on (2026-03-02). The reflex loads and fires as before.
 
