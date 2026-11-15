@@ -134,3 +134,18 @@ describe('perf — O(n²) analysis', () => {
     expect(lastOf(results).totalMs).toBeGreaterThan(0);
   });
 });
+
+describe('perf — finalization', () => {
+  it('2,000 streamed rows with every field checked as it ends take well under a second', () => {
+    const schema = z.object({ rows: z.array(z.object({ id: z.number(), name: z.string() })) });
+    const json = JSON.stringify({ rows: Array.from({ length: 2000 }, (_, i) => ({ id: i, name: `row ${i}` })) });
+    const stream = createStream({ schema, constraints: 'finalize' });
+    const start = performance.now();
+    for (let i = 0; i < json.length; i += 50) stream.write(json.slice(i, i + 50));
+    stream.close();
+    const totalMs = performance.now() - start;
+    console.log(`  2,000 rows, finalize: ${Math.round(totalMs)}ms`);
+    expect(stream.current().rows).toHaveLength(2000);
+    expect(totalMs).toBeLessThan(1000);
+  });
+});

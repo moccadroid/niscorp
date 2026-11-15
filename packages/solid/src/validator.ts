@@ -27,6 +27,7 @@ export type ValidatorDeps = {
   emitError: (err: StreamError) => void;
   onFailed: () => void;
   getContainerKeys: (path: string) => readonly string[] | undefined;
+  getChildIndex: (path: string, key: string) => number | undefined;
 };
 
 export type Validator = {
@@ -40,6 +41,8 @@ export const createValidator = (deps: ValidatorDeps): Validator => {
   const finalizeChecked = new Set<string>();
   // A key may have a dot in it, so a joined path cannot be split back into its keys.
   const containerSegments = new Map<string, readonly string[]>([['', []]]);
+  // Keys of a container before this index have been checked.
+  const checkedUpTo = new Map<string, number>();
 
   const valueOpen = (segments: readonly string[], kind: ValueKind): 'accept' | 'skip' => {
     if (deps.mode === 'trust') return 'accept';
@@ -95,13 +98,17 @@ export const createValidator = (deps: ValidatorDeps): Validator => {
 
   const finalizeSiblingsBefore = (containerPath: string, newKey: string, getRoot: () => unknown): void => {
     const keys = deps.getContainerKeys(containerPath);
-    if (!keys) return;
+    const end = deps.getChildIndex(containerPath, newKey);
+    if (!keys || end === undefined) return;
+    const start = checkedUpTo.get(containerPath) ?? 0;
     const base = segmentsOf(containerPath);
-    for (const key of keys) {
-      if (key === newKey) break;
+    for (let index = start; index < end; index += 1) {
+      const key = keys[index];
+      if (key === undefined) continue;
       finalizeField(childPathOf(containerPath, key), [...base, key], getRoot);
       if (failed) return;
     }
+    checkedUpTo.set(containerPath, Math.max(start, end));
   };
 
   const finalizeAllChildren = (containerPath: string, getRoot: () => unknown): void => {

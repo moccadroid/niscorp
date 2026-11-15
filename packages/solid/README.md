@@ -114,6 +114,8 @@ This runs the sub-schema `safeParse` at the exact moment each field closes in th
 
 2. **Incremental parsing** — each `write(chunk)` feeds characters into a state machine that tracks JSON structure, extracts values, and emits structural events. No `JSON.parse`, no buffer re-scanning. What is written should be the JSON value and nothing else. A code fence around it is ignored, and so is text with no double quote, bracket or brace in it. A `"` in text before the JSON is read as a string where the root belongs: an `onError` (`[solid] <root>: expected object, got string`) in `recover`, a failed stream in `strict`. A bracket or brace in text before the JSON is read as the root itself: the stream ends there, on the initial value or, in `strict`, sometimes as a failure.
 
+   A string is shown as read so far, and a number is too: `{"price":19` then `99}` shows 19, then 1999.
+
 3. **Value-open validation** — the moment the parser detects a value's JSON kind (`{`, `[`, `"`, digit, `t`/`f`/`n`), it checks it against the schema. If the kind doesn't match (string where number expected, array where object lives), the parser enters **skip-mode** — consuming the entire bad subtree without writing, dirtying, or emitting anything. The prior valid value stays in place.
 
 4. **Structural sharing** — the parser mutates an internal object, then produces an immutable snapshot where only the changed paths get new references. Unchanged subtrees keep the same object reference as the previous snapshot.
@@ -182,7 +184,7 @@ stream.onError(listener: (err: StreamError) => void): () => void
 stream.select<P>(path: string): Stream<P>
 ```
 
-`select()` streams are cached by path — `select('widget')` always returns the same instance. Selected streams use reference equality for change detection, so `select('widget.title').on(...)` only fires when the title actually changes, not when sibling fields update.
+`select()` streams are cached by path — `select('widget')` always returns the same instance. A selection's `write()` and `close()` do nothing: feed the root. Selected streams use reference equality for change detection, so `select('widget.title').on(...)` only fires when the title actually changes, not when sibling fields update.
 
 A path separates keys with dots, so `select()` cannot reach a key that has a dot in it (`"index.ts"`). The stream itself keeps such a key and checks it against the schema; an error's `path` joins the keys with dots as given.
 

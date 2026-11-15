@@ -219,6 +219,8 @@ await signal.complete([
 
 The same run as `complete()`, delivered as it happens. Returns `AsyncIterable<StreamEvent<T>>`; `options.signal` (an `AbortSignal`) aborts it.
 
+A missing API key throws `E_MISSING_API_KEY` (and a custom provider with no model `E_MISSING_MODEL`) when `stream()` is called, before anything is read: a `try` around the call catches it, not one around the loop alone.
+
 ```typescript
 for await (const event of signal.stream('Tell me a story')) {
   if (event.type === 'text') process.stdout.write(event.text);
@@ -240,7 +242,7 @@ Schema validation happens at the end of the stream; when the retries are spent t
 
 ### `.step(request)` / `.stepStream(request, options?)`
 
-The low-level primitives `complete()` and `stream()` are built on: one model call, no tool execution, no schema retries. The caller owns the loop. Both take `options.signal` (an `AbortSignal`) as their second argument. `step()` takes a `StepRequest` (`messages`, `tools`, `toolChoice`, `output`, `responseFormat`, `options`) and returns a `StepResult` (`content`, `toolCalls`, `usage`, `finishReason`, `raw`, and — when the request carried `output.accept` — the routed `outcome` and `wire` report). `stepStream()` yields `text`, `reasoning` and `tool_call_delta` events and a final `done` carrying the `StepResult`.
+The low-level primitives `complete()` and `stream()` are built on: one model call, no tool execution, no schema retries. The caller owns the loop. Both take `options.signal` (an `AbortSignal`) as their second argument. `step()` takes a `StepRequest` (`messages`, `tools`, `toolChoice`, `output`, `responseFormat`, `options`) and returns a `StepResult` (`content`, `toolCalls`, `usage`, `finishReason`, `raw`, `reasoning` when the provider sent it, and — when the request carried `output.accept` — the routed `outcome` and `wire` report). `stepStream()` yields `text`, `reasoning` and `tool_call_delta` events and a final `done` carrying the `StepResult`.
 
 - **`messages`** — an assistant turn carries the calls it made as `toolCalls` (`{ id, name, args }`, `args` a JSON string) and has `content: ''` when it only called tools. Each result goes back as a `tool` message whose `toolCallId` is that call's `id`.
 - **`tools`** — each is `{ name, description, parameters }`; `parameters` is the JSON Schema of the tool's input (`z.toJSONSchema()` of a Zod schema).
@@ -251,6 +253,7 @@ The low-level primitives `complete()` and `stream()` are built on: one model cal
 - **`usage`** — `reported: false` means the provider sent no usage and the numbers are an estimate (about 4 characters per token). A stream does not reliably carry its usage.
 - **`outcome`** — also present, without `output.accept`, on a result recovered from a provider rejection.
 - **`wire`** — `rung` names what produced the accepted output: `parse` for content that was valid JSON as it arrived, `call-args` for a call's arguments, otherwise the repair it took. `recovered` is set when the result was recovered from a provider rejection.
+- **`reasoning`** — on `step()`, the model's thinking from the reply (`reasoning` or `reasoning_content`), never part of `content`. `step()` does not ask for it, so it is there only when the provider sends it unasked.
 - **`reasoning` events** — the model's thinking, never part of `content`. Only a provider that streams its reasoning produces them; on Groq and OpenRouter Signal asks for it only when `reasoningEffort` is set.
 - **`tool_call_delta` events** — each carries one fragment of a call's arguments (`argsText`) for the call at `index`. The assembled calls are in the `done` event's `toolCalls`.
 
@@ -278,8 +281,8 @@ The result:
 
 A call is aborted by the `signal` set with `.options()`, the `signal` in a step request's `options`, or the `signal` handed to `stream()`, `step()` or `stepStream()`. When more than one is set, the first to fire aborts the call. A call aborted before it sends its request sends nothing; one aborted while the request is open tears it down.
 
-- `stream()` and `stepStream()` end: no `done` event, and no error.
-- `complete()`, `step()`, `embed()` and `decide()` reject with `E_PROVIDER_ERROR`.
+- `stream()` and `stepStream()` end: no `done` event, and no error. They end at the abort even while the provider's SDK waits out a rate limit's `retry-after`.
+- `complete()`, `step()`, `embed()` and `decide()` reject with `E_PROVIDER_ERROR`. `step()`, `embed()` and `decide()` reject only once such a wait is over.
 
 The caller has the signal, so `signal.aborted` tells an abort from a failed provider call.
 
@@ -352,6 +355,7 @@ const { response } = await createSignal('groq')
    - otherwise `nativeJsonMode` and no tools → sends `response_format: json_object` + schema in a system message
    - otherwise → schema in a system message only
 3. The response is normalized by the wire layer (JSON extraction and repairs, each counted only if the result passes the schema)
+   - On OpenAI, a reply with several JSON values answers with the first that passes the schema; `jsonl-lines` is used only when none does. `{"answer":"draft"}` then `{"answer":"final"}` on two lines answers `draft`.
 4. Validated with `schema.safeParse()`
 5. On failure: the evidence is sent back to the model as a correction message
 6. Retries up to `retries` times (default: 2), then fails with `E_VALIDATION_FAILED`
@@ -418,11 +422,11 @@ Signal is stateless — it doesn't track conversation history. The caller owns h
 const signal = createSignal('groq');
 
 const r1 = await signal.complete('My name is Alice.');
-const r2 = await signal.history(r1.history).complete('What is my name?');
+const r2 = await signal.history(r1.history.filter((m) => m.role !== 'system')).complete('What is my name?');
 // r2.response contains "Alice"
 ```
 
-`complete()` returns `history` which includes all messages (system, user, assistant, tool calls). Pass it back via `.history()` for the next turn.
+`complete()` returns `history` which includes every message it sent and got back: the system prompt, with a schema the schema's system message, and the user, assistant and tool messages. Each call adds the system prompt and the schema message again, so pass the history back without its system messages, as above. Passed back whole, each turn sends them once more: `system system user system assistant user system` on the second turn.
 
 ---
 
@@ -573,7 +577,7 @@ const { decisions } = await jev.decide({
 
 A key that is not a uuid fails with `E_VALIDATION_FAILED` on every provider. A request with no images, or `images: {}`, is sent exactly as one without the field.
 
-### Abort
+### Abort a decision
 
 ```typescript
 const controller = new AbortController();
@@ -607,7 +611,7 @@ All errors are `SignalError` instances with a `.code` and optional `.context`:
 | `E_MISSING_API_KEY` | No API key found (env or explicit) |
 | `E_MISSING_MODEL` | No model specified for custom provider |
 | `E_MISSING_SDK` | Provider SDK not installed |
-| `E_VALIDATION_FAILED` | Response failed Zod validation after all retries; a `decide()` answer failed its gate; a `reasoningEffort` the model does not take |
+| `E_VALIDATION_FAILED` | Response failed Zod validation after all retries; a `decide()` answer failed its gate; a `reasoningEffort` the model does not take; an unknown `wire` strategy id (`context.wire`) |
 | `E_MAX_ITERATIONS` | The tool loop did not finish within its turn limit |
 | `E_PROVIDER_ERROR` | Provider API error (rate limit, server error, a refused `embed()`, etc.); tools on a provider without `nativeTools`; an adapter that is not implemented |
 | `E_MAX_RETRIES`, `E_TOOL_NOT_FOUND`, `E_TOOL_EXECUTION`, `E_TOOL_VALIDATION` | Declared in `ErrorCode`, not currently thrown — tool failures go back to the model as tool results, and exhausted retries are `E_VALIDATION_FAILED` |

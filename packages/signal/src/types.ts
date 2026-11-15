@@ -174,6 +174,7 @@ export type StepResult = {
   raw: unknown;
   outcome?: StepOutcome;
   wire?: WireReport;
+  reasoning?: string;
 };
 
 export type CountInput = string | ReadonlyArray<StepInputMessage>;
@@ -306,6 +307,7 @@ export type ProviderResponse = {
   };
   finishReason: string;
   raw: unknown;
+  reasoning?: string;
 };
 
 export type ChatAdapter = {

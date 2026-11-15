@@ -628,3 +628,20 @@ describe('createStream — a listener that throws', () => {
     expect(await stream.select('t').final()).toBe('ab');
   });
 });
+
+describe('createStream — a key that is the empty string', () => {
+  it('finalizes selections under it, and beside it, when they finalize today', () => {
+    const stream = createStream({ schema: z.any(), initial: {}, mode: 'trust' });
+    const log: string[] = [];
+    let written = 0;
+    for (const path of ['.x', '.x.y', 'x', 'x.y', 'b']) {
+      stream.select(path).onFinal((value) => log.push(`${path}=${JSON.stringify(value)}@${written}`));
+    }
+    for (const char of '{"":{"x":{"y":1}},"b":2,"c":3}') {
+      written += 1;
+      stream.write(char);
+    }
+    stream.close();
+    expect(log).toEqual(['.x.y=1@16', '.x={"y":1}@17', 'x=undefined@17', 'x.y=undefined@17', 'b=undefined@17']);
+  });
+});

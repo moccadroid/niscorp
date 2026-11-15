@@ -90,7 +90,11 @@ How the envelope travels from model to runtime. One field,
 | `respond` | a synthesized `respond` tool; the envelope is its arguments | where the tool params can ENFORCE the contract — the endpoint does not validate tool args itself, the schema is small, the model carries nested args intact (auto-picked there) |
 | `emit` | the model's completion IS the envelope (content channel) | everything else — auto-picked wherever neither of the above enforces anything: all of Groq, big schemas, models that mangle nested tool args |
 
-Zod validates in **every** strategy. Invalid output feeds back as a
+Zod validates in **every** strategy. A `data` that arrives as a
+string of JSON is decoded before it is checked. A schema that takes
+only strings gets it as written when the decoded value fails:
+`z.string()` takes `"[1,2,3]"`.
+Invalid output feeds back as a
 correction *inside the same run* (the attempt and a system message
 naming the issues are appended) — never a full re-run. Big recursive
 schemas (Prism nodes, Nova actions) ride `emit`; cortex injects
@@ -142,6 +146,10 @@ second attempt. `repeatedCalls(n)` ends the run when a tool call has
 got the same answer as the call before it n times in a row — the same
 tool, the same arguments, the same result or error — which is n + 1
 identical calls.
+
+Stop conditions are checked before each step; a model call that
+stalls runs until it ends or the run is aborted. To bound a call's
+wall-clock time, pass `signal: AbortSignal.timeout(ms)`.
 
 `policy.tools` lists take tool **ids** (`tool.id`), not the names
 the model calls: a name in `deny` or `requireApproval` matches
@@ -218,6 +226,12 @@ const result = await run.result;   // the no-streaming opt-out
   is best-effort: a run emits none when Solid cannot follow the
   schema or the text, and the run's result is validated on its own
   either way.
+- Under `respond`, an answer the model writes as message text instead
+  of calling `respond` streams no `output-delta` or `output-partial`;
+  the result is the same.
+- `run.events` replays from `run-start` to any iterator, so a handle
+  keeps every event until it is dropped; drop handles you no longer
+  read.
 - `retry` resets partial-output state. Its `kind` says what is retried: `output` — an envelope
   arrived and was refused; `termination` — the step ended with no
   envelope in it; `provider` — the provider rejected the model's
@@ -331,8 +345,10 @@ Anything you can't explain in the preview, the model can't either.
 
 ## Errors
 
-Programmer errors throw at definition/registration time. Runtime
-conditions return:
+Programmer errors throw at definition or registration time, or from
+`run()` when they depend on the run's options: no `llm`, a tool id
+or name used twice across the agent's and the run's tools, a tool
+named `respond`. Runtime conditions return:
 
 ```ts
 type CortexError = {

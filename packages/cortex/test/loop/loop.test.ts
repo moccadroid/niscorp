@@ -597,3 +597,12 @@ describe('the loop — corrections', () => {
     expect(correction?.content).toContain(issues);
   });
 });
+
+describe('the loop — a string output schema', () => {
+  it('returns a payload that reads as JSON as the model wrote it', async () => {
+    const llm = stubSignal([{ toolCalls: [{ id: 'r', name: 'respond', args: { response: 'here', data: '[1,2,3]' } }] }]);
+    const agent = defineAgent({ id: 'text-out', instructions: 'Answer.', output: { schema: z.string() } });
+    const result = await agent.run('x', { llm }).result;
+    expect(result.ok && result.output.data).toBe('[1,2,3]');
+  });
+});

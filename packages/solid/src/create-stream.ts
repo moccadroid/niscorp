@@ -84,6 +84,7 @@ export const createStream = <T>(options: CreateStreamOptions<T>): Stream<T> => {
     emitError,
     onFailed: enterFailedState,
     getContainerKeys: (path) => tracker.getContainerKeys(path),
+    getChildIndex: (path, key) => tracker.getChildIndex(path, key),
   });
 
   const parser = createIncrementalParser(base, {

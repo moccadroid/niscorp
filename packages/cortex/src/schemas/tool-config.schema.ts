@@ -5,7 +5,7 @@ export type ToolRiskLevel = z.infer<typeof ToolRiskLevelSchema>;
 
 export const ToolConfigSchema = z.object({
   id: z.string().describe('Unique tool identifier.'),
-  name: z.string().describe('Human-readable tool name.'),
+  name: z.string().describe('The name the model calls: letters, digits, `_` and `-`, at most 64 characters (what OpenAI-compatible providers accept).'),
   description: z.string().describe('What this tool does, for the model to read.'),
   category: z.string().optional().describe('Tool category for grouping.'),
   riskLevel: ToolRiskLevelSchema.optional().describe('Risk level: low, medium, or high.'),

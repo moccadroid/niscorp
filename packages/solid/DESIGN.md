@@ -131,6 +131,8 @@ write(chunk)
 
 **How:** The parser calls `setValue(valueBuffer)` on every non-escape character while inside a string. The dirty tracking and snapshot machinery handle the rest.
 
+A number is shown as read so far, as a string is: `{"price":19` then `99}` shows 19, then 1999.
+
 ### 5. Skip-if-unchanged for setValue
 
 **Decision:** The parser checks `value !== existing` before marking a path dirty.
@@ -149,7 +151,7 @@ write(chunk)
 
 **Assumption:** Producers emit keys in a deliberate order. LLM structured output does this naturally — the model writes fields left to right. Consumers should place immediately useful fields first (UI/render → text → reasoning → metadata).
 
-**Implementation:** The finalization tracker maintains a `keysPerContainer` map. When a new key enters, all previous sibling keys (and their descendants) are finalized. When a container closes, all its children are finalized.
+**Implementation:** The finalization tracker keeps, for each container, its keys in order and how many leading keys are already final. When a new key enters or the container closes, the keys not yet final are finalized. Only that container's direct children are walked: a child container finalized its own children when it closed. The validator remembers how far it has checked each container's keys, so with `constraints: 'finalize'` each field is checked once.
 
 ### 7. Events decouple parsing from finalization
 
@@ -166,6 +168,8 @@ write(chunk)
 **Why:** All parsing happens once at root. Selected streams are just lenses into the root state. They subscribe to root change signals (value-free — no type casting needed), project their subtree via `getByPath`, and compare with the previous reference.
 
 **Caching:** `select('widget')` always returns the same stream instance. The cache is a `Map<string, Stream>` on the root.
+
+A selection's `write()` and `close()` do nothing: feed the root.
 
 ### 9. Factory functions, not classes
 
@@ -189,8 +193,8 @@ write(chunk)
 |-----------|-----------|
 | Parser scan | O(chunk_length) |
 | Dirty tracking | O(depth) per value set |
-| Snapshot | O(dirty_paths × depth) |
-| Finalization check | O(events) |
+| Snapshot | O(dirty_paths × depth), plus the length of each list a write changes |
+| Finalization check | O(events): each key is finalized once |
 | Selected stream notify | O(1) per selection (reference ===) |
 
 Total per-write: **O(chunk_length + dirty_count × depth)**

@@ -119,6 +119,12 @@ export const validateEnvelope = <TData>(raw: unknown, spec: EnvelopeSpec<TData>)
       const repaired = spec.schema.safeParse(deepDecodeJsonish(data));
       if (repaired.success) parsed = repaired;
     }
+    if (!parsed.success && data !== record['data'] && spec.schema.type === 'string') {
+      // Only a schema that takes nothing but strings gets text that reads as JSON as it was
+      // written: any other schema is corrected toward the decoded value, as before.
+      const asWritten = spec.schema.safeParse(record['data']);
+      if (asWritten.success) parsed = asWritten;
+    }
     if (!parsed.success) {
       for (const issue of flattenSchemaIssues(parsed.error.issues)) {
         const path = issue.path.length > 0 ? `data.${issue.path.join('.')}` : 'data';

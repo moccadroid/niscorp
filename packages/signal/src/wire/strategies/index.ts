@@ -1,4 +1,5 @@
 import type { Rejection } from '../../types';
+import { SignalError, ErrorCode } from '../../errors';
 import { failedGeneration } from './failed-generation';
 import { jsonlLines } from './jsonl-lines';
 
@@ -25,7 +26,7 @@ const REGISTRY: Record<string, WireStrategy> = {
 export const resolveWireStrategies = (ids: ReadonlyArray<string>): WireStrategy[] =>
   ids.map((id) => {
     const strategy = REGISTRY[id];
-    if (!strategy) throw new Error(`Unknown wire strategy "${id}" — known: ${Object.keys(REGISTRY).join(', ')}`);
+    if (!strategy) throw new SignalError(`Unknown wire strategy "${id}" — known: ${Object.keys(REGISTRY).join(', ')}`, ErrorCode.VALIDATION_FAILED, { wire: id });
     return strategy;
   });
 
