@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { z } from 'zod';
 import { createSignal } from '../src/signal';
+import { SignalError, ErrorCode } from '../src/errors';
 import { routeResponse, routeRejection } from '../src/wire/router';
 import { failedGeneration, jsonlLines, recoverRejection, resolveWireStrategies } from '../src/wire/strategies';
 
@@ -143,6 +144,17 @@ describe('wire strategies — provider knowledge as registry data', () => {
 
   it('unknown strategy ids throw at resolution, not mid-run', () => {
     expect(() => resolveWireStrategies(['nope'])).toThrow(/Unknown wire strategy/);
+  });
+
+  it('an unknown strategy id given to createSignal throws a SignalError', () => {
+    let thrown: unknown;
+    try {
+      createSignal({ baseUrl: 'https://provider.test/v1', apiKey: 'k', model: 'm', wire: ['no-such'] });
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toBeInstanceOf(SignalError);
+    expect(thrown).toMatchObject({ code: ErrorCode.VALIDATION_FAILED, message: expect.stringMatching(/^Unknown wire strategy "no-such"/) });
   });
 });
 
