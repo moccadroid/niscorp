@@ -4,6 +4,7 @@ import { createUpgrader, type Stamp, type Transform } from '../documents';
 import type { Sequence } from '../schema';
 import type { GrammarSchema } from '../check';
 import { changedStrings, planSourceUpgrade, renderReport, verifySourceUpgrade, type SourceDocument, type SourcePlan } from '../upgrade';
+import { schemaMisfit } from '../upgrade/fits';
 import { StrataError } from '../errors';
 
 export type SourceUpgradeOptions = {
@@ -172,12 +173,20 @@ export const runSourceUpgrade = async (options: SourceUpgradeOptions, argv: read
       log(`[fail] the plan was made for ${stampText(plan.to)}, but the installed grammars are at ${stampText(upgrader.stamp)} — plan again: strata upgrade`);
       return 1;
     }
-    const result = verifySourceUpgrade({ plan, upgrader, documents: await loadDocuments() });
+    const documents = await loadDocuments();
+    const result = verifySourceUpgrade({ plan, upgrader, documents });
     for (const line of result.lines) {
       log(`[${line.ok ? 'pass' : 'fail'}] ${line.text}`);
       for (const d of line.detail ?? []) log(`         ${d}`);
     }
-    if (!result.ok) return 1;
+    const planned = new Set(plan.documents.map((d) => `${d.kind}:${d.id}`));
+    const misfits: string[] = [];
+    for (const doc of documents.filter((d) => planned.has(`${d.kind}:${d.id}`))) {
+      const misfit = await schemaMisfit(options.schemas, doc.kind, doc.document);
+      if (misfit !== undefined) misfits.push(`${doc.kind}:${doc.id} does not pass ${doc.kind}'s current schema — ${misfit}`);
+    }
+    for (const misfit of misfits) log(`[fail] ${misfit}`);
+    if (!result.ok || misfits.length > 0) return 1;
     writeLock(plan.to);
     rmSync(join(options.root, options.workDir ?? '.strata'), { recursive: true, force: true });
     log(`[pass] the source is now written at ${stampText(plan.to)} — ${rel(lockPath)} updated. Commit it with the edits.`);

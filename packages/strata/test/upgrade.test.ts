@@ -130,6 +130,19 @@ describe('strata upgrade — the loop', () => {
     expect(readFileSync(join(a.root, '.strata', 'upgrade', 'REPORT.md'), 'utf8')).toContain('## Stop: a migration is wrong');
   });
 
+  it('verify refuses an artifact that matches its migrated JSON but fails the current schema, and keeps the lock', async () => {
+    const a = app();
+    await a.run([forms([])], 'init');
+    const broken = { ...renameTitle, steps: [{ kind: 'document' as const, at: 'acme.forms/form', transform: ({ document }: { document: Record<string, unknown> }) => ({ ...document, heading: 42 }) }] };
+    await a.run([forms([broken])], 'upgrade');
+    a.edit('signup', { id: 'signup', title: 'Sign up', heading: 42, fields: ['email'] });
+    a.edit('contact', { id: 'contact', heading: 42, fields: [] });
+
+    expect(await a.run([forms([broken])], 'verify')).toBe(1);
+    expect(a.lines.join('\n')).toContain("acme.forms/form:signup does not pass acme.forms/form's current schema");
+    expect(a.lock()).toEqual({ grammar: { 'acme.forms': 0 } });
+  });
+
   it('a lock ahead of the installed grammars is refused', async () => {
     const a = app();
     writeFileSync(join(a.root, 'strata.lock.json'), JSON.stringify({ grammar: { 'acme.forms': 3 } }));
