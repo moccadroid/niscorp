@@ -374,3 +374,15 @@ describe('LoomEditor — two recursive documents in one plugin', () => {
     expect(screen.getByDisplayValue('sub')).toBeDefined();
   });
 });
+
+describe('LoomEditor — a document with a field named _errors', () => {
+  it('keeps the field, edits it, and does not report it missing', () => {
+    const onChange = vi.fn();
+    render(<LoomForm schema={z.object({ _errors: z.string(), name: z.string() })} options={{ value: { _errors: 'kept', name: '' } }} onChange={onChange} />);
+    expect(onChange).toHaveBeenLastCalledWith({ _errors: 'kept', name: '' });
+
+    fireEvent.change(screen.getByDisplayValue('kept'), { target: { value: 'still kept' } });
+    expect(onChange).toHaveBeenLastCalledWith({ _errors: 'still kept', name: '' });
+    expect(screen.queryByText(/expected string/i)).toBeNull();
+  });
+});

@@ -168,7 +168,9 @@ of truth. `attachValidation` runs the schema's `safeParse` (refinements and all)
 over the live document and writes the problems into a reserved `_errors` slot in
 the data, as a tree shaped like the document: a problem at `venue.hall` is the
 string at `_errors.venue.hall`. The `_errors` slot is stripped from the document
-Loom reports out.
+Loom reports out. The editor places a document with a top-level field named
+`_errors` one level down, as it places a document whose root is not an object,
+so the slot and the field never meet.
 
 That tree, which `editor.validations` publishes per document, holds the messages
 a form shows. It is not the verdict on the document:
