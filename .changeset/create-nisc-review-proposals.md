@@ -9,3 +9,4 @@ A `.gitignore` that is a folder, or an `.env` that is a folder when the app asks
 An `.env` that already sets a key as `NAME = value` or `export NAME=value` no longer gains an empty `NAME=` after it when the key is left empty, which hid the key from Node. A key that is given is added as before.
 The "Next" lines quote a folder whose path has a space or a shell character: `cd "with space\app"`.
 The README's `env` row names an option's `hint`, which the question shows.
+A new model-first app reads its own `.env` wherever the command is run from (`nisc build --root app` from the folder above found no key before).

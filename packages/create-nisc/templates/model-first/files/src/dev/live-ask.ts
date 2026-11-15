@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import type { SignalClient } from '@niscorp/cortex';
 import type { Chat } from '../server/compose';
 import { modelsFromEnv } from '../server/models';
@@ -34,7 +35,8 @@ const runs = Number(process.argv.find((arg) => arg.startsWith('--runs='))?.slice
 const own = process.argv.slice(2).filter((arg) => !arg.startsWith('--'));
 const cases: readonly Case[] = own.length > 0 ? own.map((ask) => ({ ask, want: () => undefined, follows: true })) : CASES;
 
-if (existsSync('.env')) process.loadEnvFile('.env');
+const envFile = fileURLToPath(new URL('../../.env', import.meta.url));
+if (existsSync(envFile)) process.loadEnvFile(envFile);
 const models = modelsFromEnv(process.env);
 if (models.chat === undefined) {
   console.log(`Set ${models.missing.join(' and ')} in .env: live-ask asks the real model.`);

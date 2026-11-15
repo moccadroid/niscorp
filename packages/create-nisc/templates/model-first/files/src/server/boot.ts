@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { createServer } from '@niscorp/moss';
 import type { MossServer, NiscRuntime, RunSink } from '@niscorp/moss';
 import { buildApp } from '../app/app';
@@ -9,8 +10,10 @@ import { modelsFromEnv } from './models';
 import { logRun } from './runs';
 import { runtime as database } from './runtime';
 
+const ENV_FILE = fileURLToPath(new URL('../../.env', import.meta.url));
+
 const fromEnvFile = (): Models => {
-  if (existsSync('.env')) process.loadEnvFile('.env');
+  if (existsSync(ENV_FILE)) process.loadEnvFile(ENV_FILE);
   const models = modelsFromEnv(process.env);
   console.log(`[app] ${models.summary}`);
   if (models.missing.length > 0) console.log(`[app] ${models.missing.join(', ')} is empty in .env: until it is set, a message is answered with a notice saying so.`);
