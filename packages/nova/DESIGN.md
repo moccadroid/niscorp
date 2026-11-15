@@ -105,15 +105,16 @@ Resolution rules:
   type — number stays number, object stays object).
 - **String, `"text {{expr}} text"`** → string interpolation.
 - **String, bare `"$.path"` or `"$item.field"`** → raw resolved value.
+- **String, bare `@event…` / `@error…`** → raw resolved value, where that scope
+  is present (a trigger's steps, an `onError` list).
 - **String, anything else** → returned literally.
-- **Object `{ $if, $then, $else }`** → conditional. The only directive form.
-  `$else` is optional.
+- **Object with a directive key** → the directive: `{ $if, $then, $else }` is a
+  conditional (`$else` optional), `{ $eq: [a, b] }` strict equality,
+  `{ $exists: x }` whether `x` resolves to anything but undefined (null
+  counts), `{ $at: [array, index, field?] }` an element or one field of it,
+  `{ $prism: node }` a Prism node evaluated against the innermost scope.
 - **Array** → walked recursively.
-- **Plain object** → walked recursively.
-
-The previous `BindingSchema` value-form objects (`{ template: ... }`,
-`{ if, then, else }`) **no longer exist**. The unified resolver replaced
-them.
+- **Any other object** → walked recursively.
 
 Scope chains are arrays of records, innermost first. `createScopeChain(data)`
 returns `[data]`. Loops push a new scope on the front (`{ [as]: item }`).

@@ -48,8 +48,8 @@ export const ActionFragmentSchema = z
     layout: z
       .union([z.string(), LayoutNodeSchema])
       .optional()
-      .describe('The wrapping (chrome) layout, or a layout id. Put a `{ slot: "body" }` node where the composing action\'s own layout is dropped in.'),
-    data: z.record(z.string(), z.unknown()).optional().describe('Partial default data; deep-merged under the action (the action wins on conflict).'),
+      .describe('The wrapping (chrome) layout: put a `{ slot: "body" }` node where the composing action\'s own layout is dropped in. A layout id instead replaces the layout composed so far (the action\'s own and any earlier fragment\'s): composition does not read the layout store, so nothing is put into a stored layout\'s slots.'),
+    data: z.record(z.string(), z.unknown()).optional().describe('Partial default data, merged under the action\'s data one top-level key at a time: on a key both set, the action\'s value replaces the fragment\'s whole, nested objects included.'),
     triggers: z.array(TriggerConfigSchema).optional().describe('Pre-wired triggers (e.g. a modal\'s close/cancel). Concatenated before the action\'s triggers.'),
     endpoints: z
       .record(z.string(), EndpointConfigSchema)
