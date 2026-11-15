@@ -68,7 +68,10 @@ export const snapshotOf = (sequence: Sequence, schemas: Readonly<Record<string, 
 export const snapshotText = (snapshot: Snapshot): string => `${JSON.stringify(sortKeys(snapshot), null, 2)}
 `;
 
-const diffLines = (a: unknown, b: unknown, path: string, out: string[], limit: number, canon: (v: unknown) => unknown = normalize, sets = true): void => {
+type DiffRun = { out: string[]; limit: number; canon: (v: unknown) => unknown; sets: boolean };
+
+const diffLines = (a: unknown, b: unknown, path: string, run: DiffRun): void => {
+  const { out, limit, canon, sets } = run;
   if (out.length >= limit) return;
   if (JSON.stringify(a) === JSON.stringify(b)) return;
   if (isRecord(a) && isRecord(b)) {
@@ -78,14 +81,14 @@ const diffLines = (a: unknown, b: unknown, path: string, out: string[], limit: n
       const after = b[key];
       if (!(key in a)) out.push(`+ ${at}`);
       else if (!(key in b)) out.push(`- ${at}`);
-      else if (sets && key === 'prefixItems' && Array.isArray(before) && Array.isArray(after)) diffPositions(before, after, at, out, limit, canon);
-      else diffLines(before, after, at, out, limit, canon, sets);
+      else if (sets && key === 'prefixItems' && Array.isArray(before) && Array.isArray(after)) diffPositions(before, after, at, run);
+      else diffLines(before, after, at, run);
       if (out.length >= limit) return;
     }
     return;
   }
   if (Array.isArray(a) && Array.isArray(b) && !sets && a.length === b.length) {
-    a.forEach((item, i) => diffLines(item, b[i], `${path}[${i}]`, out, limit, canon, sets));
+    a.forEach((item, i) => diffLines(item, b[i], `${path}[${i}]`, run));
     return;
   }
   if (Array.isArray(a) && Array.isArray(b)) {
@@ -101,7 +104,7 @@ const diffLines = (a: unknown, b: unknown, path: string, out: string[], limit: n
     for (const x of onlyA) {
       const partner = byLabel.get(label(x));
       if (partner !== undefined) {
-        diffLines(x, partner, `${path}[${label(x)}]`, out, limit, canon, sets);
+        diffLines(x, partner, `${path}[${label(x)}]`, run);
         byLabel.delete(label(x));
       } else {
         out.push(`- ${path}[${label(x)}]`);
@@ -117,12 +120,13 @@ const diffLines = (a: unknown, b: unknown, path: string, out: string[], limit: n
   out.push(`~ ${path || '(root)'}: ${JSON.stringify(a)?.slice(0, 60)} → ${JSON.stringify(b)?.slice(0, 60)}`);
 };
 
-const diffPositions = (a: readonly unknown[], b: readonly unknown[], path: string, out: string[], limit: number, canon: (v: unknown) => unknown): void => {
+const diffPositions = (a: readonly unknown[], b: readonly unknown[], path: string, run: DiffRun): void => {
+  const { out, limit } = run;
   for (let i = 0; i < Math.max(a.length, b.length); i += 1) {
     if (out.length >= limit) return;
     if (i >= a.length) out.push(`+ ${path}[${i}]`);
     else if (i >= b.length) out.push(`- ${path}[${i}]`);
-    else diffLines(a[i], b[i], `${path}[${i}]`, out, limit, canon, true);
+    else diffLines(a[i], b[i], `${path}[${i}]`, { ...run, sets: true });
   }
 };
 
@@ -229,7 +233,7 @@ export const compareSnapshot = (recorded: Snapshot | undefined, current: Snapsho
     const lines: string[] = [];
     if (!(kind in recorded.kinds)) lines.push('+ (a new kind)');
     else if (!(kind in current.kinds)) lines.push('- (the kind is gone)');
-    else diffLines(canonical(recorded.kinds[kind]), canonical(current.kinds[kind]), '', lines, 12);
+    else diffLines(canonical(recorded.kinds[kind]), canonical(current.kinds[kind]), '', { out: lines, limit: 12, canon: normalize, sets: true });
     if (lines.length > 0) changes.push({ kind, lines });
   }
   return changes.length === 0 ? { status: 'same' } : { status: 'changed', changes };
@@ -246,7 +250,7 @@ const issueText = (issue: Issue): string => {
 
 export const diffJson = (a: unknown, b: unknown, limit = 20): string[] => {
   const out: string[] = [];
-  diffLines(a, b, '', out, limit, sortKeys, false);
+  diffLines(a, b, '', { out, limit, canon: sortKeys, sets: false });
   return out;
 };
 
