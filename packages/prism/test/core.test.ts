@@ -144,6 +144,15 @@ describe('plain objects', () => {
     expect(evaluate(config, source)).toEqual({ name: 'Alice' });
   });
 
+  it('__optional leaves out a $get whose path runs into null or a missing key, as it does a $ref', () => {
+    const nick = { $get: { from: { $ref: '$.user' }, path: ['profile', 'nick'] } };
+    expect(evaluate({ name: 'x', nick, __optional: ['nick'] }, { user: { profile: null } })).toEqual({ name: 'x' });
+    expect(evaluate({ name: 'x', nick, __optional: ['nick'] }, { user: {} })).toEqual({ name: 'x' });
+    expect(() => evaluate({ name: 'x', nick }, { user: { profile: null } })).toThrow(expect.objectContaining({ code: 'E_TYPE' }));
+    expect(() => evaluate({ nick, __optional: ['nick'] }, { user: { profile: 5 } })).toThrow(expect.objectContaining({ code: 'E_TYPE' }));
+    expect(() => evaluate({ nick, __optional: ['nick'] }, { user: { profile: 'text' } })).toThrow(expect.objectContaining({ code: 'E_TYPE' }));
+  });
+
   it('handles nested template objects', () => {
     const config = {
       profile: {

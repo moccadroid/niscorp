@@ -78,7 +78,7 @@ The interpreter asks it for every node it evaluates; the optimizer asks it once 
 
 ## Plain Objects and `__optional`
 
-Objects without `$`-prefixed keys are output templates. Each value is recursively evaluated. The `__optional` metadata key lists fields that should be silently omitted when they evaluate to `null`/`undefined` or throw `E_MISSING_PATH`.
+Objects without `$`-prefixed keys are output templates. Each value is recursively evaluated. The `__optional` metadata key lists fields that should be silently omitted when they evaluate to `null`/`undefined`, throw `E_MISSING_PATH`, or throw a `$get` error marked `details.absent` (its path ran into `null` or a missing key; the code stays `E_TYPE`).
 
 This enables partial results from incomplete source data without try/catch wrapping every field.
 
