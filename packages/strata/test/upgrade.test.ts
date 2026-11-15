@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { mkdtempSync, readFileSync, existsSync, writeFileSync, mkdirSync, readdirSync } from 'node:fs';
+import { afterAll, describe, it, expect } from 'vitest';
+import { mkdtempSync, readFileSync, existsSync, writeFileSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import { z } from 'zod';
@@ -25,8 +25,19 @@ const renameTitle = {
 const forms = (migrations: Sequence['migrations']): Sequence => ({ id: 'acme.forms', documents: { form: {} }, migrations });
 const schemas = { 'acme.forms/form': z.object({ heading: z.string(), fields: z.array(z.string()) }).strict() };
 
+const made: string[] = [];
+const temporaryFolder = (prefix: string): string => {
+  const folder = mkdtempSync(join(tmpdir(), prefix));
+  made.push(folder);
+  return folder;
+};
+afterAll(() => {
+  for (const folder of made) rmSync(folder, { recursive: true, force: true });
+  expect(made.filter((folder) => existsSync(folder))).toEqual([]);
+});
+
 const app = (workDir?: string) => {
-  const root = mkdtempSync(join(tmpdir(), 'strata-upgrade-'));
+  const root = temporaryFolder('strata-upgrade-');
   mkdirSync(join(root, 'src'), { recursive: true });
   writeFileSync(join(root, 'src', 'forms.ts'), "export const signup = { id: 'signup', title: 'Sign up', fields: ['email'] };\n");
   const source: SourceDocument[] = [
@@ -186,7 +197,7 @@ describe('strata upgrade — it removes only what it wrote', () => {
   });
 
   it('a work directory outside the project: what else is in it stays', async () => {
-    const outside = mkdtempSync(join(tmpdir(), 'strata-outside-'));
+    const outside = temporaryFolder('strata-outside-');
     writeFileSync(join(outside, 'theirs.txt'), 'not strata\n');
     const a = app(join('..', basename(outside)));
     await a.run([forms([])], 'init');
