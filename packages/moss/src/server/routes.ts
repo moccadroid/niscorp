@@ -53,7 +53,7 @@ const INVALID_TOKEN = { refused: { status: 401, error: 'invalid_token', message:
 
 const authenticateRequest = async (deps: AuthenticationDeps, header: string | undefined, request: Request): Promise<Found> => {
   if (header === undefined) return { principal: null, resolved: await deps.resolve(null) };
-  const token = header.startsWith('Bearer ') ? header.slice('Bearer '.length) : header;
+  const token = header.replace(/^bearer +/i, '');
   const credential = deps.credentials.find(({ prefix }) => token.startsWith(prefix));
   if (credential !== undefined) {
     const answer = await credential.principalOf(token, request);

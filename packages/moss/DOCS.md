@@ -1224,7 +1224,8 @@ feature serves).
 
 The socket is not a Hono route: `server.socket` is fed by the runtime's
 transport (`/socket` under `serve` and `attachSocket`). Every request is
-identified once, from `Authorization: Bearer <token>`: a session token goes
+identified once, from `Authorization: Bearer <token>` (the scheme in any
+case; a header with no scheme is read whole as the token): a session token goes
 through the `session` verifier (`401` when it does not resolve); a token
 whose prefix a feature registered is that feature's to read (the integrations
 read `ik_`, an integration key); no header is the anonymous principal. There

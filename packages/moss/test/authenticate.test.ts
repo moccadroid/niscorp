@@ -38,6 +38,16 @@ describe('authentication — who is calling', () => {
     expect(resolve).toHaveBeenCalledTimes(1);
   });
 
+  it.each([['Bearer good'], ['bearer good'], ['BEARER good'], ['Bearer  good']])('the scheme is read in any case: %s is that principal', async (header) => {
+    const answer = await serverWith().request('/who', { headers: { Authorization: header } });
+    expect(await answer.json()).toEqual({ principal: 'usr_1', roles: ['member'] });
+  });
+
+  it('a header with no scheme is read whole, as the token', async () => {
+    const answer = await serverWith().request('/who', { headers: { Authorization: 'good' } });
+    expect(await answer.json()).toEqual({ principal: 'usr_1', roles: ['member'] });
+  });
+
   it('a token that is nobody’s is refused: 401, and never served as nobody', async () => {
     const answer = await asked(serverWith(), 'stale');
     expect(answer.status).toBe(401);
