@@ -2,7 +2,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import type { AddressInfo } from 'node:net';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { serve } from '@hono/node-server';
 import type { ExportedDocument } from '@niscorp/moss';
 import { devServer } from './dev';
@@ -136,10 +136,22 @@ const write = (options: CommandOptions, project: NiscProject, out: string, route
   say(options)(`nisc: ${routes.length} paths written to ${out}`);
 };
 
+const isWithin = (folder: string, path: string): boolean => {
+  const way = relative(folder, path);
+  return way === '' || (way !== '..' && !way.startsWith(`..${sep}`) && !isAbsolute(way));
+};
+
+const refuseOut = (out: string, root: string, dist: string): void => {
+  const what = isWithin(out, root) ? `the app's folder (${root}) or a folder above it` : isWithin(out, dist) || isWithin(dist, out) ? `the built app (${dist}), a folder inside it or one above it` : undefined;
+  if (what === undefined) return;
+  throw new Error(`nisc: --out ${out} is ${what}, and an export empties its folder before writing to it. Nothing was written. Give the export a folder of its own: \`--out out\`.`);
+};
+
 export const exportSite = async (options: CommandOptions): Promise<{ written: boolean; result: BuildResult; out: string }> => {
   const project = await loadProject(options.root);
-  const result = await build(options);
   const out = resolve(options.root, options.out ?? 'out');
+  refuseOut(out, options.root, distOf(options.root, project));
+  const result = await build(options);
   if (result.kind === 'shell') {
     if (!result.ok) {
       const failed = result.routes.filter((route) => route.problems.length > 0);
