@@ -14,6 +14,8 @@ type OpenAICompletion = {
     message?: {
       role: string;
       content?: string | null;
+      reasoning?: string | null;
+      reasoning_content?: string | null;
       tool_calls?: Array<{
         id: string;
         type: string;
@@ -155,8 +157,10 @@ export const createOpenAICompatibleAdapter = async (
     }
 
     const choice = completion.choices?.[0];
+    const reasoning = choice?.message?.reasoning ?? choice?.message?.reasoning_content;
     return {
       content: choice?.message?.content ?? '',
+      ...(typeof reasoning === 'string' && reasoning.length > 0 && { reasoning }),
       toolCalls: choice?.message?.tool_calls?.map((tc) => ({
         id: tc.id,
         name: tc.function.name,

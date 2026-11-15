@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { z } from 'zod';
 import { createSignal, SignalError } from '../src';
+import { sdkOverFetch } from './sdk-over-fetch';
 
 describe('createSignal', () => {
   it('creates a signal from a known provider string', () => {
@@ -203,5 +204,24 @@ describe('stepStream carries the client options to the wire', () => {
     await drain(signal.stepStream({ messages: [{ role: 'user', content: 'hi' }] }));
     expect(captured.params?.['reasoning_effort']).toBe('high');
     expect(captured.params?.['reasoning_format']).toBe('parsed');
+  });
+});
+
+describe('step() returns the reasoning a provider sends', () => {
+  const answer = (message: Record<string, unknown>) => ({
+    json: { id: 'x', object: 'chat.completion', created: 0, model: 'm', choices: [{ index: 0, message: { role: 'assistant', content: '4', ...message }, finish_reason: 'stop' }], usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 } },
+  });
+  const step = (message: Record<string, unknown>) => {
+    const provider = sdkOverFetch([answer(message)]);
+    return createSignal({ baseUrl: 'http://fake.local/v1', apiKey: 'k', model: 'm' }, { client: provider.client }).step({ messages: [{ role: 'user', content: '2+2?' }] });
+  };
+
+  it('as `reasoning` (OpenRouter, Groq) or `reasoning_content` (GLM, DeepSeek), apart from the content', async () => {
+    expect(await step({ reasoning: '2+2 is 4' })).toMatchObject({ content: '4', reasoning: '2+2 is 4' });
+    expect(await step({ reasoning_content: 'two and two' })).toMatchObject({ content: '4', reasoning: 'two and two' });
+  });
+
+  it('and has no `reasoning` when the provider sent none', async () => {
+    expect(await step({})).not.toHaveProperty('reasoning');
   });
 });

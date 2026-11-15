@@ -306,6 +306,7 @@ const createSignalFromConfig = <T = string>(config: SignalConfig): Signal<T> => 
       usage: { ...response.usage, reported: true },
       finishReason: response.finishReason,
       raw: response.raw,
+      ...(response.reasoning !== undefined && { reasoning: response.reasoning }),
     };
     if (!request.output) return result;
     const routed = routeResponse({

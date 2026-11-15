@@ -240,7 +240,7 @@ Schema validation happens at the end of the stream; when the retries are spent t
 
 ### `.step(request)` / `.stepStream(request, options?)`
 
-The low-level primitives `complete()` and `stream()` are built on: one model call, no tool execution, no schema retries. The caller owns the loop. Both take `options.signal` (an `AbortSignal`) as their second argument. `step()` takes a `StepRequest` (`messages`, `tools`, `toolChoice`, `output`, `responseFormat`, `options`) and returns a `StepResult` (`content`, `toolCalls`, `usage`, `finishReason`, `raw`, and — when the request carried `output.accept` — the routed `outcome` and `wire` report). `stepStream()` yields `text`, `reasoning` and `tool_call_delta` events and a final `done` carrying the `StepResult`.
+The low-level primitives `complete()` and `stream()` are built on: one model call, no tool execution, no schema retries. The caller owns the loop. Both take `options.signal` (an `AbortSignal`) as their second argument. `step()` takes a `StepRequest` (`messages`, `tools`, `toolChoice`, `output`, `responseFormat`, `options`) and returns a `StepResult` (`content`, `toolCalls`, `usage`, `finishReason`, `raw`, `reasoning` when the provider sent it, and — when the request carried `output.accept` — the routed `outcome` and `wire` report). `stepStream()` yields `text`, `reasoning` and `tool_call_delta` events and a final `done` carrying the `StepResult`.
 
 - **`messages`** — an assistant turn carries the calls it made as `toolCalls` (`{ id, name, args }`, `args` a JSON string) and has `content: ''` when it only called tools. Each result goes back as a `tool` message whose `toolCallId` is that call's `id`.
 - **`tools`** — each is `{ name, description, parameters }`; `parameters` is the JSON Schema of the tool's input (`z.toJSONSchema()` of a Zod schema).
@@ -251,6 +251,7 @@ The low-level primitives `complete()` and `stream()` are built on: one model cal
 - **`usage`** — `reported: false` means the provider sent no usage and the numbers are an estimate (about 4 characters per token). A stream does not reliably carry its usage.
 - **`outcome`** — also present, without `output.accept`, on a result recovered from a provider rejection.
 - **`wire`** — `rung` names what produced the accepted output: `parse` for content that was valid JSON as it arrived, `call-args` for a call's arguments, otherwise the repair it took. `recovered` is set when the result was recovered from a provider rejection.
+- **`reasoning`** — on `step()`, the model's thinking from the reply (`reasoning` or `reasoning_content`), never part of `content`. `step()` does not ask for it, so it is there only when the provider sends it unasked.
 - **`reasoning` events** — the model's thinking, never part of `content`. Only a provider that streams its reasoning produces them; on Groq and OpenRouter Signal asks for it only when `reasoningEffort` is set.
 - **`tool_call_delta` events** — each carries one fragment of a call's arguments (`argsText`) for the call at `index`. The assembled calls are in the `done` event's `toolCalls`.
 
