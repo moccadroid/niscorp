@@ -401,7 +401,7 @@ const { response, meta } = await createSignal('groq')
 Tools use the provider's native `tools` parameter and `tool_calls` response; the model decides when to call them. A provider without `nativeTools` cannot take tools — the call throws `E_PROVIDER_ERROR`. Signal handles the loop:
 
 1. Model responds with tool calls
-2. Signal validates args with Zod, executes the tool
+2. Signal validates args with Zod (a call that arrives with no argument text is validated as `{}`), executes the tool
 3. Tool result is sent back to the model
 4. Model responds with the final answer
 5. With a schema set, the final answer is validated against it

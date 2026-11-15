@@ -146,7 +146,8 @@ export async function* runStream<T>(spec: RunSpec, deps: RunDeps): AsyncGenerato
         spec.onToolCall?.(call.name, call.args);
         yield { type: 'tool_start', name: call.name, args: call.args };
         const tool = toolMap.get(call.name);
-        const parsed = tool?.inputSchema.safeParse(call.args);
+        // A provider may send no argument text at all for a call that takes none.
+        const parsed = tool?.inputSchema.safeParse(call.args === '' ? {} : call.args);
         const started = Date.now();
         let output: unknown;
         if (!tool) output = `error: unknown tool "${call.name}"`;
