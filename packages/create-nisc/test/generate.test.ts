@@ -260,3 +260,25 @@ describe('items — how a catalog is put together', () => {
     expect(existsSync(at('clash'))).toBe(false);
   });
 });
+
+describe('items — an item.json of the wrong shape is refused, naming the file and the field', () => {
+  const catalogWith = (name: string, item: Record<string, unknown>): string => {
+    const root = join(scratch, 'misshapen', name);
+    mkdirSync(join(root, 'thing'), { recursive: true });
+    writeFileSync(join(root, 'questions.json'), JSON.stringify([{ id: 'shape', message: 'Which shape?' }]));
+    writeFileSync(join(root, 'thing', 'item.json'), JSON.stringify({ id: 'thing', answers: 'shape', label: 'Thing', default: true, ...item }));
+    return root;
+  };
+
+  it.each([
+    ['requires', { requires: 'moss' }, 'requires is not an object'],
+    ['with', { with: { thing: ['docs'] } }, 'with.thing is not an object'],
+    ['env', { env: [{ name: 'KEY' }] }, 'env[0].message is not a string'],
+    ['an env choice', { env: [{ choose: 'MODE', message: 'Which mode?', options: [{ value: 'a' }] }] }, 'env[0].options[0].label is not a string'],
+    ['docs', { docs: { where: 'src/  the source' } }, 'docs.where is not a list'],
+    ['package', { package: ['zod'] }, 'package is not an object'],
+    ['default', { default: 'yes' }, 'default is not true or false'],
+  ])('%s', (name, item, said) => {
+    expect(() => readCatalog(catalogWith(name, item))).toThrow(`create-nisc: in thing/item.json, ${said}`);
+  });
+});
