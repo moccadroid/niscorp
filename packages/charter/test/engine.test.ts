@@ -18,6 +18,25 @@ describe('glob', () => {
     expect(matchGlob('a.*', 'a.one')).toBe(true);
     expect(matchGlob('*', 'a.one')).toBe(true);
   });
+
+  it('a pattern of many stars against a long id that it does not match answers at once', () => {
+    const started = Date.now();
+    expect(matchGlob('*a*a*a*a*a*a*a*a*a*a*b', 'a'.repeat(40))).toBe(false);
+    expect(Date.now() - started).toBeLessThan(50);
+  });
+
+  it('answers what a regular expression of the pattern answers', () => {
+    const regexOf = (pattern: string): RegExp => new RegExp(`^${pattern.split('*').map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('.*')}$`, 's');
+    const alphabet = ['a', 'b', '.', '*', '\n'];
+    let seed = 7;
+    const next = (n: number): number => ((seed = (seed * 1103515245 + 12345) % 2147483648), seed % n);
+    const word = (max: number, chars: readonly string[]): string => Array.from({ length: next(max) }, () => chars[next(chars.length)]).join('');
+    for (let i = 0; i < 20000; i++) {
+      const pattern = word(7, alphabet);
+      const id = word(9, alphabet.filter((c) => c !== '*'));
+      expect([pattern, id, matchGlob(pattern, id)]).toEqual([pattern, id, regexOf(pattern).test(id)]);
+    }
+  });
 });
 
 describe('resolution', () => {
