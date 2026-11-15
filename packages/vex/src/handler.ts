@@ -12,10 +12,10 @@ import { collectMutationContext, collectQueryContext, mutationEffect } from './m
 import type { ContextSignature, MutationEffect } from './mutations/signature.js';
 import type { CacheEntry } from './cache/cache.types.js';
 import type { QueryResponse } from './schemas/request.schema.js';
-import type { Query } from './schemas/query.schema.js';
 import { isVexError } from './errors.js';
 import { depthRefusal, exceedsDepth } from '@niscorp/strata';
 import { canReadTable } from './scope/apply.js';
+import { discoverEntities } from './scope/discover.js';
 
 export type VexHandlerConfig = {
   engine: QueryEngine;
@@ -158,20 +158,8 @@ const canWriteTable = (policy: ScopePolicy, table: string, op: string): boolean 
   return false;
 };
 
-const collectTables = (dsl: Query): string[] => {
-  const out: string[] = [];
-  const walk = (q: Query): void => {
-    for (const src of q.from) {
-      if (typeof src === 'string') out.push(src);
-      else walk(src.query);
-    }
-  };
-  walk(dsl);
-  return out;
-};
-
 const entryVisible = (policy: ScopePolicy, entry: CacheEntry): boolean => {
-  if (entry.kind === 'ok') return collectTables(entry.dsl).every((t) => canReadTable(policy, t));
+  if (entry.kind === 'ok') return [...discoverEntities(entry.dsl)].every((t) => canReadTable(policy, t));
   if (entry.kind === 'mutation') return mutationEffect(entry.mutation).every((e) => canWriteTable(policy, e.table, e.op));
   return false;
 };
