@@ -109,10 +109,15 @@ export const createLoomEditor = (config: LoomEditorConfig): LoomEditor => {
         detach.push(attachValidation(shell, instanceId, schema));
       }
     }
+    // An edit arrives twice: as itself, and as the validation it writes back.
+    let published = '';
     detach.push(
       shell.onDataChange((change) => {
         if (!Object.values(formInstances).includes(change.instanceId)) return;
         refresh();
+        const now = JSON.stringify([documents, validations]);
+        if (now === published) return;
+        published = now;
         emit('change');
       }),
     );

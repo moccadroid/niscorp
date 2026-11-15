@@ -212,7 +212,9 @@ contributed by plugins. The flow:
 - `open(artifact)` selects the plugin named by `artifact.type` and compiles its
   documents into form canvases. The controller then publishes the live document
   values (`editor.documents`) and validation problems (`editor.validations`), and
-  emits `change` / `open` events. `editor.plugin` is the selected plugin,
+  emits `change` / `open` events. `change` is emitted when either of the two
+  differs from what the last `change` published, so an edit and the validation
+  it writes back are one `change`. `editor.plugin` is the selected plugin,
   `undefined` before the first `open`. The default canvas layout is a row of
   `loom:column` nodes, one holding the forms and one holding every other canvas;
   `loom:column` is the kit's sized column, with `grow` (default 1), its

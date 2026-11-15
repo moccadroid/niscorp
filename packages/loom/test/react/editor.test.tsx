@@ -399,6 +399,14 @@ describe('LoomEditor — fields named like built-in object members', () => {
 });
 
 describe('LoomEditor — the onChange prop', () => {
+  it('is called once for one keystroke, with the edited document', () => {
+    const onChange = vi.fn();
+    render(<LoomForm schema={z.object({ name: z.string().min(2) })} onChange={onChange} />);
+    onChange.mockClear();
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'x' } });
+    expect(onChange.mock.calls).toEqual([[{ name: 'x' }]]);
+  });
+
   it('calls the onChange of the latest render', () => {
     const first = vi.fn();
     const second = vi.fn();

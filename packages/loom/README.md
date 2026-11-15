@@ -97,7 +97,7 @@ import { prism } from '@niscorp/loom/plugins/prism/react';
 - `artifact` says what to edit. `type` names the plugin that handles it;
   `documents` seeds the starting values (omit it to start from the schema's
   defaults).
-- `onChange` fires with the live document values on every edit; the one
+- `onChange` fires once per edit, with the live document values; the one
   passed on the latest render is the one called.
 - To switch to a different artifact, give the element a new React `key`.
   `plugins` and `artifact` are read once, when the element mounts.
