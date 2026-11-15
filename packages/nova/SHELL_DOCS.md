@@ -133,6 +133,8 @@ In nova itself every `initial` seed is pushed, and one naming an unknown action 
 
 Every action the shell can mount, keyed by id. Actions are validated at shell init via `ActionDefinitionSchema`. Any malformed definition throws `DefinitionValidationError` with a list of Zod issues. An action or fragment keyed by anything other than its id is reported to `onError` as a `DefinitionValidationError`, in strict mode too, and the shell still loads it under its key: `push` and `removeAction` then take the key, and the instance carries the id.
 
+A `GET` endpoint with a `request` body (in an action or a fragment) is reported the same way, by `createShell` and by `registerAction`, and is loaded as given: fetch sends no body with a GET, so its every call fails.
+
 Actions can `{push: {action: 'someId'}}` other actions — but only ones that exist in this map. Trying to push an unknown action throws `UnknownActionError`.
 
 ### `registry` and `layoutStore`

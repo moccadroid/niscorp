@@ -375,7 +375,7 @@ endpoints: {
 - **`url`** *(required)* — template URL. Bindings work.
 - **`method`** *(required)* — `GET` | `POST` | `PUT` | `PATCH` | `DELETE`.
 - **`headers`** *(optional)* — object of header name → value. Values can be templated; names cannot.
-- **`request`** *(optional)* — a transform config run by the **injected evaluator** (see below) over the action data to build the request body. Static parts are literal; dynamic parts use the evaluator's ops. A string result is sent as-is; anything else is JSON-stringified. Declaring `request` without an injected transform is a hard error — never a silent empty body.
+- **`request`** *(optional)* — a transform config run by the **injected evaluator** (see below) over the action data to build the request body. Static parts are literal; dynamic parts use the evaluator's ops. A string result is sent as-is; anything else is JSON-stringified. Declaring `request` without an injected transform is a hard error — never a silent empty body. Not on a `GET`: fetch sends no body with a GET, so every call of it fails; the shell reports such an endpoint to `onError` as a `DefinitionValidationError` when `createShell` or `registerAction` loads the definition, and loads it as given.
 - **`response`** *(optional)* — a transform config run by the injected evaluator over the reply **exactly as received** (`$` is the reply — object, array, or scalar; no wrapping) to produce the value stored at `target`. Declaring it without an injected transform is a hard error — never the unshaped reply.
 - **`target`** *(optional)* — data path to write the (possibly transformed) response into on success. If unset, the response is discarded.
 - **`errorTarget`** *(optional)* — data path to write the error info into on failure.

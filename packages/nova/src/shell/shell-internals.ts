@@ -82,6 +82,18 @@ export const misfiledDefinitions = (definitions: Record<string, ActionDefinition
   return new DefinitionValidationError(`${failures.length} definition(s) keyed by something other than their id`, { failures });
 };
 
+// Reported, not refused: the schema accepts such an endpoint, and fetch refuses its every call.
+export const getEndpointsWithBody = (definitions: Record<string, ActionDefinition | ActionFragment>): DefinitionValidationError | undefined => {
+  const failures: DefinitionValidationFailure[] = Object.entries(definitions).flatMap(([key, def]) => {
+    const issues = Object.entries(def.endpoints ?? {})
+      .filter(([, endpoint]) => 'method' in endpoint && endpoint.method === 'GET' && endpoint.request !== undefined)
+      .map(([name]) => ({ code: 'custom' as const, path: ['endpoints', name, 'request'], message: `endpoint "${name}" is a GET with a request body: fetch sends no body with a GET, so every call fails`, input: undefined }));
+    return issues.length === 0 ? [] : [{ id: key, issues }];
+  });
+  if (failures.length === 0) return undefined;
+  return new DefinitionValidationError(`${failures.length} definition(s) with a GET endpoint that has a request body`, { failures });
+};
+
 export const snapshotCanvas = (canvas: Canvas): CanvasState => {
   const stack = canvas.stack.slice();
   return {
