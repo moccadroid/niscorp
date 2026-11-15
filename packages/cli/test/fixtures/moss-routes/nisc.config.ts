@@ -13,6 +13,7 @@ const app = defineApp({
       data: { said: '' },
       endpoints: { load: { url: '/hello', method: 'GET', target: 'said' } },
       lifecycle: { mount: [{ call: 'load' }] },
+      ...(process.env['NISC_FIXTURE_LIVE'] === '1' ? { triggers: [{ message: 'hello-changed', do: [{ call: 'load' }] }] } : {}),
     },
   },
   shell: { canvases: [{ id: 'main', initial: 'home' }] },

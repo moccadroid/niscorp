@@ -45,13 +45,19 @@ export const exportSite = async (options: CommandOptions): Promise<{ written: bo
     return { written: true, result, out };
   }
   const routes = result.routes;
-  const live = routes.filter((route) => route.live || !route.drawn);
-  if (live.length > 0 && options.allowLive !== true) {
+  const pathsOf = (some: typeof routes): string => some.map((route) => route.path).join(', ');
+  const live = routes.filter((route) => route.drawn && route.live);
+  const undrawn = routes.filter((route) => !route.drawn);
+  if (live.length + undrawn.length > 0 && options.allowLive !== true) {
     say(options)('');
-    say(options)(`nisc: ${live.length} of ${routes.length} paths cannot be a file alone (${live.map((route) => route.path).join(', ')}).`);
-    say(options)('      Nothing was written. With a server beside the files they still work: `nisc export --allow-live`.');
+    if (live.length > 0) say(options)(`nisc: ${live.length} of ${routes.length} paths cannot be a file alone (${pathsOf(live)}).`);
+    if (undrawn.length > 0) {
+      say(options)(`nisc: ${undrawn.length} of ${routes.length} paths could not be drawn (see the table): it would go out as the template, empty until its terminal connects (${pathsOf(undrawn)}).`);
+    }
+    say(options)(live.length > 0 ? '      Nothing was written. With a server beside the files they still work: `nisc export --allow-live`.' : '      Nothing was written.');
     return { written: false, result, out };
   }
   write(options, project, out, routes);
+  for (const route of undrawn) say(options)(`nisc: ${route.path} could not be drawn — written as the template; it shows nothing until its terminal connects.`);
   return { written: true, result, out };
 };

@@ -275,7 +275,9 @@ For an app behind moss: if any path wants a server behind it, **nothing is writt
 says which paths and why (exit code 1). A folder cannot be a server. When one
 will stand beside the files — the socket at `/socket` on the same origin —
 `--allow-live` writes the site anyway: each such file is a true first screen,
-and its terminal connects.
+and its terminal connects. A path that could not be drawn is named on a line of
+its own, and `--allow-live` is not offered for it: written anyway, it is the
+template, empty until its terminal connects, and the command says so.
 
 A folder carries no headers, so what a browser may keep of it is the host's to
 say. What `nisc start` says is the rule to give it: everything under `/assets/`
