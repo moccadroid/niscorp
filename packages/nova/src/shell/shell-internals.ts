@@ -70,6 +70,18 @@ export const refuseSharedId = (id: string): never => {
   });
 };
 
+// Reported, not refused: the shell loads such a map under its keys.
+export const misfiledDefinitions = (definitions: Record<string, ActionDefinition | ActionFragment>): DefinitionValidationError | undefined => {
+  const failures: DefinitionValidationFailure[] = Object.entries(definitions)
+    .filter(([key, def]) => def.id !== key)
+    .map(([key, def]) => ({
+      id: key,
+      issues: [{ code: 'custom', path: ['id'], message: `keyed "${key}" but its id is "${def.id}": key the map by the id`, input: def.id }],
+    }));
+  if (failures.length === 0) return undefined;
+  return new DefinitionValidationError(`${failures.length} definition(s) keyed by something other than their id`, { failures });
+};
+
 export const snapshotCanvas = (canvas: Canvas): CanvasState => {
   const stack = canvas.stack.slice();
   return {

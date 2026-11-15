@@ -18,3 +18,6 @@ export const hasKey = <K extends string>(
   obj: unknown,
   key: K,
 ): obj is Record<K, unknown> => isObject(obj) && key in obj;
+
+export const ownEntry = <T>(record: Record<string, T> | undefined, name: string): T | undefined =>
+  record !== undefined && Object.hasOwn(record, name) ? record[name] : undefined;

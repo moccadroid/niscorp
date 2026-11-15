@@ -29,12 +29,24 @@ no terminal. What consumes that tree is an adapter, and five ship here:
 | `adapters/tty`   | any terminal, line REPL   | every interactive carries a `[n]` marker — type the number |
 | `adapters/ink`   | any terminal, full-screen | the same `[n]` markers, plus focus and live typing         |
 
-Same trees down, same `ui:click` / `ui:model` / `ui:key` events up — an app
-renders in all five without changing a line, and a served host (see
-`@niscorp/moss`) cannot tell them apart. The TTY numbering is computed once
-and shared: `[7]` is the same interactive in the REPL and the TUI.
+Same trees down, same `ui:click` / `ui:model` / `ui:key` events up — every
+walker takes the same tree, and a served host (see `@niscorp/moss`) cannot
+tell them apart. The TTY numbering is computed once and shared: `[7]` is the
+same interactive in the REPL and the TUI.
 
-An adapter is a walker plus a component kit of ~15 domain-blind primitives.
+An adapter is a walker plus a component kit of domain-blind primitives. The
+kits differ in what they ship, so an app renders unchanged in an adapter when
+every component name it uses is in that kit or registered by the app; a name
+the registry lacks draws a `COMPONENT_NOT_FOUND` marker.
+
+| kit                                                     | components                                                                                                          |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `adapters/react/components`, `adapters/vue/components` | Stack, Text, Input, Button, Box, Panel, JsonTree, CanvasSlot, ActionSlot (9)                                       |
+| `adapters/dom/components`                               | Box, Row, Stack, Grid, Text, Button, Input, Textarea, Checkbox, Table, Panel, JsonTree, ActionSlot; Select (an Input), Switch (a Checkbox) |
+| `adapters/tty/components`                               | the DOM kit's names plus Badge                                                                                      |
+| `adapters/ink`                                          | the TTY kit's names, with Textarea an Input                                                                         |
+
+The DOM and TTY walkers draw a `CanvasSlot` themselves.
 [ADAPTER.md](ADAPTER.md) is the whole contract; the terminal adapters' APIs
 are in [TERMINAL_DOCS.md](TERMINAL_DOCS.md); a Svelte or react-native
 adapter is a sibling folder, built the way the Vue one is.

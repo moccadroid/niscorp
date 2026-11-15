@@ -40,8 +40,9 @@ const FunctionEndpointSchema = z
     fn: z
       .string()
       .describe(
-        'Key of a function registered in `ShellConfig.functions`. The host must ' +
-          'register the name before the action runs.',
+        'Name of a function registered in `ShellConfig.functions`; the host registers it before the action runs. ' +
+          'Read as a binding first: a `{{…}}` template, a `$` path into the action\'s data (`$.which`), or an `@event` path (in a trigger\'s steps) ' +
+          'or `@error` path (in an `onError` list) supplies the name; any other string is the name itself.',
       ),
     target: z.string().optional().describe('Data path to store the return value at on success.'),
     errorTarget: z.string().optional().describe('Data path to store the error at on failure.'),

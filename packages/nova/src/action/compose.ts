@@ -21,7 +21,7 @@ export const composeAction = (
     const wrap = frag.layout;
     if (wrap === undefined) continue;
     if (typeof wrap === 'string') {
-      layout = wrap; // a stored layout has no slot to fill: it replaces the layout so far
+      layout = wrap; // composition does not read the layout store: the id replaces the layout so far
       continue;
     }
     layout = fillSlots(wrap, layout === undefined ? {} : { body: layout as LayoutNode });

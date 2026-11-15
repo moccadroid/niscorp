@@ -1,5 +1,5 @@
 import { evaluateSafe } from '@niscorp/prism';
-import { hasKey, isArray, isObject } from '../common';
+import { hasKey, isArray, isObject, ownEntry } from '../common';
 import { getPath } from './paths';
 import type { ScopeChain } from './types';
 
@@ -124,7 +124,7 @@ const DIRECTIVES: Record<string, Directive> = {
 
 const directiveOf = (value: Record<string, unknown>): Directive | undefined => {
   for (const key of Object.keys(value)) {
-    const directive = DIRECTIVES[key];
+    const directive = ownEntry(DIRECTIVES, key);
     if (directive !== undefined) return directive;
   }
   return undefined;

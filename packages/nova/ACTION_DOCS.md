@@ -194,7 +194,7 @@ Remove an element at a specific index.
 { removeAt: 'items', index: 2 }                  // remove third
 ```
 
-The index can also be a template string (e.g. `"{{@event.payload}}"`) resolved before applying.
+The index can also be a template string (e.g. `"{{@event.payload}}"`) resolved before applying. One that does not resolve to a whole number (a missing path, a fraction, a word) leaves the array as it is, and the steps after it run.
 
 ### `move`
 
@@ -205,7 +205,7 @@ Reorder an array element from one index to another.
 { move: 'items', from: '{{@event.payload}}', to: 0 }
 ```
 
-`from` / `to` accept a number or a template string resolved before applying. An out-of-range `from` is a no-op; `to` is clamped into range.
+`from` / `to` accept a number or a template string resolved before applying. An out-of-range `from` is a no-op; `to` is clamped into range. A template that does not resolve to a whole number leaves the array as it is.
 
 ### `clear`
 
@@ -472,7 +472,7 @@ const modalFrame: ActionFragment = {
 
 Fields: `kind`, `id`, and optional `name`, `description`, `layout`, `data`, `triggers`, `endpoints`, `lifecycle` — the same shapes as on an action. A fragment has no `title` or `input`.
 
-On merge (`composeAction(action, fragments)`): each fragment's layout wraps the layout so far, filling its `{ slot: 'body' }` — the last fragment listed is the outermost; a fragment whose `layout` is a store id replaces the layout instead of wrapping it. `data` and `endpoints` merge with the action winning on a clash (`data` is a shallow merge). Triggers concatenate, fragment first. Lifecycle steps concatenate per hook, fragment first. An unknown fragment id throws `UnknownFragmentError`.
+On merge (`composeAction(action, fragments)`): each fragment's layout wraps the layout so far, filling its `{ slot: 'body' }` with it as it is — the last fragment listed is the outermost, and a layout so far that is a layout id fills the slot as a string, which renders as that text; a fragment whose `layout` is a layout id replaces the layout instead of wrapping it. `data` and `endpoints` merge with the action winning on a clash (`data` is a shallow merge). Triggers concatenate, fragment first. Lifecycle steps concatenate per hook, fragment first. An unknown fragment id throws `UnknownFragmentError`.
 
 ---
 

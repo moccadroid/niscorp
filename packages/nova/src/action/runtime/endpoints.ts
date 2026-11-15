@@ -1,5 +1,5 @@
 import { createScopeChain, resolve } from '@shared/bindings';
-import { hasKey } from '@shared/common';
+import { hasKey, ownEntry } from '@shared/common';
 import type { ScopeChain } from '@shared/bindings';
 import type { EndpointConfig, FunctionEndpointConfig, HttpEndpointConfig } from '../schemas';
 import type { FetchFn, FetchResponse, FunctionHandler, TransformFn, Unsubscribe } from '../types';
@@ -187,7 +187,7 @@ const callFunctionEndpoint = async (
   if (signal === undefined) {
     throw new Error('callEndpoint: function variant requires an AbortSignal');
   }
-  const handler = functions?.[endpoint.fn];
+  const handler = ownEntry(functions, endpoint.fn);
   if (handler === undefined) {
     throw new Error(`callEndpoint: function "${endpoint.fn}" is not registered`);
   }

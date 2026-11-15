@@ -1,9 +1,10 @@
+import { ownEntry } from '../shared/common';
 import { isComponentNode, isConditionalNode, isLoopNode, isSlotNode } from './guards';
 import type { LayoutNode } from './schemas';
 
 export const fillSlots = (layout: LayoutNode, fills: Record<string, LayoutNode>): LayoutNode => {
   if (isSlotNode(layout)) {
-    const fill = fills[layout.slot];
+    const fill = ownEntry(fills, layout.slot);
     return fill === undefined ? layout : fill;
   }
   if (Array.isArray(layout)) {

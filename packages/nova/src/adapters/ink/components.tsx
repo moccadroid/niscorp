@@ -4,6 +4,7 @@ import TextInput from 'ink-text-input';
 // The package's public name, not the `@react` alias: this import stays external
 // in the bundle, so the ink kit shares the react adapter's context with its host.
 import { useNovaDispatch, type NovaComponent } from '@niscorp/nova/adapters/react';
+import { ownEntry } from '../../shared/common';
 import { str, num, bool, iconGlyph, truncate, pad } from '../tty/components/props';
 import { at, cellText, columnsOf, cellKey, JsonTree as renderJsonLines } from '../tty/components/components';
 import { useMarker, markerFocusId, Mark, FrameControlsContext } from './markers';
@@ -149,7 +150,7 @@ const TEXT_COLOR: Record<string, string> = {
 export const Text: NovaComponent = ({ children, ...rest }) => {
   if (children === undefined || children === null) return null;
   const body = bool(rest, 'upper') ? <Transform transform={(s) => s.toUpperCase()}>{children}</Transform> : children;
-  const tone = TEXT_COLOR[str(rest, 'color') ?? ''];
+  const tone = ownEntry(TEXT_COLOR, str(rest, 'color') ?? '');
   return (
     <InkText bold={heavy(rest)} dimColor={mutedColor(rest)} {...(tone !== undefined ? { color: tone } : {})}>{body}</InkText>
   );

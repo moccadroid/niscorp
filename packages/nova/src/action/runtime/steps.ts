@@ -2,7 +2,7 @@ import { createScopeChain, resolve } from '@shared/bindings';
 import type { ExtraScopes, ScopeChain } from '@shared/bindings';
 import type { DataStore } from '@shared/data-store';
 import type { EventBus } from '@shared/event-bus';
-import { isObject } from '@shared/common';
+import { isObject, ownEntry } from '@shared/common';
 import type { MessageBus } from '@shared/message-bus';
 import { setPath } from '@shared/bindings/paths';
 import { applyMutations } from '../mutations';
@@ -58,6 +58,12 @@ export type StepContext = {
 
 export const noopOnError: OnErrorHandler = (_error: NovaError): void => {};
 
+// What is no whole number stays text: the op's own guard then leaves the array alone.
+const resolveIndex = (template: string, chain: ScopeChain, extras: ExtraScopes): number | string => {
+  const index = Number(resolve(template, chain, extras));
+  return Number.isInteger(index) ? index : String(index);
+};
+
 const resolveMutationValues = (
   list: Mutation[],
   chain: ScopeChain,
@@ -71,13 +77,13 @@ const resolveMutationValues = (
       return { ...m, value: resolve(m.value, chain, extras) };
     }
     if ('removeAt' in m && typeof m.index === 'string') {
-      return { ...m, index: Number(resolve(m.index, chain, extras)) };
+      return { ...m, index: resolveIndex(m.index, chain, extras) };
     }
     if ('move' in m) {
       return {
         ...m,
-        from: typeof m.from === 'string' ? Number(resolve(m.from, chain, extras)) : m.from,
-        to: typeof m.to === 'string' ? Number(resolve(m.to, chain, extras)) : m.to,
+        from: typeof m.from === 'string' ? resolveIndex(m.from, chain, extras) : m.from,
+        to: typeof m.to === 'string' ? resolveIndex(m.to, chain, extras) : m.to,
       };
     }
     return m;
@@ -123,7 +129,7 @@ const runCall = async (
   onError: Step[] | undefined,
   ctx: StepContext,
 ): Promise<void> => {
-  const raw = ctx.endpoints[callName];
+  const raw = ownEntry(ctx.endpoints, callName);
   if (raw === undefined) {
     await raiseUnknown(`unknown endpoint: ${callName}`, onError, ctx);
     return;
@@ -133,7 +139,7 @@ const runCall = async (
     const chain = createScopeChain(ctx.dataStore.get());
     const fn = String(resolve(raw.fn, chain, ctx.extras) ?? '');
     endpoint = { ...raw, fn };
-    if (ctx.functions[fn] === undefined) {
+    if (ownEntry(ctx.functions, fn) === undefined) {
       await raiseUnknown(`unknown function: ${fn}`, onError, ctx, new UnknownFunctionError(fn));
       return;
     }
