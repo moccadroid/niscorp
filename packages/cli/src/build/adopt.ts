@@ -33,7 +33,7 @@ const main = async (): Promise<void> => {
   if (root === undefined || asked === undefined || answered === undefined) throw new Error('usage: adopt <root> <pages.json> <answer.json>');
   standDom(root);
   // only now: the app's modules load into a world that has a DOM
-  const { isShellProject, loadProject } = await import('./project');
+  const { isShellProject, loadProject } = await import('../project');
   const project = await loadProject(root);
   if (!isShellProject(project)) throw new Error('nisc: this app has no shell of its own to adopt with.');
 

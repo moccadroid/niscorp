@@ -16,7 +16,7 @@ for (const entry of readdirSync(packages, { withFileTypes: true })) {
 // Both entries sit in dist/, beside each other, so `../templates` means the
 // same folder to both.
 export default defineConfig({
-  entry: { index: 'src/index.ts', cli: 'src/cli.ts' },
+  entry: { index: 'src/index.ts', cli: 'src/command/cli.ts' },
   format: ['esm'],
   dts: { entry: { index: 'src/index.ts' } },
   sourcemap: true,

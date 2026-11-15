@@ -1,7 +1,7 @@
 import { brotliDecompressSync, createBrotliDecompress, gunzipSync } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
-import { siteHandler, withCaching, withCompression } from '../src/site';
-import type { SiteHandler } from '../src/site';
+import { siteHandler, withCaching, withCompression } from '../src/serve';
+import type { SiteHandler } from '../src/serve';
 
 const WHEN = 'Sat, 03 Oct 2026 12:00:00 GMT';
 const LONG = 'nisc '.repeat(2000);

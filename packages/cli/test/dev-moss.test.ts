@@ -1,7 +1,7 @@
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { dev } from '../src/commands';
+import { dev } from '../src/dev';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), 'fixtures', 'moss-routes');
 

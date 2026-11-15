@@ -1,9 +1,9 @@
 import { existsSync, readdirSync } from 'node:fs';
 import { basename, relative, resolve } from 'node:path';
 import { cancel, confirm, intro, isCancel, note, outro, password, select, text } from '@clack/prompts';
-import { envOf, isChoice, itemsOf, offered, readCatalog } from './catalog';
-import type { Catalog, EnvKey, Item, Question } from './catalog';
-import { TEMPLATES, generate, refuseFileInTheWay, validName } from './generate';
+import { envOf, isChoice, itemsOf, offered, readCatalog } from '../catalog';
+import type { Catalog, EnvKey, Item, Question } from '../catalog';
+import { TEMPLATES, generate, refuseFileInTheWay, validName } from '../generate';
 import { testedSet } from './set';
 
 const DEFAULT_DIR = 'my-nisc-app';

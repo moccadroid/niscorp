@@ -8,7 +8,7 @@ import type { Shell } from '@niscorp/nova';
 import { headOf, placeHead } from '@niscorp/nova/document';
 import type { ScreenHead } from '@niscorp/nova/document';
 import { livenessOf } from '@niscorp/nova/reflect';
-import type { NiscShellProject } from './project';
+import type { NiscShellProject } from '../project';
 
 const DEFAULT_BUILD_WAIT_MS = 5000;
 export const DEFAULT_ROOT = '<div id="root"></div>';
@@ -91,7 +91,7 @@ const adoptAll = (root: string, pages: readonly { path: string; screen: string }
   if (pages.length === 0) return [];
   const here = dirname(fileURLToPath(import.meta.url));
   // built: beside this file. From source (the package's own tests): in dist.
-  const entry = [join(here, 'adopt.js'), join(here, '..', 'dist', 'adopt.js')].find((candidate) => existsSync(candidate));
+  const entry = [join(here, 'adopt.js'), join(here, '..', '..', 'dist', 'adopt.js')].find((candidate) => existsSync(candidate));
   if (entry === undefined) throw new Error('nisc: the adoption check is not built (packages/cli/dist/adopt.js).');
   const scratch = mkdtempSync(join(tmpdir(), 'nisc-adopt-'));
   try {

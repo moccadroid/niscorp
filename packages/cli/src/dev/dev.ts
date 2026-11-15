@@ -1,8 +1,8 @@
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { configFileOf, isProject, isShellProject, loadProject } from './project';
-import type { NiscMossProject } from './project';
+import { configFileOf, isProject, isShellProject, loadProject } from '../project';
+import type { CommandOptions, NiscMossProject } from '../project';
 
 // Declared here rather than imported: vite is the app's dependency, and so are
 // its types.
@@ -83,3 +83,6 @@ export const devServer = async (options: { root: string; port?: number }): Promi
   const url = server.resolvedUrls?.local[0] ?? `http://localhost:${options.port ?? 5173}/`;
   return { url, close: () => server.close() };
 };
+
+export const dev = (options: CommandOptions): Promise<{ url: string; close: () => Promise<void> }> =>
+  devServer({ root: options.root, ...(options.port !== undefined ? { port: options.port } : {}) });

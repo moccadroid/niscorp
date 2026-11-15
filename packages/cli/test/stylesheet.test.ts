@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { JSDOM } from 'jsdom';
 import { afterAll, describe, expect, it } from 'vitest';
-import { stylesheetInPage, writeStylesheetIntoPage } from '../src/stylesheet';
+import { stylesheetInPage, writeStylesheetIntoPage } from '../src/build';
 
 const page = (head: string): string => `<!doctype html><html lang="en"><head>${head}</head><body><div id="root"></div></body></html>`;
 const files =

@@ -14,7 +14,7 @@ export default defineConfig([
     external: EXTERNAL,
   },
   {
-    entry: { cli: 'src/cli.ts', adopt: 'src/adopt.ts' },
+    entry: { cli: 'src/command/index.ts', adopt: 'src/build/adopt.ts' },
     format: ['esm'],
     dts: false,
     sourcemap: true,

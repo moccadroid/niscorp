@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { defaultPaths, fileOf, routeTable } from '../src/routes';
-import type { RouteReport } from '../src/routes';
+import { defaultPaths, fileOf, routeTable } from '../src/build';
+import type { RouteReport } from '../src/build';
 
 const route = (path: string, extra: Partial<RouteReport> = {}): RouteReport => ({ path, drawn: true, live: false, why: [], drawnWith: [], settled: true, ...extra });
 

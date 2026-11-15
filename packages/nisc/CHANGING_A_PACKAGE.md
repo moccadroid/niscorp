@@ -56,4 +56,4 @@ All four run in `pnpm verify` and in CI.
 - Module rules 3, 4 and 8 have no gate. They are what a review reads for.
 - What two processes do to each other is in no package's tests either: those run on PGlite, which has one connection.
 - `check:raw-sql` sweeps every package but vex and strata, where SQL lives.
-- `check:modules` and `check:api` cover moss. A package joins `check:modules` by being made of modules and getting an entry in `PACKAGES`; it joins `check:api` by an entry in `ENTRIES` and `pnpm check:api --write`.
+- `check:modules` covers moss, cli and create-nisc; `check:api` covers moss. A package joins `check:modules` by being made of modules and getting an entry in `PACKAGES`; it joins `check:api` by an entry in `ENTRIES` and `pnpm check:api --write`.

@@ -39,6 +39,26 @@ const PACKAGES: Readonly<Record<string, Shape>> = {
     },
     features: ['integrations', 'tide'],
   },
+  cli: {
+    modules: {
+      project: [],
+      serve: ['project'],
+      build: ['project', 'serve'],
+      dev: ['project'],
+      migrate: ['project'],
+      shape: [],
+      command: ['project', 'build', 'serve', 'dev', 'migrate'],
+    },
+    features: [],
+  },
+  'create-nisc': {
+    modules: {
+      catalog: [],
+      generate: ['catalog'],
+      command: ['catalog', 'generate'],
+    },
+    features: [],
+  },
 };
 
 const lines: string[] = [];

@@ -1,8 +1,8 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, extname, join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { envOf, isChoice, itemsOf, partsOf, readCatalog } from './catalog';
-import type { EnvKey, EnvSpec, Item, Part, Picks } from './catalog';
+import { envOf, isChoice, itemsOf, partsOf, readCatalog } from '../catalog';
+import type { EnvKey, EnvSpec, Item, Part, Picks } from '../catalog';
 import { agentsDoc, gitignoreLines, planDoc } from './docs';
 
 export type CreateOptions = {
@@ -25,7 +25,9 @@ export type Created = {
   extended: string[];
 };
 
-export const TEMPLATES = fileURLToPath(new URL('../templates', import.meta.url));
+const BUILT_TEMPLATES = fileURLToPath(new URL('../templates', import.meta.url));
+// From source (the package's own tests) this file sits a folder deeper than in dist/.
+export const TEMPLATES = existsSync(BUILT_TEMPLATES) ? BUILT_TEMPLATES : fileURLToPath(new URL('../../templates', import.meta.url));
 
 const TOKEN = 'nisc-template-app';
 const SKIP = new Set(['node_modules', 'dist', 'out', '.turbo']);

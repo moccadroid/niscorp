@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, describe, expect, it } from 'vitest';
-import { shellSite } from '../src/shell-site';
+import { shellSite } from '../src/serve';
 import { project } from './fixtures/own-head/nisc.config';
 import { NISC } from './nisc';
 
