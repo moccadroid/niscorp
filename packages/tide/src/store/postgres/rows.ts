@@ -98,7 +98,6 @@ const RunRowSchema = z.object({
   dueAt: z.number(),
   createdAt: z.number(),
   settledAt: z.number().optional(),
-  notBefore: z.number().optional(),
   drained: z.boolean().optional(),
   note: z.string().optional(),
 });

@@ -29,10 +29,8 @@ export const nextDue = async (deps: EngineDeps, now: number): Promise<number | u
 
   // Pending runs only: a fanned run waiting on a retrying task would report a
   // past instant on every call. Its tasks, below, are what is due.
-  const [run] = await deps.store.query({ table: 'run', where: { state: 'pending', notBefore: { isNull: true } }, order: [{ by: 'dueAt' }], limit: 1 });
+  const [run] = await deps.store.query({ table: 'run', where: { state: 'pending' }, order: [{ by: 'dueAt' }], limit: 1 });
   consider(run?.dueAt);
-  const [deferred] = await deps.store.query({ table: 'run', where: { state: 'pending', notBefore: { isNull: false } }, order: [{ by: 'notBefore' }], limit: 1 });
-  consider(deferred?.notBefore);
 
   const [waiting] = await deps.store.query({
     table: 'task',

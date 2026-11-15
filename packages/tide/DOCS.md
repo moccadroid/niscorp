@@ -508,8 +508,7 @@ tide.ledger.releaseParked(factId)  // let a parked fact through, once; false if 
 - **run** — one activation: cause, version hash, the identity it ran `as`, what
   the selection returned, the counts, the outcome. A run's `cause` is
   `occurrence:<key>` or `fact:<id>`; a fact's is `task:<id>` when a handler
-  emitted it and `run:<id>` when a run's settlement minted it. `notBefore` is
-  set on a run whose fan-out was deferred: it is not fanned out before then.
+  emitted it and `run:<id>` when a run's settlement minted it.
 - **task** — one unit of effect work: unit key, pinned `env`, attempt count,
   lease, last error, `output`. `unit` is the row's `unitKey` value as a string
   in `each` mode, and `''` for a `batch` run and for a run with no selection.
@@ -549,7 +548,7 @@ logs at whatever grain it wants.
 | `run.created` | `run` | a run opened |
 | `run.settled` | `run` | its last task settled, or it fanned out to no tasks — once per run, not again after a `retry` |
 | `run.skipped` | `reflexId`, `reason` | overlap, or a fan-out tide refused |
-| `run.deferred` | `reflexId`, `runId`, `reason` | a fan-out failed in a host seam; the run's `notBefore` is set the reflex's `retry.baseMs` (default 60 000) ahead, and the first `advance` from then tries it again |
+| `run.deferred` | `reflexId`, `runId`, `reason` | a fan-out failed in a host seam; retried next `advance` |
 | `task.done` / `task.failed` | `task` | an attempt recorded a terminal outcome |
 | `task.retrying` | `task`, `nextAt` | an attempt threw or timed out with retries left |
 | `task.reclaimed` | `task` | a lapsed lease was taken back |
@@ -864,7 +863,7 @@ A `TideError` is tide's own refusal — a duplicate unit key, a missing `select`
 seam — which means the reflex is wrong and will be wrong again next `advance`, so the
 run is `skipped` with a note. Anything else came out of a host seam: a
 selection, a transform, a database. That is a bad minute, not a bad reflex, so
-the run stays `pending` and is tried again once the reflex's `retry.baseMs` has
-passed — a row past its due time that a query can see. Skipping it instead would
+the run stays `pending` and is tried again on the next `advance` — a row past
+its due time that a query can see. Skipping it instead would
 lose it for good: runs are idempotent on `(reflexId, cause)`, so the occurrence
 cannot open a second run.

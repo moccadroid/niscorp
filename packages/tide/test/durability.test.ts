@@ -828,34 +828,6 @@ describe('work that cannot start yet does not stop the work behind it', () => {
     expect(calls).toHaveLength(1);
   });
 
-  it('a hundred runs whose fan-out keeps failing do not keep another reflex from fanning out, and wait before they are tried again', async () => {
-    const { tide, calls, events } = await harness(
-      [
-        {
-          id: 'broken.select',
-          intent: 'Select with a template that throws.',
-          on: { fact: { signal: 'x' } },
-          select: { query: { $throw: 'the template is broken' }, mode: 'each', unitKey: 'id' },
-          effect: { name: 'work' },
-        },
-        { id: 'healthy', intent: 'Answer y.', on: { fact: { signal: 'y' } }, effect: { name: 'work' } },
-      ],
-      { work: { run: () => ({ ok: true }) } },
-      { select: () => [] },
-    );
-    for (let n = 0; n < 100; n += 1) await tide.ingest({ kind: 'signal', name: 'x', at: T0 });
-    await tide.advance({ now: T0 });
-    const deferrals = (): number => events.filter((event) => event.type === 'run.deferred').length;
-    expect(deferrals()).toBe(100);
-    expect(await tide.nextDue(T0)).toBe(T0 + 60_000);
-
-    await tide.ingest({ kind: 'signal', name: 'y', at: T0 + 1 });
-    await tide.advance({ now: T0 + 1 });
-
-    expect(calls).toHaveLength(1);
-    expect(deferrals()).toBe(100);
-  });
-
   it('a task whose reflex is not loaded is left for when it is, with no attempt spent', async () => {
     let attempts = 0;
     const flaky: ReflexInput = {
