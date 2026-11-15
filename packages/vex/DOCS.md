@@ -187,6 +187,14 @@ type QueryEngineConfig = {
   their tables without a schema, so they resolve through the connection's
   `search_path`: with `schema`, set the `search_path` to that schema too, or
   reads and writes reach the tables of another schema.
+- `createPostgresAdapter({ pool, schema, qualifyTables: true })` writes the
+  schema's name on every table instead (`FROM "app".tasks`), in reads and in
+  mutations, so the `search_path` does not matter. `introspect()` then returns
+  the name as `namespace` on the `DatabaseSchema`, and the mutation compiler
+  reads it there. It is not part of the schema fingerprint, so cached entries
+  stay fresh when the option is turned on. Without the option, tables are named
+  bare, as above: a host that points the `search_path` at a schema per tenant
+  keeps doing so.
 - `config.statementTimeoutMs` is enforced by the database (`statement_timeout`),
   set up at `introspect()`. A database that cannot enforce it (PGlite) runs
   reads unbounded and the engine warns each time `introspect()` runs. A `PgPool`

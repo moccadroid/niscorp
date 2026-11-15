@@ -26,6 +26,7 @@ type CompilationContext = {
   paramSlots: ParamSlot[];
   paramCounter: { value: number };
   existsMap?: Map<object, ResolvedExists>;
+  namespace?: string;
 };
 
 // An authored string reaches SQL text only as a table, alias or column that
@@ -62,6 +63,9 @@ const LOWER_IDENTIFIER = /^[a-z_][a-z0-9_]*$/;
 export const sqlName = (name: string): string => (LOWER_IDENTIFIER.test(name) && !RESERVED.has(name) ? name : quoteIdent(name));
 
 export const columnSql = (qualifier: string, column: string): string => `${sqlName(qualifier)}.${sqlName(column)}`;
+
+export const tableSql = (table: string, namespace: string | undefined): string =>
+  namespace === undefined ? sqlName(table) : `${quoteIdent(namespace)}.${sqlName(table)}`;
 
 // A number that is not finite has no SQL spelling: `NaN` would read as a name.
 export const numberLiteral = (n: number): string => {
@@ -172,7 +176,7 @@ export const compileFilter = (
 
     const parts: string[] = ['SELECT 1'];
     const first = resolved.sources[0];
-    if (first?.table !== undefined) parts.push(`FROM ${sqlName(first.table)} AS ${sqlName(first.alias)}`);
+    if (first?.table !== undefined) parts.push(`FROM ${tableSql(first.table, ctx.namespace)} AS ${sqlName(first.alias)}`);
     for (const join of resolved.joins) {
       const source = resolved.sources.find((s) => s.alias === join.toAlias);
       if (source?.table === undefined) continue;
@@ -181,7 +185,7 @@ export const compileFilter = (
         ...compileJoinPairs(join),
         ...(join.on ?? []).map((extra) => compileFilter(extra.original, inner)),
       ];
-      parts.push(`${keyword} ${sqlName(source.table)} AS ${sqlName(join.toAlias)} ON ${conditions.join(' AND ')}`);
+      parts.push(`${keyword} ${tableSql(source.table, ctx.namespace)} AS ${sqlName(join.toAlias)} ON ${conditions.join(' AND ')}`);
     }
     if (resolved.filter !== undefined) parts.push(`WHERE ${compileFilter(resolved.filter.original, inner)}`);
 

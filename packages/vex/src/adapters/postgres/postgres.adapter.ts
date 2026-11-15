@@ -10,6 +10,7 @@ export type PostgresAdapterConfig = {
   pool: PgPool;
   schema?: string;
   exclude?: string[];
+  qualifyTables?: boolean;
 };
 
 const NUMERIC_OIDS = new Set([
@@ -41,6 +42,7 @@ const coerceNumericColumns = (rows: Row[], fields: PgField[]): Row[] => {
 
 export const createPostgresAdapter = (config: PostgresAdapterConfig): DatabaseAdapter => {
   const { pool, schema = 'public', exclude } = config;
+  const namespace = config.qualifyTables === true ? schema : undefined;
 
   const capabilities: AdapterCapabilities = {
     vectorSearch: true,
@@ -53,15 +55,17 @@ export const createPostgresAdapter = (config: PostgresAdapterConfig): DatabaseAd
     statementTimeout: true,
   };
 
-  const introspect = async (options?: IntrospectOptions): Promise<DatabaseSchema> =>
-    introspectPostgres(pool, {
+  const introspect = async (options?: IntrospectOptions): Promise<DatabaseSchema> => {
+    const introspected = await introspectPostgres(pool, {
       ...options,
       schema: options?.schema ?? schema,
       exclude: options?.exclude ?? exclude,
     });
+    return namespace === undefined ? introspected : { ...introspected, namespace };
+  };
 
   const compile = (resolved: ResolvedQuery): CompiledQuery =>
-    compileQuery(resolved);
+    compileQuery(resolved, namespace);
 
   let perStatementMs: number | undefined;
   const limitReads = async (ms: number): Promise<TimeoutEnforcement> => {
