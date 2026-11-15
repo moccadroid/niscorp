@@ -377,7 +377,8 @@ blind edges; `warnings` names a reflex that subscribes to its own run and a
 reflex whose `timeoutMs` is not shorter than `leaseMs`; `refused` is each reflex `isolate` left out, as
 `{ reflexId, code, message }` (`reflexId` is undefined for one that had none),
 and is empty without it. Calling it again is how a host changes what is running,
-including turning one off.
+including turning one off. The tasks of a reflex left out are not claimed until
+a load brings it back, so they spend no attempt while it is away.
 
 ```typescript
 ingest(fact: FactInput, options?: { as?: string; cause?: string; depth?: number }): Promise<Fact | undefined>

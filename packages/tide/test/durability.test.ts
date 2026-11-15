@@ -827,4 +827,28 @@ describe('work that cannot start yet does not stop the work behind it', () => {
 
     expect(calls).toHaveLength(1);
   });
+
+  it('a task whose reflex is not loaded is left for when it is, with no attempt spent', async () => {
+    let attempts = 0;
+    const flaky: ReflexInput = {
+      id: 'flaky',
+      intent: 'Fail, and retry a minute later.',
+      on: { manual: {} },
+      effect: { name: 'work' },
+      policy: { retry: { max: 3, backoff: 'fixed', baseMs: 60_000 } },
+    };
+    const other: ReflexInput = { id: 'other', intent: 'Anything else.', on: { manual: {} }, effect: { name: 'work' } };
+    const { tide } = await harness([flaky, other], { work: { run: () => { attempts += 1; throw new Error('provider down'); } } }, { leaseMs: 1_000 });
+    await tide.fire('flaky', { now: T0 });
+    await tide.advance({ now: T0 });
+
+    await tide.load([other]);
+    for (let tick = 1; tick <= 5; tick += 1) await tide.advance({ now: T0 + 60_000 + tick * 2_000 });
+    await tide.load([flaky, other]);
+    await tide.advance({ now: T0 + 120_000 });
+
+    const [task] = await tide.ledger.tasks({ reflexId: 'flaky' });
+    expect(attempts).toBe(2);
+    expect({ state: task?.state, attempt: task?.attempt }).toEqual({ state: 'retrying', attempt: 2 });
+  });
 });

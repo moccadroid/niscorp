@@ -34,6 +34,7 @@ const claimTasks = async (deps: EngineDeps, now: number, limit: number, token: s
   return deps.store.claim({
     table: 'task',
     where: {
+      reflexId: { in: deps.reflexes().map((loaded) => loaded.reflex.id) },
       state: { in: ['pending', 'retrying', 'claimed'] },
       notBefore: { lte: now },
       claimedUntil: { lte: now },
