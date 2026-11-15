@@ -59,3 +59,26 @@ describe('a source nested deeper than the stack reaches', () => {
     expect(result.ok ? undefined : result.error).toMatchObject({ code: ErrorCode.BUDGET });
   });
 });
+
+describe('a source that refers back to itself', () => {
+  const cyclic = (): { b: number; self?: unknown } => {
+    const source: { b: number; self?: unknown } = { b: 1 };
+    source.self = source;
+    return source;
+  };
+
+  it('is refused as not JSON when the source is checked, naming where it refers back', () => {
+    const result = evaluateSafe({ $ref: '$.b' }, cyclic(), { check: 'always' });
+    expect(result.ok ? undefined : result.error).toMatchObject({ code: ErrorCode.TYPE, message: 'The source must be plain JSON: source.self refers back to source.' });
+  });
+
+  it('is stopped by the budget with a message that names the loop when it is walked unchecked', () => {
+    const result = evaluateSafe({ $walk: { over: { $ref: '$' }, as: 'n', rules: [{ when: false, then: null }] } }, cyclic());
+    expect(result.ok ? undefined : result.error).toMatchObject({ code: ErrorCode.BUDGET, message: expect.stringContaining('refers back to itself') });
+  });
+
+  it('a value reached twice without a loop is plain JSON', () => {
+    const shared = { n: 1 };
+    expect(evaluate({ $ref: '$.a' }, { a: shared, b: shared }, { check: 'always' })).toEqual({ n: 1 });
+  });
+});

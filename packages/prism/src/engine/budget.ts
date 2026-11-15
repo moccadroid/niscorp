@@ -46,13 +46,14 @@ const sizeOf = (value: JsonValue, budget: Budget): number => {
 };
 
 // Whatever walks a value nested deeper than the call stack reaches overflows
-// it, Prism's own code or JSON.stringify alike. V8 and JavaScriptCore throw a
+// it, Prism's own code or JSON.stringify alike, and so does a value that is
+// not JSON because it contains itself. V8 and JavaScriptCore throw a
 // RangeError that says so.
 const STACK_OVERFLOW = /call stack/i;
 
 export const stackRefusal = (error: unknown): unknown =>
   error instanceof RangeError && STACK_OVERFLOW.test(error.message)
-    ? new PrismError('Evaluation stopped: a value nests deeper than the call stack reaches.', ErrorCode.BUDGET)
+    ? new PrismError('Evaluation stopped: a value nests deeper than the call stack reaches, or refers back to itself.', ErrorCode.BUDGET)
     : error;
 
 export const measureString = (value: JsonValue, budget: Budget, node?: unknown): void => {

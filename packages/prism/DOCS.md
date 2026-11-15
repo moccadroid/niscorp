@@ -824,7 +824,9 @@ each time it appears, as it would be serialized: a `$reduce` whose body is
 
 A source nested deeper than the call stack reaches (tens of thousands of levels
 in Node) also throws `E_BUDGET` once the evaluation walks it. That stack has no
-limit to set; in Firefox the engine's own error comes through instead.
+limit to set; in Firefox the engine's own error comes through instead. A source that contains
+itself is not JSON: with `check: 'always'` it is refused as `E_TYPE`, naming
+where it refers back; unchecked, walking it stops with the same `E_BUDGET`.
 
 ## Error Codes
 

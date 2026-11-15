@@ -80,17 +80,28 @@ const evaluateUnbudgeted = (node: unknown, context: EvalContext): JsonValue => {
   );
 };
 
-const notJson = (value: unknown, at: string): string | undefined => {
+// `ancestors` holds the objects and arrays on the way down to `value`, by
+// where each is: a value reached twice from two places is still JSON.
+const notJson = (value: unknown, at: string, ancestors: Map<object, string> = new Map()): string | undefined => {
   if (value === null || typeof value === 'string' || typeof value === 'boolean') return undefined;
   if (typeof value === 'number') return Number.isFinite(value) ? undefined : `${at} is ${value}`;
+  if (typeof value !== 'object') return `${at} is ${value === undefined ? 'undefined' : `a ${typeof value}`}`;
+  const loop = ancestors.get(value);
+  if (loop !== undefined) return `${at} refers back to ${loop}`;
+  ancestors.set(value, at);
+  const found = notJsonInside(value, at, ancestors);
+  ancestors.delete(value);
+  return found;
+};
+
+const notJsonInside = (value: object, at: string, ancestors: Map<object, string>): string | undefined => {
   if (Array.isArray(value)) {
     for (const index of Object.keys(value)) {
-      const found = notJson(value[Number(index)], `${at}[${index}]`);
+      const found = notJson(value[Number(index)], `${at}[${index}]`, ancestors);
       if (found !== undefined) return found;
     }
     return undefined;
   }
-  if (typeof value !== 'object') return `${at} is ${value === undefined ? 'undefined' : `a ${typeof value}`}`;
   // A Date, a Map or an instance of a class has no fields to look at and would
   // pass for `{}`.
   const proto: unknown = Object.getPrototypeOf(value);
@@ -99,7 +110,7 @@ const notJson = (value: unknown, at: string): string | undefined => {
     return `${at} is ${tag === 'Object' ? 'an instance of a class' : `a ${tag}`}`;
   }
   for (const [key, inner] of Object.entries(value)) {
-    const found = notJson(inner, `${at}.${key}`);
+    const found = notJson(inner, `${at}.${key}`, ancestors);
     if (found !== undefined) return found;
   }
   return undefined;

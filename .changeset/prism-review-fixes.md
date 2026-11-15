@@ -11,3 +11,5 @@ A source nested deeper than the call stack reaches is stopped with `E_BUDGET` in
 The cache of parsed `$ref` paths keeps at most 1,000 paths; it grew with every distinct path a process saw.
 
 A config still cannot carry a key called `__proto__`: validation drops it from a plain object, a `$const` payload, a `$with` binding or a `$renameKeys` map while `validate` answers ok. DOCS.md says so; data with such a key comes in through the source.
+
+With `check: 'always'`, a source that contains itself is refused as not JSON (`E_TYPE`, "source.self refers back to source").
