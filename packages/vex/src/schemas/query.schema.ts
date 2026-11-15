@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { FilterSchema } from './filter.schema.js';
+import { FilterSchema, nullKeysAbsent } from './filter.schema.js';
 import { ComputeExpressionSchema } from './compute.schema.js';
 import { AggregateExpressionSchema } from './aggregate.schema.js';
 import { FieldPathSchema, IdentifierSchema } from './identifier.schema.js';
@@ -7,13 +7,14 @@ import type { Filter } from './filter.schema.js';
 import type { ComputeExpression } from './compute.schema.js';
 import type { AggregateExpression } from './aggregate.schema.js';
 
-export const SortEntrySchema = z
-  .object({
-    field: z.union([FieldPathSchema, IdentifierSchema]).describe('Field path (entity.field), computed field name, or aggregate alias'),
-    dir: z.enum(['asc', 'desc']).default('asc').describe('Sort direction'),
-  })
-  .strict()
-  .describe('Sort specification');
+export const SortEntrySchema = nullKeysAbsent(
+  z
+    .object({
+      field: z.union([FieldPathSchema, IdentifierSchema]).describe('Field path (entity.field), computed field name, or aggregate alias'),
+      dir: z.enum(['asc', 'desc']).default('asc').describe('Sort direction'),
+    })
+    .strict(),
+).describe('Sort specification');
 
 export type SortEntry = z.infer<typeof SortEntrySchema>;
 
@@ -62,7 +63,7 @@ const FieldRefSchema = z
   .describe('A selected field — a bare `entity.field`, or `{ field, as }` to alias the output key');
 
 export const QuerySchema: z.ZodType<Query> = z.lazy(() =>
-  z
+  nullKeysAbsent(z
     .object({
       from: z.array(SourceSchema).min(1).describe('Data sources — entity names or subqueries. Every entity used anywhere in the query must be listed here. Listed entities are JOINED FOR YOU along their foreign keys — a nullable key as a LEFT JOIN, so a row whose key is empty is kept, with the joined columns null. Never restate a join as a filter comparing the two keys: that throws those rows away.'),
       fields: z.array(FieldRefSchema).optional().describe('Raw columns to select — each `entity.field`, or `{ field, as }` to alias the output key (no SELECT *). Optional: omit it for an aggregate-only query (e.g. a bare COUNT). Do not list compute or aggregate aliases here — those are added automatically.'),
@@ -78,7 +79,7 @@ export const QuerySchema: z.ZodType<Query> = z.lazy(() =>
     .refine(
       (q) => (q.fields?.length ?? 0) > 0 || Object.keys(q.aggregate ?? {}).length > 0,
       { message: 'A query must select at least one of `fields` or `aggregate`.' },
-    ),
+    )),
 );
 
 export { SubquerySourceSchema, SourceSchema };

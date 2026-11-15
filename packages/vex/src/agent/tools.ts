@@ -16,20 +16,20 @@ export type QueryToolDeps = {
 };
 
 const GetSchemaInputSchema = z.object({
-  entities: z.array(z.string()).optional().describe('Filter to specific entity names'),
+  entities: z.array(z.string()).nullish().describe('Filter to specific entity names'),
 });
 export type GetSchemaInput = z.infer<typeof GetSchemaInputSchema>;
 
 const GetSampleRowsInputSchema = z.object({
   entity: z.string().describe('Entity name to sample rows from'),
-  limit: z.number().int().positive().max(50).optional().describe('Max rows to return (default: 5)'),
+  limit: z.number().int().positive().max(50).nullish().describe('Max rows to return (default: 5)'),
 });
 export type GetSampleRowsInput = z.infer<typeof GetSampleRowsInputSchema>;
 
 const GetDistinctValuesInputSchema = z.object({
   entity: z.string().describe('Entity name'),
   field: z.string().describe('Field name within the entity'),
-  limit: z.number().int().positive().max(200).optional().describe('Max distinct values to return (default: 20)'),
+  limit: z.number().int().positive().max(200).nullish().describe('Max distinct values to return (default: 20)'),
 });
 export type GetDistinctValuesInput = z.infer<typeof GetDistinctValuesInputSchema>;
 
@@ -48,14 +48,14 @@ const inSpec = (what: string): string => `${what} — written as the DSL spec (O
 const TestQueryInputSchema = z
   .object({
     from: z.array(z.unknown()).describe(inSpec('The data sources: entity names (or subqueries); every entity the query uses is listed here')),
-    fields: z.array(z.unknown()).optional().describe(inSpec('Raw columns to select, `entity.field` or `{ field, as }`; omit for an aggregate-only query')),
-    filter: z.record(z.string(), z.unknown()).optional().describe(inSpec('Filter conditions')),
-    compute: z.record(z.string(), z.unknown()).optional().describe(inSpec('Computed fields: output alias → expression')),
-    aggregate: z.record(z.string(), z.unknown()).optional().describe(inSpec('Aggregates (count, sum, avg, …): output alias → function')),
-    groupBy: z.array(z.unknown()).optional().describe(inSpec('Fields to group by, for aggregates')),
-    sort: z.array(z.unknown()).optional().describe(inSpec('Sort order')),
-    limit: z.number().optional().describe('Maximum rows to return.'),
-    distinct: z.boolean().optional().describe('Eliminate duplicate rows.'),
+    fields: z.array(z.unknown()).nullish().describe(inSpec('Raw columns to select, `entity.field` or `{ field, as }`; omit for an aggregate-only query')),
+    filter: z.record(z.string(), z.unknown()).nullish().describe(inSpec('Filter conditions')),
+    compute: z.record(z.string(), z.unknown()).nullish().describe(inSpec('Computed fields: output alias → expression')),
+    aggregate: z.record(z.string(), z.unknown()).nullish().describe(inSpec('Aggregates (count, sum, avg, …): output alias → function')),
+    groupBy: z.array(z.unknown()).nullish().describe(inSpec('Fields to group by, for aggregates')),
+    sort: z.array(z.unknown()).nullish().describe(inSpec('Sort order')),
+    limit: z.number().nullish().describe('Maximum rows to return.'),
+    distinct: z.boolean().nullish().describe('Eliminate duplicate rows.'),
   })
   .catchall(z.unknown())
   .describe('Your draft DSL query — the query object itself, NOT wrapped in any field.');
