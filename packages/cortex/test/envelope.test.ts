@@ -88,6 +88,12 @@ describe('validateEnvelope — with a data schema', () => {
     expect(verdict).toEqual({ ok: true, envelope: { data: { a: 1 } } });
   });
 
+  it('corrects text that reads as JSON toward the decoded value when the schema also takes a non-string', () => {
+    const verdict = validateEnvelope({ data: '{"answer":"seven"}' }, { schema: z.union([DataSchema, z.string()]), responseMode: 'optional' });
+    expect(verdict.ok).toBe(false);
+    if (!verdict.ok) expect(verdict.issues).toContain('data.answer');
+  });
+
   it('tells the model when data stays an undecodable string', () => {
     const verdict = validateEnvelope(
       { data: 'the answer is seven' },

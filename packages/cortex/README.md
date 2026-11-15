@@ -91,8 +91,9 @@ How the envelope travels from model to runtime. One field,
 | `emit` | the model's completion IS the envelope (content channel) | everything else — auto-picked wherever neither of the above enforces anything: all of Groq, big schemas, models that mangle nested tool args |
 
 Zod validates in **every** strategy. A `data` that arrives as a
-string of JSON is decoded before it is checked, and checked as
-written when the decoded value fails: `z.string()` takes `"[1,2,3]"`.
+string of JSON is decoded before it is checked. A schema that takes
+only strings gets it as written when the decoded value fails:
+`z.string()` takes `"[1,2,3]"`.
 Invalid output feeds back as a
 correction *inside the same run* (the attempt and a system message
 naming the issues are appended) — never a full re-run. Big recursive
