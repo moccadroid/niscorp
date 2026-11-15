@@ -67,4 +67,5 @@ export type SelectedStreamDeps = {
   onRootFinalize: (listener: () => void) => () => void;
   onRootError: (listener: (error: StreamError) => void) => () => void;
   resolveSubSelect: (fullPath: string) => Stream<unknown>;
+  deliver: (call: () => void) => void;
 };

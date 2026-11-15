@@ -19,13 +19,13 @@ export const createSelectedStream = <P>(deps: SelectedStreamDeps): Stream<P> => 
   const notifyListeners = (value: P): void => {
     isNotifying = true;
     for (const listener of listeners) {
-      listener(value);
+      deps.deliver(() => listener(value));
     }
     isNotifying = false;
 
     while (pendingImmediateFires.length > 0) {
       const fire = pendingImmediateFires.shift();
-      if (fire) fire();
+      if (fire) deps.deliver(fire);
     }
   };
 
@@ -35,7 +35,7 @@ export const createSelectedStream = <P>(deps: SelectedStreamDeps): Stream<P> => 
     finalState = { resolved: true, value };
     resolve(value);
     for (const listener of finalListeners) {
-      listener(value);
+      deps.deliver(() => listener(value));
     }
     finalListeners.clear();
   };
@@ -66,7 +66,7 @@ export const createSelectedStream = <P>(deps: SelectedStreamDeps): Stream<P> => 
   const unsubError = deps.onRootError((err) => {
     if (isDestroyed) return;
     if (!coversPath(err.path, deps.path)) return;
-    for (const listener of errorListeners) listener(err);
+    for (const listener of errorListeners) deps.deliver(() => listener(err));
   });
 
   const current = (): P => project();

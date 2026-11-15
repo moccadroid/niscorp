@@ -154,6 +154,9 @@ stream.write(chunk: string): void
 // Signal end of stream (forces finalization)
 stream.close(): void
 
+// A listener that throws does not cut write() or close() short: the call
+// finishes, every other listener hears of the change, then it throws that error.
+
 // Tear down all listeners and reject pending promises
 stream.destroy(): void
 

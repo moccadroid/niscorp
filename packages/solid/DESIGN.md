@@ -247,7 +247,7 @@ A constraint violation (phase 2) is found after the value has been written, so i
 - A value of the wrong JSON kind is never written into `current()` (in `recover` and `strict`, for the schema kinds the walker checks — see Sub-schema walking), and every field `initial` holds keeps a value.
 - An object the reply creates starts empty and fills in key by key. Until it closes, `current()` can lack keys the schema requires, and no error is raised for that; a complete reply that never sends a required key of such an object leaves `final()` without it (reported only under `constraints: 'finalize'`).
 - `current()` is *not* always constraint-valid, mid-stream or at the end. `constraints: 'finalize'` reports a violation when the field closes; it does not take the value back.
-- No throwing from `write()`. All error surfaces go through `onError` + `final()` rejection. Signal adapters and other producer loops can write without try/catch.
+- No validation error is thrown from `write()`: all of them go through `onError` + `final()` rejection, so signal adapters and other producer loops can write without try/catch. What `write()` and `close()` throw is a listener's own error: a listener that throws does not cut the call short, every other listener still hears of the change, and once the call has finished it throws the first such error.
 - Selected streams see only errors at-or-below their path. `select('widget').onError(...)` ignores errors on sibling fields.
 
 ### Sub-schema walking
