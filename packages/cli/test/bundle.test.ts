@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { NISC } from './nisc';
+import { linkPackage, NISC } from './nisc';
 
 const OWN_SHELL = pathToFileURL(join(import.meta.dirname, 'fixtures', 'own-shell', 'nisc.config.ts')).href;
 const SLOW = 60_000;
@@ -35,6 +35,7 @@ beforeAll(() => {
       '',
     ].join('\n'),
   );
+  linkPackage(app, 'jsdom');
   mkdirSync(join(app, 'node_modules', 'vite'), { recursive: true });
   writeFileSync(join(app, 'node_modules', 'vite', 'package.json'), JSON.stringify({ name: 'vite', version: '0.0.0', bin: { vite: 'bin.cjs' } }));
   writeFileSync(join(app, 'node_modules', 'vite', 'bin.cjs'), BUNDLER);

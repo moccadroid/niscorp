@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { NISC } from './nisc';
+import { linkPackage, NISC } from './nisc';
 
 const OWN_SHELL = join(import.meta.dirname, 'fixtures', 'own-shell');
 const SLOW = 60_000;
@@ -17,6 +17,7 @@ beforeEach(() => {
   app = join(scratch, 'app');
   cpSync(join(OWN_SHELL, 'built'), join(app, 'built'), { recursive: true });
   writeFileSync(join(app, 'package.json'), JSON.stringify({ name: 'nisc-fixture-out', private: true, type: 'module' }));
+  linkPackage(app, 'jsdom');
   writeFileSync(join(app, 'nisc.config.ts'), `export { project } from ${JSON.stringify(pathToFileURL(join(OWN_SHELL, 'nisc.config.ts')).href)};\n`);
 });
 
