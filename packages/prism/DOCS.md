@@ -20,6 +20,10 @@ A key that starts with `$` is an op's name. A plain object has none: `{ "$fetch"
 
 Every evaluation takes a `source` — the data the transformation reads from via `$ref`. `evaluate` accepts any JSON value (object, array, or scalar); `"$"` is the whole of it.
 
+Prism reads only the keys the data has: `$.constructor` on `{}` is a missing path, and `toString` is not a variable unless something binds it. A key called `__proto__` in the data (as `JSON.parse` makes it) is an ordinary key, read and written like any other.
+
+A config cannot carry a key called `__proto__`. Validation drops it without a word, so `validate` answers ok and the key is gone: from a plain object, a `$const` payload, a `$with` binding or a `$renameKeys` map. Data with such a key comes in through the source.
+
 ### Bindings and Variables
 
 `$ref` reads from source. `$var` reads from scoped variables created by `$with`, `$map`, `$filter`, `$reduce`, `$sortBy`, `$keyBy`, `$groupBy`, `$update`, and `$walk`.
