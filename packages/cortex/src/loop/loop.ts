@@ -388,6 +388,9 @@ export const runLoop = async <TData, TDeps>(
     return called;
   };
 
+  // A function, not a string: a replacement string reads $$, $& and $' as patterns.
+  const correction = (issues: string): string => cfg.resolved.corrections.invalidOutput.replace('{issues}', () => issues);
+
   let lastAttempt: unknown;
   const retryOutput = (kind: 'output' | 'termination', issues: string, attempt?: unknown): RunResult<TData> | undefined => {
     if (attempt !== undefined) lastAttempt = attempt;
@@ -518,7 +521,7 @@ export const runLoop = async <TData, TDeps>(
       }
       s.messages.push({
         role: 'system',
-        content: cfg.resolved.corrections.invalidOutput.replace('{issues}', validated.issues),
+        content: correction(validated.issues),
       });
       continue;
     }
@@ -535,7 +538,7 @@ export const runLoop = async <TData, TDeps>(
     }
     s.messages.push({
       role: 'system',
-      content: cfg.resolved.corrections.invalidOutput.replace('{issues}', outcome.evidence),
+      content: correction(outcome.evidence),
     });
 
   }

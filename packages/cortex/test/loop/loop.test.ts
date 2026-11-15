@@ -576,3 +576,24 @@ describe('the loop — reasoning channel', () => {
     if (result.ok) expect(result.output.data.answer).toBe(4);
   });
 });
+
+describe('the loop — corrections', () => {
+  it('quotes the issues word for word, dollar signs included', async () => {
+    const issues = "the total must be $$5, not $& or $'";
+    const llm = stubSignal([
+      { toolCalls: [{ id: 'r1', name: 'respond', args: { data: { answer: 4 } } }] },
+      { toolCalls: [{ id: 'r2', name: 'respond', args: { data: { answer: 5 } } }] },
+    ]);
+    const agent = defineAgent({
+      id: 'checked',
+      description: 'Answers, checked by the app.',
+      instructions: 'Answer.',
+      output: { schema: CalcSchema, validate: (out) => (out.data.answer === 5 ? { ok: true } : { retry: issues }) },
+    });
+
+    expect((await agent.run('go', { llm }).result).ok).toBe(true);
+    const correction = llm.requests[1]?.messages.at(-1);
+    expect(correction?.role).toBe('system');
+    expect(correction?.content).toContain(issues);
+  });
+});
