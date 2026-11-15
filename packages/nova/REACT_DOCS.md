@@ -341,7 +341,7 @@ registerNovaReactComponents(registry);
 // Now Stack, Text, Input, Button, Box, Panel, JsonTree, CanvasSlot, ActionSlot are all registered.
 ```
 
-`Input` is remote-safe: while focused it holds a local draft the incoming tree never overwrites, and a `debounce` prop (ms) coalesces `ui:model` dispatches, flushing on blur. See ADAPTER.md §6.
+`Input` is remote-safe: while focused it holds a local draft the incoming tree never overwrites, and a `debounce` prop (ms) coalesces `ui:model` dispatches, flushing on blur. With `replaceDraftOnWrite: true`, a value written to its model path while it is focused (not an echo of what was typed) replaces the draft and drops a pending debounced dispatch, so a step can clear the field. See ADAPTER.md §6.
 
 `CanvasSlot` and `ActionSlot` are shell-aware: they pull state from the React shell context and must only be used inside a `<NovaShellProvider>` (they are what shell/canvas layouts use to paint their regions).
 

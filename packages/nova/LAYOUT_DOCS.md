@@ -468,7 +468,7 @@ If a component carries a static `.meta` property, `registerAll` picks it up auto
 
 - **`Stack`** — flex container with `direction`, `gap`, `align`, `justify`, `padding`, `wrap`
 - **`Text`** — typography element with `as`, `size`, `weight`, `color`
-- **`Input`** — text input bound via `model`; holds a local draft while focused and honours a `debounce` prop (ms) on `ui:model` dispatches
+- **`Input`** — text input bound via `model`; holds a local draft while focused and honours a `debounce` prop (ms) on `ui:model` dispatches; with `replaceDraftOnWrite: true`, a value a step writes to its model path while it is focused replaces what is typed
 - **`Button`** — clickable button that dispatches `ui:click` with its `ref`
 - **`Box`** — generic styling container
 - **`Panel`** — titled container with optional `backRef`/`closeRef` header buttons

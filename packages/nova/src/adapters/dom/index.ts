@@ -4,6 +4,7 @@ import type { NovaEvent } from '@shared/event-bus/schemas';
 import { headOf, isHeadNode, shellView } from '@shell';
 import type { RenderApi, Shell } from '@shell';
 import { createHeadKeeper } from '../../document/head-keeper';
+import { createDispatchedValues, type DispatchedValues } from '../dispatched-values';
 
 export type DomComponentContext = {
   props: Record<string, unknown>;
@@ -36,6 +37,8 @@ type Ctx = {
   openCanvases: ReadonlySet<string>;
 };
 
+type FieldState = { stale: boolean; replaceable?: { dispatched: DispatchedValues; dropPending: () => void } };
+
 type Mount = {
   node: RenderNode;
   ctx: Ctx;
@@ -43,7 +46,7 @@ type Mount = {
   kids: Mount[];
   host: HTMLElement | undefined;
   cleanups: (() => void)[];
-  field: { stale: boolean };
+  field: FieldState;
 };
 
 const errorEl = (code: string, message: string): HTMLElement => {
@@ -159,13 +162,25 @@ const readValue = (target: EventTarget | null): unknown => {
 
 // The listeners close over `node`: an element is only kept for a node with the
 // same `ref`, `model` and props, a bound field's `value` aside, which none reads.
-const wireEvents = (el: HTMLElement, node: ComponentRenderNode, dispatch: Dispatch, field: { stale: boolean }): void => {
+const wireEvents = (el: HTMLElement, node: ComponentRenderNode, dispatch: Dispatch, field: FieldState): void => {
   if (node.model !== undefined) {
     const ref = node.model.ref;
     const wait = node.props['debounce'];
     const debounce = typeof wait === 'number' ? wait : 0;
     let pending: { value: unknown; timer: ReturnType<typeof setTimeout> } | undefined;
-    const fire = (value: unknown): void => dispatch({ type: 'ui:model', ref, payload: value });
+    if (node.props['replaceDraftOnWrite'] === true) {
+      field.replaceable = {
+        dispatched: createDispatchedValues(),
+        dropPending: () => {
+          if (pending !== undefined) clearTimeout(pending.timer);
+          pending = undefined;
+        },
+      };
+    }
+    const fire = (value: unknown): void => {
+      field.replaceable?.dispatched.record(value);
+      dispatch({ type: 'ui:model', ref, payload: value });
+    };
     el.addEventListener('input', (e) => {
       field.stale = true;
       const value = readValue(e.target);
@@ -259,7 +274,7 @@ export const createDomView = (
   let drawn = false;
   let writes = 0;
   const refocus: { from: Element | null; to: HTMLElement | undefined } = { from: null, to: undefined };
-  const fields = new WeakMap<Node, { stale: boolean }>();
+  const fields = new WeakMap<Node, FieldState>();
 
   const builderOf = (node: ComponentRenderNode, ctx: Ctx): DomComponent | undefined => ctx.registry.get(node.name)?.component ?? ctx.fallback;
 
@@ -291,7 +306,7 @@ export const createDomView = (
       return fragment;
     });
     const cleanups: (() => void)[] = [];
-    const field = { stale: false };
+    const field: FieldState = { stale: false };
     let holdsOnly = true;
     writes += 1;
     const el = builder({
@@ -439,6 +454,12 @@ export const createDomView = (
         if (!own && prev.ref === next.ref && equal(prev.model, next.model) && equal(withoutValue(prev.props), withoutValue(next.props))) {
           old.field.stale = true;
           own = true;
+          const written = next.props['value'];
+          if (old.field.replaceable?.dispatched.classify(written) === 'written') {
+            old.field.replaceable.dropPending();
+            active.value = typeof written === 'string' || typeof written === 'number' ? String(written) : '';
+            placeCaret(active, { value: active.value, start: null, end: null });
+          }
         }
       } else if (old.field.stale) {
         // No longer typed in, or a checkbox that was pressed: the tree's value

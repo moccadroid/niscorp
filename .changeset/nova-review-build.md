@@ -11,3 +11,5 @@ A `GET` endpoint with a `request` body, which fetch refuses on every call, is re
 An HTTP endpoint can set `encodeValues: true` to put each `{{…}}` value into its `url` through `encodeURIComponent` (a `url` that is a single `{{…}}` is left whole). Without it, values go in as they are, as before. The nova grammar gets a marker migration (version 3) for the new field.
 
 The `reconcile` step takes `keepTyped: true`, and `reconcileCanvas` an optional `lastInputs` map: a row is then compared with the input it last gave the instance, and only keys whose value changed are written, so what someone typed stays when the step runs again with the same rows. Without them, every run writes the row's input back over the instance's data, as before. The nova grammar gets a marker migration (version 4) for the new field.
+
+A bound `Input` takes `replaceDraftOnWrite: true`: while it is focused, a value a step writes to its model path (not an echo of what was typed) replaces what is typed and drops a pending debounced dispatch, in the DOM, React, Vue and Ink adapters, so a step can clear a focused field. Without it, a focused field keeps what is typed, as before.

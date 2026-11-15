@@ -183,6 +183,16 @@ or bound inputs drop keystrokes the moment the shell is remote:
   value on blur. The React, Vue, DOM and Ink adapters implement it — omitting it silently
   makes a served `debounce` a no-op in your terminal, so the same layout behaves
   differently across renderers.
+- **Honour `replaceDraftOnWrite` on a `model`-bound node.** With
+  `props.replaceDraftOnWrite === true`, a focused field still ignores the
+  echoes of what it dispatched, but a new tree value that is none of them was
+  written by the action: it replaces the in-progress value, drops a pending
+  debounced dispatch (which would write the old text back), and the caret goes
+  to the end. Keep the values the field dispatched since the tree last caught
+  up; a tree value equal to the last of them empties the list, and so does a
+  written one. This is how a step clears a focused field (a `set` of its model
+  path to `""`). Without the prop, the first obligation stands as written. The
+  React, Vue, DOM and Ink adapters implement it.
 
 These belong to *every* adapter because they are artifacts of the transport, not
 of taste — unlike styling, hover, or animation, which *should* differ per kit.
@@ -308,7 +318,9 @@ close it; nothing has needed one yet.
   element's, and stay with it. Once it is left, the next render shows the tree's
   value again (the kit is asked for the field afresh, because how a value is
   shown is the kit's business). A checkbox or a radio is not "typed in": the
-  tree's answer shows at once.
+  tree's answer shows at once. A field with `replaceDraftOnWrite` takes a
+  value that is not an echo of what it dispatched into the same element while
+  it is typed in, with the caret at the end.
 - **A field that had to be built again while focused** (another of its props
   changed) is given what was being typed, the caret, and focus.
 - **Focus follows the element.** One that stayed has it still. One that was

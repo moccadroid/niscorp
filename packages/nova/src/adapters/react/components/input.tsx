@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ChangeEvent, type CSSProperties } from 'react';
 import { InputPropsSchema, type InputProps } from '../../primitive-props';
+import { createDispatchedValues } from '../../dispatched-values';
 import { useNovaDispatch, type NovaComponent, type NovaComponentProps } from '@react';
 
 export { InputPropsSchema, type InputProps };
@@ -33,6 +34,7 @@ export const Input: NovaComponent<InputProps> = ({
   disabled,
   value,
   debounce,
+  replaceDraftOnWrite,
   novaModel,
 }: NovaComponentProps & InputProps) => {
   const dispatch = useNovaDispatch();
@@ -56,10 +58,21 @@ export const Input: NovaComponent<InputProps> = ({
   };
   useEffect(() => clearPending, []);
 
+  const [dispatched] = useState(createDispatchedValues);
   const fire = (next: string): void => {
     if (novaModel === undefined) return;
+    if (replaceDraftOnWrite === true) dispatched.record(next);
     dispatch({ type: 'ui:model', ref: novaModel.ref, payload: next });
   };
+
+  const seen = useRef(value);
+  useEffect(() => {
+    if (Object.is(seen.current, value)) return;
+    seen.current = value;
+    if (replaceDraftOnWrite !== true || draft === null || dispatched.classify(value) === 'echo') return;
+    clearPending();
+    setDraft(value ?? '');
+  });
 
   const onChange = (event: ChangeEvent<HTMLInputElement>): void => {
     const next = event.target.value;

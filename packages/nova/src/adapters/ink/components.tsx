@@ -5,6 +5,7 @@ import TextInput from 'ink-text-input';
 // in the bundle, so the ink kit shares the react adapter's context with its host.
 import { useNovaDispatch, type NovaComponent } from '@niscorp/nova/adapters/react';
 import { ownEntry } from '../../shared/common';
+import { createDispatchedValues } from '../dispatched-values';
 import { str, num, bool, iconGlyph, truncate, pad } from '../tty/components/props';
 import { at, cellText, columnsOf, cellKey, JsonTree as renderJsonLines } from '../tty/components/components';
 import { useMarker, markerFocusId, Mark, FrameControlsContext } from './markers';
@@ -192,10 +193,14 @@ export const Input: NovaComponent = ({ novaModel, ...rest }) => {
   const server = typeof raw === 'string' || typeof raw === 'number' ? String(raw) : '';
   const [draft, setDraft] = useState<string | null>(null);
   const debounceMs = num(rest, 'debounce') ?? 0;
+  const replaceDraftOnWrite = bool(rest, 'replaceDraftOnWrite');
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const [dispatched] = useState(createDispatchedValues);
 
   const fire = (next: string): void => {
-    if (novaModel !== undefined) dispatch({ type: 'ui:model', ref: novaModel.ref, payload: next });
+    if (novaModel === undefined) return;
+    if (replaceDraftOnWrite) dispatched.record(next);
+    dispatch({ type: 'ui:model', ref: novaModel.ref, payload: next });
   };
   const clearPending = (): void => {
     if (timer.current !== undefined) {
@@ -204,6 +209,15 @@ export const Input: NovaComponent = ({ novaModel, ...rest }) => {
     }
   };
   useEffect(() => clearPending, []);
+
+  const seen = useRef(server);
+  useEffect(() => {
+    if (seen.current === server) return;
+    seen.current = server;
+    if (!replaceDraftOnWrite || draft === null || dispatched.classify(server) === 'echo') return;
+    clearPending();
+    setDraft(server);
+  });
 
   useEffect(() => {
     if (isFocused) setDraft((current) => current ?? server);

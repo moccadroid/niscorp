@@ -1,4 +1,5 @@
-import { defineComponent, h, onBeforeUnmount, shallowRef, type CSSProperties } from 'vue';
+import { defineComponent, h, onBeforeUnmount, shallowRef, watch, type CSSProperties } from 'vue';
+import { createDispatchedValues } from '../../dispatched-values';
 import { ButtonPropsSchema, InputPropsSchema, type ButtonProps, type InputProps } from '../../primitive-props';
 import { useNovaDispatch } from '../composables/context';
 import type { NovaComponentProps } from '../types';
@@ -116,10 +117,20 @@ export const Input = Object.assign(
       };
       onBeforeUnmount(clearPending);
 
+      const dispatched = createDispatchedValues();
       const fire = (next: string): void => {
         if (props.novaModel === undefined) return;
+        if (props.replaceDraftOnWrite === true) dispatched.record(next);
         dispatch({ type: 'ui:model', ref: props.novaModel.ref, payload: next });
       };
+      watch(
+        () => props.value,
+        (value) => {
+          if (props.replaceDraftOnWrite !== true || draft.value === null || dispatched.classify(value) === 'echo') return;
+          clearPending();
+          draft.value = value ?? '';
+        },
+      );
 
       const onInput = (event: Event): void => {
         const target = event.target;
@@ -168,7 +179,7 @@ export const Input = Object.assign(
     },
     {
       name: 'NovaInput',
-      props: ['type', 'placeholder', 'disabled', 'value', 'debounce', 'novaModel'],
+      props: ['type', 'placeholder', 'disabled', 'value', 'debounce', 'replaceDraftOnWrite', 'novaModel'],
       inheritAttrs: false,
     },
   ),
