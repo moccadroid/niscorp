@@ -35,22 +35,22 @@ export const claimOver =
     if (spec.onePer === undefined) return take(client, {}, spec.limit);
 
     // What the claim may take, in order: every row outside `only`, and the first row of each group in
-    // `only` that no earlier claim holds. Postgres refuses a window function beside FOR UPDATE, so these
-    // rows are read first and claimed after, the groups in `only` one at a time. Asking whether a group
-    // is held and then claiming in it are two statements: they run in a transaction behind an advisory
-    // lock on the group, because under READ COMMITTED two instances would both be told nothing is held.
+    // `only` where no earlier claim is still running. Postgres refuses a window function beside FOR UPDATE,
+    // so these rows are read first and claimed after, the groups in `only` one at a time. Asking whether a
+    // group is busy and then claiming in it are two statements: they run in a transaction behind an
+    // advisory lock on the group, because under READ COMMITTED two instances would both be told it is free.
     const { column, held, only } = spec.onePer;
     const key = snake(PRIMARY_KEY[spec.table]);
     const where = compileWhere(spec.where, 1, 'c');
-    const holding = compileWhere(held, where.params.length + 1, 'h');
+    const running = compileWhere(held, where.params.length + 1, 'h');
     const candidates = await client.query(
       `SELECT e.${key} AS key, e.${snake(column)} AS grp FROM (
          SELECT c.*, row_number() OVER (PARTITION BY c.${snake(column)}${order}) AS nth FROM ${table} c WHERE ${where.sql}
        ) e
-       WHERE NOT (e.${snake(column)} = ANY($${where.params.length + holding.params.length + 1}))
-          OR (e.nth = 1 AND NOT EXISTS (SELECT 1 FROM ${table} h WHERE ${holding.sql} AND h.${snake(column)} = e.${snake(column)}))
+       WHERE NOT (e.${snake(column)} = ANY($${where.params.length + running.params.length + 1}))
+          OR (e.nth = 1 AND NOT EXISTS (SELECT 1 FROM ${table} h WHERE ${running.sql} AND h.${snake(column)} = e.${snake(column)}))
        ${compileOrder(spec.order, 'e')} LIMIT ${Math.floor(spec.limit)}`,
-      [...where.params, ...holding.params, [...only]],
+      [...where.params, ...running.params, [...only]],
     );
     const restricted = new Set<unknown>(only);
     const free = candidates.rows.filter((row) => !restricted.has(row['grp'])).map((row) => row['key']);
