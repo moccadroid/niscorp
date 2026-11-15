@@ -157,7 +157,10 @@ describe('decide() on a decision provider', () => {
     const settled = rejection(pending);
     while (provider.seen.length === 0) await new Promise((resolve) => setTimeout(resolve, 5));
     controller.abort();
-    expect((await settled).code).toBe(ErrorCode.PROVIDER_ERROR);
+    const error = await settled;
+    expect(error.code).toBe(ErrorCode.PROVIDER_ERROR);
+    expect(error.message).not.toBe('The call was aborted');
+    expect(error.context?.['raw']).toBeDefined();
     await provider.closed;
   });
 

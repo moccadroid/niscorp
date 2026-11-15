@@ -9,22 +9,24 @@ export type ApprovalBridge = {
 };
 
 export const createApprovalBridge = (): ApprovalBridge => {
-  const pending = new Map<string, (decision: ApprovalDecision) => void>();
+  const pending = new Map<string, { resolve: (decision: ApprovalDecision) => void; timer?: ReturnType<typeof setTimeout> }>();
 
   const settle = (approvalId: string, decision: ApprovalDecision): void => {
-    const resolve = pending.get(approvalId);
-    if (!resolve) return; // already settled: a UI double-click decides the same id twice
+    const ask = pending.get(approvalId);
+    if (!ask) return; // already settled: a UI double-click decides the same id twice
     pending.delete(approvalId);
-    resolve(decision);
+    clearTimeout(ask.timer);
+    ask.resolve(decision);
   };
 
   return {
     ask: (approvalId, timeoutMs) =>
       new Promise<ApprovalDecision>((resolve) => {
-        pending.set(approvalId, resolve);
-        if (timeoutMs !== undefined && timeoutMs > 0) {
-          setTimeout(() => settle(approvalId, { approved: false, reason: 'approval timeout' }), timeoutMs);
-        }
+        const timer =
+          timeoutMs !== undefined && timeoutMs > 0
+            ? setTimeout(() => settle(approvalId, { approved: false, reason: 'approval timeout' }), timeoutMs)
+            : undefined;
+        pending.set(approvalId, { resolve, ...(timer !== undefined && { timer }) });
       }),
     approve: (approvalId, options) =>
       settle(approvalId, {

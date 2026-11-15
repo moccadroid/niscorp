@@ -3,6 +3,7 @@ import type {
   StepRequest, StepResult, StepStreamEvent, StepToolCall, StreamOptions,
 } from '../types';
 import { estimateUsage } from '../utils/estimate-usage';
+import { abortForCall } from '../utils/abort';
 
 export type ExecuteStepStreamConfig = {
   adapter: ChatAdapter;
@@ -28,7 +29,7 @@ const assembleToolCall = (
   if (delta.argsFragment) tc.args += delta.argsFragment;
 };
 
-const buildProviderRequest = (
+export const buildProviderRequest = (
   model: string,
   request: StepRequest,
 ): ProviderRequest => {
@@ -55,8 +56,20 @@ const buildProviderRequest = (
 export async function* executeStepStream(
   config: ExecuteStepStreamConfig,
 ): AsyncGenerator<StepStreamEvent> {
+  const abort = abortForCall(config.streamOptions?.signal, config.request.options?.signal);
+  try {
+    yield* streamStep(config, abort.signal);
+  } finally {
+    abort.release();
+  }
+}
+
+async function* streamStep(
+  config: ExecuteStepStreamConfig,
+  abortSignal: AbortSignal | undefined,
+): AsyncGenerator<StepStreamEvent> {
   const providerRequest = buildProviderRequest(config.model, config.request);
-  const abortSignal = config.streamOptions?.signal;
+  if (abortSignal?.aborted) return;
 
   let contentBuffer = '';
   let finishReason = 'unknown';
@@ -106,6 +119,7 @@ export async function* executeStepStream(
     if (abortSignal?.aborted) return;
     throw error;
   }
+  if (abortSignal?.aborted) return;
 
   const toolCalls: StepToolCall[] = [...assembledToolCalls.values()].map((tc) => {
     let parsed: unknown = tc.args;

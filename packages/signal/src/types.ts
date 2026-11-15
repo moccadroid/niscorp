@@ -311,9 +311,9 @@ export type ProviderResponse = {
 export type ChatAdapter = {
   kind: 'chat';
   id: string;
-  chat: (request: ProviderRequest) => Promise<ProviderResponse>;
+  chat: (request: ProviderRequest, options?: { signal?: AbortSignal }) => Promise<ProviderResponse>;
   chatStream: (request: ProviderRequest, options?: { signal?: AbortSignal }) => AsyncIterable<ProviderStreamDelta>;
-  embed?: (request: EmbedRequest) => Promise<EmbedResponse>;
+  embed?: (request: EmbedRequest, options?: { signal?: AbortSignal }) => Promise<EmbedResponse>;
 };
 
 export type DecisionAdapter = {

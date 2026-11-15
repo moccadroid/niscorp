@@ -2,6 +2,7 @@ import type { ZodType } from 'zod';
 import { SignalError, ErrorCode } from './errors';
 import { bareSchemaPrompt, bareSchemaCorrection } from './transport/protocol';
 import { asOutput } from './output-trust';
+import { abortedSource, abortedError } from './utils/abort';
 import type {
   Capabilities,
   Message,
@@ -123,7 +124,10 @@ export async function* runStream<T>(spec: RunSpec, deps: RunDeps): AsyncGenerato
       if (event.type === 'text') yield { type: 'text', text: event.text };
       if (event.type === 'done') result = event.result;
     }
-    if (!result) throw new SignalError('stream ended without a done event', ErrorCode.PROVIDER_ERROR);
+    if (!result) {
+      if (abortedSource(spec.streamOptions?.signal, spec.options?.signal)) return;
+      throw new SignalError('stream ended without a done event', ErrorCode.PROVIDER_ERROR);
+    }
     usage = {
       inputTokens: usage.inputTokens + result.usage.inputTokens,
       outputTokens: usage.outputTokens + result.usage.outputTokens,
@@ -142,7 +146,8 @@ export async function* runStream<T>(spec: RunSpec, deps: RunDeps): AsyncGenerato
         spec.onToolCall?.(call.name, call.args);
         yield { type: 'tool_start', name: call.name, args: call.args };
         const tool = toolMap.get(call.name);
-        const parsed = tool?.inputSchema.safeParse(call.args);
+        // A provider may send no argument text at all for a call that takes none.
+        const parsed = tool?.inputSchema.safeParse(call.args === '' ? {} : call.args);
         const started = Date.now();
         let output: unknown;
         if (!tool) output = `error: unknown tool "${call.name}"`;
@@ -206,5 +211,7 @@ export const runComplete = async <T>(spec: RunSpec, deps: RunDeps): Promise<Sign
     if (event.type === 'done') return { response: event.response, history: event.history, meta: event.meta };
     if (event.type === 'error') throw event.error;
   }
+  const aborted = abortedSource(spec.streamOptions?.signal, spec.options?.signal);
+  if (aborted) throw abortedError(aborted.reason);
   throw new SignalError('run ended without a result', ErrorCode.PROVIDER_ERROR);
 };

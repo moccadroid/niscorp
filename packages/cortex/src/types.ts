@@ -8,7 +8,7 @@ import type {
 } from '@niscorp/signal';
 
 export type SignalClient = {
-  step: (request: StepRequest) => Promise<StepResult>;
+  step: (request: StepRequest, options?: StreamOptions) => Promise<StepResult>;
   stepStream: (request: StepRequest, options?: StreamOptions) => AsyncIterable<StepStreamEvent>;
   count: (input: CountInput) => Promise<number>;
   describe: () => SignalDescription;

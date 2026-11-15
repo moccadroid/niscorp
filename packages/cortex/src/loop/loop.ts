@@ -217,18 +217,11 @@ export const runLoop = async <TData, TDeps>(
           type: 'approval-required',
           approval: { id: approvalId, toolId, callId: call.id, args, reason: decision.ask.reason },
         });
-        const outcome = await new Promise<Awaited<ReturnType<ApprovalBridge['ask']>>>((resolve) => {
-          const onAbort = (): void => resolve({ approved: false, reason: 'aborted' });
-          if (cfg.abort.aborted) {
-            onAbort();
-            return;
-          }
-          cfg.abort.addEventListener('abort', onAbort, { once: true });
-          void askPromise.then((askDecision) => {
-            cfg.abort.removeEventListener('abort', onAbort);
-            resolve(askDecision);
-          });
-        });
+        const onAbort = (): void => cfg.approvals.deny(approvalId, 'aborted');
+        if (cfg.abort.aborted) onAbort();
+        else cfg.abort.addEventListener('abort', onAbort, { once: true });
+        const outcome = await askPromise;
+        cfg.abort.removeEventListener('abort', onAbort);
         // The abort check comes before `pending` is cleared: a snapshot taken after
         // an abort still resumes into the approval.
         if (cfg.abort.aborted) return fail(makeError('aborted', 'run aborted', errorContext));
@@ -252,7 +245,8 @@ export const runLoop = async <TData, TDeps>(
       return undefined;
     }
 
-    let parsedArgs = tool.config.input.safeParse(args);
+    // A provider may send no argument text at all for a call that takes none.
+    let parsedArgs = tool.config.input.safeParse(args === '' ? {} : args);
     if (!parsedArgs.success) {
       // Some models stringify nested values inside the arguments.
       const repaired = tool.config.input.safeParse(deepDecodeJsonish(args));
@@ -346,10 +340,10 @@ export const runLoop = async <TData, TDeps>(
   };
 
   const streamEmittedOutput = cfg.resolved.transport !== 'respond';
-  const oneStep = async (llm: SignalClient, request: StepRequest): Promise<Result<StepResult>> => {
+  const callModel = async (llm: SignalClient, request: StepRequest): Promise<Result<StepResult>> => {
     if (cfg.transport === 'step') {
       try {
-        return ok(await llm.step(request));
+        return ok(await llm.step(request, { signal: cfg.abort }));
       } catch (cause) {
         const message = cause instanceof Error ? cause.message : String(cause);
         return err(makeError('model_call_failed', message, { ...errorContext, cause }));
@@ -387,9 +381,16 @@ export const runLoop = async <TData, TDeps>(
       return err(makeError('model_call_failed', message, { ...errorContext, cause }));
     }
     if (final) return ok(final);
-    if (cfg.abort.aborted) return err(makeError('aborted', 'run aborted during model call', errorContext));
     return err(makeError('model_call_failed', 'stream ended without a done event', errorContext));
   };
+  const oneStep = async (llm: SignalClient, request: StepRequest): Promise<Result<StepResult>> => {
+    const called = await callModel(llm, request);
+    if (cfg.abort.aborted) return err(makeError('aborted', 'run aborted during model call', errorContext));
+    return called;
+  };
+
+  // A function, not a string: a replacement string reads $$, $& and $' as patterns.
+  const correction = (issues: string): string => cfg.resolved.corrections.invalidOutput.replace('{issues}', () => issues);
 
   let lastAttempt: unknown;
   const retryOutput = (kind: 'output' | 'termination', issues: string, attempt?: unknown): RunResult<TData> | undefined => {
@@ -521,7 +522,7 @@ export const runLoop = async <TData, TDeps>(
       }
       s.messages.push({
         role: 'system',
-        content: cfg.resolved.corrections.invalidOutput.replace('{issues}', validated.issues),
+        content: correction(validated.issues),
       });
       continue;
     }
@@ -538,7 +539,7 @@ export const runLoop = async <TData, TDeps>(
     }
     s.messages.push({
       role: 'system',
-      content: cfg.resolved.corrections.invalidOutput.replace('{issues}', outcome.evidence),
+      content: correction(outcome.evidence),
     });
 
   }

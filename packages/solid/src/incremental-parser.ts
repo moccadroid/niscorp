@@ -3,7 +3,7 @@ import type { ValueKind } from './schema-walker';
 
 export type ValueOpenDecision = 'accept' | 'skip';
 
-export type ValueOpenHook = (path: string, kind: ValueKind) => ValueOpenDecision;
+export type ValueOpenHook = (segments: readonly string[], kind: ValueKind) => ValueOpenDecision;
 
 export type IncrementalParserOptions = {
   valueOpenHook?: ValueOpenHook;
@@ -137,9 +137,9 @@ export const createIncrementalParser = (
     containerTypeStack.push(type);
   };
 
-  const checkValueOpen = (path: string, kind: ValueKind): boolean => {
+  const checkValueOpen = (kind: ValueKind): boolean => {
     if (!valueOpenHook) return true;
-    const decision = valueOpenHook(path, kind);
+    const decision = valueOpenHook([...pathStack], kind);
     if (decision === 'accept') return true;
     return false;
   };
@@ -300,7 +300,7 @@ export const createIncrementalParser = (
             hasUnpoppedValue = true;
           }
           const path = currentPath();
-          if (!isRoot && !checkValueOpen(path, 'object')) {
+          if (!isRoot && !checkValueOpen('object')) {
             enterSkipObject();
             afterColon = false;
             expectingValue = false;
@@ -340,7 +340,7 @@ export const createIncrementalParser = (
             hasUnpoppedValue = true;
           }
           const arrPath = currentPath();
-          if (!isRootArr && !checkValueOpen(arrPath, 'array')) {
+          if (!isRootArr && !checkValueOpen('array')) {
             enterSkipArray();
             afterColon = false;
             expectingValue = false;
@@ -387,7 +387,7 @@ export const createIncrementalParser = (
             expectingValue = false;
             hasUnpoppedValue = true;
           }
-          if (!checkValueOpen(currentPath(), 'string')) {
+          if (!checkValueOpen('string')) {
             enterSkipString();
             break;
           }
@@ -438,7 +438,7 @@ export const createIncrementalParser = (
             hasUnpoppedValue = true;
           }
           const litKind = literalKindFromChar(ch);
-          if (!checkValueOpen(currentPath(), litKind)) {
+          if (!checkValueOpen(litKind)) {
             enterSkipLiteral();
             expectingValue = false;
             break;

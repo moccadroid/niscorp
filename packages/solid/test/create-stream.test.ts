@@ -582,3 +582,49 @@ describe('createStream — onFinal unsubscribe', () => {
     expect(listener).not.toHaveBeenCalled();
   });
 });
+
+describe('createStream — a listener that throws', () => {
+  const Doc = z.object({ n: z.number(), t: z.string() });
+  const json = '{"n":"bad","t":"kept"}';
+
+  it('an onError listener: the chunk is still parsed, and write() throws its error after', () => {
+    const stream = createStream({ schema: Doc, initial: { n: 0, t: '' } });
+    stream.onError(() => {
+      throw new Error('listener failed');
+    });
+    expect(() => stream.write(json)).toThrow('listener failed');
+    expect(stream.current()).toEqual({ n: 0, t: 'kept' });
+  });
+
+  it('an on listener: the others still hear of the value, and the stream keeps working', () => {
+    const stream = createStream({ schema: Doc, initial: { n: 0, t: '' } });
+    stream.on((value) => {
+      if (value.t !== '') throw new Error('listener failed');
+    });
+    const heard: string[] = [];
+    stream.on((value) => heard.push(value.t));
+    const selected: string[] = [];
+    stream.select<string>('t').on((value) => selected.push(value));
+
+    expect(() => stream.write('{"n":1,"t":"ab"')).toThrow('listener failed');
+    expect(heard.at(-1)).toBe('ab');
+    expect(selected.at(-1)).toBe('ab');
+
+    const late: string[] = [];
+    stream.on((value) => late.push(value.t));
+    expect(late).toEqual(['ab']);
+  });
+
+  it('an onFinal listener: the others and the selections still settle, and close() throws its error after', async () => {
+    const stream = createStream({ schema: Doc, initial: { n: 0, t: '' } });
+    stream.onFinal(() => {
+      throw new Error('listener failed');
+    });
+    const finals: unknown[] = [];
+    stream.onFinal((value) => finals.push(value));
+    stream.write('{"n":1,"t":"ab"');
+    expect(() => stream.close()).toThrow('listener failed');
+    expect(finals).toEqual([{ n: 1, t: 'ab' }]);
+    expect(await stream.select('t').final()).toBe('ab');
+  });
+});

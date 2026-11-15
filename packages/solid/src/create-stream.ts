@@ -30,8 +30,34 @@ export const createStream = <T>(options: CreateStreamOptions<T>): Stream<T> => {
   let isNotifying = false;
   const pendingImmediateFires: Array<() => void> = [];
 
+  // A listener that throws during write() or close() does not cut it short: the
+  // rest runs, then the call throws the first listener's error.
+  let thrownByListeners: unknown[] | undefined;
+  const deliver = (call: () => void): void => {
+    if (thrownByListeners === undefined) {
+      call();
+      return;
+    }
+    try {
+      call();
+    } catch (error) {
+      thrownByListeners.push(error);
+    }
+  };
+  const throwingAfter = (operation: () => void): void => {
+    const outer = thrownByListeners;
+    const thrown: unknown[] = [];
+    thrownByListeners = thrown;
+    try {
+      operation();
+    } finally {
+      thrownByListeners = outer;
+    }
+    if (thrown.length > 0) throw thrown[0];
+  };
+
   const emitError = (err: StreamError): void => {
-    for (const listener of errorListeners) listener(err);
+    for (const listener of errorListeners) deliver(() => listener(err));
     for (const sub of errorSubscribers) sub(err);
   };
 
@@ -67,7 +93,7 @@ export const createStream = <T>(options: CreateStreamOptions<T>): Stream<T> => {
   const notify = (value: T): void => {
     isNotifying = true;
     for (const listener of listeners) {
-      listener(value);
+      deliver(() => listener(value));
     }
     for (const sub of changeSubscribers) {
       sub();
@@ -76,7 +102,7 @@ export const createStream = <T>(options: CreateStreamOptions<T>): Stream<T> => {
 
     while (pendingImmediateFires.length > 0) {
       const fire = pendingImmediateFires.shift();
-      if (fire) fire();
+      if (fire) deliver(fire);
     }
   };
 
@@ -86,7 +112,7 @@ export const createStream = <T>(options: CreateStreamOptions<T>): Stream<T> => {
     finalState = { resolved: true, value };
     resolve(value);
     for (const listener of finalListeners) {
-      listener(value);
+      deliver(() => listener(value));
     }
     finalListeners.clear();
     for (const sub of finalizeSubscribers) {
@@ -97,7 +123,7 @@ export const createStream = <T>(options: CreateStreamOptions<T>): Stream<T> => {
     hasNotifiedFinal = true;
   };
 
-  const write = (chunk: string): void => {
+  const write = (chunk: string): void => throwingAfter(() => {
     if (isClosed || isDestroyed || isFailed) return;
 
     const events = parser.write(chunk);
@@ -129,16 +155,16 @@ export const createStream = <T>(options: CreateStreamOptions<T>): Stream<T> => {
     if (tracker.isRootFinal()) {
       notifyFinal(currentValue);
     }
-  };
+  });
 
-  const close = (): void => {
+  const close = (): void => throwingAfter(() => {
     if (isDestroyed || isClosed) return;
     isClosed = true;
 
     if (!finalState.resolved) {
       notifyFinal(currentValue);
     }
-  };
+  });
 
   const destroy = (): void => {
     if (isDestroyed) return;
@@ -225,6 +251,7 @@ export const createStream = <T>(options: CreateStreamOptions<T>): Stream<T> => {
         return () => { errorSubscribers.delete(listener); };
       },
       resolveSubSelect: (fullPath) => select(fullPath),
+      deliver,
     });
 
     selectedStreams.set(path, selected as Stream<unknown>);

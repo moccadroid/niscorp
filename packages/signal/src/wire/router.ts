@@ -156,14 +156,15 @@ export const routeResponse = (request: RouteRequest): Routed => {
   return contentTurn(request);
 };
 
-let recoveredCallCounter = 0;
+// Sent back to the provider on the next turn, so it stays as short as a provider's own ids.
+const recoveredCallId = (): string =>
+  `recovered_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
 
 export const routeRejection = (rejection: Rejection, request: Omit<RouteRequest, 'content' | 'toolCalls'>): Routed => {
   const name = rejection.name;
   if (name !== undefined && request.declared.has(name) && name !== request.outputTool) {
-    recoveredCallCounter += 1;
     const args = rejection.args ?? decodeJsonish(rejection.argsText);
-    return toolTurn([{ id: `recovered_${recoveredCallCounter}`, name, args }], []);
+    return toolTurn([{ id: recoveredCallId(), name, args }], []);
   }
 
   const call: StepToolCall = { id: '', name: name ?? '', args: rejection.args ?? rejection.argsText };

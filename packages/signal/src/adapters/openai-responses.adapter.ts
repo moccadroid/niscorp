@@ -180,11 +180,11 @@ export const createOpenAIResponsesAdapter = async (config: OpenAISdkConfig): Pro
     true,
   );
 
-  const chat = async (request: ProviderRequest): Promise<ProviderResponse> => {
+  const chat = async (request: ProviderRequest, options?: RequestOptions): Promise<ProviderResponse> => {
     const params = buildParams(request);
     let response: ResponsesResponse;
     try {
-      response = await responsesCreate(params);
+      response = await responsesCreate(params, options);
     } catch (error) {
       throw providerError('Provider error', error);
     }
