@@ -213,7 +213,7 @@ const packedFiles = (await run(['-tzf', archives[0]], evidence, 'contents', 'tar
 assert(
   packedFiles.every(
     (name) =>
-      ['package.json', 'README.md', 'LICENSE', 'DESIGN.md', 'STATUS.md'].includes(name) ||
+      ['package.json', 'README.md', 'LICENSE', 'DESIGN.md', 'STATUS.md', 'ARTIFACTS.md'].includes(name) ||
       name.startsWith('dist/'),
   ),
   'Unexpected packed file',

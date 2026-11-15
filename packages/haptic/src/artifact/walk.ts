@@ -11,7 +11,13 @@ import {
   type XmlRecord,
 } from './formats.js';
 import type { PreparedArtifact } from './prepare.js';
-import { readLinks, readRecords, type ExtractedRecord } from './stage.js';
+import {
+  emptyTally,
+  readLinks,
+  readRecords,
+  type ExtractedRecord,
+  type RecordTally,
+} from './stage.js';
 import type { Policy, Stage } from './schema.js';
 
 export type Redirect = { from: string; to: string; status: number };
@@ -30,6 +36,18 @@ export type WalkResult = {
   emptyPages: string[];
   broken: boolean;
 };
+
+// One page at one stage. A link or reference stage names the addresses the page gave (within the stage's limit and
+// the policy's room); a record stage counts what it did with the elements its selector matched and, for each field,
+// the records it kept without a value.
+export type PageReport = { url: string; stage: number } & (
+  | { links: string[]; selected: number | null }
+  | (RecordTally & { kept: number; empty: Record<string, number> })
+);
+
+// What a run did, filled as it goes, so it is there when the run stops: the pages, then the last level's records
+// before the program ran.
+export type Report = { pages: PageReport[]; records: StageRecord[] | null };
 
 export class WalkError extends Error {
   constructor(
@@ -84,6 +102,7 @@ export const walk = async (
   prepared: PreparedArtifact,
   url: string,
   options: WalkOptions,
+  report: Report = { pages: [], records: null },
 ): Promise<WalkResult> => {
   const { artifact } = prepared;
   const { policy } = artifact;
@@ -134,18 +153,20 @@ export const walk = async (
         };
         if (stage.kind === 'links') {
           files(stage, source, []);
-          take(
-            readLinks(
-              source,
-              stage,
-              {
-                visited: new Set([...visited, ...next]),
-                room: Math.min(wanted, room + 1) - next.length,
-                stripFragments: policy.stripFragments,
-              },
-              options.signal,
-            ),
+          const tally = { selected: 0 };
+          const links = readLinks(
+            source,
+            stage,
+            {
+              visited: new Set([...visited, ...next]),
+              room: Math.min(wanted, room + 1) - next.length,
+              stripFragments: policy.stripFragments,
+            },
+            options.signal,
+            tally,
           );
+          report.pages.push({ url: source.url, stage: index, links, selected: tally.selected });
+          take(links);
         } else {
           const found = readReferences(
             source,
@@ -153,6 +174,7 @@ export const walk = async (
             prepared.references[index] as Config,
             options.signal,
           );
+          report.pages.push({ url: source.url, stage: index, links: found.links, selected: null });
           files(stage, source, found.resources);
           take(found.links);
         }
@@ -172,19 +194,27 @@ export const walk = async (
     }
     const perPage = current.map((source) => {
       files(stage, source, []);
-      if (stage.format === 'html')
-        return {
-          url: source.url,
-          records: readRecords(source, stage, options.signal) as StageRecord[],
-        };
-      if (stage.format === 'xml')
-        return {
-          url: source.url,
-          records: readXmlRecords(source, stage, options.signal) as StageRecord[],
-        };
-      return { url: source.url, records: [readJsonRecord(source)] as StageRecord[] };
+      const tally = emptyTally();
+      const records: StageRecord[] =
+        stage.format === 'html'
+          ? readRecords(source, stage, options.signal, tally)
+          : stage.format === 'xml'
+            ? readXmlRecords(source, stage, options.signal, tally)
+            : [readJsonRecord(source)];
+      if (stage.format === 'json') tally.selected = 1;
+      const empty: Record<string, number> = {};
+      if (stage.format !== 'json')
+        for (const name of Object.keys(stage.fields))
+          empty[name] = records.filter((record) =>
+            [(record as ExtractedRecord | XmlRecord).fields[name]]
+              .flat()
+              .every((value) => value == null || String(value).trim() === ''),
+          ).length;
+      report.pages.push({ url: source.url, stage: index, ...tally, kept: records.length, empty });
+      return { url: source.url, records };
     });
     const records = perPage.flatMap((page) => page.records);
+    report.records = records;
     const emptyPages = perPage.filter((page) => !page.records.length).map((page) => page.url);
     const resources: HttpSource[] = [];
     for (const address of fileAddresses.slice(0, policy.maxResources ?? 0))

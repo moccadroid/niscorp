@@ -6,6 +6,7 @@
 . FieldRuleSchema
 . FormatError
 . HttpSource
+. Inspection
 . JsonRecord
 . JsonRecordStage
 . JsonRecordStageSchema
@@ -14,6 +15,7 @@
 . LinkStage
 . LinkStageSchema
 . OperationFailure
+. PageReport
 . Policy
 . PolicySchema
 . PreparedArtifact

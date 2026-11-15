@@ -25,6 +25,25 @@ const valueIn = (record: ExtractedRecord, place: string): string =>
 export const passes = (record: ExtractedRecord, where: Where | null): boolean =>
   !where || valueIn(record, where.in).includes(fold(where.contains));
 
+// What a record stage did with the elements its selector matched on one page.
+export type RecordTally = {
+  selected: number;
+  // Elements left out because this required field had no value (the first such field counts).
+  missing: Record<string, number>;
+  failedWhere: number;
+  duplicates: number;
+  // Elements not read because the limit was reached.
+  pastLimit: number;
+};
+
+export const emptyTally = (): RecordTally => ({
+  selected: 0,
+  missing: {},
+  failedWhere: 0,
+  duplicates: 0,
+  pastLimit: 0,
+});
+
 const rulesOf = (fields: Record<string, FieldRule>) =>
   Object.fromEntries(
     Object.entries(fields).map(([name, { selector, attribute, closest }]) => [
@@ -41,8 +60,10 @@ export const readRecords = (
   source: HttpSource,
   stage: RecordStage,
   signal: AbortSignal,
+  tally: RecordTally = emptyTally(),
 ): ExtractedRecord[] => {
   const selection = selectHtml(source, stage.selector, rulesOf(stage.fields), signal);
+  tally.selected += selection.items.length;
   const clean = (value: string | null, rule: FieldRule): string | null => {
     if (value === null) return null;
     if (rule.attribute === 'href')
@@ -51,14 +72,18 @@ export const readRecords = (
   };
   const records: ExtractedRecord[] = [];
   const seen = new Set<string>();
-  for (const item of selection.items) {
-    if (stage.limit && records.length >= stage.limit) break;
-    if (
-      !stage.required.every((name) =>
-        (item.fields[name] ?? []).some((value) => value && value.trim()),
-      )
-    )
+  for (const [index, item] of selection.items.entries()) {
+    if (stage.limit && records.length >= stage.limit) {
+      tally.pastLimit += selection.items.length - index;
+      break;
+    }
+    const empty = stage.required.find(
+      (name) => !(item.fields[name] ?? []).some((value) => value && value.trim()),
+    );
+    if (empty !== undefined) {
+      tally.missing[empty] = (tally.missing[empty] ?? 0) + 1;
       continue;
+    }
     const fields: Record<string, FieldValue> = {};
     for (const [name, rule] of Object.entries(stage.fields)) {
       const found = (item.fields[name] ?? []).map((value) => clean(value, rule));
@@ -68,7 +93,14 @@ export const readRecords = (
     }
     const record = { sourceUrl: source.url, text: item.text, attributes: item.attributes, fields };
     const same = JSON.stringify(fields);
-    if (!passes(record, stage.where) || seen.has(same)) continue;
+    if (!passes(record, stage.where)) {
+      tally.failedWhere++;
+      continue;
+    }
+    if (seen.has(same)) {
+      tally.duplicates++;
+      continue;
+    }
     seen.add(same);
     records.push(record);
   }
@@ -82,6 +114,7 @@ export const readLinks = (
   stage: LinkStage,
   options: { visited: ReadonlySet<string>; room: number; stripFragments: boolean },
   signal: AbortSignal,
+  tally: { selected: number } = { selected: 0 },
 ): string[] => {
   const selection = selectHtml(
     source,
@@ -89,6 +122,7 @@ export const readLinks = (
     { link: { selector: stage.link.selector, attribute: stage.link.attribute } },
     signal,
   );
+  tally.selected += selection.items.length;
   const out: string[] = [];
   for (const item of selection.items) {
     if (out.length >= options.room) break;

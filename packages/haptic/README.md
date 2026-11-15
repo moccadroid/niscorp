@@ -26,7 +26,9 @@ try {
 }
 ```
 
-`prepareArtifact` refuses an artifact whose shape, Prism programs or output schema are wrong. A run fetches the pages, runs a page's own scripts first when the artifact says so, follows its link stages, reads its records, runs its Prism program and checks the result against its output schema. This entry point never loads a model package.
+`prepareArtifact` refuses an artifact whose shape, field names, selectors, Prism programs or output schema are wrong, and names the place of each problem. A run fetches the pages, runs a page's own scripts first when the artifact says so, follows its link stages, reads its records, runs its Prism program and checks the result against its output schema. This entry point never loads a model package.
+
+An artifact does not have to come from discovery: a person, a model or a tool can write one. `prepared.inspect({ url }, options)` runs it like `run`, but returns what each page gave at each stage (elements matched, records left out and why, fields left empty) and the records the program saw, even when the run stops. [ARTIFACTS.md](ARTIFACTS.md) is the format, with a hand-written example.
 
 ## Discover
 
@@ -69,5 +71,6 @@ DuckDuckGo is the shipped provider (`duckduckgo`, a `SearchProvider` value; pass
 
 ## More
 
+- [ARTIFACTS.md](ARTIFACTS.md): writing an artifact by hand, the check errors, `inspect`, every key of the grammar.
 - [DESIGN.md](DESIGN.md): the artifact grammar, the discovery steps, search, rendering, the modules.
 - [STATUS.md](STATUS.md): measured results, known limits, what is not built, how to check a change.

@@ -5,6 +5,7 @@ import { readXml, readXmlProfile } from '../readers/xml/index.js';
 import { resolveAddress, selectHtml } from '../web/html.js';
 import { readSourceBody, type HttpSource } from '../web/source.js';
 import { fold } from './fold.js';
+import { emptyTally, type RecordTally } from './stage.js';
 import type { Where, XmlRecordStage, XmlReferenceStage } from './schema.js';
 
 type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
@@ -88,12 +89,20 @@ export const readXmlRecords = (
   source: HttpSource,
   stage: XmlRecordStage,
   signal: AbortSignal,
+  tally: RecordTally = emptyTally(),
 ): XmlRecord[] => {
   const out: XmlRecord[] = [];
-  for (const record of select(source, stage, signal)) {
-    if (stage.limit && out.length >= stage.limit) break;
-    if (stage.required.every((name) => present(record.fields[name])) && passes(record, stage.where))
-      out.push(record);
+  const selected = select(source, stage, signal);
+  tally.selected += selected.length;
+  for (const [index, record] of selected.entries()) {
+    if (stage.limit && out.length >= stage.limit) {
+      tally.pastLimit += selected.length - index;
+      break;
+    }
+    const empty = stage.required.find((name) => !present(record.fields[name]));
+    if (empty !== undefined) tally.missing[empty] = (tally.missing[empty] ?? 0) + 1;
+    else if (!passes(record, stage.where)) tally.failedWhere++;
+    else out.push(record);
   }
   return out;
 };

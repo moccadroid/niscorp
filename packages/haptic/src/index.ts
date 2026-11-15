@@ -30,6 +30,8 @@ export type {
   Where,
   Policy,
   PreparedArtifact,
+  Inspection,
+  PageReport,
   WalkResult,
   WalkOptions,
   Redirect,

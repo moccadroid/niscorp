@@ -35,14 +35,7 @@ Perl's free online books, as discovery wrote it (`tests/fixtures/discovery/perl.
 }
 ```
 
-- **Stages** run in order, one per level of pages: link or reference stages first, one record stage last.
-  - HTML record stage: CSS for one record, field rules (`selector`, `attribute`, optional `list`, optional `closest`), `required` (a record without a non-empty value for one of these fields is not an item), `where` (kept when that field, or the record's text, contains the phrase, compared with case, whitespace, dashes and quotes folded), `limit` (the first N records of each page). Order per page: required, where, limit.
-  - HTML link stage: CSS for the link records, the link rule, `limit` (distinct addresses not yet visited).
-  - `render: true`: the level's pages run their own inline scripts before anything reads them.
-  - `resources` on an HTML stage: CSS for files to download (up to `policy.maxResources`).
-  - XML record and reference stages: XPath records, namespaces, XPath fields; a reference stage's Prism program returns `{ links, resources }`. JSON: a record stage makes each page's document one record; a reference stage's program over the document returns `{ links, resources }`.
-- **The program** sees `{ records }`, the last level's records from all pages in page order. Each HTML record is `{ sourceUrl, text, attributes, fields }`: text with whitespace collapsed, addresses resolved, one value per field (a list for `list` fields).
-- **A run** returns `{ data, records, visited, redirects, limited, resources, emptyPages, broken }`. `limited`: a stage had more pages than `maxPages` left room for. `broken`: a page of the last level gave no records, so the artifact no longer fits it.
+- **Stages** run in order, one per level of pages: link or reference stages first, one record stage last. The program sees `{ records }`, the last level's records from all pages in page order. [ARTIFACTS.md](ARTIFACTS.md) has every key, what a record holds, what a run returns, the check errors and `inspect`.
 - **Versions**: `prepareArtifact` upgrades an older stamp through Strata (`HAPTIC_SEQUENCE` with Prism's sequence) before checking it. A change to the artifact schema appends a migration; `pnpm check:grammars` at the repository root holds the grammar to its snapshot and upgrades the captured artifacts in `strata/corpus/haptic`.
 
 ## Discovery

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import {
   ArtifactError,
   fetchPage,
@@ -164,12 +165,62 @@ const short = await walk(capped, index.url, {
 assert.deepEqual(short.visited, [index.url, 'https://example.com/news/a']);
 assert.equal(short.limited, true);
 
-// Checked once when prepared: grammar, program, output schema.
-const refused = (value: unknown, code: string) =>
+// Checked once when prepared: grammar, field names, selectors, program, output schema. The message names the place
+// and what is wrong there.
+const refused = (value: unknown, code: string, message?: string) =>
   assert.throws(
     () => prepareArtifact(value),
-    (error: unknown) => error instanceof ArtifactError && error.code === code,
+    (error: unknown) =>
+      error instanceof ArtifactError &&
+      error.code === code &&
+      (!message || error.message.includes(message)),
   );
+const stage = records.artifact.stages[0] as Record<string, unknown>;
+const withStage = (change: Record<string, unknown>) => ({
+  ...records.artifact,
+  stages: [{ ...stage, ...change }],
+});
+refused(
+  withStage({ render: undefined }),
+  'GRAMMAR',
+  'stages.0.render: Invalid input: expected boolean',
+);
+refused(withStage({ format: 'csv' }), 'GRAMMAR', 'no stage has kind "records" and format "csv"');
+refused(
+  withStage({ required: ['title'] }),
+  'GRAMMAR',
+  'stages.0.required.0: "title" is not a field',
+);
+refused(
+  withStage({ where: { in: 'title', contains: 'x' } }),
+  'GRAMMAR',
+  'stages.0.where.in: "title" is not a field or "text"',
+);
+refused(withStage({ selector: 'tr[' }), 'SELECTOR', 'stages.0.selector: "tr[" is not CSS');
+refused(
+  withStage({ fields: { name: { selector: 'td:hover', attribute: null } } }),
+  'SELECTOR',
+  'stages.0.fields.name.selector',
+);
+refused(
+  {
+    ...records.artifact,
+    stages: [
+      {
+        kind: 'records',
+        format: 'xml',
+        selector: '//item',
+        namespaces: {},
+        fields: { title: 'atom:title' },
+        required: [],
+        where: null,
+        limit: null,
+      },
+    ],
+  },
+  'SELECTOR',
+  'stages.0.fields.title: "atom:title" is not XPath',
+);
 refused(
   { ...records.artifact, stages: [...records.artifact.stages, linked.artifact.stages[0]] },
   'GRAMMAR',
@@ -189,6 +240,60 @@ await assert.rejects(
   walk(strict, releases.url, { signal, pages: async () => releases }),
   (error: unknown) => error instanceof WalkError && error.code === 'SCHEMA',
 );
+
+// Inspect: what each page gave at each stage, and the records the program saw even when the run stops.
+const seen = await records.inspect({ url: releases.url }, { signal, pages: async () => releases });
+assert.equal(seen.error, null);
+assert.deepEqual(seen.pages, [
+  {
+    url: releases.url,
+    stage: 0,
+    selected: 5,
+    missing: { name: 1 },
+    failedWhere: 3,
+    duplicates: 0,
+    pastLimit: 0,
+    kept: 1,
+    empty: { name: 0, file: 0, tags: 0 },
+  },
+]);
+const stopped = await strict.inspect(
+  { url: releases.url },
+  { signal, pages: async () => releases },
+);
+assert.equal(stopped.result, null);
+assert.equal(stopped.error?.code, 'SCHEMA');
+assert.equal(stopped.records?.length, 1);
+const throughLinks = await linked.inspect(
+  { url: index.url },
+  { signal, pages: async (url) => pages.get(url) ?? assert.fail(url) },
+);
+assert.deepEqual(throughLinks.pages[0], {
+  url: index.url,
+  stage: 0,
+  links: ['https://example.com/news/a', 'https://example.com/news/b'],
+  selected: 5,
+});
+assert.deepEqual(
+  throughLinks.pages.slice(1).map((p) => [p.url, 'kept' in p ? p.kept : null]),
+  [
+    ['https://example.com/news/a', 1],
+    ['https://example.com/news/b', 0],
+  ],
+);
+
+// The hand-written example in ARTIFACTS.md prepares and gives the nine free books on its saved page.
+const authoring = await readFile(new URL('../ARTIFACTS.md', import.meta.url), 'utf8');
+const example = JSON.parse(authoring.match(/```json\r?\n([\s\S]*?)\r?\n```/)?.[1] ?? 'null');
+const perl = JSON.parse(
+  await readFile(new URL('./fixtures/discovery/perl.json', import.meta.url), 'utf8'),
+) as { pages: HttpSource[] };
+const books = await prepareArtifact(example).inspect(
+  { url: 'https://www.perl.org/books/library.html' },
+  { signal, pages: async (url) => perl.pages.find((p) => p.url === url) ?? assert.fail(url) },
+);
+assert.equal(books.error, null);
+assert.equal((books.result?.data as unknown[]).length, 9);
 
 // Redirects are followed within the policy; the final status must be accepted.
 const answers = (map: Record<string, HttpSource>): WebTransport => ({
@@ -217,4 +322,6 @@ await assert.rejects(
   (error: unknown) => error instanceof WalkError && error.code === 'STATUS',
 );
 
-console.log('artifact: record and link stages, preparation checks, output schema, redirects');
+console.log(
+  'artifact: record and link stages, preparation checks, output schema, inspect, redirects',
+);
