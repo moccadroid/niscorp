@@ -365,4 +365,14 @@ describe('upgradeStore — rows that hold documents', () => {
     const { rows } = await pool.query(`SELECT definition FROM forms WHERE id = 'a'`);
     expect(rows[0]?.['definition']).toEqual({ title: 'Sign up' });
   });
+
+  it('a row whose stamp is not a number of migrations refuses the whole pass, rather than passing as current', async () => {
+    const pool = await withForms();
+    await pool.query(`INSERT INTO forms (id, definition, grammar) VALUES ('x', '{"title":"Unread"}', '{"acme.forms":"one"}')`);
+    const upgrader = await createUpgrader([grammar([renameTitle])], { transform });
+    const error = await upgradeStore(pool, store, upgrader).catch((e: unknown) => e);
+    expect(String(error)).toContain('forms (id="x")');
+    const { rows } = await pool.query(`SELECT definition FROM forms WHERE id IN ('a', 'x') ORDER BY id`);
+    expect(rows.map((row) => row['definition'])).toEqual([{ title: 'Sign up' }, { title: 'Unread' }]);
+  });
 });

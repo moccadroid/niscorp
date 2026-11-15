@@ -116,7 +116,11 @@ export const runSourceUpgrade = async (options: SourceUpgradeOptions, argv: read
     behind = upgrader.behind(lock);
   } catch (error) {
     log(`[fail] ${error instanceof Error ? error.message.split('\n').join('\n       ') : String(error)}`);
-    log('       The lock is ahead of the installed grammars — install the newer packages, or the lock is wrong.');
+    log(
+      error instanceof StrataError && error.code === 'TOO_NEW'
+        ? '       The lock is ahead of the installed grammars — install the newer packages, or the lock is wrong.'
+        : `       ${rel(lockPath)} is wrong: each grammar's entry is the number of its migrations the source is written at.`,
+    );
     return 1;
   }
 

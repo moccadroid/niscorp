@@ -188,8 +188,11 @@ const { document, stamp, applied } = upgrader.upgrade(storedAction, { kind: 'nis
   The source is `{ document, path }`.
 - **No stamp** (`{}`, `null`) reads as the start of every grammar. **Ahead of
   the code** on any grammar the code was given is refused, `TOO_NEW`: the reader
-  upgrades first. A stamp entry for a grammar the code was not given is neither
-  ahead nor behind: it is kept on the stamp as it was, for code that has it.
+  upgrades first. An entry that is not a number on any grammar the code was
+  given is refused too, `STEP_FAILED`, whether it is a document's stamp, a
+  row's in `upgradeStore` or `strata.lock.json`'s. A stamp entry for a grammar
+  the code was not given is neither ahead nor behind: it is kept on the stamp as
+  it was, for code that has it.
 
 | | |
 |---|---|

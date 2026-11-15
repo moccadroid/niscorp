@@ -115,6 +115,14 @@ export const createUpgrader = async (sequences: readonly Sequence[], options: { 
   const positionOf = (given: Stamp | null | undefined, id: string): number => given?.[id] ?? 0;
 
   const behind = (given: Stamp | null | undefined): boolean => {
+    const unread = grammars.filter((s) => Number.isNaN(Number(positionOf(given, s.id))));
+    if (unread.length > 0) {
+      throw new StrataError(
+        'STEP_FAILED',
+        'This stamp does not say how many migrations the document has had — reading it would be guessing.',
+        unread.map((s) => `${s.id}: ${String(given?.[s.id])} is not a number of migrations`),
+      );
+    }
     const ahead = grammars.filter((s) => positionOf(given, s.id) > s.migrations.length);
     if (ahead.length > 0) {
       throw new StrataError(

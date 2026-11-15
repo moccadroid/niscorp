@@ -149,6 +149,13 @@ describe('strata upgrade — the loop', () => {
     expect(await a.run([forms([renameTitle])], 'status')).toBe(1);
     expect(a.lines.join('\n')).toContain('ahead of the installed grammars');
   });
+
+  it('a lock whose entry is not a number of migrations is refused, not read as current', async () => {
+    const a = app();
+    writeFileSync(join(a.root, 'strata.lock.json'), JSON.stringify({ grammar: { 'acme.forms': 'one' } }));
+    expect(await a.run([forms([renameTitle])], 'status', '--check')).toBe(1);
+    expect(a.lines.join('\n')).not.toContain('ahead of the installed grammars');
+  });
 });
 
 describe('strata upgrade — it removes only what it wrote', () => {
