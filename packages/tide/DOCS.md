@@ -80,7 +80,8 @@ the record. A task still `claimed` past its lease is claimable again; the
 fencing token is what makes that safe. An effect whose `timeoutMs` is not
 shorter than the lease can still be running when another instance claims its
 task again, so `load` names each such reflex in `warnings`; it loads it all
-the same.
+the same. With a `clock` passed to `advance`, as the driver does, a task's
+lease starts as its effect starts rather than when its claim was made.
 
 ---
 
@@ -425,12 +426,22 @@ inside the fact is discarded. Anything else ingests with neither: `depth`
 defaults to 0.
 
 ```typescript
-advance(options: { now: number; limit?: number }): Promise<AdvanceReport>
+advance(options: { now: number; limit?: number; clock?: () => number }): Promise<AdvanceReport>
 ```
 Materialize → match → fan out → claim → execute → settle. Idempotent and
 safe to run concurrently. `limit` (default 100) bounds facts, fan-outs and
 claims per pass. A chain advances one hop per call, so the driver drains to quiescence and
 then sleeps until `nextDue`.
+
+The tasks of one claim run one after another, and their leases start at
+`now`, so a task late in a slow pass can start after its lease has run out,
+when another instance may have claimed it again. `clock` is the host's clock:
+given one, each task's lease starts again, from `clock()`, just before its
+effect, and the effect runs only if the task is still this claim's. A task
+another instance took back is left to it. That is one more write per task.
+The driver passes its own `now`; without `clock`, nothing is renewed. The
+guarantee assumes the instances' clocks agree to within `leaseMs − timeoutMs`,
+as the lease already does.
 
 ```typescript
 type AdvanceReport = {
@@ -772,8 +783,9 @@ A `TideDriver` is `{ ingest, fire, wake, stop }`. Hand a host's intake the
 driver, not the bare engine, so a fact wakes it instead of waiting for
 somebody's beat. `stop()` resolves once nothing the driver started still
 touches the store: await it before closing the database. `now` replaces the
-clock (`Date.now`); `janitorMs` defaults to 5 minutes; absent `retention`,
-nothing is swept. What it logs, it logs as `[tide:driver]`.
+clock (`Date.now`), and is what the driver passes to `advance` as both `now`
+and `clock`; `janitorMs` defaults to 5 minutes; absent `retention`, nothing is
+swept. What it logs, it logs as `[tide:driver]`.
 
 ---
 

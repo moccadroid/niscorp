@@ -502,6 +502,14 @@ The requirements doc calls this "the part that must not be hand-waved." In order
   `overlap: 'skip'` reflex was blocked permanently. The alternative designs — a reaper
   process, a heartbeat table, a liveness service — all add an organ; expiry adds a
   column, and the fencing token is what makes it safe.
+- **A lease starts again as its effect starts.** One claim takes up to `limit` tasks and
+  runs them one after another, all leased from the advance's `now`; a late task could
+  start after its lease ran out, be claimed again by another instance, and run twice.
+  Tide reads no clock, so it cannot know how long a pass has taken; the host can. Given
+  `advance({ clock })` (the driver passes its own), the engine renews each task's lease
+  with a compare-and-set on this claim's token and attempt just before the effect, and
+  runs the effect only if that lands. Claiming fewer tasks was the alternative: it cost
+  throughput everywhere and still ran a task twice, since fan-out runs before the claim.
 - **Emits are buffered, validated, and narrowed.** `ctx.emit` facts commit with the
   successful attempt, in the same transaction; a throwing attempt discards its buffer,
   or every retry of an emit-then-throw handler would double-mint facts and fire the

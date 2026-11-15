@@ -864,6 +864,57 @@ describe('the fence holds across engines', () => {
     expect(afterB?.state).toBe('done');
     expect(afterB?.output).toBe('from b');
   });
+
+  it("given the host's clock, a task another engine took back after the claim's lease is left to it", async () => {
+    const store = createMemoryStore();
+    const ran: string[] = [];
+    let open: () => void = () => undefined;
+    let reach: () => void = () => undefined;
+    const shut = new Promise<void>((resolve) => (open = resolve));
+    const reached = new Promise<void>((resolve) => (reach = resolve));
+    const reflex: ReflexInput = {
+      id: 'welcome',
+      intent: 'Mail each member.',
+      on: { manual: {} },
+      select: { query: {}, mode: 'each', unitKey: 'id' },
+      effect: { name: 'send', input: { id: { $ref: '$.row.id' } } },
+      policy: { timeoutMs: 60_000 },
+    };
+    const engine = (name: string): Tide =>
+      createTide({
+        store,
+        transform: testTransform,
+        select: async () => [1, 2, 3, 4, 5].map((id) => ({ id })),
+        effects: {
+          send: {
+            run: async (input) => {
+              const id = String((input as { id: number }).id);
+              ran.push(id);
+              if (name === 'a' && id === '1') {
+                reach();
+                await shut;
+              }
+              return null;
+            },
+          },
+        },
+      });
+    const a = engine('a');
+    const b = engine('b');
+    await a.load([reflex], { at: T0 });
+    await b.load([reflex], { at: T0 });
+    await a.fire('welcome', { now: T0 });
+
+    const slowFanOut = T0 + 250_000;
+    const aRun = a.advance({ now: T0, clock: () => slowFanOut });
+    await reached;
+    const pastTheLease = T0 + 300_001;
+    await b.advance({ now: pastTheLease, clock: () => pastTheLease });
+    open();
+    await aRun;
+
+    expect([...ran].sort()).toEqual(['1', '2', '3', '4', '5']);
+  });
 });
 
 describe('the last tasks of a run landing at once', () => {

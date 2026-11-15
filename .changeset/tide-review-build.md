@@ -9,3 +9,5 @@ On the Postgres store, a fact payload, an effect input or an output that is a st
 An `advance` before the first `load` no longer skips pending runs as "reflex is no longer loaded": fan-out waits for the first load, as matching already did.
 
 `load(reflexes, { at, resume: true })` is a new opt-in for the load a process makes when it starts: a reflex this engine has never loaded keeps its stored watermark, so its `catchUp` decides what the downtime runs and a one-shot clock due during a restart fires after it. Without `resume`, `load` re-baselines as before.
+
+`advance` takes an optional `clock`, and the driver passes its own `now`. Given one, each task's lease starts again just before its effect, and the effect runs only if the task is still this claim's: a task late in a slow pass, whose lease had run out and which another instance had claimed again, no longer runs twice. That is one more write per task. Without `clock`, nothing changes.

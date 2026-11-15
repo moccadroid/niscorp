@@ -5,7 +5,7 @@ import { matchFacts } from './match';
 import { fanOut } from './fanout';
 import { executeTasks, settleRuns } from './execute';
 
-export type AdvanceOptions = { now: number; limit?: number };
+export type AdvanceOptions = { now: number; limit?: number; clock?: () => number };
 
 const DEFAULT_LIMIT = 100;
 
@@ -16,7 +16,7 @@ export const runAdvance = async (deps: EngineDeps, options: AdvanceOptions): Pro
   const clocks = await materializeClocks(deps, now);
   const matched = await matchFacts(deps, now, limit);
   const tasksCreated = await fanOut(deps, now, limit);
-  const executed = await executeTasks(deps, now, limit);
+  const executed = await executeTasks(deps, now, limit, options.clock);
   const runsSettled = await settleRuns(deps, now);
 
   return {

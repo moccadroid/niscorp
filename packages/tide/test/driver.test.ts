@@ -133,3 +133,23 @@ describe('a delay longer than a timer can hold', () => {
     await driver.stop();
   });
 });
+
+describe('the clock the driver hands to advance', () => {
+  it('is its own `now`, read again each time it is asked', async () => {
+    let current = 1_000;
+    const clocks: number[] = [];
+    const real = createTide({ store: createMemoryStore(), transform: testTransform });
+    const tide: Tide = {
+      ...real,
+      advance: async (options) => {
+        current += 5;
+        clocks.push(options.clock?.() ?? Number.NaN);
+        return real.advance(options);
+      },
+    };
+    const driver = createTideDriver({ tide, now: () => current });
+    await driver.wake();
+    await driver.stop();
+    expect(clocks).toEqual([1_005]);
+  });
+});
