@@ -17,3 +17,5 @@ A stored document whose root is not an object (a list, a scalar, a tuple, a unio
 A field with two defaults starts at the one zod applies (`.default('a').default('b')` starts at `'b'`), and a discriminated union branch whose discriminator is an enum is tagged with the first value of that enum instead of `undefined`.
 
 `LoomEditorPlugin` is now written as `LoomPlugin` plus `components`, the same shape it had.
+
+A stored document opens on the branch of a discriminated union whose discriminator allows its value, when that discriminator is an enum (`kind: 'box'` for `z.enum(['square', 'box'])`); a tag `Pattern` lists every allowed value in a new optional `values`. The README says a key with a dot in it is not edited correctly, which needs a change in Nova.

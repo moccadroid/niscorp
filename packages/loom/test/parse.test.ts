@@ -87,7 +87,7 @@ describe('parse — Zod schema → field model', () => {
     expect(circle.fields.map((f) => f.key)).toEqual(['radius']);
   });
 
-  it('tags a branch whose discriminator is an enum with the first value of the enum', () => {
+  it('tags a branch whose discriminator is an enum with every value of the enum, the first for a new document', () => {
     const schema = z.discriminatedUnion('kind', [
       z.object({ kind: z.enum(['square', 'box']), side: z.number() }),
       z.object({ kind: z.literal('circle'), radius: z.number() }),
@@ -95,7 +95,7 @@ describe('parse — Zod schema → field model', () => {
     const ir = parse(schema);
     if (ir.kind !== 'union') throw new Error('expected union');
     expect(ir.variants.map((v) => [v.label, v.pattern])).toEqual([
-      ['square', { kind: 'tag', key: 'kind', value: 'square' }],
+      ['square', { kind: 'tag', key: 'kind', value: 'square', values: ['square', 'box'] }],
       ['circle', { kind: 'tag', key: 'kind', value: 'circle' }],
     ]);
     expect(schema.safeParse(buildDocument(ir, {})).success).toBe(true);

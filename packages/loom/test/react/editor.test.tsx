@@ -401,3 +401,18 @@ describe('LoomEditor — the onChange prop', () => {
     expect(first).not.toHaveBeenCalled();
   });
 });
+
+describe('LoomEditor — a branch whose discriminator is an enum', () => {
+  it('opens a stored document on that branch whichever value of the enum it has', () => {
+    const schema = z.discriminatedUnion('kind', [
+      z.object({ kind: z.literal('circle'), radius: z.number() }),
+      z.object({ kind: z.enum(['square', 'box']), side: z.number() }),
+    ]);
+    const onChange = vi.fn();
+    render(<LoomForm schema={z.object({ shape: schema })} options={{ value: { shape: { kind: 'box', side: 7 } } }} onChange={onChange} />);
+    const select = screen.getByRole('combobox');
+    expect(select instanceof HTMLSelectElement ? select.selectedOptions[0]?.textContent : undefined).toBe('square');
+    expect(screen.getByRole('spinbutton')).toHaveProperty('value', '7');
+    expect(onChange).toHaveBeenLastCalledWith({ shape: { kind: 'box', side: 7 } });
+  });
+});

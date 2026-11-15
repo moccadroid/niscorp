@@ -1,7 +1,7 @@
 export type EnumOption = { value: unknown; label: string };
 export type ObjectField = { key: string; required: boolean; field: Field };
 export type Pattern =
-  | { kind: 'tag'; key: string; value: unknown }
+  | { kind: 'tag'; key: string; value: unknown; values?: unknown[] }
   | { kind: 'key'; key: string }
   | { kind: 'type'; type: string }
   | { kind: 'fallback' };

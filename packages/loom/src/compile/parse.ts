@@ -69,17 +69,17 @@ const jsonType = (branch: ZodType): string | undefined => {
   return JSON_TYPES.has(type) ? type : undefined;
 };
 
-// A literal lists its values, an enum its entries; either way the first is the
-// branch's tag.
-const tagValue = (discriminator: ZodType): unknown => {
-  const def = defOf(discriminator);
-  return def.values !== undefined ? def.values[0] : Object.values(def.entries ?? {})[0];
+// A literal lists its values, an enum its entries. The first is the tag a new
+// document of the branch gets; a stored document may have any of them.
+const tagPattern = (key: string, discriminator: ZodType | undefined): Pattern => {
+  const def = discriminator === undefined ? undefined : defOf(discriminator);
+  const values = def === undefined ? [] : def.values !== undefined ? [...def.values] : Object.values(def.entries ?? {});
+  return values.length > 1 ? { kind: 'tag', key, value: values[0], values } : { kind: 'tag', key, value: values[0] };
 };
 
 const distinguish = (branch: ZodType, siblings: readonly ZodType[], tag: string | undefined): Pattern | undefined => {
   if (tag !== undefined) {
-    const literal = (defOf(branch).shape ?? {})[tag];
-    return { kind: 'tag', key: tag, value: literal !== undefined ? tagValue(literal) : undefined };
+    return tagPattern(tag, (defOf(branch).shape ?? {})[tag]);
   }
   const elsewhere = new Set(siblings.flatMap(branchKeys));
   const key = branchKeys(branch).find((k) => !elsewhere.has(k));
