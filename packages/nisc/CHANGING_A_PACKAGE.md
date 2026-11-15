@@ -1,6 +1,6 @@
 # Changing a package
 
-**This file is for whoever changes a `@niscorp` package.** Whoever builds an app on them reads `AGENTS.md`, beside it. Read `/STYLE_GUIDE.md`, "The packages are live", before this: what a change may do to an app that works today comes first.
+**This file is for whoever changes a `@niscorp` package.** Whoever builds an app on them reads `AGENTS.md`, beside it. Read `STYLE_GUIDE.md`, beside this file, "The packages are live", before this: what a change may do to an app that works today comes first.
 
 ## A package follows the rules nisc sets for apps
 
@@ -24,7 +24,7 @@ A module is a directory under `src/` with an `index.ts`.
    - A file is at most 400 lines of code, a line at most 200 wide.
    - Do not split a function or a file to satisfy a number: split it when it has stopped being one thing.
    - The other way round too: a file of a few lines joins the file that uses it, unless it is a published entry point.
-8. **The code speaks.** A comment is there only where the reasoning, a decision or the workings would be misread without it (`/STYLE_GUIDE.md`, "Comments"). No file headers, and no prose on the fields of a type: what an app author needs to know of an exported type is in the package's `DOCS.md`.
+8. **The code speaks.** A comment is there only where the reasoning, a decision or the workings would be misread without it (`STYLE_GUIDE.md`, beside this file, "Comments"). No file headers, and no prose on the fields of a type: what an app author needs to know of an exported type is in the package's `DOCS.md`.
 
 ## How something new gets in
 
