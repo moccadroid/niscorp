@@ -5,7 +5,8 @@ import type { Filter } from '../schemas/filter.schema.js';
 import type { DatabaseSchema } from '../schemas/database.schema.js';
 import type { ScopePolicy, ScopeValues, ScopeMatch, ScopeRule } from '../scope/scope.types.js';
 import { isSetMatch } from '../scope/scope.types.js';
-import { VexScopeError } from '../scope/apply.js';
+import { VexScopeError, readRulesOf } from '../scope/apply.js';
+import type { Refusal } from '../scope/apply.js';
 import { VexError } from '../errors.js';
 import { isFieldPathShape, sqlName } from '../schemas/identifier.schema.js';
 import { resolveParams } from '../utils/context.js';
@@ -145,18 +146,11 @@ const assertReturnedColumns = (refs: ReadonlyMap<string, ReturnedSource>, schema
 };
 
 const readMatchesFor = (table: string, policy: ScopePolicy): ScopeMatch[] => {
-  const rule = policy.entities[table];
-  if (rule === undefined) {
-    if (policy.default === 'deny') throw new VexScopeError(table, `A $lookup reads "${table}", which is not allowed by scope policy (default: deny).`);
-    return [];
-  }
-  if ('public' in rule) return [];
-  if ('deny' in rule) throw new VexScopeError(table, `A $lookup reads "${table}", which is denied by scope policy.`);
-  if (rule.read === undefined) {
-    if (policy.default === 'deny') throw new VexScopeError(table, `A $lookup reads "${table}", which this principal has no read grant for.`);
-    return [];
-  }
-  return rule.read;
+  const rules = readRulesOf(policy, table);
+  if (rules === 'unlisted') throw new VexScopeError(table, `A $lookup reads "${table}", which is not allowed by scope policy (default: deny).`);
+  if (rules === 'denied') throw new VexScopeError(table, `A $lookup reads "${table}", which is denied by scope policy.`);
+  if (rules === 'ungranted') throw new VexScopeError(table, `A $lookup reads "${table}", which this principal has no read grant for.`);
+  return rules;
 };
 
 const boundaryOf = (table: string, r: ScopeMatch): Filter =>
@@ -180,20 +174,23 @@ const scopeLookups = <V extends MutationValue | ItemRef>(cols: Record<string, V>
 
 type WriteGate = { rule: Extract<ScopePolicy['entities'][string], { read?: unknown }>; rules: readonly ScopeRule[] };
 
-const writeGate = (table: string, op: 'insert' | 'update' | 'delete', policy: ScopePolicy): WriteGate | undefined => {
+// `undefined`: the write is allowed with no rules.
+export const writeGateOf = (table: string, op: 'insert' | 'update' | 'delete', policy: ScopePolicy): WriteGate | undefined | Refusal => {
   const rule = policy.entities[table];
-  if (rule === undefined) {
-    if (policy.default === 'deny') throw new VexScopeError(table, `Writes to "${table}" are not allowed by scope policy (default: deny).`);
-    return undefined;
-  }
+  if (rule === undefined) return policy.default === 'deny' ? 'unlisted' : undefined;
   if ('public' in rule) return undefined;
-  if ('deny' in rule) throw new VexScopeError(table, `Writes to "${table}" are denied by scope policy.`);
+  if ('deny' in rule) return 'denied';
   const specific = op === 'insert' ? rule.insert : op === 'update' ? rule.update : rule.delete;
-  if (rule.write === undefined && specific === undefined) {
-    if (policy.default === 'deny') throw new VexScopeError(table, `"${op}" on "${table}" is not allowed by scope policy (default: deny).`);
-    return undefined;
-  }
+  if (rule.write === undefined && specific === undefined) return policy.default === 'deny' ? 'ungranted' : undefined;
   return { rule, rules: [...(rule.write ?? []), ...(specific ?? [])] };
+};
+
+const writeGate = (table: string, op: 'insert' | 'update' | 'delete', policy: ScopePolicy): WriteGate | undefined => {
+  const gate = writeGateOf(table, op, policy);
+  if (gate === 'unlisted') throw new VexScopeError(table, `Writes to "${table}" are not allowed by scope policy (default: deny).`);
+  if (gate === 'denied') throw new VexScopeError(table, `Writes to "${table}" are denied by scope policy.`);
+  if (gate === 'ungranted') throw new VexScopeError(table, `"${op}" on "${table}" is not allowed by scope policy (default: deny).`);
+  return gate;
 };
 
 // The ON CONFLICT half is governed as the UPDATE it is.

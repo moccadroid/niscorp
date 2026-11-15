@@ -1,7 +1,7 @@
 import type { Query } from '../schemas/query.schema.js';
 import type { Filter } from '../schemas/filter.schema.js';
 import type { ResolvedQuery, ResolvedFilter, ResolvedSource, ResolvedJoin } from '../engine/engine.types.js';
-import type { ScopePolicy, ScopeEntityRule, ScopeMatch } from './scope.types.js';
+import type { ScopePolicy, ScopeMatch } from './scope.types.js';
 import { isSetMatch } from './scope.types.js';
 import { VexError } from '../errors.js';
 import { sqlName } from '../schemas/identifier.schema.js';
@@ -20,30 +20,31 @@ export class VexScopeError extends VexError {
 // its join kinds: a rule on a LEFT-joined table goes in that join's ON clause.
 // In WHERE, `null = $tenant` is null and a driving row with a null key vanishes.
 
-const matchesFor = (entity: string, rule: ScopeEntityRule | undefined, def: 'allow' | 'deny'): ScopeMatch[] => {
-  if (rule === undefined) {
-    if (def === 'deny') throw new VexScopeError(entity, `Entity "${entity}" is not allowed by scope policy (default: deny)`);
-    return [];
-  }
+// A refusal says why: the table is not listed under `default: 'deny'`, it is
+// denied, or it is listed with no read under `default: 'deny'`.
+export type Refusal = 'unlisted' | 'denied' | 'ungranted';
+
+export const readRulesOf = (policy: ScopePolicy, table: string): ScopeMatch[] | Refusal => {
+  const rule = policy.entities[table];
+  if (rule === undefined) return policy.default === 'deny' ? 'unlisted' : [];
   if ('public' in rule) return [];
-  if ('deny' in rule) throw new VexScopeError(entity, `Entity "${entity}" is denied by scope policy`);
-  if (rule.read === undefined) {
-    if (def === 'deny') throw new VexScopeError(entity, `Reads of "${entity}" are not allowed by scope policy (default: deny)`);
-    return [];
-  }
+  if ('deny' in rule) return 'denied';
+  if (rule.read === undefined) return policy.default === 'deny' ? 'ungranted' : [];
   return rule.read;
 };
 
-export const canReadTable = (policy: ScopePolicy, table: string): boolean => {
-  const rule = policy.entities[table];
-  if (rule === undefined) return policy.default === 'allow';
-  if ('public' in rule) return true;
-  if ('deny' in rule) return false;
-  return rule.read !== undefined || policy.default === 'allow';
+const matchesFor = (policy: ScopePolicy, entity: string): ScopeMatch[] => {
+  const rules = readRulesOf(policy, entity);
+  if (rules === 'unlisted') throw new VexScopeError(entity, `Entity "${entity}" is not allowed by scope policy (default: deny)`);
+  if (rules === 'denied') throw new VexScopeError(entity, `Entity "${entity}" is denied by scope policy`);
+  if (rules === 'ungranted') throw new VexScopeError(entity, `Reads of "${entity}" are not allowed by scope policy (default: deny)`);
+  return rules;
 };
 
+export const canReadTable = (policy: ScopePolicy, table: string): boolean => Array.isArray(readRulesOf(policy, table));
+
 export const checkScope = (entities: Set<string>, policy: ScopePolicy): void => {
-  for (const entity of entities) matchesFor(entity, policy.entities[entity], policy.default);
+  for (const entity of entities) matchesFor(policy, entity);
 };
 
 const andMerge = (existing: ResolvedFilter | undefined, additions: ResolvedFilter[]): ResolvedFilter | undefined => {
@@ -91,7 +92,7 @@ const placeInto = (level: ScopeLevel, policy: ScopePolicy): void => {
     if (entity === undefined) continue;
 
     const join = level.joins.find((j) => j.toAlias === source.alias);
-    for (const match of matchesFor(entity.name, policy.entities[entity.name], policy.default)) {
+    for (const match of matchesFor(policy, entity.name)) {
       const predicate = predicateFor(entity.name, source.alias, match, entity.fields);
       if (predicate === undefined) continue;
 
