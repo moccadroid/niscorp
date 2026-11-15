@@ -103,6 +103,11 @@ describe('a one-shot clock on a date that does not exist', () => {
     const report = await build([once('late', '2026-13-01T10:00')]);
     expect(report.warnings).toEqual(['late: clock.at names 2026-13-01, which does not exist — it fires on 2027-01-01']);
   });
+
+  it('a date in a year before 100 that does exist is not named', async () => {
+    const report = await build([once('early', '0050-06-15T10:00'), once('first', '0000-01-01T10:00')]);
+    expect(report.warnings).toEqual([]);
+  });
 });
 
 describe('versioning', () => {

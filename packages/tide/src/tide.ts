@@ -67,7 +67,9 @@ const missingDateWarnings = (reflex: Reflex): string[] => {
   if (clock === undefined || isRecurring(clock)) return [];
   const named = clock.at.slice(0, 10);
   const [year = 0, month = 0, day = 0] = named.split('-').map(Number);
-  const asWritten = new Date(Date.UTC(year, month - 1, day));
+  // Not `Date.UTC`, which reads a year before 100 as 19xx.
+  const asWritten = new Date(0);
+  asWritten.setUTCFullYear(year, month - 1, day);
   if (asWritten.getUTCFullYear() === year && asWritten.getUTCMonth() === month - 1 && asWritten.getUTCDate() === day) return [];
   const [fires] = occurrencesBetween(clock, -Infinity, Infinity, 1);
   if (fires === undefined) return [];
