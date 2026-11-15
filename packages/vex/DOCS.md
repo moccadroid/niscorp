@@ -258,6 +258,8 @@ type QueryRequest = {
 ```
 
 The request is Zod-validated; `execute` throws `invalid_request` on failure.
+A `fingerprint` or `intent` sent as `null` is read as left out. A `null` in
+`context` is a value and stays.
 It must carry a `fingerprint`, a `shape`, or both — the three postures:
 
 1. **Explore** — `{ intent, shape, context }`: generate, cache, mint a
@@ -1512,6 +1514,12 @@ none of this applies — only the `Query` you return matters.)
 `testQuery` executes drafts with **NULL synthetic params** — valid SQL against
 a column of any type (Postgres infers from the column side), so a draft is
 judged on executability, never on a guessed value's cast.
+
+A key of the draft the model sends as `null` is read as one it left out
+(`"limit": null`). Inside the query, a `null` can also be a literal (a `case`'s
+`then` or `else`), so nested `null` keys (`"dir": null` in a sort) are dropped
+only when the draft does not validate with them. If it still does not
+validate, `testQuery` reports the errors of the draft as sent.
 
 ### `vexGuide()` — the exported agent-facing contract
 

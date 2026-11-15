@@ -7,7 +7,7 @@ import type { TestResult, AnalysisConfig } from './engine.types.js';
 import type { ScopeValues, ScopePolicy } from '../scope/scope.types.js';
 import type { CacheBackend, CacheEntry, OkCacheEntry } from '../cache/cache.types.js';
 import { z } from 'zod';
-import { QueryRequestSchema } from '../schemas/request.schema.js';
+import { QueryRequestSchema, dropNullIntentAndFingerprint } from '../schemas/request.schema.js';
 import { QuerySchema } from '../schemas/query.schema.js';
 import { discoverEntities } from '../scope/discover.js';
 import { checkScope, scopeResolved, canReadTable } from '../scope/apply.js';
@@ -429,7 +429,7 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
     options?: ExecuteOptions,
   ): Promise<QueryResponse> => {
     if (exceedsDepth(request)) throw new VexError('invalid_request', `Invalid request: ${depthRefusal()}`);
-    const parsed = QueryRequestSchema.safeParse(request);
+    const parsed = QueryRequestSchema.safeParse(dropNullIntentAndFingerprint(request));
     if (!parsed.success) {
       throw new VexError('invalid_request', `Invalid request: ${parsed.error.message}`);
     }
