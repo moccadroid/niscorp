@@ -32,14 +32,16 @@ export const nextDue = async (deps: EngineDeps, now: number): Promise<number | u
   const [run] = await deps.store.query({ table: 'run', where: { state: 'pending' }, order: [{ by: 'dueAt' }], limit: 1 });
   consider(run?.dueAt);
 
+  // Only the tasks a claim would take: a task of a reflex that is not loaded waits for a load, not a time.
+  const loaded = { in: deps.reflexes().map((entry) => entry.reflex.id) };
   const [waiting] = await deps.store.query({
     table: 'task',
-    where: { state: { in: ['pending', 'retrying'] } },
+    where: { reflexId: loaded, state: { in: ['pending', 'retrying'] } },
     order: [{ by: 'notBefore' }],
     limit: 1,
   });
   consider(waiting?.notBefore);
-  const [claimed] = await deps.store.query({ table: 'task', where: { state: 'claimed' }, order: [{ by: 'claimedUntil' }], limit: 1 });
+  const [claimed] = await deps.store.query({ table: 'task', where: { reflexId: loaded, state: 'claimed' }, order: [{ by: 'claimedUntil' }], limit: 1 });
   consider(claimed?.claimedUntil);
 
   for (const loaded of deps.reflexes()) {

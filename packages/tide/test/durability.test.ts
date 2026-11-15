@@ -880,6 +880,21 @@ describe('work that cannot start yet does not stop the work behind it', () => {
     expect(attempts).toBe(2);
     expect({ state: task?.state, attempt: task?.attempt }).toEqual({ state: 'retrying', attempt: 2 });
   });
+
+  it('a task whose reflex is not loaded does not make nextDue answer a time already past', async () => {
+    const gone: ReflexInput = { id: 'gone', intent: 'Fail once.', on: { manual: {} }, effect: { name: 'fail' }, policy: { retry: { max: 3, backoff: 'fixed', baseMs: 60_000 } } };
+    const waiter: ReflexInput = { id: 'waiter', intent: 'Answer a ping.', on: { fact: { signal: 'ping' } }, effect: { name: 'work' } };
+    const { tide } = await harness([gone, waiter], { fail: { run: () => { throw new Error('down'); } }, work: { run: () => null } });
+    await tide.fire('gone', { now: T0 });
+    await tide.advance({ now: T0 });
+    await tide.load([waiter]);
+
+    const now = T0 + 120_000;
+    await tide.ingest({ kind: 'signal', name: 'ping', at: now, notBefore: now + 60_000 });
+    await tide.advance({ now });
+
+    expect(await tide.nextDue(now)).toBe(now + 60_000);
+  });
 });
 
 describe('reading the ledger', () => {
