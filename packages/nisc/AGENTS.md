@@ -549,7 +549,7 @@ src/
   dev/                     headless checks; strata.ts lists the artifacts for the `strata` script
   main.tsx                 the terminal entry
 nisc.config.ts             what the app tells the `nisc` command: how it boots, how a screen is
-                           drawn — only if its pages are drawn on the server or built to files
+                           drawn. Every `nisc` command reads it
 strata.lock.json           which grammar version the source is written in (rule 20) — committed,
                            moved only by the `strata` script's `verify`
 ```
