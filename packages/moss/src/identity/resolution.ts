@@ -40,7 +40,7 @@ export type Identity = {
 };
 
 export const assignedRoles = (assignments: Readonly<Record<string, readonly string[]>> | undefined, principal: string | null): readonly string[] =>
-  principal === null ? ['public'] : (assignments?.[principal] ?? ['public']);
+  principal === null || assignments === undefined || !Object.hasOwn(assignments, principal) ? ['public'] : (assignments[principal] ?? ['public']);
 
 // Loose on purpose: the record goes back to the app's own scope hook, which
 // may read fields of its own on it.

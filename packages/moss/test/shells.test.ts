@@ -2024,13 +2024,13 @@ describe('shells — what fails is said', () => {
 });
 
 describe('shells — an event from a canvas the shell does not have', () => {
-  it('is dropped, where one from a canvas it has still lands', async () => {
+  it.each([['nowhere'], ['constructor'], ['toString'], ['__proto__']])('%s: is dropped, where one from a canvas it has still lands', async (nowhere) => {
     const host = standHost(hostConfig({ ...ctx, app: twoCanvas }));
     const session = await host.session('t', 'usr_1');
     await tick();
     const n = (canvas: string): unknown => session.shell.getRuntime(session.shell.getState().canvases[canvas]?.active?.id ?? '')?.getData()['n'];
 
-    session.dispatch('nowhere', { type: 'ui:click', ref: 'bump' });
+    session.dispatch(nowhere, { type: 'ui:click', ref: 'bump' });
     await tick();
     expect([n('left'), n('right')]).toEqual([0, 0]);
 

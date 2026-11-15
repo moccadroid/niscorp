@@ -85,6 +85,11 @@ describe('who a principal is', () => {
     expect(identity.roster).toBeUndefined();
   });
 
+  it.each([['toString'], ['constructor'], ['__proto__'], ['valueOf']])('a principal called %s is nobody the assignments name: public', async (who) => {
+    const identity = createIdentity({ assignments: { usr_1: ['sales'] }, readAs: noRows });
+    expect((await identity.resolve(who)).roles).toEqual(['public']);
+  });
+
   it('two people on the same roles with the same installs share a key; a different install set does not', async () => {
     const records: Record<string, IdentityRecord> = {
       a: { roles: ['member', 'instructor'], scope: {}, installed: ['mail'] },

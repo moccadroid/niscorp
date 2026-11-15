@@ -1,7 +1,7 @@
 import type { Charter, Section } from './types';
 import { matchAll } from './glob';
 import { CharterError, normalizeRole, resolveRole } from './resolve';
-import { charterShape, fieldsOf } from './shape';
+import { charterShape, fieldsOf, roleOf } from './shape';
 
 export type VerifyIssue = { level: 'error' | 'warning'; rule: string; detail: string };
 
@@ -102,11 +102,11 @@ export const verifyCharter = (
 
   const ancestorDenied = (role: string, section: Section, seen: Set<string> = new Set()): Set<string> => {
     const out = new Set<string>();
-    const def = charter[role];
+    const def = roleOf(charter, role);
     if (def === undefined || seen.has(role)) return out;
     seen.add(role);
     for (const parent of normalizeRole(def, section).extends) {
-      const parentDef = charter[parent];
+      const parentDef = roleOf(charter, parent);
       if (parentDef === undefined) continue;
       for (const id of matchAll(normalizeRole(parentDef, section).deny, universeOf[section])) out.add(id);
       for (const id of ancestorDenied(parent, section, seen)) out.add(id);

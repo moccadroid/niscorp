@@ -1,6 +1,6 @@
 import type { Charter, RoleDef, Section } from './types';
 import { matchAll } from './glob';
-import { fieldsOf, listOf, roleShape } from './shape';
+import { fieldsOf, listOf, roleOf, roleShape } from './shape';
 
 export class CharterError extends Error {
   constructor(message: string) {
@@ -43,7 +43,8 @@ export const resolveRole = (
 ): ReadonlySet<string> => {
   const cached = memo.get(role);
   if (cached !== undefined) return cached;
-  const def = charter[role];
+  // A name every object answers to and the charter does not define reads as an empty role; the shape check says so.
+  const def = role in charter && !Object.hasOwn(charter, role) ? [] : charter[role];
   if (def === undefined) throw new CharterError(`Unknown role "${role}"`);
   if (visiting.has(role)) throw new CharterError(`Role cycle through "${role}"`);
   const unreadable = roleShape(role, def).errors[0];
@@ -65,7 +66,7 @@ export const resolveRole = (
 // One role, not a list: two roles naming different profiles are not a conflict
 // to refuse. A caller holding several resolves each and merges the results.
 export const resolveScoping = (charter: Charter, role: string): string | undefined => {
-  const def = charter[role];
+  const def = roleOf(charter, role);
   return !def || Array.isArray(def) ? undefined : def.scoping;
 };
 

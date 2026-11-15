@@ -11,3 +11,5 @@ A `Host` that writes out the scheme's own port (`app.example.com:443` for a page
 A server shell's endpoint that declares its own lower-case `authorization` header is now called as the session, as one spelt `Authorization` already was, instead of carrying both tokens and answering `401`.
 
 `Authorization: bearer <token>` is read in any case of the scheme, as HTTP defines it, instead of being refused with `401`.
+
+A principal called `toString`, `constructor`, `__proto__` or `valueOf` is no longer answered `500` on every request: the assignments are read by their own keys, so such a principal is `public` unless they name it. A socket event for a canvas called `constructor` or `toString` is dropped, as one for any canvas the shell does not have, instead of reaching every action.

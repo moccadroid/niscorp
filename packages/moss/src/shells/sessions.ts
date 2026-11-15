@@ -137,7 +137,8 @@ export const sessionOn = (host: HostState, cell: Cell, ephemeral: boolean, reset
   // canvas's active instance is the origin.
   dispatch: (canvas, event) => {
     const { shell } = cell.live;
-    const state = shell.getState().canvases[canvas];
+    const { canvases } = shell.getState();
+    const state = Object.hasOwn(canvases, canvas) ? canvases[canvas] : undefined;
     if (state === undefined) return;
     const claimed = event['origin'];
     if (claimed !== undefined && (typeof claimed !== 'string' || !state.stack.some((item) => item.id === claimed))) return;

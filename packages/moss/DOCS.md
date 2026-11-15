@@ -1420,7 +1420,8 @@ It's a Hono app — mount it, extend it, or hand it to a listener.
   resolved the way a request resolves it: `{ roles, scope, installed? }`,
   through the same cache the request path uses. `null` is nobody signed in.
   With no `identity` seam the roles are the ones `assignments` names, and
-  `scope` is empty.
+  `scope` is empty. A principal it does not name as its own key is `public`,
+  one called `toString` or `constructor` included.
 - `identities?: { list(); meter() }` — the resident identity
   roster (`{ principal, since, lastSeen }`) and what the cache costs
   (`{ size, max, resolved, evicted, expired }`). Present only when the app

@@ -71,4 +71,17 @@ export const roleShape = (role: string, def: unknown): CharterShape => {
   ]);
 };
 
-export const charterShape = (charter: Charter): CharterShape => merged(Object.entries(charter).map(([role, def]) => roleShape(role, def)));
+export const roleOf = (charter: Charter, role: string): Charter[string] | undefined => (Object.hasOwn(charter, role) ? charter[role] : undefined);
+
+// Every object answers to `constructor` or `toString`: named in "extends" or "without" and not defined by the charter, it reads as an empty role.
+const inheritedNames = (charter: Charter, role: string, def: unknown): CharterShape => {
+  const fields = fieldsOf(def);
+  const said = (key: 'extends' | 'without', effect: string): string[] =>
+    listOf(fields?.get(key)).flatMap((name) =>
+      name in charter && !Object.hasOwn(charter, name) ? [`role "${role}": "${key}" names "${name}", which the charter does not define: ${effect}`] : [],
+    );
+  return { errors: [], warnings: [...said('extends', 'it adds nothing'), ...said('without', 'it takes nothing away')] };
+};
+
+export const charterShape = (charter: Charter): CharterShape =>
+  merged(Object.entries(charter).flatMap(([role, def]) => [roleShape(role, def), inheritedNames(charter, role, def)]));

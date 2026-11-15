@@ -126,7 +126,10 @@ Resolve one role in one section against `universe`. Applies the algebra
 accumulators for recursion and cycle detection; callers pass neither. (`memo` is
 keyed by role name alone, so one is never shared across sections or universes.)
 
-Throws `CharterError` on an unknown role reference or a role cycle.
+Throws `CharterError` on an unknown role reference or a role cycle. A role is
+one the charter defines as its own key: a name every object answers to
+(`constructor`, `toString`, `hasOwnProperty`, `__proto__`) that the charter
+does not define is an empty role, and the verifier says so (`shape`).
 
 ### `resolvePrincipal(charter, universe, roles, section?): Set<string>`
 
@@ -217,7 +220,7 @@ type RoleClosure = { role: string; actions: string[]; data: string[]; layouts: s
 | `orphan` | warning | an action (or, when handed in, a layout variant or a function) granted by no role — deployed but unreachable. An ungranted `data` id is not reported |
 | `re-allow` | warning | a role re-allows an id an ancestor denied |
 | `subtractive-assigned` | warning | a role used in `without` also appears in a `wearable` combination |
-| `shape` | warning, or error where it takes away | a key the charter does not read, in a role or in a section (`denny`, `Deny`, `actions.alow`): what it lists does not apply. A string where a list belongs: in `allow`, `deny`, `extends` and `without` it is read as a list of that one string. Any other value that is not a list of strings, and any entry of a list that is not a string, is read as nothing: where it would grant (a role, a section, `allow`, `extends`) that is a warning; in `deny` or `without` it is an error, and resolving that role throws a `CharterError`. A `null` list is an absent one; a role that is `null` is an error, since named in a `without` it would take away nothing. A `scoping` that is not a string is handed on as written and is a warning: vex gives a scoping that names no profile no rows. With a `shape` error the verifier reports the shape findings and checks nothing else |
+| `shape` | warning, or error where it takes away | a key the charter does not read, in a role or in a section (`denny`, `Deny`, `actions.alow`): what it lists does not apply. A string where a list belongs: in `allow`, `deny`, `extends` and `without` it is read as a list of that one string. Any other value that is not a list of strings, and any entry of a list that is not a string, is read as nothing: where it would grant (a role, a section, `allow`, `extends`) that is a warning; in `deny` or `without` it is an error, and resolving that role throws a `CharterError`. A `null` list is an absent one; a role that is `null` is an error, since named in a `without` it would take away nothing. A `scoping` that is not a string is handed on as written and is a warning: vex gives a scoping that names no profile no rows. A name in `extends` or `without` that every object answers to (`constructor`, `toString`) and the charter does not define is a warning: it adds or takes away nothing. With a `shape` error the verifier reports the shape findings and checks nothing else |
 | *(closure)* | via `RoleClosure.issues` | cross-action wiring problems from the injected auditor |
 
 ---

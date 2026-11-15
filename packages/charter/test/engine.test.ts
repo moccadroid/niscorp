@@ -247,3 +247,37 @@ describe('a charter as it is read from JSON — a value that is neither a list n
     expect(verifyCharter(fromJson('{"r":{"actions":null,"allow":["crm.*"]}}'), { actions: crm, data: [] }).errors.map((error) => error.rule)).toContain('ambiguous-selection');
   });
 });
+
+describe('a role named only because every object answers to the name', () => {
+  const crm = ['crm.deal.view', 'crm.deal.delete', 'admin.panel'];
+  const shapeOf = (charter: Charter): string[] =>
+    verifyCharter(charter, { actions: crm, data: [] }).warnings.flatMap((warning) => (warning.rule === 'shape' ? [warning.detail] : []));
+
+  it.each([['constructor'], ['toString'], ['hasOwnProperty'], ['__proto__']])('"without" naming %s takes nothing away, as before, and is said', (name) => {
+    const charter: Charter = { staff: ['*'], contractor: { extends: ['staff'], without: [name] } };
+    expect(sorted(resolvePrincipal(charter, crm, ['contractor']))).toEqual([...crm].sort());
+    expect(verifyCharter(charter, { actions: crm, data: [] }).errors).toEqual([]);
+    expect(shapeOf(charter)).toEqual([`role "contractor": "without" names "${name}", which the charter does not define: it takes nothing away`]);
+  });
+
+  it('"extends" naming constructor adds nothing, as before, and is said', () => {
+    const charter: Charter = { r: { extends: ['constructor'], allow: ['*'] } };
+    expect(sorted(resolvePrincipal(charter, crm, ['r']))).toEqual([...crm].sort());
+    expect(shapeOf(charter)).toEqual(['role "r": "extends" names "constructor", which the charter does not define: it adds nothing']);
+  });
+
+  it('a name nobody answers to is still an unknown role', () => {
+    expect(() => resolvePrincipal({ r: { without: ['nope'] } }, crm, ['r'])).toThrow('Unknown role "nope"');
+  });
+
+  it('a role the charter does define under such a name is that role, and nothing is said', () => {
+    const charter: Charter = { constructor: ['admin.panel'], r: { extends: ['constructor'] }, s: { allow: ['*'], without: ['constructor'] } };
+    expect(sorted(resolvePrincipal(charter, crm, ['r']))).toEqual(['admin.panel']);
+    expect(sorted(resolvePrincipal(charter, crm, ['s']))).toEqual(['crm.deal.delete', 'crm.deal.view']);
+    expect(shapeOf(charter)).toEqual([]);
+  });
+
+  it('a scoping is read off a role the charter defines', () => {
+    expect(resolveScoping({ r: { allow: ['*'], scoping: 'own' } }, 'toString')).toBeUndefined();
+  });
+});
