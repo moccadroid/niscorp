@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { evaluate, compile, execute, PrismError } from '../src';
+import { evaluate, evaluateSafe, compile, execute, ErrorCode, PrismError } from '../src';
 
 // Intl emits non-breaking and narrow non-breaking spaces between a number and its unit.
 const flat = (value: unknown): string => String(value).replace(/[  ]/g, ' ');
@@ -51,6 +51,10 @@ describe('$localeMoney', () => {
   it('refuses an amount with no currency', () => {
     expect(() => evaluate({ $localeMoney: { value: { $const: 1 }, currency: { $ref: '$.nothing' }, locale: 'de-AT' } }, source)).toThrow(PrismError);
   });
+
+  it('prints the code beside the number for a locale Intl does not read', () => {
+    expect(evaluate({ $localeMoney: { value: { $ref: '$.cents' }, currency: 'EUR', locale: 'de_AT' } }, source)).toBe('EUR 45.00');
+  });
 });
 
 describe('$localeDate', () => {
@@ -88,6 +92,11 @@ describe('$localeDate', () => {
   it('throws on an unparseable date', () => {
     expect(() => evaluate({ $localeDate: { value: { $const: 'not a date' }, locale: 'de-AT' } }, source)).toThrow(PrismError);
   });
+
+  it('refuses a locale Intl does not read with a type error', () => {
+    const result = evaluateSafe({ $localeDate: { value: { $ref: '$.day' }, locale: { $ref: '$.locale' } } }, { ...source, locale: 'de_AT' });
+    expect(result.ok ? undefined : result.error).toMatchObject({ code: ErrorCode.TYPE, message: expect.stringContaining('"de_AT"') });
+  });
 });
 
 describe('$localeNumber', () => {
@@ -104,6 +113,11 @@ describe('$localeNumber', () => {
 
   it('compacts when asked', () => {
     expect(flat(evaluate({ $localeNumber: { value: { $const: 1200 }, locale: 'en-GB', compact: true } }, source))).toBe('1.2k');
+  });
+
+  it('refuses a locale Intl does not read with a type error', () => {
+    const result = evaluateSafe({ $localeNumber: { value: { $const: 1 }, locale: { $ref: '$.locale' } } }, { ...source, locale: 'de_AT' });
+    expect(result.ok ? undefined : result.error).toMatchObject({ code: ErrorCode.TYPE, message: expect.stringContaining('"de_AT"') });
   });
 });
 
