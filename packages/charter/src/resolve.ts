@@ -1,5 +1,6 @@
-import type { Charter, RoleDef, Section, Selection } from './types';
+import type { Charter, RoleDef, Section } from './types';
 import { matchAll } from './glob';
+import { fieldsOf, listOf, roleShape } from './shape';
 
 export class CharterError extends Error {
   constructor(message: string) {
@@ -8,11 +9,11 @@ export class CharterError extends Error {
   }
 }
 
-// A charter read from JSON may carry a string where its type says a list: it is a list of that one string.
-const listOf = (list: string[] | undefined): string[] => (typeof list === 'string' ? [list] : (list ?? []));
-
-const asSelection = (s: Selection | undefined): { allow: string[]; deny: string[] } =>
-  s === undefined ? { allow: [], deny: [] } : Array.isArray(s) ? { allow: s, deny: [] } : { allow: listOf(s.allow), deny: listOf(s.deny) };
+const asSelection = (selection: unknown): { allow: string[]; deny: string[] } => {
+  if (Array.isArray(selection)) return { allow: listOf(selection), deny: [] };
+  const fields = fieldsOf(selection);
+  return { allow: listOf(fields?.get('allow')), deny: listOf(fields?.get('deny')) };
+};
 
 export const normalizeRole = (
   def: RoleDef,
@@ -20,14 +21,15 @@ export const normalizeRole = (
 ): { allow: string[]; deny: string[]; extends: string[]; without: string[] } => {
   if (Array.isArray(def)) {
     return section === 'actions'
-      ? { allow: def, deny: [], extends: [], without: [] }
+      ? { allow: listOf(def), deny: [], extends: [], without: [] }
       : { allow: [], deny: [], extends: [], without: [] };
   }
-  const composition = { extends: listOf(def.extends), without: listOf(def.without) };
+  const fields = fieldsOf(def);
+  const composition = { extends: listOf(fields?.get('extends')), without: listOf(fields?.get('without')) };
   const sel =
-    section === 'actions' && def.actions === undefined
-      ? { allow: listOf(def.allow), deny: listOf(def.deny) }
-      : asSelection(def[section]);
+    section === 'actions' && fields?.has('actions') !== true
+      ? { allow: listOf(fields?.get('allow')), deny: listOf(fields?.get('deny')) }
+      : asSelection(fields?.get(section));
   return { ...sel, ...composition };
 };
 
@@ -44,6 +46,8 @@ export const resolveRole = (
   const def = charter[role];
   if (def === undefined) throw new CharterError(`Unknown role "${role}"`);
   if (visiting.has(role)) throw new CharterError(`Role cycle through "${role}"`);
+  const unreadable = roleShape(role, def).errors[0];
+  if (unreadable !== undefined) throw new CharterError(unreadable);
   visiting.add(role);
 
   const { allow, extends: parents, deny, without } = normalizeRole(def, section);
@@ -61,8 +65,8 @@ export const resolveRole = (
 // One role, not a list: two roles naming different profiles are not a conflict
 // to refuse. A caller holding several resolves each and merges the results.
 export const resolveScoping = (charter: Charter, role: string): string | undefined => {
-  const def = charter[role];
-  return def === undefined || Array.isArray(def) ? undefined : def.scoping;
+  const scoping = fieldsOf(charter[role])?.get('scoping');
+  return typeof scoping === 'string' ? scoping : undefined;
 };
 
 export const resolvePrincipal = (

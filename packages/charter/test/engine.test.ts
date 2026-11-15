@@ -206,3 +206,31 @@ describe('glob — a line break is a character like any other', () => {
     expect(sorted(resolvePrincipal({ r: { allow: ['crm.a\nb', 'crm.view'], deny: ['crm.a*'] } }, ['crm.a\nb', 'crm.view'], ['r']))).toEqual(['crm.view']);
   });
 });
+
+describe('a charter as it is read from JSON — a value that is neither a list nor a string', () => {
+  const crm = ['crm.deal.view', 'crm.deal.edit', 'crm.deal.delete'];
+  const fromJson = (text: string): Charter => JSON.parse(text);
+
+  it('where it would grant, it grants nothing and is said; the verifier does not throw', () => {
+    const charter = fromJson('{"a":{"allow":5},"b":{"allow":["crm.deal.view",5]},"c":null,"d":{"actions":7},"all":["*"]}');
+    const report = verifyCharter(charter, { actions: crm, data: [] });
+    expect(report.errors).toEqual([]);
+    expect(report.warnings.filter((warning) => warning.rule === 'shape').map((warning) => warning.detail)).toEqual([
+      'role "a": "allow" is 5, which is not a list: it grants nothing',
+      'role "b": "allow" lists 5, which is not a string: it grants nothing',
+      'role "c" is null, which grants nothing: a role is a list of globs or an object',
+      'role "d": "actions" is 7, which grants nothing: a section is a list of globs or { allow, deny }',
+    ]);
+    expect(sorted(resolvePrincipal(charter, crm, ['a', 'b', 'c', 'd']))).toEqual(['crm.deal.view']);
+  });
+
+  it('where it would take away, the role is refused: the verifier says so, and resolving it throws', () => {
+    const charter = fromJson('{"r":{"allow":["crm.*"],"deny":5},"s":{"actions":{"allow":["crm.*"],"deny":["crm.deal.delete",5]}}}');
+    expect(verifyCharter(charter, { actions: crm, data: [] }).errors).toEqual([
+      { level: 'error', rule: 'shape', detail: 'role "r": "deny" is 5, which is not a list: what it takes away cannot be read' },
+      { level: 'error', rule: 'shape', detail: 'role "s": "actions.deny" lists 5, which is not a string: what it takes away cannot be read' },
+    ]);
+    expect(() => resolvePrincipal(charter, crm, ['r'])).toThrow(CharterError);
+    expect(() => resolvePrincipal(charter, crm, ['s'])).toThrow(CharterError);
+  });
+});

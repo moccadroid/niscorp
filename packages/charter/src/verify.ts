@@ -1,7 +1,7 @@
 import type { Charter, Section } from './types';
 import { matchAll } from './glob';
 import { CharterError, normalizeRole, resolveRole } from './resolve';
-import { charterShape } from './shape';
+import { charterShape, fieldsOf } from './shape';
 
 export type VerifyIssue = { level: 'error' | 'warning'; rule: string; detail: string };
 
@@ -33,9 +33,12 @@ export const verifyCharter = (
     functions: universes.functions ?? [],
   };
 
-  const errors: VerifyIssue[] = [];
-  const warnings: VerifyIssue[] = charterShape(charter).map((detail) => ({ level: 'warning', rule: 'shape', detail }));
+  const shape = charterShape(charter);
+  const errors: VerifyIssue[] = shape.errors.map((detail) => ({ level: 'error', rule: 'shape', detail }));
+  const warnings: VerifyIssue[] = shape.warnings.map((detail) => ({ level: 'warning', rule: 'shape', detail }));
   const perRole: RoleClosure[] = [];
+  // Resolving a role that cannot be read throws, so every check below would say it again.
+  if (errors.length > 0) return { errors, warnings, perRole };
 
   const resolved: Record<Section, Map<string, ReadonlySet<string>>> = { actions: new Map(), data: new Map(), layouts: new Map(), functions: new Map() };
   for (const section of sections) {
@@ -63,8 +66,8 @@ export const verifyCharter = (
   if (universes.layouts !== undefined) leavesOnly(universes.layouts, 'variants');
 
   for (const [role, def] of Object.entries(charter)) {
-    if (Array.isArray(def)) continue;
-    if (def.actions !== undefined && (def.allow !== undefined || def.deny !== undefined)) {
+    const fields = fieldsOf(def);
+    if (fields?.has('actions') === true && (fields.has('allow') || fields.has('deny'))) {
       errors.push({ level: 'error', rule: 'ambiguous-selection', detail: `role "${role}" has both top-level allow/deny and an "actions" section — one selection per section` });
     }
   }
