@@ -353,6 +353,7 @@ const { response } = await createSignal('groq')
    - otherwise `nativeJsonMode` and no tools → sends `response_format: json_object` + schema in a system message
    - otherwise → schema in a system message only
 3. The response is normalized by the wire layer (JSON extraction and repairs, each counted only if the result passes the schema)
+   - On OpenAI, a reply with several JSON values answers with the first that passes the schema; `jsonl-lines` is used only when none does. `{"answer":"draft"}` then `{"answer":"final"}` on two lines answers `draft`.
 4. Validated with `schema.safeParse()`
 5. On failure: the evidence is sent back to the model as a correction message
 6. Retries up to `retries` times (default: 2), then fails with `E_VALIDATION_FAILED`
