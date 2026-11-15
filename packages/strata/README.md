@@ -44,7 +44,9 @@ ledgered run, and the server checks them at boot.
   ledger; change them and every database that ran it refuses to boot
   (`EDITED`). Append a new migration instead. Descriptions, `dependsOn` and
   full-line `--` comments are not part of the checksum — rewording is not
-  editing.
+  editing. A line that begins with `--`, after any spaces, is left out even inside a string
+  literal or a dollar-quoted body, so an edit to such a line is not caught:
+  keep text like that off the start of a line, or in a migration of its own.
 - **One statement per step.** A driver that prepares statements (PGlite, `pg`
   with parameters) refuses a string carrying several. For a DDL file, use
   `sqlSteps(ddl)` — never split on every `;`: a comment containing one is cut
@@ -59,7 +61,10 @@ ledgered run, and the server checks them at boot.
   change tables can still check them.
 - **A run is one transaction** under an advisory lock. A step throws, nothing
   from the run happened — Postgres DDL is transactional. Two processes migrating
-  at once serialize; the second finds the work done.
+  at once serialize; the second finds the work done. A statement Postgres will
+  not run inside a transaction (`CREATE INDEX CONCURRENTLY`) always
+  fails its run with `STEP_FAILED` ("cannot run inside a transaction block"):
+  write it without `CONCURRENTLY`, or run it outside strata.
 - **A run sets its own timeouts**, for its transaction only: a statement
   timeout (1 hour) that also bounds the wait for another run, then a lock
   timeout (10 s) so a step queued behind a busy table gives up instead of
@@ -258,6 +263,22 @@ lock for a source that has never had one.
 | `@niscorp/strata/node` | `runSourceUpgrade(options, argv)` — the lock, the work directory, the report, "look in" hints from the source. `sources` is the directory under `root` that is searched for the files an artifact is written in (default `src`). `workDir` (default `.strata/upgrade`) is where `upgrade` writes `plan.json`, `REPORT.md` and `expected/`; `upgrade` and `verify` remove only those files, and a directory only once it is empty, so nothing else in it is touched. |
 
 See [DESIGN.md](./DESIGN.md) and [the plan](../../docs/plans/versioning.md).
+
+## `INVALID_SEQUENCE`
+
+One code covers input strata cannot read as what it was given for; the error's
+sentence says which:
+
+| Refused | Where |
+|---|---|
+| a sequence that does not parse, `null` included | `prepare` |
+| two sequences with one id | `prepare` |
+| a ledger `table` or `schema`, or a store's table, schema or column, that is not a plain identifier | `migrate`, `status`, `readLedger`, `ledgerDdl`, `upgradeStore` |
+| a store whose `key` names no column | `upgradeStore` |
+| a `strata.lock.json` that is JSON but not a lock, or has an entry that is not a whole number of migrations | `runSourceUpgrade` |
+| two artifacts with one kind and id | `planSourceUpgrade`, `runSourceUpgrade` |
+
+A `strata.lock.json` that is not JSON at all throws the parser's own `SyntaxError`.
 
 ## License
 

@@ -80,7 +80,8 @@ the record. A task still `claimed` past its lease is claimable again; the
 fencing token is what makes that safe. An effect whose `timeoutMs` is not
 shorter than the lease can still be running when another instance claims its
 task again, so `load` names each such reflex in `warnings`; it loads it all
-the same.
+the same. With a `clock` passed to `advance`, as the driver does, a task's
+lease starts as its effect starts rather than when its claim was made.
 
 ---
 
@@ -194,6 +195,17 @@ watermark keeps up with each `advance` — so eight days paused is eight days of
 nothing, not eight occurrences waiting to be minted the moment it comes back.
 A reflex that *enters* the loaded set re-baselines to the `at` passed to `load`,
 for the same reason: coming back is not the same as never having left.
+
+**A restart re-baselines too, unless the load says `resume`.** An engine knows
+only what it has loaded itself, so after a restart every reflex enters the set
+and the downtime is passed over: a daily reflex down three days runs nothing
+for them, and a one-shot clock due during the restart never fires.
+`load(reflexes, { at, resume: true })` hands the downtime to each reflex's
+`catchUp` instead: a reflex this engine has never loaded keeps the watermark
+the store has. One left out of a load and brought back by the same engine
+still re-baselines. Pass it on the load a process makes when it starts — not
+on an engine made for each request, whose every load would then run what was
+missed since the one before.
 
 **There is no poll.** A data change is a write fact the host pushes when it
 sees its own write; an external source with no write choke point enters through
@@ -358,21 +370,31 @@ cancellation token.
 
 **Dedupe is keyed on `(kind, entity, name, dedupeKey)`.** `entity` is in the key
 because two sources over different tables whose event ids happen to agree are
-not duplicates of each other, and without it one of them loses its rows.
+not duplicates of each other, and without it one of them loses its rows. The
+identity `ingest` is given is not in the key: a `dedupeKey` is unique across
+the whole ledger, so two tenants ingesting the same event id under one kind,
+entity and name keep only the first. A host whose keys are unique only within
+a tenant puts the tenant in the key (`'tenant-a:evt_1'`).
 
 ---
 
 ## Verbs
 
 ```typescript
-load(reflexes, options?: { at?: number; isolate?: boolean }): Promise<LoadReport>
+load(reflexes, options?: { at?: number; isolate?: boolean; resume?: boolean }): Promise<LoadReport>
 ```
 Validates, hashes versions, derives and verifies the graph, and arms. `at` is
 the host's boot time; arming persists, so a restart does not reopen the past.
+`resume` is under [Triggers](#triggers): what a restart does to the occurrences it
+missed. Loads run one at a time, in the order they are called: a second call
+resolves after the first, and the set it was given is the one loaded. Before
+the first load, `advance` matches no fact and fans out no run; both wait for it.
 `LoadReport` carries `{ loaded, cycles, blind, warnings, refused }` — guarded
 cycles are legal and reported; effects with no `writes` are reported as
-blind edges; `warnings` names a reflex that subscribes to its own run and a
-reflex whose `timeoutMs` is not shorter than `leaseMs`; `refused` is each reflex `isolate` left out, as
+blind edges; `warnings` names a reflex that subscribes to its own run, a
+reflex whose `timeoutMs` is not shorter than `leaseMs`, and a one-shot clock
+whose date does not exist (`2026-02-30`), with the day it fires on (2 March);
+`refused` is each reflex `isolate` left out, as
 `{ reflexId, code, message }` (`reflexId` is undefined for one that had none),
 and is empty without it. Calling it again is how a host changes what is running,
 including turning one off. The tasks of a reflex left out are not claimed until
@@ -410,12 +432,22 @@ inside the fact is discarded. Anything else ingests with neither: `depth`
 defaults to 0.
 
 ```typescript
-advance(options: { now: number; limit?: number }): Promise<AdvanceReport>
+advance(options: { now: number; limit?: number; clock?: () => number }): Promise<AdvanceReport>
 ```
 Materialize → match → fan out → claim → execute → settle. Idempotent and
 safe to run concurrently. `limit` (default 100) bounds facts, fan-outs and
 claims per pass. A chain advances one hop per call, so the driver drains to quiescence and
 then sleeps until `nextDue`.
+
+The tasks of one claim run one after another, and their leases start at
+`now`, so a task late in a slow pass can start after its lease has run out,
+when another instance may have claimed it again. `clock` is the host's clock:
+given one, each task's lease starts again, from `clock()`, just before its
+effect (never to end before the claim's, should the clock read earlier), and the effect runs only if the task is still this claim's. A task
+another instance took back is left to it. That is one more write per task.
+The driver passes its own `now`; without `clock`, nothing is renewed. The
+guarantee assumes the instances' clocks agree to within `leaseMs − timeoutMs`,
+as the lease already does.
 
 ```typescript
 type AdvanceReport = {
@@ -711,6 +743,11 @@ its work.
 - **A row is read by a schema.** What comes back from the database is parsed,
   one schema for each table: a row that does not fit throws where it is read,
   naming the table and the field.
+- **A string in a JSON column.** A payload, an input or an output that is a
+  string reads back as itself when it is not JSON text (`'hello'`). On a
+  driver that parses jsonb itself (`pg`, PGlite) one that is JSON text reads
+  back parsed: `'123'` as `123`, `'{"a":1}'` as `{ a: 1 }`. A host that needs
+  such a string back exactly puts it inside an object.
 - **A serial group is claimed by one instance at a time.** Asking whether a
   group is held and claiming in it run in one transaction, behind an advisory
   lock on the group (`pg_try_advisory_xact_lock`). An instance that does not
@@ -752,8 +789,9 @@ A `TideDriver` is `{ ingest, fire, wake, stop }`. Hand a host's intake the
 driver, not the bare engine, so a fact wakes it instead of waiting for
 somebody's beat. `stop()` resolves once nothing the driver started still
 touches the store: await it before closing the database. `now` replaces the
-clock (`Date.now`); `janitorMs` defaults to 5 minutes; absent `retention`,
-nothing is swept. What it logs, it logs as `[tide:driver]`.
+clock (`Date.now`), and is what the driver passes to `advance` as both `now`
+and `clock`; `janitorMs` defaults to 5 minutes; absent `retention`, nothing is
+swept. What it logs, it logs as `[tide:driver]`.
 
 ---
 
@@ -846,7 +884,7 @@ if (result.ok && isDraft(result.output.data)) {
 | `unguarded_cycle` | `load` found a loop on which no reflex has a `select` or a `when` |
 | `unknown_effect` | `load` found a reflex naming an effect that is not registered |
 | `no_transform` | in `TideErrorCode`; not raised — `transform` is a required config field |
-| `duplicate_unit` | a selection's `unitKey` was not unique, or `maxFanOut` was exceeded |
+| `duplicate_unit` | a selection's `unitKey` was not unique, or `maxFanOut` was exceeded. Never thrown to a caller: the run is skipped with the message as its `note`, and `preview` answers it as `reason` |
 | `store` | a selection exists but no `select` seam is wired |
 
 `load` checks the whole graph in one pass. When it refuses, `details.errors`

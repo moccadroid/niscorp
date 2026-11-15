@@ -1,4 +1,5 @@
-import { FactInputSchema, factOf } from './schemas';
+import { FactInputSchema, clockOf, factOf, isRecurring } from './schemas';
+import { occurrencesBetween, zonedParts } from './engine/occurrence';
 import type { Reflex, ReflexInput } from './schemas';
 import { TideError } from './errors';
 import type {
@@ -29,7 +30,7 @@ import { stateOf } from './engine/materialize';
 import { admitFact, announceFact } from './engine/facts';
 
 export type Tide = {
-  load: (reflexes: readonly ReflexInput[], options?: { at?: number; isolate?: boolean }) => Promise<LoadReport>;
+  load: (reflexes: readonly ReflexInput[], options?: { at?: number; isolate?: boolean; resume?: boolean }) => Promise<LoadReport>;
   reflexes: () => readonly Reflex[];
   graph: () => GraphReport;
 
@@ -60,6 +61,23 @@ const DEFAULT_MAX_CHAIN_FACTS = 10_000;
 const DEFAULT_MAX_FAN_OUT = 10_000;
 const DEFAULT_LEASE_MS = 300_000;
 
+// Such a clock loads, and fires on the day its date runs on to ("2026-02-30" → 2 March).
+const missingDateWarnings = (reflex: Reflex): string[] => {
+  const clock = clockOf(reflex.on);
+  if (clock === undefined || isRecurring(clock)) return [];
+  const named = clock.at.slice(0, 10);
+  const [year = 0, month = 0, day = 0] = named.split('-').map(Number);
+  // Not `Date.UTC`, which reads a year before 100 as 19xx.
+  const asWritten = new Date(0);
+  asWritten.setUTCFullYear(year, month - 1, day);
+  if (asWritten.getUTCFullYear() === year && asWritten.getUTCMonth() === month - 1 && asWritten.getUTCDate() === day) return [];
+  const [fires] = occurrencesBetween(clock, -Infinity, Infinity, 1);
+  if (fires === undefined) return [];
+  const local = zonedParts(fires.at, clock.tz);
+  const on = [local.year, local.month, local.day].map((part, index) => String(part).padStart(index === 0 ? 4 : 2, '0')).join('-');
+  return [`${reflex.id}: clock.at names ${named}, which does not exist — it fires on ${on}`];
+};
+
 export const createTide = (config: TideConfig): Tide => {
   const loaded = new Map<string, LoadedReflex>();
   let effectsCache: EffectRegistry | undefined;
@@ -71,6 +89,7 @@ export const createTide = (config: TideConfig): Tide => {
   };
 
   let tokens = 0;
+  let hasLoaded = false;
   const deps: EngineDeps = {
     store: config.store,
     transform: config.transform,
@@ -83,6 +102,7 @@ export const createTide = (config: TideConfig): Tide => {
     leaseMs: config.leaseMs ?? DEFAULT_LEASE_MS,
     emit: config.onEvent ?? (() => undefined),
     reflexes: () => [...loaded.values()],
+    hasLoaded: () => hasLoaded,
     find: (id) => loaded.get(id),
     nextToken: () => {
       tokens += 1;
@@ -90,7 +110,17 @@ export const createTide = (config: TideConfig): Tide => {
     },
   };
 
-  const load = async (input: readonly ReflexInput[], options?: { at?: number; isolate?: boolean }): Promise<LoadReport> => {
+  const everLoaded = new Set<string>();
+  let lastLoad: Promise<unknown> = Promise.resolve();
+
+  // One at a time: two loads that overlapped would otherwise swap their sets in in the order they finished.
+  const load = (input: readonly ReflexInput[], options?: { at?: number; isolate?: boolean; resume?: boolean }): Promise<LoadReport> => {
+    const turn = lastLoad.then(() => loadNow(input, options));
+    lastLoad = turn.catch(() => undefined);
+    return turn;
+  };
+
+  const loadNow = async (input: readonly ReflexInput[], options?: { at?: number; isolate?: boolean; resume?: boolean }): Promise<LoadReport> => {
     const { reflexes: parsed, graph, refused } = admitReflexes(input, mergedEffects, options?.isolate === true);
 
     const previously = new Set(loaded.keys());
@@ -107,13 +137,18 @@ export const createTide = (config: TideConfig): Tide => {
 
       // A reflex entering the set has its watermark moved up to `at`: left out
       // of the load for a while, it would otherwise materialize all it missed.
-      if (!previously.has(reflex.id) && stored?.materializedThrough !== undefined && options?.at !== undefined)
+      // With `resume`, one this engine never loaded keeps its watermark: its
+      // process restarted, and its `catchUp` decides what the downtime runs.
+      const entering = !previously.has(reflex.id) && (options?.resume !== true || everLoaded.has(reflex.id));
+      if (entering && stored?.materializedThrough !== undefined && options?.at !== undefined)
         await config.store.cas('state', reflex.id, {}, { materializedThrough: Math.max(stored.materializedThrough, options.at) });
 
       next.set(reflex.id, { reflex, version: versionOf(reflex), armedAt });
     }
     loaded.clear();
     for (const [id, entry] of next) loaded.set(id, entry);
+    for (const id of next.keys()) everLoaded.add(id);
+    hasLoaded = true;
 
     const leaseWarnings = parsed
       .filter((reflex) => reflex.policy.timeoutMs >= deps.leaseMs)
@@ -121,7 +156,7 @@ export const createTide = (config: TideConfig): Tide => {
         (reflex) =>
           `${reflex.id}: timeoutMs ${reflex.policy.timeoutMs} is not shorter than leaseMs ${deps.leaseMs} — another instance may claim the task again while its effect still runs`,
       );
-    return { loaded: parsed.length, cycles: graph.cycles, blind: graph.blind, warnings: [...graph.warnings, ...leaseWarnings], refused };
+    return { loaded: parsed.length, cycles: graph.cycles, blind: graph.blind, warnings: [...graph.warnings, ...leaseWarnings, ...parsed.flatMap(missingDateWarnings)], refused };
   };
 
   const mergedEffects = (parsed: readonly Reflex[]): EffectRegistry => {

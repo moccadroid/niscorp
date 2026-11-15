@@ -56,7 +56,7 @@ export const createTideDriver = (config: TideDriverConfig): TideDriver => {
 
   const drain = async (): Promise<void> => {
     for (let steps = 0; steps < MAX_STEPS_PER_DRAIN; steps += 1) {
-      const report = await tide.advance({ now: now() });
+      const report = await tide.advance({ now: now(), clock: now });
       if (progressOf(report) === 0) return;
     }
     console.error(`[tide:driver] a drain exceeded ${MAX_STEPS_PER_DRAIN} steps — stopping this pass; the janitor will resume it`);

@@ -51,7 +51,14 @@ const claimTasks = async (deps: EngineDeps, now: number, limit: number, token: s
   });
 };
 
-export const executeTasks = async (deps: EngineDeps, now: number, limit: number): Promise<ExecuteReport> => {
+// A claim's tasks run one after another under leases that started at the advance's `now`, so a late one's may
+// have run out and another engine taken it back. With the host's clock its lease starts again as its effect
+// starts, and only while its claim is still this one's. It never ends before the claim's: a clock can step back.
+const leaseRenewed = async (deps: EngineDeps, task: Task, token: string, clock: (() => number) | undefined): Promise<boolean> =>
+  clock === undefined ||
+  deps.store.cas('task', task.id, { token, attempt: task.attempt }, { claimedUntil: Math.max(task.claimedUntil, clock() + deps.leaseMs) });
+
+export const executeTasks = async (deps: EngineDeps, now: number, limit: number, clock?: () => number): Promise<ExecuteReport> => {
   const report: ExecuteReport = { executed: 0, succeeded: 0, failed: 0, retrying: 0, reclaimed: 0 };
 
   // Read before the claim, which returns each row as it wrote it. Only a
@@ -77,6 +84,7 @@ export const executeTasks = async (deps: EngineDeps, now: number, limit: number)
 
     const loaded = deps.find(task.reflexId);
     if (loaded === undefined) continue;
+    if (!(await leaseRenewed(deps, task, token, clock))) continue;
 
     const { reflex } = loaded;
     const registry = deps.effectsFor(reflex.as);

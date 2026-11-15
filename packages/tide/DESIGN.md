@@ -342,7 +342,10 @@ advance({ now, limit })              — ONE committed increment; the driver's v
    │                  a question the fact already answers); a declared selection is
    │                  ENRICHMENT, re-run under the reflex's own principal — the guard
    │                  that re-checks reality. Duplicate unitKey refuses the run
-   │                  loudly; a transient seam failure DEFERS it.
+   │                  loudly; a transient seam failure DEFERS it. Before the engine's
+   │                  first load has finished this pass does nothing: every pending run
+   │                  would read as one whose reflex was taken out. After it, a run whose
+   │                  reflex a load left out is skipped, a load of nothing included.
    ├─ 4 CLAIM         due tasks and lapsed leases, in one statement — exactly-once,
    │                  `order: 'serial'` honoured inside the claim, `attempt`
    │                  incremented as part of it, one fencing token per claim
@@ -437,9 +440,10 @@ archaeology project.
 **Retention is a policy, not an accident.** The ledger grows without bound unless told
 otherwise; `sweep(now, { facts?, runs?, tasks? })` deletes settled rows past a horizon,
 and the default is *keep forever*, which is the only honest default when the rows are
-billing history. Deleting a run takes its tasks with it — **⟲** independent horizons
-per table meant sweeping tasks could destroy the `UNIQUE(runId, unit)` row that *is*
-the "this unit already ran" record, and a restore would then re-charge the invoice.
+billing history. Deleting a run takes its tasks with it. The `tasks` horizon removes
+tasks settled before it whatever their run, and with them the record of a unit's
+output. It never causes a second run: a run never fans out again, and `retry()` needs
+the task it reopens.
 
 ### Execution semantics
 
@@ -500,6 +504,14 @@ The requirements doc calls this "the part that must not be hand-waved." In order
   `overlap: 'skip'` reflex was blocked permanently. The alternative designs — a reaper
   process, a heartbeat table, a liveness service — all add an organ; expiry adds a
   column, and the fencing token is what makes it safe.
+- **A lease starts again as its effect starts.** One claim takes up to `limit` tasks and
+  runs them one after another, all leased from the advance's `now`; a late task could
+  start after its lease ran out, be claimed again by another instance, and run twice.
+  Tide reads no clock, so it cannot know how long a pass has taken; the host can. Given
+  `advance({ clock })` (the driver passes its own), the engine renews each task's lease
+  with a compare-and-set on this claim's token and attempt just before the effect, and
+  runs the effect only if that lands. Claiming fewer tasks was the alternative: it cost
+  throughput everywhere and still ran a task twice, since fan-out runs before the claim.
 - **Emits are buffered, validated, and narrowed.** `ctx.emit` facts commit with the
   successful attempt, in the same transaction; a throwing attempt discards its buffer,
   or every retry of an emit-then-throw handler would double-mint facts and fire the
@@ -599,9 +611,10 @@ rather than carefully avoided. The calendar edges are decided, not discovered:
 
 - `every: 'month', on: 31` **clamps to the last day of the month** — February bills on
   the 28th (29th), because "skip February" is never what a billing rule means.
-- A local time erased by spring-forward resolves to the **first valid instant after**;
-  a local time that fall-back makes ambiguous takes the **first occurrence**. The key
-  is identical either way.
+- A local time erased by spring-forward is **shifted forward by the length of the gap**
+  (Vienna 02:30 → 03:30), as Temporal's `disambiguation: 'compatible'`; a local time
+  that fall-back makes ambiguous takes the **first occurrence**. The key is identical
+  either way.
 - Timezone resolution uses the platform's IANA data (`Intl`), keeping the dependency
   count at zero. "03:00 in Vienna" and "03:00 in Denver" are both honest.
 
@@ -619,6 +632,19 @@ to a world in which the reflex did not exist.
 A **paused** reflex materializes nothing and keeps its watermark moving. A reflex
 *entering* the loaded set re-baselines to the `at` passed to `load`. Both say the same
 thing: coming back is not the same as never having left.
+
+What an engine knows of "entering" is its own memory, so after a restart every reflex
+enters, and downtime is re-baselined away: `catchUp` never meets it. `load(…, { resume:
+true })` is the opt-in that hands downtime to `catchUp`: a reflex this engine has never
+loaded keeps the watermark the store has. A reflex left out of a load and brought back
+by the same engine still re-baselines. Across a restart the engine cannot tell a reflex
+that was away from one that was down — that needs a durable record of each reflex's
+absence — so `resume` belongs on the load a process makes when it starts, never on an
+engine made per request, whose every load would run what was missed since the last.
+Whether `resume` should be the default is open.
+
+Loads run one at a time, in the order they are called, so the set swapped in last is the
+set passed last.
 
 **⟲ This is where the worst defect in the package lived.** A disarmed reflex was
 skipped outright, which froze its watermark at the moment of the pause. Eight days off

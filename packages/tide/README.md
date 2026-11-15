@@ -92,6 +92,8 @@ await tide.preview('billing.dunning', { now });          // show me, change noth
 
 **Pausing a reflex is an edit of its row.** Enablement is a property of the reflex the host hands over: set `enabled: false` on your own row and `load` again. It survives a restart, and it leaves something to audit.
 
+**A restart passes over the clock occurrences it missed**, unless the first load the process makes says `load(reflexes, { at, resume: true })`: then each reflex's `catchUp` decides what the downtime runs.
+
 ## Storage
 
 Four tables, and only two of them grow with events:

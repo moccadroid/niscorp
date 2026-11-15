@@ -295,6 +295,61 @@ describe('recovery on postgres', () => {
   });
 });
 
+describe('the lease renewed as each effect starts, on postgres', () => {
+  it("given the host's clock, a task another engine took back after the claim's lease is left to it", async () => {
+    const { pool } = await database.emptied();
+    const store = createTideStore(pool);
+    await store.ready;
+    const ran: string[] = [];
+    let open: () => void = () => undefined;
+    let reach: () => void = () => undefined;
+    const shut = new Promise<void>((resolve) => (open = resolve));
+    const reached = new Promise<void>((resolve) => (reach = resolve));
+    const reflex: ReflexInput = {
+      id: 'welcome',
+      intent: 'Mail each member.',
+      on: { manual: {} },
+      select: { query: {}, mode: 'each', unitKey: 'id' },
+      effect: { name: 'send', input: { id: { $ref: '$.row.id' } } },
+      policy: { timeoutMs: 60_000 },
+    };
+    const engine = (name: string): Tide =>
+      createTide({
+        store,
+        transform,
+        select: async () => [1, 2, 3].map((id) => ({ id })),
+        effects: {
+          send: {
+            run: async (input) => {
+              const id = String((input as { id: number }).id);
+              ran.push(id);
+              if (name === 'a' && id === '1') {
+                reach();
+                await shut;
+              }
+              return null;
+            },
+          },
+        },
+      });
+    const a = engine('a');
+    const b = engine('b');
+    await a.load([reflex], { at: T0 });
+    await b.load([reflex], { at: T0 });
+    await a.fire('welcome', { now: T0 });
+
+    const slowFanOut = T0 + 250_000;
+    const aRun = a.advance({ now: T0, clock: () => slowFanOut });
+    await reached;
+    const pastTheLease = T0 + 300_001;
+    await b.advance({ now: pastTheLease, clock: () => pastTheLease });
+    open();
+    await aRun;
+
+    expect([...ran].sort()).toEqual(['1', '2', '3']);
+  });
+});
+
 describe('chains and fan-in on postgres', () => {
   it('an emitted fact continues the chain, and the cause survives the round trip', async () => {
     const first: ReflexInput = {
@@ -454,6 +509,52 @@ describe('facts on postgres', () => {
     await tide.advance({ now: T0 });
     expect(calls).toHaveLength(2);
     expect(await tide.ledger.runs()).toHaveLength(2);
+  });
+});
+
+describe('a string in a JSON column on postgres', () => {
+  const hook: ReflexInput = {
+    id: 'hook.forward',
+    intent: 'Forward a hook body.',
+    on: { fact: { signal: 'hook' } },
+    effect: { name: 'send', input: { body: { $ref: '$.fact.payload' } } },
+  };
+
+  it('a string payload and a string output read back as themselves', async () => {
+    const { tide, calls } = await harness([hook], { send: { run: () => 'msg_8812' } });
+    await tide.ingest({ kind: 'signal', name: 'hook', payload: 'hello', at: T0 });
+    await tide.advance({ now: T0 });
+
+    expect(calls).toEqual([{ body: 'hello' }]);
+    expect((await tide.ledger.tasks())[0]?.output).toBe('msg_8812');
+    expect((await tide.ledger.facts()).map((fact) => fact.payload)).toContain('hello');
+  });
+
+  it('a string that is JSON text reads back parsed, as it always has', async () => {
+    const { tide } = await harness([], {});
+    const numeric = await tide.ingest({ kind: 'signal', name: 'other', payload: '123', at: T0 });
+    const object = await tide.ingest({ kind: 'signal', name: 'other', payload: '{"a":1}', at: T0 });
+    expect([numeric?.payload, object?.payload]).toEqual([123, { a: 1 }]);
+  });
+
+  it('a driver that hands jsonb back as text reads the same values', async () => {
+    const { db } = await database.emptied();
+    const asText = { parsers: { 3802: (value: string) => value, 114: (value: string) => value } };
+    const pool: TidePool = {
+      query: (text, values) => db.query(text, values, asText),
+      transaction: (fn) => db.transaction((tx) => fn({ query: (text, values) => tx.query(text, values, asText) })),
+    };
+    const store = createTideStore(pool);
+    await store.ready;
+    const tide = createTide({ store, transform, effects: { send: { run: () => 'msg_8812' } } });
+    await tide.load([hook], { at: T0 });
+    const numeric = await tide.ingest({ kind: 'signal', name: 'other', payload: '123', at: T0 });
+    const object = await tide.ingest({ kind: 'signal', name: 'other', payload: { a: 1 }, at: T0 });
+    await tide.ingest({ kind: 'signal', name: 'hook', payload: 'hello', at: T0 });
+    await tide.advance({ now: T0 });
+
+    expect([numeric?.payload, object?.payload]).toEqual(['123', { a: 1 }]);
+    expect((await tide.ledger.tasks())[0]?.output).toBe('msg_8812');
   });
 });
 

@@ -101,6 +101,11 @@ describe('plan — refusals', () => {
     await expect(prepare([bad])).rejects.toBeInstanceOf(StrataError);
   });
 
+  it('a sequence that is not an object is refused the same way', async () => {
+    await expect(prepare([null as unknown as Sequence])).rejects.toMatchObject({ code: 'INVALID_SEQUENCE' });
+    await expect(prepare(['nisc.cache' as unknown as Sequence])).rejects.toMatchObject({ code: 'INVALID_SEQUENCE' });
+  });
+
   it('two sequences with one id are refused', async () => {
     await expect(prepare([cache, cache])).rejects.toMatchObject({ code: 'INVALID_SEQUENCE' });
   });
