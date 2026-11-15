@@ -2265,7 +2265,9 @@ server.nudge('usr_ada', 'notes-changed');
 - **A browser on the app's own page** is who its session cookie says
   ([`sessionCookies`](#sessioncookiespage-token-options)). The cookie is read
   only when the upgrade's `Origin` is the host it was addressed to, or one
-  `runtime.origins` lists. (Behind a proxy that rewrites `Host` and with
+  `runtime.origins` lists. A `Host` that writes out the scheme's own port
+  (`app.example.com:443` for `https://app.example.com`, `:80` for `http`)
+  names the same host. (Behind a proxy that rewrites `Host` and with
   nothing listed, no page is the app's own: terminals hold their own tokens,
   as before, and moss says so once in the log.) A token such a page offers is who it is and is
   moved into the cookie by the answer to the upgrade; one that no longer

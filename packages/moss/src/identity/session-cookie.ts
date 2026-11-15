@@ -20,7 +20,13 @@ export const tokenFromCookie = (header: string | null | undefined, name = DEFAUL
 export const ownOriginOf = (origin: string | null | undefined, host: string | null | undefined, listed: readonly string[] = []): URL | undefined => {
   if (origin === undefined || origin === null || !URL.canParse(origin)) return undefined;
   const asked = new URL(origin);
-  const own = asked.host === host?.toLowerCase() || listed.some((entry) => URL.canParse(entry) && new URL(entry).origin === asked.origin);
+  const named = host?.toLowerCase();
+  // `URL` leaves out the scheme's own port, which a Host may write out.
+  const schemePort = asked.protocol === 'https:' ? '443' : asked.protocol === 'http:' ? '80' : undefined;
+  const own =
+    asked.host === named ||
+    (schemePort !== undefined && asked.port === '' && `${asked.host}:${schemePort}` === named) ||
+    listed.some((entry) => URL.canParse(entry) && new URL(entry).origin === asked.origin);
   return own ? asked : undefined;
 };
 

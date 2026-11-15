@@ -355,6 +355,10 @@ describe('ownOriginOf', () => {
     ['a proxy rewrote Host, and the deployment lists where it is served', 'https://app.example.com', 'moss:8787', ['https://app.example.com'], true],
     ['listing one origin does not admit its sibling', 'https://evil.example.com', 'moss:8787', ['https://app.example.com'], false],
     ['…nor the same host over another scheme', 'http://app.example.com', 'moss:8787', ['https://app.example.com'], false],
+    ['a Host that writes out https’s own port', 'https://app.example.com', 'app.example.com:443', [], true],
+    ['a Host that writes out http’s own port', 'http://app.example.com', 'app.example.com:80', [], true],
+    ['…but not the other scheme’s port', 'http://app.example.com', 'app.example.com:443', [], false],
+    ['…nor another port', 'https://app.example.com', 'app.example.com:8443', [], false],
   ] as const)('%s', (_label, origin, host, listed, own) => {
     expect(ownOriginOf(origin, host, listed)?.origin).toBe(own ? new URL(origin ?? '').origin : undefined);
   });
