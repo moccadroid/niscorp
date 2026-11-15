@@ -47,12 +47,18 @@ describe('the prism node editor', () => {
     expect(lastConfig()).toEqual({ $upper: { $ref: '$.name' } });
   });
 
-  it('renaming a template field to a name another field has keeps both fields', () => {
-    const { lastConfig } = openConfig({ a: { $const: 1 }, b: { $const: 2 } });
-    fireEvent.change(screen.getByDisplayValue('b'), { target: { value: 'a' } });
-    expect(lastConfig()).toEqual({ a: { $const: 1 }, b: { $const: 2 } });
-    fireEvent.change(screen.getByDisplayValue('b'), { target: { value: 'c' } });
-    expect(lastConfig()).toEqual({ a: { $const: 1 }, c: { $const: 2 } });
+  it('renaming a template field to a name another field has keeps both fields, shows the clash, and renames once it is gone', () => {
+    const { lastConfig } = openConfig({ field: { $const: 1 }, field1: { $const: 2 } });
+    const second = screen.getByDisplayValue('field1');
+    fireEvent.change(second, { target: { value: 'field' } });
+    expect(lastConfig()).toEqual({ field: { $const: 1 }, field1: { $const: 2 } });
+    expect(second).toHaveProperty('value', 'field');
+    expect(screen.getByRole('alert').textContent).toBe('"field" is already a key');
+    fireEvent.change(second, { target: { value: 'fiel' } });
+    expect(lastConfig()).toEqual({ field: { $const: 1 }, fiel: { $const: 2 } });
+    fireEvent.change(second, { target: { value: 'field' } });
+    fireEvent.blur(second);
+    expect(second).toHaveProperty('value', 'fiel');
   });
 
   it('lists every prism op under a category of the chooser', () => {

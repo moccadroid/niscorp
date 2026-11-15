@@ -6,6 +6,7 @@ import { parse, buildDocument } from '@compile/parse';
 import type { Field, Variant } from '@compile/types';
 import { useModelWrite } from '@react/hooks/model.js';
 import { JsonEditor } from '@react/kit/json-editor.js';
+import { KeyInput } from '@react/kit/key-input.js';
 import { ActionMenu, MenuItem, SubMenu } from '@react/kit/menu.js';
 
 type NodeKind = { id: string; label: string; category: string; variant: Variant };
@@ -298,7 +299,6 @@ const ListEditor: FC<{ itemField: Field; value: unknown; onChange: (next: unknow
 const TemplateEditor: FC<{ value: unknown; onChange: (next: unknown) => void }> = ({ value, onChange }) => {
   const entries = Object.entries(isObj(value) ? value : {});
   const rename = (from: string, to: string): void => {
-    if (entries.some(([key]) => key === to)) return;
     onChange(Object.fromEntries(entries.map(([key, val]) => [key === from ? to : key, val])));
   };
   const addField = (): void => {
@@ -311,7 +311,7 @@ const TemplateEditor: FC<{ value: unknown; onChange: (next: unknown) => void }> 
     <div style={block}>
       {entries.map(([key, val], index) => (
         <div key={index} style={{ ...rowStyle, alignItems: 'flex-start' }}>
-          <input style={{ ...input, width: 150 }} value={key} onChange={(event) => rename(key, event.target.value)} />
+          <KeyInput style={{ ...input, width: 150 }} value={key} isTaken={(name) => entries.some(([k]) => k === name)} onRename={(name) => rename(key, name)} />
           <div style={{ flex: 1, minWidth: 0 }}>
             <NodeEditor
               value={val}

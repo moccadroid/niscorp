@@ -26,7 +26,7 @@ const openQuery = (query: Record<string, unknown>, run: (query: Query) => Promis
 const aliases = (): HTMLInputElement[] => screen.getAllByPlaceholderText('alias').filter((el) => el instanceof HTMLInputElement);
 
 const recordRows = (): HTMLElement => {
-  const root = aliases()[0]?.parentElement?.parentElement;
+  const root = aliases()[0]?.parentElement?.parentElement?.parentElement;
   if (root === null || root === undefined) throw new Error('no record rows');
   return root;
 };
@@ -41,14 +41,17 @@ describe('the vex aggregate and compute widgets', () => {
     expect(lastQuery()['aggregate']).toEqual({ orders: { sum: 'orders.total' } });
   });
 
-  it('renaming an alias to one another row has keeps both rows', () => {
-    const { lastQuery } = openQuery({ from: ['orders'], aggregate: { a: { count: '*' }, b: { sum: 'orders.total' } } });
+  it('renaming an alias to one another row has keeps both rows, shows the clash, and renames once it is gone', () => {
+    const { lastQuery } = openQuery({ from: ['orders'], aggregate: { field: { count: '*' }, field1: { sum: 'orders.total' } } });
     const second = aliases()[1];
     if (second === undefined) throw new Error('no second alias');
-    fireEvent.change(second, { target: { value: 'a' } });
-    expect(lastQuery()['aggregate']).toEqual({ a: { count: '*' }, b: { sum: 'orders.total' } });
-    fireEvent.change(second, { target: { value: 'ab' } });
-    expect(lastQuery()['aggregate']).toEqual({ a: { count: '*' }, ab: { sum: 'orders.total' } });
+    fireEvent.change(second, { target: { value: 'field' } });
+    expect(lastQuery()['aggregate']).toEqual({ field: { count: '*' }, field1: { sum: 'orders.total' } });
+    expect(second.value).toBe('field');
+    expect(screen.getByRole('alert').textContent).toBe('"field" is already a key');
+    fireEvent.change(second, { target: { value: 'fiel' } });
+    expect(lastQuery()['aggregate']).toEqual({ field: { count: '*' }, fiel: { sum: 'orders.total' } });
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 
   it('adding a row after a delete does not overwrite a row that is left', () => {

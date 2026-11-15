@@ -2,6 +2,7 @@ import { useState, type FC, type ReactNode } from 'react';
 import type { NovaComponent, NovaModelBinding } from '@niscorp/nova/adapters/react';
 import { useModelWrite } from '@react/hooks/model';
 import { JsonEditor } from '@react/kit';
+import { KeyInput } from '@react/kit/key-input.js';
 import { isRecord } from '@compile/parse';
 import type { Catalog } from '../widgets.js';
 import { useScopedColumns } from './columns.js';
@@ -19,10 +20,7 @@ const RecordRows: FC<{
   const set = useModelWrite(model);
   const entries = isRecord(value) ? Object.entries(value) : [];
   const write = (next: [string, unknown][]): void => set(Object.fromEntries(next));
-  const rename = (index: number, to: string): void => {
-    if (entries.some(([key], i) => i !== index && key === to)) return;
-    write(entries.map((entry, i) => (i === index ? [to, entry[1]] : entry)));
-  };
+  const rename = (index: number, to: string): void => write(entries.map((entry, i) => (i === index ? [to, entry[1]] : entry)));
   const freeAlias = (): string => {
     const taken = new Set(entries.map(([key]) => key));
     let n = entries.length + 1;
@@ -33,10 +31,11 @@ const RecordRows: FC<{
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: 12, border: '1px dashed #d1d5db', borderRadius: 6 }}>
       {entries.map(([key, val], index) => (
         <div key={index} style={{ display: 'flex', gap: 6, alignItems: 'flex-start' }}>
-          <input
+          <KeyInput
             value={key}
             placeholder="alias"
-            onChange={(event) => rename(index, event.target.value)}
+            isTaken={(name) => entries.some(([other]) => other === name)}
+            onRename={(name) => rename(index, name)}
             style={{ ...fieldStyle, width: 110 }}
           />
           <div style={{ flex: 1, minWidth: 0 }}>
