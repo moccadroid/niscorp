@@ -115,7 +115,13 @@ export const createTide = (config: TideConfig): Tide => {
     loaded.clear();
     for (const [id, entry] of next) loaded.set(id, entry);
 
-    return { loaded: parsed.length, cycles: graph.cycles, blind: graph.blind, warnings: graph.warnings, refused };
+    const leaseWarnings = parsed
+      .filter((reflex) => reflex.policy.timeoutMs >= deps.leaseMs)
+      .map(
+        (reflex) =>
+          `${reflex.id}: timeoutMs ${reflex.policy.timeoutMs} is not shorter than leaseMs ${deps.leaseMs} — another instance may claim the task again while its effect still runs`,
+      );
+    return { loaded: parsed.length, cycles: graph.cycles, blind: graph.blind, warnings: [...graph.warnings, ...leaseWarnings], refused };
   };
 
   const mergedEffects = (parsed: readonly Reflex[]): EffectRegistry => {

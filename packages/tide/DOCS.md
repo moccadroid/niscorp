@@ -77,7 +77,10 @@ no reflexes are loaded. Signal and manual facts are always stored.
 
 `leaseMs` is the recovery story for a process that dies between the effect and
 the record. A task still `claimed` past its lease is claimable again; the
-fencing token is what makes that safe.
+fencing token is what makes that safe. An effect whose `timeoutMs` is not
+shorter than the lease can still be running when another instance claims its
+task again, so `load` names each such reflex in `warnings`; it loads it all
+the same.
 
 ---
 
@@ -370,7 +373,8 @@ Validates, hashes versions, derives and verifies the graph, and arms. `at` is
 the host's boot time; arming persists, so a restart does not reopen the past.
 `LoadReport` carries `{ loaded, cycles, blind, warnings, refused }` — guarded
 cycles are legal and reported; effects with no `writes` are reported as
-blind edges; `refused` is each reflex `isolate` left out, as
+blind edges; `warnings` names a reflex that subscribes to its own run and a
+reflex whose `timeoutMs` is not shorter than `leaseMs`; `refused` is each reflex `isolate` left out, as
 `{ reflexId, code, message }` (`reflexId` is undefined for one that had none),
 and is empty without it. Calling it again is how a host changes what is running,
 including turning one off.

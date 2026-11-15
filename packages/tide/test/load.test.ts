@@ -81,6 +81,15 @@ describe('cycles', () => {
   });
 });
 
+describe('the lease', () => {
+  it('warns when an effect may run as long as its lease, and loads the reflex', async () => {
+    const tide = createTide({ store: createMemoryStore(), transform: testTransform, effects: { work: { run: () => null } }, leaseMs: 60_000 });
+    const report = await tide.load([manual('slow', { policy: { timeoutMs: 60_000 } }), manual('quick', { policy: { timeoutMs: 59_999 } })], { at: 0 });
+    expect(report.loaded).toBe(2);
+    expect(report.warnings).toEqual([expect.stringMatching(/^slow: .*timeoutMs 60000.*leaseMs 60000/)]);
+  });
+});
+
 describe('versioning', () => {
   const parse = (input: ReflexInput) => ReflexSchema.parse(input);
 
