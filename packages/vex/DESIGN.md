@@ -793,7 +793,8 @@ byte for byte, so nothing a cache already holds under one has moved.
    compiler that refuses any field position that did not resolve. With
    `qualifyTables`, one more piece of text reaches a statement: the adapter's
    `schema` option, set by the operator and never by a query, quoted before
-   each table name.
+   each table name. `test/security/injection.test.ts` is the attack list,
+   against a real Postgres.
 
 2. **The LLM is injected, not embedded.** Making `generateDsl`/`mapToShape`
    plain hooks keeps the engine deterministic and testable without a model,
