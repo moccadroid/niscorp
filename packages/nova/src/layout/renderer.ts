@@ -87,6 +87,16 @@ const resolveDataPath = (
   return undefined;
 };
 
+const sameEntries = (a: ReadonlyMap<string, unknown>, b: ReadonlyMap<string, unknown>): boolean =>
+  a.size === b.size && [...a].every(([key, value]) => b.has(key) && b.get(key) === value);
+
+// A `$.name` reads the innermost scope that has `name`; `$` and `$prism` read the innermost scope itself.
+const bindingsOf = (chain: ScopeChain): Map<string, unknown> => new Map([...chain].reverse().flatMap((scope) => Object.entries(scope)));
+
+const readsAlike = (a: ScopeChain, b: ScopeChain): boolean =>
+  a === b ||
+  (sameEntries(new Map(Object.entries(a[0] ?? {})), new Map(Object.entries(b[0] ?? {}))) && sameEntries(bindingsOf(a), bindingsOf(b)));
+
 const makeAutoRef = (componentName: string, path: string): string =>
   `auto-${componentName}-${path}`;
 
@@ -117,8 +127,8 @@ const renderNode = (
     if (target === undefined) {
       throw new LayoutRefNotFoundError(`Layout ref not found: ${node.ref}`, { ref: node.ref });
     }
-    // Entered again under the same scope, a ref renders the same thing again, forever.
-    const first = ctx.refsEntered.findIndex((entered) => entered.ref === node.ref && entered.chain === chain);
+    // Entered again where every binding reads as it did last time, a ref renders the same thing again, forever.
+    const first = ctx.refsEntered.findIndex((entered) => entered.ref === node.ref && readsAlike(entered.chain, chain));
     if (first >= 0) {
       const path = [...ctx.refsEntered.slice(first).map((entered) => entered.ref), node.ref].join(' → ');
       throw new RenderError(`Layout ref "${node.ref}" comes back to itself: ${path}`, { ref: node.ref });

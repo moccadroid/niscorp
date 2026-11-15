@@ -29,6 +29,13 @@ describe('a stored layout that comes back to itself', () => {
     );
   });
 
+  it('a loop over the same data again is the same place again', () => {
+    const x: LayoutNode = { for: '$.items', as: 'it', do: { ref: 'x' } };
+    expect(() => renderLayout({ ref: 'x' }, { items: [1] }, { store: storeOf({ x }), registry: createPermissiveRegistry(), strict: true })).toThrow(
+      'Layout ref "x" comes back to itself: x → x',
+    );
+  });
+
   it('a layout that refers to itself one level down its data still renders', () => {
     const tree: LayoutNode = { component: 'Box', props: { name: '$node.name' }, children: { for: '$node.children', as: 'node', do: { ref: 'tree' } } };
     const data = { root: { name: 'a', children: [{ name: 'b', children: [{ name: 'c', children: [] }] }] } };
