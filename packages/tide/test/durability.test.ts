@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { createMemoryStore, createTide } from '../src/index';
 import type { EffectRegistry, Fact, ReflexInput, Row, SelectFn, Tide, TideConfig, TideEvent } from '../src/index';
-import { testTransform, utc } from './support';
+import { failingFirstRunFact, testTransform, utc } from './support';
 
 const vienna = 'Europe/Vienna';
 const T0 = utc('2026-03-01T00:00:00Z');
@@ -788,5 +788,28 @@ describe('the last tasks of a run landing at once', () => {
     const runs = await engines.a.ledger.runs({ reflexId: 'reminders.send' });
     expect(runs.map((run) => run.state)).toEqual(['settled', 'settled']);
     expect(runs.map((run) => run.done)).toEqual([6, 6]);
+  });
+});
+
+describe('a settled run and the fact that announces it', () => {
+  const settles: ReflexInput = { id: 'import.rows', intent: 'Import the rows.', on: { manual: {} }, effect: { name: 'work' } };
+  const follows: ReflexInput = { id: 'import.report', intent: 'Report the import.', on: { fact: { run: 'import.rows' } }, effect: { name: 'work' } };
+
+  it('land together: a failed fact write leaves the run to announce on the next advance', async () => {
+    const calls: unknown[] = [];
+    const tide = createTide({
+      store: failingFirstRunFact(createMemoryStore()),
+      transform: testTransform,
+      effects: { work: { run: (input) => calls.push(input) } },
+    });
+    await tide.load([settles, follows], { at: T0 });
+    await tide.fire('import.rows', { now: T0 });
+
+    await expect(tide.advance({ now: T0 })).rejects.toThrow('connection reset');
+    for (let tick = 1; tick <= 3; tick += 1) await tide.advance({ now: T0 + tick });
+
+    expect((await tide.ledger.facts()).filter((fact) => fact.kind === 'run' && fact.reflex === 'import.rows')).toHaveLength(1);
+    expect(await tide.ledger.runs({ reflexId: 'import.report' })).toHaveLength(1);
+    expect(calls).toHaveLength(2);
   });
 });

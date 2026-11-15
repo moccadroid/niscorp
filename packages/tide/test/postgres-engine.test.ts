@@ -3,7 +3,7 @@ import { createTide } from '../src/index';
 import type { EffectRegistry, ReflexInput, Row, Tide, TideConfig, TideEvent } from '../src/index';
 import { createTideStore } from '../src/store/postgres';
 import type { TidePool } from '../src/store/postgres';
-import { oneDatabase } from './support';
+import { failingFirstRunFact, oneDatabase } from './support';
 
 const vienna = 'Europe/Vienna';
 const T0 = Date.UTC(2026, 2, 1, 0, 0, 0);
@@ -349,6 +349,30 @@ describe('chains and fan-in on postgres', () => {
     expect(calls).toContainEqual({ done: 5, total: 5 });
     await tide.advance({ now: T0 + 10 });
     expect(calls.filter((input) => typeof input === 'object' && input !== null && 'total' in input)).toHaveLength(1);
+  });
+});
+
+describe('a settled run and the fact that announces it, on postgres', () => {
+  it('land together: a failed fact write leaves the run to announce on the next advance', async () => {
+    const store = createTideStore((await database.emptied()).pool);
+    await store.ready;
+    const calls: unknown[] = [];
+    const tide = createTide({ store: failingFirstRunFact(store), transform, effects: { work: { run: (input) => calls.push(input) } } });
+    await tide.load(
+      [
+        { id: 'import.rows', intent: 'Import the rows.', on: { manual: {} }, effect: { name: 'work' } },
+        { id: 'import.report', intent: 'Report the import.', on: { fact: { run: 'import.rows' } }, effect: { name: 'work' } },
+      ],
+      { at: T0 },
+    );
+    await tide.fire('import.rows', { now: T0 });
+
+    await expect(tide.advance({ now: T0 })).rejects.toThrow('connection reset');
+    for (let tick = 1; tick <= 3; tick += 1) await tide.advance({ now: T0 + tick });
+
+    expect((await tide.ledger.facts()).filter((fact) => fact.kind === 'run' && fact.reflex === 'import.rows')).toHaveLength(1);
+    expect(await tide.ledger.runs({ reflexId: 'import.report' })).toHaveLength(1);
+    expect(calls).toHaveLength(2);
   });
 });
 

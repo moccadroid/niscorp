@@ -1,6 +1,6 @@
 import { FactInputSchema } from '../schemas';
 import { TideError } from '../errors';
-import type { AttemptOutcome, FactInput, NewFact, Task, TideCtx, TideStore } from '../types';
+import type { AttemptOutcome, FactInput, NewFact, Run, Task, TideCtx, TideStore } from '../types';
 import { evaluateTemplate, withNow } from './runtime';
 import { admitFact, announceFact } from './facts';
 import type { Admission } from './facts';
@@ -248,29 +248,36 @@ export const reopenTask = async (deps: EngineDeps, taskId: string, now: number):
   });
 
 export const settleRuns = async (deps: EngineDeps, now: number): Promise<number> => {
-  const settled = await deps.store.claim({
-    table: 'run',
-    where: { state: 'settled', drained: { ne: true } },
-    order: [{ by: 'settledAt' }],
-    limit: 200,
-    set: { drained: true },
+  const drained = await deps.store.transact(async (tx) => {
+    const settled = await tx.claim({
+      table: 'run',
+      where: { state: 'settled', drained: { ne: true } },
+      order: [{ by: 'settledAt' }],
+      limit: 200,
+      set: { drained: true },
+    });
+    const admitted: { run: Run; admission: Admission }[] = [];
+    for (const run of settled) {
+      const admission = await admitFact(tx, {
+        kind: 'run',
+        reflex: run.reflexId,
+        runId: run.id,
+        occurrence: run.occurrence,
+        stats: { total: run.total, done: run.done, failed: run.failed },
+        at: now,
+        depth: run.depth + 1,
+        cause: `run:${run.id}`,
+        as: run.as,
+      }, deps.maxChainFacts);
+      admitted.push({ run, admission });
+    }
+    return admitted;
   });
 
-  for (const run of settled) {
+  for (const { run, admission } of drained) {
     deps.emit({ type: 'run.settled', run });
-    const admission = await admitFact(deps.store, {
-      kind: 'run',
-      reflex: run.reflexId,
-      runId: run.id,
-      occurrence: run.occurrence,
-      stats: { total: run.total, done: run.done, failed: run.failed },
-      at: now,
-      depth: run.depth + 1,
-      cause: `run:${run.id}`,
-      as: run.as,
-    }, deps.maxChainFacts);
     announceFact(deps.emit, admission);
   }
 
-  return settled.length;
+  return drained.length;
 };
