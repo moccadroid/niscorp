@@ -82,7 +82,7 @@ Objects without `$`-prefixed keys are output templates. Each value is recursivel
 
 This enables partial results from incomplete source data without try/catch wrapping every field.
 
-The schema and the evaluator hold one rule: a `$` name is an op's. The template branch's key pattern refuses every key that starts with `$`, which is exactly the evaluator's test for a plain object — so a `$` key that is not an op is `E_SCHEMA`, with the key's path, and not a config that validates, is stored, and fails each time it runs. Because the whole prefix is reserved, adding an op takes no name away from templates. Data that has `$` keys is a `$const` payload.
+The schema and the evaluator share one rule: a `$` name is an op's. The template branch's key pattern refuses every key that starts with `$`, which is exactly the evaluator's test for a plain object — so a `$` key that is not an op is `E_SCHEMA`, with the key's path, and not a config that validates, is stored, and fails each time it runs. Because the whole prefix is reserved, adding an op takes no name away from templates. Data that has `$` keys is a `$const` payload.
 
 ---
 
