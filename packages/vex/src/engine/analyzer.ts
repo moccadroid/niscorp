@@ -55,9 +55,9 @@ const hasCartesianProduct = (resolved: ResolvedQuery): boolean => {
 const findUnindexedFilterColumns = (resolved: ResolvedQuery): string[] => {
   if (resolved.filter === undefined) return [];
 
-  const unindexed: string[] = [];
+  const unindexed = new Set<string>();
 
-  for (const [path, res] of resolved.filter.resolvedPaths) {
+  for (const res of resolved.filter.resolvedPaths.values()) {
     const source = resolved.sources.find((s) => s.alias === res.alias);
     if (source === undefined || source.entity === undefined) continue;
 
@@ -70,11 +70,11 @@ const findUnindexedFilterColumns = (resolved: ResolvedQuery): string[] => {
     );
 
     if (!isIndexed && !isPrimaryKey) {
-      unindexed.push(path);
+      unindexed.add(`${source.entity.name}.${res.column}`);
     }
   }
 
-  return unindexed;
+  return [...unindexed];
 };
 
 const hasAggregatesWithoutGroupBy = (resolved: ResolvedQuery): boolean =>

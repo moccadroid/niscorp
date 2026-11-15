@@ -55,6 +55,8 @@ const andMerge = (existing: ResolvedFilter | undefined, additions: ResolvedFilte
   return { original: { and: all.map((f) => f.original) }, resolvedPaths: paths as never };
 };
 
+// Keyed by the source's alias, not the entity's name: a table listed twice is
+// two sources, and each gets its own rule.
 const predicateFor = (
   entityName: string,
   alias: string,
@@ -64,7 +66,7 @@ const predicateFor = (
   const field = fields.find((f) => f.name === match.match);
   // Fails closed: a rule naming a missing column must not let the read run without it.
   if (field === undefined) throw new VexScopeError(entityName, `Scope rule for "${entityName}" names column "${match.match}", which the table does not have`);
-  const path = `${entityName}.${match.match}`;
+  const path = `${alias}.${match.match}`;
   // `in` against a scope value compiles to `col = ANY($n)`, so a null or empty
   // set matches no row.
   const original: Filter = isSetMatch(match)
@@ -92,9 +94,7 @@ const placeInto = (level: ScopeLevel, policy: ScopePolicy): void => {
       const predicate = predicateFor(entity.name, source.alias, match, entity.fields);
       if (predicate === undefined) continue;
 
-      // The compiler resolves `entity.column` through the alias map, and these
-      // predicates did not go through the resolver's field pass.
-      level.aliasMap.set(`${entity.name}.${match.match}`, `${source.alias}.${match.match}`);
+      level.aliasMap.set(`${source.alias}.${match.match}`, `${source.alias}.${match.match}`);
 
       if (join !== undefined && join.kind === 'left') join.on = [...(join.on ?? []), predicate];
       else whereAdditions.push(predicate);

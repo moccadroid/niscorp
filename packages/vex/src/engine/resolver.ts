@@ -57,13 +57,15 @@ const findClosest = (target: string, candidates: string[]): string | undefined =
   return undefined;
 };
 
-type AliasCounter = Map<string, number>;
+// `taken` holds every name a path of this query can start with: an alias is
+// never one of them, so `<alias>.<column>` never reads as a path the query wrote.
+type AliasCounter = { counts: Map<string, number>; taken: ReadonlySet<string> };
 
 const generateAlias = (name: string, counter: AliasCounter): string => {
   const prefix = name.charAt(0).toLowerCase();
-  const current = counter.get(prefix) ?? 0;
-  const next = current + 1;
-  counter.set(prefix, next);
+  let next = (counter.counts.get(prefix) ?? 0) + 1;
+  while (counter.taken.has(`${prefix}${next}`)) next += 1;
+  counter.counts.set(prefix, next);
   return `${prefix}${next}`;
 };
 
@@ -398,7 +400,10 @@ const extractSemantic = (
 };
 
 export const resolve = (dsl: Query, schema: DatabaseSchema): ResolvedQuery => {
-  const aliasCounter: AliasCounter = new Map();
+  const aliasCounter: AliasCounter = {
+    counts: new Map(),
+    taken: new Set([...schema.entities.map((e) => e.name), ...dsl.from.flatMap((source) => (typeof source === 'string' ? [] : [source.as]))]),
+  };
   const entityLookup: EntityLookup = new Map();
   const aliasMap = new Map<string, string>();
   const sources: ResolvedSource[] = [];
