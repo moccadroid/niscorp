@@ -194,27 +194,6 @@ export const STORE_CONTRACT: readonly StoreCheck[] = [
       equal(byReflex('parallel'), 2, 'a reflex outside `only` claims freely');
     },
   },
-  {
-    name: 'onePer claims in order, and groups with nothing to claim take no room',
-    run: async (store) => {
-      await withRuns(store, 'a', 'b');
-      await store.appendIfAbsent('task', task({ runId: 'a', unit: 'p1', reflexId: 'parallel' }));
-      await store.appendIfAbsent('task', task({ runId: 'a', unit: 'p2', reflexId: 'parallel' }));
-      await store.appendIfAbsent('task', task({ runId: 'b', unit: 's1', reflexId: 'serial.a' }));
-      const claimBy = (limit: number) =>
-        store.claim({
-          table: 'task',
-          where: { state: 'pending' },
-          order: [{ by: 'unit' }],
-          limit,
-          set: { state: 'claimed', claimedUntil: 900 },
-          onePer: { column: 'reflexId', held: { state: 'claimed', claimedUntil: { gt: 100 } }, only: ['serial.a', 'serial.b', 'serial.c'] },
-        });
-
-      equal((await claimBy(2)).map((row) => row.unit).join(','), 'p1,p2', 'the first two in order, though three groups are in `only`');
-      equal((await claimBy(2)).map((row) => row.unit).join(','), 's1', 'then the serial one');
-    },
-  },
 
   {
     name: 'cas moves a row only from the state it expected — this is the fence',

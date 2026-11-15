@@ -514,6 +514,20 @@ describe('overlap, order and retention on postgres', () => {
     expect(calls).toHaveLength(1);
   });
 
+  it('a serial task still finds room when parallel tasks fill the limit', async () => {
+    const serial: ReflexInput = { id: 'serial', intent: 'One at a time.', on: { manual: {} }, effect: { name: 'work', input: { who: 'serial' } }, policy: { order: 'serial' } };
+    const busy: ReflexInput = { id: 'busy', intent: 'Many.', on: { manual: {} }, select: { query: {}, mode: 'each', unitKey: 'id' }, effect: { name: 'work', input: { who: 'busy' } } };
+    const { tide, calls } = await harness([serial, busy], { work: noop }, {
+      select: () => Array.from({ length: 10 }, (_, n) => ({ id: String(n) })),
+    });
+
+    await tide.fire('busy', { now: T0 });
+    await tide.fire('serial', { now: T0 });
+    await tide.advance({ now: T0, limit: 3 });
+
+    expect(calls).toContainEqual({ who: 'serial' });
+  });
+
   it('sweeping a run takes its tasks with it', async () => {
     const reflex: ReflexInput = { id: 'once', intent: 'Once.', on: { manual: {} }, effect: { name: 'work' } };
     const { tide } = await harness([reflex], { work: noop });

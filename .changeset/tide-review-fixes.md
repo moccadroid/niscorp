@@ -10,6 +10,6 @@ Facts delayed by `notBefore` no longer keep a due fact from its reflex: the matc
 
 The tasks of a reflex that is not loaded are no longer claimed, so they spend no attempt while it is away.
 
-The Postgres store claims tasks in order whatever the number of `order: 'serial'` reflexes: with as many serial reflexes as the advance's `limit`, other tasks were never claimed. `STORE_CONTRACT` has a check for it, which a host's own store now has to pass as well.
-
 `ledger.facts({ reflexId })` reads only that reflex's facts instead of the whole fact table. The docs describe what `sweep` removes and drop the history they carried.
+
+The Postgres store no longer sets aside room in a claim for every `order: 'serial'` reflex before it knows whether one has work: with as many serial reflexes as the advance's `limit`, other tasks were never claimed. Serial reflexes are still claimed first.
