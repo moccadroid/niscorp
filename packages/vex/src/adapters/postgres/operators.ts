@@ -26,6 +26,9 @@ type CompilationContext = {
   paramSlots: ParamSlot[];
   paramCounter: { value: number };
   existsMap?: Map<object, ResolvedExists>;
+  // The Postgres schema every table is read from; without it, a table name
+  // resolves through the connection's search_path.
+  tableSchema?: string;
 };
 
 // An authored string reaches SQL text only as a table or column that resolved
@@ -44,6 +47,9 @@ export const numberLiteral = (n: number): string => {
   if (!Number.isFinite(n)) throw new VexError('invalid_dsl', `${String(n)} is not a number SQL can hold.`);
   return String(n);
 };
+
+export const tableRef = (table: string, ctx: Pick<CompilationContext, 'tableSchema'>): string =>
+  ctx.tableSchema === undefined ? sqlName(table) : `${sqlName(ctx.tableSchema)}.${sqlName(table)}`;
 
 const columnOf = (path: string, ctx: CompilationContext): string => {
   const mapped = ctx.aliasMap.get(path);
@@ -144,7 +150,7 @@ export const compileFilter = (
 
     const parts: string[] = ['SELECT 1'];
     const first = resolved.sources[0];
-    if (first?.table !== undefined) parts.push(`FROM ${sqlName(first.table)} AS ${first.alias}`);
+    if (first?.table !== undefined) parts.push(`FROM ${tableRef(first.table, ctx)} AS ${first.alias}`);
     for (const join of resolved.joins) {
       const source = resolved.sources.find((s) => s.alias === join.toAlias);
       if (source?.table === undefined) continue;
@@ -153,7 +159,7 @@ export const compileFilter = (
         ...compileJoinPairs(join),
         ...(join.on ?? []).map((extra) => compileFilter(extra.original, inner)),
       ];
-      parts.push(`${keyword} ${sqlName(source.table)} AS ${join.toAlias} ON ${conditions.join(' AND ')}`);
+      parts.push(`${keyword} ${tableRef(source.table, ctx)} AS ${join.toAlias} ON ${conditions.join(' AND ')}`);
     }
     if (resolved.filter !== undefined) parts.push(`WHERE ${compileFilter(resolved.filter.original, inner)}`);
 
