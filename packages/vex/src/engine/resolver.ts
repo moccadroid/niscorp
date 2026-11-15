@@ -517,7 +517,7 @@ export const resolve = (dsl: Query, schema: DatabaseSchema): ResolvedQuery => {
     for (const [name, expr] of Object.entries(dsl.aggregate)) {
       if (expr !== undefined) {
         assertName(name, 'aggregate name');
-        resolveAggregatePaths(expr, entityLookup, schema, aliasMap);
+        resolveAggregatePaths(expr, entityLookup, schema, aliasMap, existsMap, aliasCounter);
         aggregates.push({ name, expression: expr });
       }
     }
@@ -622,6 +622,8 @@ const resolveAggregatePaths = (
   entityLookup: EntityLookup,
   schema: DatabaseSchema,
   aliasMap: Map<string, string>,
+  existsOut?: Map<object, ResolvedExists>,
+  aliasCounter?: AliasCounter,
 ): void => {
   const arg = ('count' in expr) ? expr.count
     : ('countDistinct' in expr) ? expr.countDistinct
@@ -633,7 +635,7 @@ const resolveAggregatePaths = (
   if (arg === '*') return;
 
   if (typeof arg !== 'string') {
-    resolveComputePaths(arg, entityLookup, schema, aliasMap);
+    resolveComputePaths(arg, entityLookup, schema, aliasMap, existsOut, aliasCounter);
     return;
   }
 
