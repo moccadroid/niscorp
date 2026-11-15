@@ -56,7 +56,9 @@ model. A required enum with no default is left out. These can fail the schema
 (`''` is not an email, `0` is not `min(1)`, `null` is not a record), and
 optional fields get them too. `toNova(model, { empty, includeOptional })`
 changes both: `empty` supplies a kind's starting value, `includeOptional: false`
-leaves optional fields out.
+leaves optional fields out. A field is optional when its schema accepts a missing
+value; one whose own code throws on a missing value (a `z.preprocess` that trims
+its input) is required.
 
 The other options: `value` is the document to edit, used as given in place of
 that starting document. `id` is the id of the action `toNova` returns (default
