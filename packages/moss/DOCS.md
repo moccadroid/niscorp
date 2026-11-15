@@ -2754,7 +2754,10 @@ bundle whole: the last good import keeps serving.
 - *A webhook* (`POST /integrations/:id/hook/*`) takes no session and no
   assertion is minted for it: the body goes on to the integration's service
   byte for byte, with the vendor's headers but `authorization` and `host`,
-  and the integration checks the vendor's signature itself. An integration
+  and the integration checks the vendor's signature itself. The headers that
+  frame one connection (`transfer-encoding`, `keep-alive`, `expect`,
+  `upgrade`) stay behind too: the request to the service is framed anew from
+  the body that arrived. An integration
   that is unknown or not approved answers `404`. **The door has a limit, and
   it is a limit per process**: 240 calls a minute for each integration,
   counted in the memory of the process that takes them, in windows of a minute

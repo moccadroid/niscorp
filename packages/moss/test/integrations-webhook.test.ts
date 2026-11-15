@@ -46,6 +46,22 @@ describe('the webhook door — what it hands on', () => {
     expect(mint).not.toHaveBeenCalled();
   });
 
+  it('a hook sent chunked, or with `Expect`, `Keep-Alive` or `Upgrade`, reaches the vendor without them', async () => {
+    const { routes, sent } = door();
+    const answered = await routes.request('/integrations/pay/hook/stripe', {
+      method: 'POST',
+      headers: { 'transfer-encoding': 'chunked', 'keep-alive': 'timeout=5', expect: '100-continue', upgrade: 'websocket', 'stripe-signature': 't=1,v1=abc', 'content-type': 'application/json' },
+      body: '{}',
+    });
+    expect(answered.status).toBe(200);
+
+    const [call] = sent();
+    for (const name of ['transfer-encoding', 'keep-alive', 'expect', 'upgrade']) expect(call?.headers.get(name)).toBeNull();
+    expect(call?.headers.get('stripe-signature')).toBe('t=1,v1=abc');
+    expect(call?.headers.get('content-type')).toBe('application/json');
+    expect(call?.body).toBe('{}');
+  });
+
   it('the body arrives byte for byte, at the path and the query the vendor called', async () => {
     const { routes, sent } = door();
     const body = '{ "b": 1,\n  "a": [2, 3] }';

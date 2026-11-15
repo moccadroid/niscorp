@@ -108,6 +108,8 @@ const webhook = (deps: ProxyDeps, routes: Hono<FeatureEnv>): void => {
     // A bearer arriving here must not read as an identity on the other side.
     headers.delete('authorization');
     headers.delete('host');
+    // Node's fetch refuses to send these; it frames the body it sends from the bytes that arrived.
+    for (const name of ['transfer-encoding', 'keep-alive', 'expect', 'upgrade']) headers.delete(name);
     const ended = await deps.forward({
       integration: id,
       admits: () => hookAllows(id, Date.now()),
