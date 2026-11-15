@@ -4,6 +4,9 @@ import type { ParserEvent } from './types';
 import { walkSchema, type SchemaInfo } from './schema-walker';
 import { splitPath, getByPath } from './path';
 
+const childPathOf = (containerPath: string, key: string): string =>
+  containerPath === '' ? key : `${containerPath}.${key}`;
+
 export type ValidationMode = 'trust' | 'recover' | 'strict';
 export type ConstraintsMode = 'kind' | 'finalize';
 
@@ -27,7 +30,7 @@ export type ValidatorDeps = {
 };
 
 export type Validator = {
-  valueOpen: (path: string, kind: ValueKind) => 'accept' | 'skip';
+  valueOpen: (segments: readonly string[], kind: ValueKind) => 'accept' | 'skip';
   processEvents: (events: ParserEvent[], getRoot: () => unknown) => void;
   isFailed: () => boolean;
 };
@@ -35,12 +38,14 @@ export type Validator = {
 export const createValidator = (deps: ValidatorDeps): Validator => {
   let failed = false;
   const finalizeChecked = new Set<string>();
+  // A key may hold a dot, so a joined path cannot be split back into its keys.
+  const containerSegments = new Map<string, readonly string[]>([['', []]]);
 
-  const valueOpen = (path: string, kind: ValueKind): 'accept' | 'skip' => {
+  const valueOpen = (segments: readonly string[], kind: ValueKind): 'accept' | 'skip' => {
     if (deps.mode === 'trust') return 'accept';
     if (failed) return 'skip';
 
-    const segments = splitPath(path);
+    const path = segments.join('.');
     const info = walkSchema(deps.schema, segments);
 
     if (!info) {
@@ -55,15 +60,18 @@ export const createValidator = (deps: ValidatorDeps): Validator => {
       return 'skip';
     }
 
+    if (kind === 'object' || kind === 'array') containerSegments.set(path, segments);
     return 'accept';
   };
 
-  const finalizeField = (path: string, getRoot: () => unknown): void => {
+  const segmentsOf = (containerPath: string): readonly string[] =>
+    containerSegments.get(containerPath) ?? splitPath(containerPath);
+
+  const finalizeField = (path: string, segments: readonly string[], getRoot: () => unknown): void => {
     if (failed) return;
     if (finalizeChecked.has(path)) return;
     finalizeChecked.add(path);
 
-    const segments = splitPath(path);
     const info = walkSchema(deps.schema, segments);
     if (!info || !info.subSchema) return;
 
@@ -88,10 +96,10 @@ export const createValidator = (deps: ValidatorDeps): Validator => {
   const finalizeSiblingsBefore = (containerPath: string, newKey: string, getRoot: () => unknown): void => {
     const keys = deps.getContainerKeys(containerPath);
     if (!keys) return;
+    const base = segmentsOf(containerPath);
     for (const key of keys) {
       if (key === newKey) break;
-      const childPath = containerPath === '' ? key : `${containerPath}.${key}`;
-      finalizeField(childPath, getRoot);
+      finalizeField(childPathOf(containerPath, key), [...base, key], getRoot);
       if (failed) return;
     }
   };
@@ -99,12 +107,12 @@ export const createValidator = (deps: ValidatorDeps): Validator => {
   const finalizeAllChildren = (containerPath: string, getRoot: () => unknown): void => {
     const keys = deps.getContainerKeys(containerPath);
     if (!keys) return;
+    const base = segmentsOf(containerPath);
     for (const key of keys) {
-      const childPath = containerPath === '' ? key : `${containerPath}.${key}`;
-      finalizeField(childPath, getRoot);
+      finalizeField(childPathOf(containerPath, key), [...base, key], getRoot);
       if (failed) return;
     }
-    finalizeField(containerPath, getRoot);
+    finalizeField(containerPath, base, getRoot);
   };
 
   const processEvents = (events: ParserEvent[], getRoot: () => unknown): void => {

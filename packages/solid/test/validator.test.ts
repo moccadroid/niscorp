@@ -779,3 +779,32 @@ describe('recover mode — empty containers', () => {
     expect(errors).toHaveLength(0);
   });
 });
+
+describe('a key with a dot in it', () => {
+  const Files = z.object({ files: z.record(z.string(), z.string().max(8)) });
+  const json = '{"files":{"index.ts":"export","README.md":"hello"}}';
+
+  it('is kept, with no error, in recover and strict mode', async () => {
+    for (const mode of ['recover', 'strict'] as const) {
+      const stream = createStream({ schema: Files, initial: { files: {} }, mode });
+      const errors: StreamError[] = [];
+      stream.onError((error) => errors.push(error));
+      stream.write(json);
+      stream.close();
+      expect(errors).toEqual([]);
+      expect(await stream.final()).toEqual({ files: { 'index.ts': 'export', 'README.md': 'hello' } });
+    }
+  });
+
+  it('has its finalize constraints checked as a key without a dot has', () => {
+    const errorsFor = (key: string): string[] => {
+      const stream = createStream({ schema: Files, initial: { files: {} }, constraints: 'finalize' });
+      const errors: string[] = [];
+      stream.onError((error) => errors.push(`${error.phase} ${error.path}`));
+      stream.write(`{"files":{"${key}":"export default 1"}}`);
+      return errors;
+    };
+    expect(errorsFor('index.ts')).toEqual(errorsFor('index').map((error) => error.replace('files.index', 'files.index.ts')));
+    expect(errorsFor('index.ts')[0]).toBe('finalize files.index.ts');
+  });
+});

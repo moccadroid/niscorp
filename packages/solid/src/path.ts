@@ -9,7 +9,7 @@ export const resolvePath = (base: string, relative: string): string => {
   return `${base}.${relative}`;
 };
 
-export const getByPath = (obj: unknown, segments: string[]): unknown => {
+export const getByPath = (obj: unknown, segments: readonly string[]): unknown => {
   let current: unknown = obj;
   for (const segment of segments) {
     if (current === null || current === undefined) return undefined;
