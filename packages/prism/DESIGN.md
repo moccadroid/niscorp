@@ -230,6 +230,8 @@ language into a package that has no business knowing which languages exist.
 Formatter construction is cached per resolved argument tuple, because building
 an `Intl` formatter costs roughly two orders of magnitude more than using one
 and a mapping over a thousand rows would otherwise build a thousand of them.
+Each cache keeps up to 1,000 formatters and is emptied when full, as the path
+cache is: a locale read from data adds one per distinct tag.
 
 ---
 

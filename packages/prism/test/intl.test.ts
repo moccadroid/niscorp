@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { evaluate, evaluateSafe, compile, execute, ErrorCode, PrismError } from '../src';
+import { DATE_FORMATTERS, NUMBER_FORMATTERS } from '../src/ops/intl.ops';
 
 // Intl emits non-breaking and narrow non-breaking spaces between a number and its unit.
 const flat = (value: unknown): string => String(value).replace(/[  ]/g, ' ');
@@ -130,5 +131,20 @@ describe('compiled path', () => {
     const out = execute(ir, source) as { price: string; when: string };
     expect(flat(out.price)).toBe('€ 45,00');
     expect(out.when).toContain('März');
+  });
+});
+
+describe('the formatter caches', () => {
+  it('keep at most 1,000 formatters each, however many locales the data names', () => {
+    const config = {
+      date: { $localeDate: { value: { $ref: '$.day' }, locale: { $ref: '$.locale' } } },
+      money: { $localeMoney: { value: { $ref: '$.cents' }, currency: 'EUR', locale: { $ref: '$.locale' } } },
+      number: { $localeNumber: { value: { $ref: '$.cents' }, locale: { $ref: '$.locale' } } },
+    };
+    for (let i = 0; i < 5000; i++) evaluate(config, { ...source, locale: `en-x-${i.toString(36)}` });
+    expect(DATE_FORMATTERS.size).toBeLessThanOrEqual(1000);
+    expect(NUMBER_FORMATTERS.size).toBeLessThanOrEqual(1000);
+    const out = evaluate(config, { ...source, locale: 'de-AT' }) as { date: string; money: string; number: string };
+    expect([out.date, flat(out.money), flat(out.number)]).toEqual(['14.03.2026', '€ 45,00', '4 500']);
   });
 });
