@@ -3,8 +3,12 @@
 `nisc` — the command for a nisc application.
 
 ```bash
-pnpm add -D @niscorp/cli
+pnpm add @niscorp/cli
 ```
+
+A dependency, not a dev dependency, when `nisc start` serves the app: a host
+that installs the dependencies alone must still have `nisc`. So is what
+`nisc.config.ts` imports.
 
 A new app starts with `npm create nisc`, which writes the `nisc.config.ts`
 described below.

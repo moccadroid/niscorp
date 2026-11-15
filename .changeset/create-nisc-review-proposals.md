@@ -13,3 +13,4 @@ A new model-first app reads its own `.env` wherever the command is run from (`ni
 A new model-first app's words match its code: the `ask` function's description says it is sent `{ asked }`, and its AGENTS.md names `begin` and `said` and counts the tour's places right.
 A new model-first app's PLAN.md lists, as open, who may ask the model: as made, everyone (`public`), so anybody who reaches the deployed app spends the Groq key; its AGENTS.md says the same under "Deploying".
 A new app behind moss no longer depends on `@niscorp/tide`, which nothing in it imports; an app that wants tide adds it.
+A new app has `@niscorp/cli` as a dependency, and an own-shell DOM app `jsdom` (its `nisc.config.ts` imports it), so a host that installs the dependencies alone can `npm start` it. An own-shell React app keeps `jsdom` as a dev dependency, for the build's check.

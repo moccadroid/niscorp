@@ -1,4 +1,4 @@
-import { execFileSync, execSync, spawn } from 'node:child_process';
+import { execFileSync, execSync, spawn, spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -82,13 +82,39 @@ const whileRunning = async (dir: string, command: 'start' | 'dev', ask: (base: s
 };
 
 const KINDS = [
-  { name: 'made-moss-react', flags: ['--moss', '--react'], ownShell: false, dev: true },
-  { name: 'made-moss-dom', flags: ['--moss', '--dom'], ownShell: false, dev: false },
-  { name: 'made-page-react', flags: ['--page', '--react'], ownShell: true, dev: false },
-  { name: 'made-page-dom', flags: ['--page', '--dom'], ownShell: true, dev: false },
-  { name: 'made-model-react', flags: ['--model-first', '--react'], ownShell: false, dev: false },
-  { name: 'made-model-dom', flags: ['--model-first', '--dom'], ownShell: false, dev: false },
+  { name: 'made-moss-react', flags: ['--moss', '--react'], ownShell: false, dev: true, production: true },
+  { name: 'made-moss-dom', flags: ['--moss', '--dom'], ownShell: false, dev: false, production: false },
+  { name: 'made-page-react', flags: ['--page', '--react'], ownShell: true, dev: false, production: false },
+  { name: 'made-page-dom', flags: ['--page', '--dom'], ownShell: true, dev: false, production: true },
+  { name: 'made-model-react', flags: ['--model-first', '--react'], ownShell: false, dev: false, production: false },
+  { name: 'made-model-dom', flags: ['--model-first', '--dom'], ownShell: false, dev: false, production: false },
 ] as const;
+
+// `npm start` as a host runs it, with the dependencies alone installed. On Windows the shell's whole tree is stopped:
+// stopping the shell alone would leave the server running.
+const startsInProduction = async (dir: string): Promise<void> => {
+  pnpm(['install', '--prod', '--no-frozen-lockfile'], dir);
+  const port = await freePort();
+  const child = spawn('npm start', { cwd: dir, shell: true, detached: process.platform !== 'win32', env: { ...process.env, PORT: String(port) }, stdio: ['ignore', 'pipe', 'pipe'] });
+  let log = '';
+  child.stdout.on('data', (chunk: Buffer) => (log += chunk.toString()));
+  child.stderr.on('data', (chunk: Buffer) => (log += chunk.toString()));
+  try {
+    const deadline = Date.now() + 60_000;
+    for (;;) {
+      const page = await fetch(`http://127.0.0.1:${port}/`).catch(() => undefined);
+      if (page !== undefined) {
+        if (page.status !== 200) throw new Error(`\`npm start\` answered / with ${page.status}:\n${log}`);
+        return;
+      }
+      if (child.exitCode !== null || Date.now() > deadline) throw new Error(`\`npm start\` did not come up:\n${log}`);
+      await pause(200);
+    }
+  } finally {
+    if (process.platform === 'win32') spawnSync('taskkill', ['/pid', String(child.pid), '/T', '/F'], { stdio: 'ignore' });
+    else if (child.pid !== undefined && child.exitCode === null) process.kill(-child.pid, 'SIGTERM');
+  }
+};
 
 const scratch = mkdtempSync(join(tmpdir(), 'nisc-create-'));
 try {
@@ -203,6 +229,7 @@ try {
         if (!html.includes(`>${kind.name}<`)) throw new Error('out/index.html does not hold the drawn screen');
       });
     }
+    if (kind.production) await stepAsync(`${kind.name}: installed with its dependencies alone, \`npm start\` serves it`, () => startsInProduction(dir));
   }
 } finally {
   rmSync(scratch, { recursive: true, force: true });

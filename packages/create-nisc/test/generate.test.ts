@@ -107,6 +107,20 @@ describe('generate — every app the questions can make', () => {
     expect(page).toContain('plain DOM');
   });
 
+  it('what `nisc start` loads is a dependency, so an install of the dependencies alone can start the app', () => {
+    const manifestOf = (picks: Picks, name: string): { dependencies: Record<string, string>; devDependencies: Record<string, string> } =>
+      JSON.parse(read(make(picks, name).dir, 'package.json'));
+    const pageDom = manifestOf(completed(catalog, { shell: 'page', kit: 'dom' }), 'start-page-dom');
+    expect(pageDom.dependencies['@niscorp/cli']).toBe('^0.4.2');
+    expect(pageDom.devDependencies['@niscorp/cli']).toBeUndefined();
+    expect(pageDom.dependencies['jsdom']).toBe('^25.0.1');
+    expect(pageDom.devDependencies['jsdom']).toBeUndefined();
+    const pageReact = manifestOf(completed(catalog, { shell: 'page', kit: 'react' }), 'start-page-react');
+    expect(pageReact.devDependencies['jsdom']).toBe('^25.0.1');
+    expect(pageReact.dependencies['jsdom']).toBeUndefined();
+    expect(manifestOf(completed(catalog, { shell: 'moss', kit: 'react' }), 'start-moss-react').dependencies['@niscorp/cli']).toBe('^0.4.2');
+  });
+
   it('an app behind moss does not depend on tide, which nothing in it imports', () => {
     const manifest = JSON.parse(read(make(completed(catalog, { shell: 'moss' }), 'no-tide').dir, 'package.json'));
     expect(manifest.dependencies['@niscorp/moss']).toBe('^0.4.3');

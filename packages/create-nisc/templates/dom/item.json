@@ -18,6 +18,7 @@
       "docs": { "where": ["src/ui/         the kit — the only renderer code, with src/main.ts, the terminal entry"] }
     },
     "page": {
+      "package": { "dependencies": { "jsdom": "^25.0.1" } },
       "docs": { "where": ["src/ui/         the kit and the screen — the only renderer code, with src/main.ts, the entry"] }
     }
   }
