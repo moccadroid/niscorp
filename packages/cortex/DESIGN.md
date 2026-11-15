@@ -9,18 +9,7 @@ calls), [`@niscorp/solid`](../solid) (partial-JSON streaming), and
 no `!`, no `enum`, no classes; arrow-const exports with explicit
 return types; kebab-case files with role suffixes; named exports only.
 
-This is the second design. The first (see git history) built an
-event-bus substrate, a producer pipeline, a JSON rules engine, and a
-plan-mode interpreter. A full architecture review (2026-07) found:
-every real consumer used only `defineAgent` + `defineTool` +
-`runAgentStandalone`; structured mode never sent the output schema to
-the model; the context prefix was re-templated every iteration
-(cache-hostile); the rules engine and stateful producers were broken
-in ways no consumer had hit because no consumer used them. v2 keeps
-what earned its place — typed tools, gating, observations,
-cross-library agents, context-from-functions, preview — and rebuilds
-the execution core around the pattern the field converged on: one
-tool loop with a typed exit.
+The execution core is one tool loop with a typed exit.
 
 ---
 
@@ -46,7 +35,7 @@ tool loop with a typed exit.
 
 **Anti-goals.** No HTTP, no UI, no database, no LLM SDK (signal), no
 JSON-parsing of streams (solid), no event-bus substrate, no
-declarative rules DSL, no plan interpreter (§14), no conversation
+declarative rules DSL, no plan interpreter, no conversation
 persistence (callers own history).
 
 **Peers:** `@niscorp/signal`, `zod`. **Dependency:** `@niscorp/solid`.
@@ -260,12 +249,11 @@ Rules the loop lives by:
 
 - **Append-only transcript.** The prefix is built once and never
   re-templated. Rule injections, corrections, and budget nudges are
-  *appended* messages. This is the KV-cache lesson: on the models we
-  run, cached input is ~10× cheaper than uncached, and v1 paid the
-  uncached price on every iteration.
+  *appended* messages: a provider caches the prompt prefix, and cached
+  input is ~10× cheaper than uncached on the models we run.
 - **Tool calls execute sequentially, in model order.** Deterministic
   gating and event order beat latency here; parallel execution is a
-  future knob (§15).
+  future knob (§12).
 - **Tool failures are observations, not exceptions.** A failed or
   denied call becomes an error result the model sees and reacts to.
   The run only fails on structural conditions (stop limits, model
@@ -280,17 +268,14 @@ Rules the loop lives by:
   names it was sent, so through Signal a call by id is read as an
   attempted answer and never reaches that table; gates, observations
   and traces always carry the canonical id. Both namespaces must be
-  collision-free per run, and nothing may claim `respond`. (v1 sent
-  ids on the wire while documenting names — a prompt-literal model
-  exposed the lie.)
+  collision-free per run, and nothing may claim `respond`.
 - **Streaming is the default.** The loop consumes `signal.stepStream`
   unless the agent sets `transport: 'step'`, which calls `llm.step()`
   and emits no deltas or partials (§11); `await run.result` is the
   consumer's opt-out. Either call is handed the run's abort signal,
   and an abort during it ends the run `aborted`.
 
-Bounds are `stopWhen` predicates — one vocabulary instead of v1's
-maxToolIterations / maxTicks / maxDurationMs / budget tangle:
+Bounds are `stopWhen` predicates — one vocabulary for every limit:
 
 ```ts
 stopWhen: [stepCount(20), tokens(100_000), duration('5m'), outputRetries(3), repeatedCalls(3)]
@@ -300,18 +285,15 @@ stopWhen: [stepCount(20), tokens(100_000), duration('5m'), outputRetries(3), rep
 call and getting the same answer — every further step would cost a
 full prompt and change nothing.
 
-Defaults: `stepCount(20)`, `outputRetries(3)`. No default duration or
-token cap — v1's 60-second default was overridden at every call site,
-which is what a wrong default looks like.
+Defaults: `stepCount(20)`, `outputRetries(3)`. There is no default
+duration or token cap: the right one depends on the agent.
 
 ---
 
 ## 5. Context — producers
 
-The v1 producer insight was right — context comes from PRODUCERS,
-and how a producer constructs its content is irrelevant. v1 failed on
-machinery (priorities, state, no per-invocation data); the machinery
-is deleted, the concept and the name stay:
+Context comes from PRODUCERS, and how a producer constructs its
+content is irrelevant to cortex:
 
 ```ts
 // What enters context: one system chunk, several (a producer can emit a
@@ -371,12 +353,11 @@ that is how knowledge drifts.
   hook instead of a rules engine.
 - `input` is `string | Message[] | unknown` (non-message values are
   JSON-stringified into the user turn). Multi-turn history is
-  caller-owned and arrives as `Message[]` — ray's transcript becomes
-  the supported path instead of a workaround.
+  caller-owned and arrives as `Message[]`.
 - Compaction (summarize-when-near-limit) is a future single hook on
-  the transcript (§15), not a v1 pipeline.
+  the transcript (§12).
 
-**Preview survives, better.** `await agent.preview(input, { deps })`
+**Preview.** `await agent.preview(input, { deps })`
 returns the exact assembled messages, the resolved tool list
 (including `respond` and its actual params), the resolved strategy,
 and a token estimate — no model call. Anything you can't explain in
@@ -407,8 +388,7 @@ type StopCondition = (s: RunProgress) => StopVerdict;   // { stop: StopReason; m
 ```
 
 - **Gates run before execution.** A deny reaches the model as a tool
-  error; the run continues. (v1 evaluated rules after the observation
-  — a rule could never stop the call that tripped it.)
+  error; the run continues.
 - **Policy sugar** covers the declarative 80%:
 
   ```ts
@@ -489,10 +469,7 @@ the whole tree. No event carries usage: the run's total is
 whole ledger.
 
 Process-level watching is the manifold's tap: `onRun(run => …)` hands
-you every run created through it. That is the one legitimate job the
-v1 bus had, kept, without the bus. (Precedent: AutoGen v0.4 built the
-bus-first agent substrate; Microsoft retired it within a year for
-plain awaited runs with typed-edge composition.)
+you every run created through it.
 
 ---
 
@@ -515,11 +492,8 @@ const asToolDef = manifold.asTool('vex.query', { description });
 ```
 
 - `agent.run()` standalone and `manifold.run()` are the same
-  function; the manifold merges defaults. There is no
-  `runAgentStandalone`.
+  function; the manifold merges defaults.
 - Agents may bind their own `llm`; the manifold's is the fallback.
-  (The architect's GLM-reasoning / Groq-support split becomes
-  configuration.)
 - `asTool(agent, { description?, select? })` wraps an agent as an
   ordinary `ToolDefinition`. Default result mapping: envelope `data`
   if present, else `response`; `select` overrides. Child events
@@ -531,7 +505,7 @@ const asToolDef = manifold.asTool('vex.query', { description });
 
 ## 9. Errors
 
-Same two principles as v1, smaller taxonomy:
+Two principles:
 
 1. **Programmer errors throw** at definition/registration time:
    duplicate ids, malformed configs.
@@ -540,7 +514,7 @@ Same two principles as v1, smaller taxonomy:
 
 ```ts
 type CortexError = {
-  code: 'model_call_failed' | 'output_invalid' | 'stopped' | 'aborted' | 'unknown';
+  code: 'model_call_failed' | 'stopped' | 'aborted' | 'unknown';
   stop?: StopReason;   // when code === 'stopped':
                        // 'steps' | 'tokens' | 'duration' | 'output_retries' | 'repeated_calls' | 'custom'
   message: string;
@@ -566,7 +540,7 @@ dependency and powers
 progressively-typed envelopes — a chat `response` string streams
 token-ish while it forms inside the JSON, and a Nova screen in `data`
 becomes renderable before the run ends. The `retry` event resets
-partial-output state, same contract as v1's `cortex.agent.retry`.
+partial-output state.
 
 ---
 
@@ -575,7 +549,7 @@ partial-output state, same contract as v1's `cortex.agent.retry`.
 ```ts
 // definition
 defineAgent<TData, TDeps>(config): AgentDefinition<TData, TDeps>
-defineTool(config): ToolDefinition                     // v1 shape, kept
+defineTool(config): ToolDefinition
 schemaDoc(schema, opts?): string
 
 // execution
@@ -633,55 +607,7 @@ DEFAULT_STOP_CONDITIONS   // [stepCount(20), outputRetries(3)]
 
 ---
 
-## 12. Signal changes this design requires
-
-Items 1–3 are built; the text below is the requirement as it was
-written. The tokenizer in item 4 has not landed.
-
-1. **`stepStream` emits `tool-call-delta`** — `{ index, id?, name?,
-   argsText }` fragments as function args stream. The SSE chunks
-   already contain them; the adapter currently drops them. This is
-   the enabler for `respond`-strategy streaming and solid, and is
-   built first.
-2. **`StepRequest.responseFormat`** passthrough (json_schema /
-   json_object) for the `native` strategy.
-3. **Capabilities truth.** Groq `nativeTools: true` (stale since the
-   registry was written; ray proves it daily). New capability:
-   `toolsWithStructuredOutput: boolean` — encodes the
-   can't-combine-format-and-tools constraint that shaped §3.
-4. Later, not blocking: signal's own `complete()` tool loop can slim
-   once cortex is the loop owner; real tokenizer behind `count()`.
-
----
-
-## 13. What v2 deletes from v1
-
-| Deleted | Why |
-|---|---|
-| Event bus, topics, wildcard matching, typed-topic | substrate carried no load; per-run event streams + `onRun` cover the real uses |
-| Rules engine (watch/when/then, accumulators, effects) | underpowered (counter thresholds), broken (global un-reset state, dead `call`, `deny`-all-forever, duplicating `inject`), post-hoc by construction; gates + `prepareStep` replace it |
-| Plan mode: ActionPlan schema, plan executor, node handlers, tick loop | ~830 lines duplicating what the tool loop does, fed by fragile text parse; delegation is `asTool`; revisit as a todo/recitation tool if ever needed (§15) |
-| Producer pipeline: priorities, eviction, compressors, token modes, producer state, stores | fought its consumers (no deps param), features unreachable or fake (`exact` mode ≡ fuzzy, per-producer compress unreachable, stateful producers had no read path) |
-| Manifold lifecycle (`start`/`stop`/`drain`), ledger object, state store, event log | decorative or folded into run meta/events |
-| `runAgentStandalone` | `agent.run()` is the standalone path |
-| Full-loop validation retries | in-loop corrections (§3.1) |
-
----
-
-## 14. Plan mode, revisited later — the record
-
-v1 bet on model-emitted ActionPlans executed by a runtime. The field
-data: BabyAGI (the pattern's origin) is archived; AutoGPT pivoted
-away; every mainstream SDK (OpenAI Agents, Vercel, Pydantic AI,
-Mastra) ships a native tool loop with code-first composition; the
-survivors of "planning" are recitation todo-lists the model itself
-maintains in-loop (Manus todo.md, Claude Code TodoWrite). If explicit
-planning returns to cortex it returns as that: a small todo tool plus
-a context entry, on top of the loop — not an interpreter under it.
-
----
-
-## 15. Future work (known, deferred)
+## 12. Future work (known, deferred)
 
 - **Compaction** — one hook: summarize the transcript when a token
   threshold nears, keep the prefix stable. Field-standard; not needed
@@ -695,14 +621,13 @@ a context entry, on top of the loop — not an interpreter under it.
 - **Exact token counting** — behind `signal.count()` when a real
   tokenizer lands.
 - **`respond` vs `emit` A/B** on the big-DSL agents (prism mapping,
-  nova layout, architect). Settled by RULE, not by measurement
-  (2026-09-24): their schemas are too large for enforcing respond
-  params, so `auto` resolves them to `emit` everywhere. The quality
-  comparison was never run.
+  nova layout). `auto` resolves them to `emit` by rule — their
+  schemas are too large for enforcing respond params — and the two
+  have not been compared on output quality.
 
 ---
 
-## 16. Source layout
+## 13. Source layout
 
 ```
 src/
@@ -716,7 +641,8 @@ src/
 │
 ├── agent/
 │   ├── define-agent.ts
-│   ├── run.ts                    # RunHandle, resumeRun, prefix assembly
+│   ├── run.ts                    # RunHandle, resumeRun
+│   ├── prefix.ts                 # transport resolution and prefix assembly, shared with preview
 │   └── preview.ts
 │
 ├── loop/

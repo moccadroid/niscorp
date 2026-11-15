@@ -26,26 +26,26 @@ import { z } from 'zod';
 import { createSignal } from '@niscorp/signal';
 import { defineAgent, defineTool } from '@niscorp/cortex';
 
-const calculator = defineTool({
-  id: 'calculator',
-  name: 'calculator',
-  description: 'Evaluates a simple arithmetic expression.',
-  input: z.object({ expression: z.string() }),
-  execute: ({ expression }) => new Function(`return (${expression})`)(),
+const add = defineTool({
+  id: 'add',
+  name: 'add',
+  description: 'Adds a list of numbers.',
+  input: z.object({ numbers: z.array(z.number()) }),
+  execute: ({ numbers }) => numbers.reduce((sum, n) => sum + n, 0),
 });
 
 const calcAgent = defineAgent({
   id: 'calc',
   description: 'Arithmetic with a tool.',
-  instructions: 'Use the calculator tool, then give the answer.',
-  tools: [calculator],
+  instructions: 'Use the add tool, then give the answer.',
+  tools: [add],
   output: { schema: z.object({ answer: z.number() }) },
 });
 
 const llm = createSignal('groq'); // qwen/qwen3.8-27b — the registry default
 
-const result = await calcAgent.run('What is (2 + 3) * 7 - 6?', { llm }).result;
-if (result.ok) console.log(result.output.data.answer); // 29
+const result = await calcAgent.run('What is 12 + 7 + 23?', { llm }).result;
+if (result.ok) console.log(result.output.data.answer); // 42
 else console.error(result.error.message); // a run that fails returns its reason; it does not throw
 ```
 
@@ -213,8 +213,7 @@ const result = await run.result;   // the no-streaming opt-out
   is best-effort: a run emits none when Solid cannot follow the
   schema or the text, and the run's result is validated on its own
   either way.
-- `retry` resets partial-output state (same contract consumers had
-  in v1). Its `kind` says what is retried: `output` — an envelope
+- `retry` resets partial-output state. Its `kind` says what is retried: `output` — an envelope
   arrived and was refused; `termination` — the step ended with no
   envelope in it; `provider` — the provider rejected the model's
   attempt on its side. Only `output` counts against `outputRetries`,
@@ -332,7 +331,7 @@ conditions return:
 
 ```ts
 type CortexError = {
-  code: 'model_call_failed' | 'output_invalid' | 'stopped' | 'aborted' | 'unknown';
+  code: 'model_call_failed' | 'stopped' | 'aborted' | 'unknown';
   stop?: 'steps' | 'tokens' | 'duration' | 'output_retries' | 'repeated_calls' | 'custom';
   message: string;
   runId: string;
