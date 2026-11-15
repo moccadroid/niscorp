@@ -2160,10 +2160,10 @@ server.nudge('usr_ada', 'notes-changed');
   - One pass at a time: a pass asks about every connection in turn, and one
     that is due while another is still asking is skipped. A slow verifier is
     not asked more the slower it gets. A pass waits for an answer until the
-    next pass is due; one not in by then is logged as one that could not be
-    asked, the connection stays, and it is not asked again until that answer
-    comes. A verifier that never answers for one token leaves that one
-    connection unchecked, and every other is still asked.
+    next pass is due, then goes on to the next connection; an answer that comes
+    later is acted on when it comes (a `null` closes), and that connection is
+    not asked again until it has come. A verifier that never answers for one
+    token leaves that one connection unchecked, and every other is still asked.
   - Without this the socket was the asymmetry: the HTTP surfaces re-ask on
     every request, so an expired credential left the socket open and rendering
     while every endpoint the server shell called came back 401 — a live

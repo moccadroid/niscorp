@@ -33,22 +33,30 @@ export const createRevalidation = (config: Pick<SocketConfig, 'session' | 'reval
     }
   };
 
-  // A question still out is not asked again: a verifier that never answers is asked once for each connection.
+  // A connection whose question is still out is not asked again: a verifier that never answers is asked once for each.
   const asking = new Set<Connection>();
 
-  // An answer not in by the time the next pass is due is one the pass does not wait for.
-  const answerOf = async (connection: Connection, token: string): Promise<string | null> => {
+  const question = async (connection: Connection, credential: { token: string; principal: string }): Promise<void> => {
     asking.add(connection);
-    const question = (async () => config.session(token))().finally(() => asking.delete(connection));
-    let late: ReturnType<typeof setTimeout> | undefined;
-    const waited = new Promise<never>((_resolve, reject) => {
-      late = setTimeout(() => reject(new Error(`the session verifier did not answer within ${revalidateMs} ms`)), revalidateMs);
-      late.unref?.();
+    try {
+      const resolved = await config.session(credential.token);
+      if (resolved !== credential.principal && live.has(connection)) expire(connection);
+    } finally {
+      asking.delete(connection);
+    }
+  };
+
+  // A pass waits for an answer until the next pass is due. One that comes later is acted on when it comes.
+  const answeredInTime = async (asked: Promise<void>): Promise<boolean> => {
+    let due: ReturnType<typeof setTimeout> | undefined;
+    const passDue = new Promise<false>((resolve) => {
+      due = setTimeout(() => resolve(false), revalidateMs);
+      due.unref?.();
     });
     try {
-      return await Promise.race([question, waited]);
+      return await Promise.race([asked.then(() => true), passDue]);
     } finally {
-      clearTimeout(late);
+      clearTimeout(due);
     }
   };
 
@@ -58,18 +66,16 @@ export const createRevalidation = (config: Pick<SocketConfig, 'session' | 'reval
     for (const [connection, credential] of [...live]) {
       if (credential === null || asking.has(connection)) continue;
       asked += 1;
-      let resolved: string | null;
+      const answer = question(connection, credential);
       try {
-        resolved = await answerOf(connection, credential.token);
+        if (!(await answeredInTime(answer))) {
+          answer.catch((error: unknown) => console.error('[moss/socket] the session verifier could not be asked about a connection after its pass went on. It stays open and is asked again:', error));
+        }
       } catch (error) {
         // An unreachable verifier is not evidence that a session ended: the
         // connection stays, and is asked about again next pass.
         unanswered.push(error);
-        continue;
       }
-      if (resolved === credential.principal) continue;
-      if (!live.has(connection)) continue;
-      expire(connection);
     }
     if (unanswered.length > 0) {
       console.error(`[moss/socket] the session verifier could not be asked about ${unanswered.length} of ${asked} connection(s). They stay open and are asked again:`, unanswered[0]);

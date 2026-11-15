@@ -599,6 +599,28 @@ describe('socket — revalidating a live connection', () => {
     }
   });
 
+  it('an answer that comes after the next pass was due is acted on when it comes', async () => {
+    vi.useFakeTimers();
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      let slow = false;
+      const session: SocketConfig['session'] = (token) =>
+        slow ? new Promise<string | null>((answer) => setTimeout(() => answer(null), 1500)) : token === 'good' ? 'usr_1' : null;
+      const accept = createSocket(ctxWith({ session, revalidateMs: 1000 }));
+      const conn = new FakeConnection();
+      await accept(SOCKET, conn.offering('good'));
+      slow = true;
+
+      await vi.advanceTimersByTimeAsync(2500);
+      expect(conn.closed?.code).toBe(CLOSE_INVALID_TOKEN);
+      expect(logged).not.toHaveBeenCalled();
+      accept.stop();
+    } finally {
+      logged.mockRestore();
+      vi.useRealTimers();
+    }
+  });
+
   it('a verifier that cannot be asked is said in the log, once for a pass', async () => {
     vi.useFakeTimers();
     const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
