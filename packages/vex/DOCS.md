@@ -182,12 +182,11 @@ type QueryEngineConfig = {
 - `createPostgresAdapter({ pool, exclude })` names tables the adapter never
   reports: `introspect()` leaves them out. It is for tables the host owns that
   are not application data, such as a migration journal.
-- `createPostgresAdapter({ pool, schema })` reads the tables of that Postgres
-  schema: `introspect()` lists them, and every query names its tables in it
-  (`app.notes`). Without `schema`, `introspect()` lists `public` and a query
-  names its tables bare, so they resolve through the connection's
-  `search_path`. Mutations name their tables without a schema, so they always
-  resolve through the `search_path`.
+- `createPostgresAdapter({ pool, schema })` makes `introspect()` list the tables
+  of that Postgres schema (`public` without it). Queries and mutations name
+  their tables without a schema, so they resolve through the connection's
+  `search_path`: with `schema`, set the `search_path` to that schema too, or
+  reads and writes reach the tables of another schema.
 - `config.statementTimeoutMs` is enforced by the database (`statement_timeout`),
   set up at `introspect()`. A database that cannot enforce it (PGlite) runs
   reads unbounded and the engine warns each time `introspect()` runs. A `PgPool`

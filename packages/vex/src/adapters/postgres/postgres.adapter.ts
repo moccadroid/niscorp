@@ -61,7 +61,7 @@ export const createPostgresAdapter = (config: PostgresAdapterConfig): DatabaseAd
     });
 
   const compile = (resolved: ResolvedQuery): CompiledQuery =>
-    compileQuery(resolved, config.schema);
+    compileQuery(resolved);
 
   let perStatementMs: number | undefined;
   const limitReads = async (ms: number): Promise<TimeoutEnforcement> => {
