@@ -370,7 +370,11 @@ cancellation token.
 
 **Dedupe is keyed on `(kind, entity, name, dedupeKey)`.** `entity` is in the key
 because two sources over different tables whose event ids happen to agree are
-not duplicates of each other, and without it one of them loses its rows.
+not duplicates of each other, and without it one of them loses its rows. The
+identity `ingest` is given is not in the key: a `dedupeKey` is unique across
+the whole ledger, so two tenants ingesting the same event id under one kind,
+entity and name keep only the first. A host whose keys are unique only within
+a tenant puts the tenant in the key (`'tenant-a:evt_1'`).
 
 ---
 
@@ -880,7 +884,7 @@ if (result.ok && isDraft(result.output.data)) {
 | `unguarded_cycle` | `load` found a loop on which no reflex has a `select` or a `when` |
 | `unknown_effect` | `load` found a reflex naming an effect that is not registered |
 | `no_transform` | in `TideErrorCode`; not raised — `transform` is a required config field |
-| `duplicate_unit` | a selection's `unitKey` was not unique, or `maxFanOut` was exceeded |
+| `duplicate_unit` | a selection's `unitKey` was not unique, or `maxFanOut` was exceeded. Never thrown to a caller: the run is skipped with the message as its `note`, and `preview` answers it as `reason` |
 | `store` | a selection exists but no `select` seam is wired |
 
 `load` checks the whole graph in one pass. When it refuses, `details.errors`

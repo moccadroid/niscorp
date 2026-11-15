@@ -13,3 +13,5 @@ An `advance` before the first `load` no longer skips pending runs as "reflex is 
 `advance` takes an optional `clock`, and the driver passes its own `now`. Given one, each task's lease starts again just before its effect, and the effect runs only if the task is still this claim's: a task late in a slow pass, whose lease had run out and which another instance had claimed again, no longer runs twice. That is one more write per task. Without `clock`, nothing changes.
 
 `load` warns about a one-shot clock whose date does not exist (`2026-02-30`), naming the day it fires on (2026-03-02). The reflex loads and fires as before.
+
+The docs say that a `dedupeKey` is unique across the whole ledger and not per identity, that `duplicate_unit` is never thrown to a caller, that a spring-forward time shifts by the length of the gap, and what `sweep`'s `tasks` horizon removes.

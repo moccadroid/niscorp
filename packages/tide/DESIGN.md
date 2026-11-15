@@ -439,9 +439,10 @@ archaeology project.
 **Retention is a policy, not an accident.** The ledger grows without bound unless told
 otherwise; `sweep(now, { facts?, runs?, tasks? })` deletes settled rows past a horizon,
 and the default is *keep forever*, which is the only honest default when the rows are
-billing history. Deleting a run takes its tasks with it — **⟲** independent horizons
-per table meant sweeping tasks could destroy the `UNIQUE(runId, unit)` row that *is*
-the "this unit already ran" record, and a restore would then re-charge the invoice.
+billing history. Deleting a run takes its tasks with it. The `tasks` horizon removes
+tasks settled before it whatever their run, and with them the record of a unit's
+output. It never causes a second run: a run never fans out again, and `retry()` needs
+the task it reopens.
 
 ### Execution semantics
 
@@ -609,9 +610,10 @@ rather than carefully avoided. The calendar edges are decided, not discovered:
 
 - `every: 'month', on: 31` **clamps to the last day of the month** — February bills on
   the 28th (29th), because "skip February" is never what a billing rule means.
-- A local time erased by spring-forward resolves to the **first valid instant after**;
-  a local time that fall-back makes ambiguous takes the **first occurrence**. The key
-  is identical either way.
+- A local time erased by spring-forward is **shifted forward by the length of the gap**
+  (Vienna 02:30 → 03:30), as Temporal's `disambiguation: 'compatible'`; a local time
+  that fall-back makes ambiguous takes the **first occurrence**. The key is identical
+  either way.
 - Timezone resolution uses the platform's IANA data (`Intl`), keeping the dependency
   count at zero. "03:00 in Vienna" and "03:00 in Denver" are both honest.
 
