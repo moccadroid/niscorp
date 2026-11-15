@@ -9,3 +9,5 @@ The prism node chooser lists every prism op under a category, taken from prism's
 Two recursive documents in one plugin each render their own nested levels: a recursive template is named after its action (`loom:tree:<action id>:<n>`) instead of `loom:tree:<n>`.
 
 A document with a top-level field named `_errors` keeps that field in the editor: it is no longer stripped, overwritten by the error tree and reported missing.
+
+A stored document whose root is not an object (a list, a scalar, a tuple, a union) opens as it was stored even when its schema refuses it, as an object document already did; validation flags it. It used to open the schema's defaults, which a host saving on change wrote over the stored document.

@@ -233,6 +233,13 @@ to a single control, which has no document root to bind to. The controller wraps
 such a document under an internal key so its control has a real path, and unwraps
 it before publishing — so the wrapping never reaches a plugin or a consumer.
 
+A seed opens as it was stored, whatever its schema says of it, and validation
+flags what is wrong after the first edit: `<LoomEditor>` reports the documents on
+mount, so a host that saves on every change would otherwise overwrite a stored
+document with the schema's defaults before anybody touched it. The one seed that
+opens the defaults is one that is not an object, for a document whose root is an
+object: a form of fields has no place to show it.
+
 ### Plugins
 
 A plugin's core descriptor is small:

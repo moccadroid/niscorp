@@ -97,7 +97,7 @@ export const createLoomEditor = (config: LoomEditorConfig): LoomEditor => {
           widgets: plugin.widgets ?? [],
         });
         for (const [id, node] of Object.entries(built.layouts)) store.set(id, node);
-        const seedsRoot = wrap && seed !== undefined && seed !== null && !isRecord(seed) && document.safeParse(seed).success;
+        const seedsRoot = wrap && seed !== undefined && seed !== null && !isRecord(seed);
         action = seedsRoot ? { ...built.action, data: { [ROOT_KEY]: seed } } : built.action;
       }
       shell.registerAction(action);
