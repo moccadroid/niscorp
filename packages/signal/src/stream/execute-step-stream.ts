@@ -84,7 +84,10 @@ async function* streamStep(
   try {
   deltas = config.adapter.chatStream(providerRequest, abortSignal ? { signal: abortSignal } : undefined)[Symbol.asyncIterator]();
   while (true) {
-    const next = await settledOrAborted(deltas.next(), abortSignal);
+    const next = await settledOrAborted(deltas.next(), abortSignal).catch((error: unknown) => {
+      drained = true;
+      throw error;
+    });
     if (next.aborted) {
       abandoned = true;
       return;
@@ -128,7 +131,6 @@ async function* streamStep(
     }
   }
   } catch (error) {
-    drained = true;
     // By the signal's state, not the error's type: the adapter wraps every iteration error
     // in a SignalError, so no AbortError arrives here.
     if (abortSignal?.aborted) return;

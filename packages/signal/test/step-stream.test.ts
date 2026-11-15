@@ -341,3 +341,34 @@ describe('abort while the provider is silent', () => {
     expect(events.find((e) => e.type === 'done')).toBeUndefined();
   });
 });
+
+describe('stepStream — the provider stream is closed as `for await` closes it', () => {
+  const closingAdapter = (closed: string[]): ChatAdapter => ({
+    ...createMockAdapter([]),
+    chatStream: async function* () {
+      try {
+        yield { type: 'text', text: 'a' };
+        yield { type: 'text', text: 'b' };
+      } finally {
+        closed.push('closed');
+      }
+    },
+  });
+  const request = { messages: [{ role: 'user' as const, content: 'hi' }] };
+
+  it('when the reader stops early', async () => {
+    const closed: string[] = [];
+    const steps = executeStepStream({ adapter: closingAdapter(closed), model: 'test', request });
+    await steps.next();
+    await steps.return(undefined);
+    expect(closed).toEqual(['closed']);
+  });
+
+  it('when an error is thrown into the stream', async () => {
+    const closed: string[] = [];
+    const steps = executeStepStream({ adapter: closingAdapter(closed), model: 'test', request });
+    await steps.next();
+    await expect(steps.throw(new Error('stop reading'))).rejects.toThrow('stop reading');
+    expect(closed).toEqual(['closed']);
+  });
+});
