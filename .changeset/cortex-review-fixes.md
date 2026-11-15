@@ -9,3 +9,5 @@ Two readers iterating `run.events` at the same time (for example the manifold's 
 An approval answered (or a run aborted) before `policy.approvalTimeoutMs` runs out no longer leaves its timer running, so a process does not stay alive until the timeout.
 
 A correction sent back to the model quotes the issues word for word: `$$`, `$&` and `$'` in them were rewritten before.
+
+The README's quick example no longer runs model-written text with `new Function`, and the docs say that a model swapped in by `prepareStep` is sent the output strategy resolved for the run's own `llm`.

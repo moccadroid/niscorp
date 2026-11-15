@@ -274,6 +274,10 @@ Rules the loop lives by:
   and emits no deltas or partials (§11); `await run.result` is the
   consumer's opt-out. Either call is handed the run's abort signal,
   and an abort during it ends the run `aborted`.
+- **The transport is resolved once, from the run's `llm`.** A
+  `prepareStep` that swaps `llm` sends that step the same transport —
+  its `response_format`, its `respond` tool — so the model swapped in
+  must take it.
 
 Bounds are `stopWhen` predicates — one vocabulary for every limit:
 

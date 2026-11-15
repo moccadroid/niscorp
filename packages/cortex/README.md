@@ -153,6 +153,11 @@ the list.
 and a tool whose name is not in it is not offered on that step. The
 `respond` tool cannot be masked.
 
+`prepareStep`'s `llm` replaces the model for that step. The step is
+still sent the output strategy resolved for the run's own `llm` — its
+`response_format` under `native`, its `respond` tool — so the model
+swapped in must take that strategy.
+
 `transport: 'step'` calls the model without streaming: the run emits
 no `model-delta`, `output-delta` or `output-partial`. It is for a
 provider and model pair that assembles tool-call arguments more
