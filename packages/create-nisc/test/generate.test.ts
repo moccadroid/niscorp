@@ -165,6 +165,28 @@ describe('generate — a folder that already holds something', () => {
   });
 });
 
+describe('generate — a folder where the app reads or writes a file', () => {
+  it('.gitignore, which it adds to: nothing is written, and it says which', () => {
+    const dir = join(scratch, 'ignore-folder');
+    mkdirSync(join(dir, '.gitignore'), { recursive: true });
+    expect(() => generate({ dir, name: 'ignore-folder', picks: completed(catalog, {}), versions: SET, today: TODAY })).toThrow('already has a file a new app would write — nothing was written:\n  .gitignore (a folder, where the app needs a file)\n');
+    expect(readdirSync(dir)).toEqual(['.gitignore']);
+  });
+
+  it('.env, for an app that asks for keys: nothing is written, and it says which', () => {
+    const dir = join(scratch, 'env-folder');
+    mkdirSync(join(dir, '.env'), { recursive: true });
+    expect(() => generate({ dir, name: 'env-folder', picks: completed(catalog, { kind: 'model-first' }), versions: SET, today: TODAY })).toThrow('already has a file a new app would write — nothing was written:\n  .env (a folder, where the app needs a file)\n');
+    expect(readdirSync(dir)).toEqual(['.env']);
+  });
+
+  it('.env, for an app that asks for no keys, is not read, and is no reason to refuse', () => {
+    const dir = join(scratch, 'env-folder-classic');
+    mkdirSync(join(dir, '.env'), { recursive: true });
+    expect(generate({ dir, name: 'env-folder-classic', picks: completed(catalog, {}), versions: SET, today: TODAY }).files).toContain('package.json');
+  });
+});
+
 describe('generate — what it refuses, before writing anything', () => {
   it('a name npm would not take', () => {
     const dir = join(scratch, 'Bad Name');

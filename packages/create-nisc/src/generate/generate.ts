@@ -193,8 +193,10 @@ export const generate = (options: CreateOptions): Created => {
     if (file !== undefined) return [`${relative(options.dir, file).split(sep).join('/')} (a file, where the app needs a folder)`];
     return !KEEP_THEIRS.has(rel) && there(rel) ? [rel] : [];
   };
+  const folderInTheWay = (rel: string): string[] => (there(rel) && statSync(join(options.dir, rel)).isDirectory() ? [`${rel} (a folder, where the app needs a file)`] : []);
+  const addedTo = ['.gitignore', ...(envs !== undefined ? ['.env'] : [])];
   const kept = [...planned.keys()].filter((rel) => KEEP_THEIRS.has(rel) && there(rel));
-  const collisions = [...new Set([...planned.keys()].flatMap(inTheWay))].sort();
+  const collisions = [...new Set([...[...planned.keys()].flatMap(inTheWay), ...addedTo.flatMap(folderInTheWay)])].sort();
   if (collisions.length > 0) {
     throw new Error(
       `create-nisc: ${options.dir} already has ${collisions.length === 1 ? 'a file' : 'files'} a new app would write — nothing was written:\n  ${collisions.join('\n  ')}\nMake the app in an empty folder, or in a subfolder of this one.`,
