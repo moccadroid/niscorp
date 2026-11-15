@@ -1,6 +1,7 @@
 import { useState, type CSSProperties, type FC, type ReactNode } from 'react';
 import type { NovaComponent } from '@niscorp/nova/adapters/react';
-import { NodeSchema } from '@niscorp/prism';
+import { NodeSchema, OP_KEYS } from '@niscorp/prism';
+import { PRISM_EXAMPLES, PRISM_EXAMPLE_GROUPS } from '@niscorp/prism/examples';
 import { parse, buildDocument } from '@compile/parse';
 import type { Field, Variant } from '@compile/types';
 import { useModelWrite } from '@react/hooks/model.js';
@@ -9,20 +10,12 @@ import { ActionMenu, MenuItem, SubMenu } from '@react/kit/menu.js';
 
 type NodeKind = { id: string; label: string; category: string; variant: Variant };
 
-const CATEGORY_ORDER = ['Value', 'Core', 'Array', 'Math', 'String', 'Predicate', 'Logic', 'Structure', 'Object', 'Time', 'Sugar'];
-
-const OP_CATEGORY: Record<string, string> = {
-  $ref: 'Core', $const: 'Core', $var: 'Core', $get: 'Core', $with: 'Core',
-  $map: 'Array', $filter: 'Array', $reduce: 'Array', $slice: 'Array', $flatten: 'Array', $unique: 'Array', $sortBy: 'Array',
-  $add: 'Math', $sub: 'Math', $mul: 'Math', $div: 'Math', $mod: 'Math', $round: 'Math', $toNumber: 'Math',
-  $join: 'String', $toString: 'String', $interpolate: 'String', $trim: 'String', $lower: 'String', $upper: 'String', $split: 'String', $replace: 'String',
-  $eq: 'Predicate', $neq: 'Predicate', $gt: 'Predicate', $gte: 'Predicate', $lt: 'Predicate', $lte: 'Predicate', $empty: 'Predicate', $startsWith: 'Predicate', $endsWith: 'Predicate', $contains: 'Predicate',
-  $not: 'Logic', $and: 'Logic', $or: 'Logic',
-  $merge: 'Structure', $coalesce: 'Structure', $case: 'Structure', $entriesOf: 'Structure', $keyBy: 'Structure', $groupBy: 'Structure',
-  $keys: 'Object', $values: 'Object', $fromEntries: 'Object', $pick: 'Object', $omit: 'Object', $type: 'Object', $length: 'Object',
-  $date: 'Time', $dateAdd: 'Time', $dateDiff: 'Time',
-  $sum: 'Sugar', $avg: 'Sugar', $count: 'Sugar', $min: 'Sugar', $max: 'Sugar', $pluck: 'Sugar', $take: 'Sugar', $drop: 'Sugar', $match: 'Sugar', $flatMap: 'Sugar',
-};
+const GROUP_TITLE = new Map<string, string>(PRISM_EXAMPLE_GROUPS.map((group) => [group.id, group.title]));
+const OP_CATEGORY = new Map<string, string>(
+  PRISM_EXAMPLES.flatMap((example) => (example.op === undefined ? [] : [[example.op, GROUP_TITLE.get(example.group) ?? example.group]])),
+);
+const CATEGORY_ORDER = ['Value', ...GROUP_TITLE.values(), 'Other'];
+const OPS: ReadonlySet<string> = new Set(OP_KEYS);
 
 const TYPE_LABEL: Record<string, string> = { string: 'string', number: 'number', boolean: 'boolean', null: 'null', array: 'array of nodes' };
 
@@ -30,7 +23,7 @@ const NODE_IR = parse(NodeSchema);
 const KINDS: NodeKind[] = (NODE_IR.kind === 'union' ? NODE_IR.variants : []).map((variant) => {
   if (variant.pattern.kind === 'key') {
     const id = variant.pattern.key;
-    return { id, label: id, category: OP_CATEGORY[id] ?? 'Other', variant };
+    return { id, label: id, category: OP_CATEGORY.get(id) ?? 'Other', variant };
   }
   if (variant.pattern.kind === 'type') {
     const id = variant.pattern.type;
@@ -39,7 +32,6 @@ const KINDS: NodeKind[] = (NODE_IR.kind === 'union' ? NODE_IR.variants : []).map
   return { id: 'template', label: 'object (template)', category: 'Value', variant };
 });
 const BY_ID = new Map(KINDS.map((kind) => [kind.id, kind]));
-const OP_KEYS = new Set(KINDS.filter((kind) => kind.category !== 'Value').map((kind) => kind.id));
 
 const isObj = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -52,7 +44,7 @@ const kindOf = (value: unknown): string => {
   if (value === null || value === undefined) return 'null';
   const type = typeof value;
   if (type === 'string' || type === 'number' || type === 'boolean') return type;
-  if (type === 'object') return Object.keys(value as object).find((key) => OP_KEYS.has(key)) ?? 'template';
+  if (type === 'object') return Object.keys(value as object).find((key) => OPS.has(key)) ?? 'template';
   return 'template';
 };
 
