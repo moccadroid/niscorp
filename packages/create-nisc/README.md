@@ -136,7 +136,7 @@ templates/
 | `default` | the answer taken when nobody gives one: exactly one per question |
 | `requires` | `{ question: item }` — what another question must be answered with; that question is then not asked |
 | `package` | a `package.json` fragment: fields, `scripts`, `dependencies`, `devDependencies` (`workspace:^` for a nisc package) |
-| `env` | the keys it asks for: `{ name, message, required? }`, or `{ choose, message, options: [{ value, label, keys? }] }` |
+| `env` | the keys it asks for: `{ name, message, required? }`, or `{ choose, message, options: [{ value, label, hint?, keys? }] }` |
 | `docs` | its lines in AGENTS.md and PLAN.md: `is`, `where`, `runs`, `decisions`, `answered`, `open`, `order` |
 | `with` | `{ <other item>: { package, env, docs } }` — added only when that other item is chosen too |
 
