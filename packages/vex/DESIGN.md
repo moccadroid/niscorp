@@ -790,7 +790,10 @@ byte for byte, so nothing a cache already holds under one has moved.
    checked against `ident` and quoted. Values from a request bind as parameters and never reach
    text at all. The name grammar (`identifier.schema.ts`) is checked three
    times — at parse, in the resolver for a DSL that skipped parsing, and by a
-   compiler that refuses any field position that did not resolve.
+   compiler that refuses any field position that did not resolve. With
+   `qualifyTables`, one more piece of text reaches a statement: the adapter's
+   `schema` option, set by the operator and never by a query, quoted before
+   each table name.
 
 2. **The LLM is injected, not embedded.** Making `generateDsl`/`mapToShape`
    plain hooks keeps the engine deterministic and testable without a model,
