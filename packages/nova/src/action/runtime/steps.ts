@@ -2,7 +2,7 @@ import { createScopeChain, resolve } from '@shared/bindings';
 import type { ExtraScopes, ScopeChain } from '@shared/bindings';
 import type { DataStore } from '@shared/data-store';
 import type { EventBus } from '@shared/event-bus';
-import { isObject } from '@shared/common';
+import { isObject, ownEntry } from '@shared/common';
 import type { MessageBus } from '@shared/message-bus';
 import { setPath } from '@shared/bindings/paths';
 import { applyMutations } from '../mutations';
@@ -123,7 +123,7 @@ const runCall = async (
   onError: Step[] | undefined,
   ctx: StepContext,
 ): Promise<void> => {
-  const raw = ctx.endpoints[callName];
+  const raw = ownEntry(ctx.endpoints, callName);
   if (raw === undefined) {
     await raiseUnknown(`unknown endpoint: ${callName}`, onError, ctx);
     return;
@@ -133,7 +133,7 @@ const runCall = async (
     const chain = createScopeChain(ctx.dataStore.get());
     const fn = String(resolve(raw.fn, chain, ctx.extras) ?? '');
     endpoint = { ...raw, fn };
-    if (ctx.functions[fn] === undefined) {
+    if (ownEntry(ctx.functions, fn) === undefined) {
       await raiseUnknown(`unknown function: ${fn}`, onError, ctx, new UnknownFunctionError(fn));
       return;
     }

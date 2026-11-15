@@ -1,4 +1,4 @@
-import { isArray, isObject } from '../shared/common';
+import { isArray, isObject, ownEntry } from '../shared/common';
 import { matcherFor } from './phrases';
 import { isPhrase } from './phrases';
 import type { PhraseKeys, Phrasebook } from './phrases';
@@ -36,11 +36,11 @@ export const passFor = (options: PassOptions | undefined): Pass | undefined => {
 
 export const swap = (value: string, where: string, pass: Pass): string => {
   if (!isPhrase(value)) return value;
-  const hit = pass.phrases[value];
+  const hit = ownEntry(pass.phrases, value);
   if (hit !== undefined) return hit;
   const trimmed = value.trim();
   if (trimmed !== value) {
-    const onTrimmed = pass.phrases[trimmed];
+    const onTrimmed = ownEntry(pass.phrases, trimmed);
     if (onTrimmed !== undefined) return value.replace(trimmed, onTrimmed);
   }
   pass.onMiss?.(trimmed, where);
@@ -52,7 +52,7 @@ const isPattern = (value: Record<string, unknown>): value is { phrase: string; s
 
 const fillPattern = (pattern: { phrase: string; slots: Record<string, unknown> }, where: string, pass: Pass): string =>
   swap(pattern.phrase, where, pass).replace(/\{([A-Za-z_][A-Za-z0-9_]*)\}/g, (hole, name: string) => {
-    const slot = pattern.slots[name];
+    const slot = ownEntry(pattern.slots, name);
     if (slot === undefined || slot === null) return hole;
     return typeof slot === 'string' && isPhrase(slot) ? swap(slot, `${where}.${name}`, pass) : String(slot);
   });

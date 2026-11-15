@@ -6,7 +6,7 @@ import type { Phrasebook } from '../i18n/phrases';
 import { createComponentRegistry, createLayoutStore, renderLayoutFromStore } from '../layout';
 import { createEventBus } from '../shared/event-bus';
 import { createMessageBus } from '../shared/message-bus';
-import type { Unsubscribe } from '../shared/common';
+import { ownEntry, type Unsubscribe } from '../shared/common';
 import {
   DefinitionValidationError,
   LifecycleError,
@@ -113,7 +113,7 @@ export const createShell = (config: ShellConfig): Shell => {
 
   const reconcilerOf = (cfg: CanvasConfig): Reconciler | undefined => {
     if (cfg.reconcile === undefined) return undefined;
-    const named = config.reconcilers !== undefined && Object.hasOwn(config.reconcilers, cfg.reconcile) ? config.reconcilers[cfg.reconcile] : undefined;
+    const named = ownEntry(config.reconcilers, cfg.reconcile);
     if (named !== undefined) return named;
     const message = `canvas "${cfg.id}" names the reconciler "${cfg.reconcile}", which the shell was not given`;
     throw new DefinitionValidationError(message, { failures: [{ id: cfg.id, issues: [{ code: 'custom', path: ['reconcile'], message, input: cfg.reconcile }] }] });
@@ -135,13 +135,13 @@ export const createShell = (config: ShellConfig): Shell => {
   const canvasOrder: string[] = config.canvases.map((cfg) => cfg.id);
   let canvasLayout = config.canvasLayout;
 
-  const definitions: Record<string, ActionDefinition | ActionFragment> = { ...config.actions, ...config.fragments };
+  const definitions = new Map<string, ActionDefinition | ActionFragment>([...Object.entries(config.actions), ...Object.entries(config.fragments ?? {})]);
   const actionOf = (actionId: string): ActionDefinition | undefined => {
-    const held = definitions[actionId];
+    const held = definitions.get(actionId);
     return held === undefined || isFragment(held) ? undefined : held;
   };
   const fragmentOf = (fragmentId: string): ActionFragment | undefined => {
-    const held = definitions[fragmentId];
+    const held = definitions.get(fragmentId);
     return held !== undefined && isFragment(held) ? held : undefined;
   };
 
@@ -203,16 +203,16 @@ export const createShell = (config: ShellConfig): Shell => {
     } else {
       validateActions({ [definition.id]: definition });
     }
-    const held = Object.hasOwn(definitions, definition.id) ? definitions[definition.id] : undefined;
+    const held = definitions.get(definition.id);
     if (held !== undefined && isFragment(held) !== isFragment(definition)) refuseSharedId(definition.id);
-    definitions[definition.id] = definition;
+    definitions.set(definition.id, definition);
   };
 
   const removeAction = (actionId: string): void => {
     guard();
-    const held = definitions[actionId];
+    const held = definitions.get(actionId);
     if (held === undefined) return;
-    delete definitions[actionId];
+    definitions.delete(actionId);
     // Nothing is mounted as a fragment: what was opened with one keeps the definition it was composed into.
     if (isFragment(held)) return;
     journal.forgetAction(actionId);

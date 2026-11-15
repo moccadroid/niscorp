@@ -1,4 +1,4 @@
-import { isArray, isObject } from '../shared/common';
+import { isArray, isObject, ownEntry } from '../shared/common';
 import type { ActionDefinition } from '../action';
 import type { LayoutNode } from '../layout';
 import { isPhrase, matcherFor } from './phrases';
@@ -170,4 +170,4 @@ export const harvestDefinitions = (
 export const missingFrom = (
   harvested: readonly HarvestedPhrase[],
   phrases: Readonly<Record<string, string>>,
-): HarvestedPhrase[] => harvested.filter((entry) => phrases[entry.phrase] === undefined);
+): HarvestedPhrase[] => harvested.filter((entry) => ownEntry(phrases, entry.phrase) === undefined);
