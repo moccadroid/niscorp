@@ -477,7 +477,7 @@ describe('the shell hosts — what each host is told', () => {
     }
   });
 
-  it('a sign-out forgets every session the principal holds, where the deployment keeps them', async () => {
+  it('a sign-out forgets every session the principal has, where the deployment keeps them', async () => {
     const forgotten: string[] = [];
     const sessions: FunctionSession[] = [];
     const hosts = buildShellHosts({

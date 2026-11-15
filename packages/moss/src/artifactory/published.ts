@@ -3,9 +3,9 @@ import type { SeedEntry, SeedMutation } from '@niscorp/vex';
 import { layoutMisfits, verifyManifest } from '../manifest';
 import type { KitComponents, ManifestCandidate, ManifestReport } from '../manifest';
 import { catalogOfGenerated, generatedInForce } from './generated';
-import type { Generated, GeneratedHeldTo } from './generated';
+import type { Generated, GeneratedChecks } from './generated';
 import { readsInForce, seedOf } from './reads';
-import type { ReadHeldTo, SavedRead } from './reads';
+import type { ReadChecks, SavedRead } from './reads';
 import type { SavedVersion } from './saves';
 
 type Actions = Readonly<Record<string, ActionDefinition>>;
@@ -28,7 +28,7 @@ export const drawableIn = (fragments: Readonly<Record<string, ActionFragment>>, 
 // One read of the rows answers every shell until it is dropped, and what it says
 // of one that is left out is said once for each read, not at every shell.
 export const createPublishedMemo = (): {
-  held: () => Promise<readonly SavedVersion[]> | undefined;
+  current: () => Promise<readonly SavedVersion[]> | undefined;
   keep: (read: Promise<readonly SavedVersion[]>) => void;
   drop: () => void;
   sayOnce: (line: string) => void;
@@ -36,7 +36,7 @@ export const createPublishedMemo = (): {
   let read: Promise<readonly SavedVersion[]> | undefined;
   let said = new Set<string>();
   return {
-    held: () => read,
+    current: () => read,
     keep: (promise) => {
       read = promise;
     },
@@ -55,11 +55,11 @@ export const createPublishedMemo = (): {
 export const hasDefaults = (defaults: Defaults): boolean =>
   Object.keys(defaults.actions).length > 0 || Object.keys(defaults.fragments).length > 0 || defaults.reads.size > 0;
 
-export type DefaultsHeldTo = {
+export type DefaultsChecks = {
   kit: KitComponents;
   entryOf: (fingerprint: string) => SeedEntry | SeedMutation | undefined;
   fingerprints: () => Iterable<string>;
-  reads: ReadHeldTo | undefined;
+  reads: ReadChecks | undefined;
   // The actions in force with nothing published laid over them.
   built: Actions;
   candidate: (actions: Actions, fragments: Readonly<Record<string, ActionFragment>>) => ManifestCandidate;
@@ -67,23 +67,23 @@ export type DefaultsHeldTo = {
 
 // What is published is checked as a person's generated artifacts are, and then as
 // a manifest. Whose policy a replay is under is the viewer's, at the replay, and
-// whose grants a call needs is every holder's: the manifest check reads them.
+// whose grants a call needs is those of every role that has it: the manifest check reads them.
 export const checkedDefaults = async (
   versions: readonly SavedVersion[],
-  heldTo: DefaultsHeldTo,
+  defaults: DefaultsChecks,
   whose: string | undefined,
 ): Promise<{ passed: Generated; reads: ReadonlyMap<string, SavedRead>; verified: ManifestReport }> => {
-  const reads = heldTo.reads === undefined ? new Map<string, SavedRead>() : await readsInForce(versions, heldTo.reads, whose);
-  const checks: GeneratedHeldTo = {
-    kit: heldTo.kit,
+  const reads = defaults.reads === undefined ? new Map<string, SavedRead>() : await readsInForce(versions, defaults.reads, whose);
+  const checks: GeneratedChecks = {
+    kit: defaults.kit,
     entryOf: (fingerprint) => {
       const read = reads.get(fingerprint);
-      return heldTo.entryOf(fingerprint) ?? (read === undefined ? undefined : seedOf(fingerprint, read));
+      return defaults.entryOf(fingerprint) ?? (read === undefined ? undefined : seedOf(fingerprint, read));
     },
-    replayable: async () => new Set([...heldTo.fingerprints(), ...reads.keys()]),
+    replayable: async () => new Set([...defaults.fingerprints(), ...reads.keys()]),
     mayCall: () => true,
-    catalog: () => [...Object.values(heldTo.built).map((action) => ({ id: action.id, input: action.input ?? {} })), ...catalogOfGenerated(versions)],
+    catalog: () => [...Object.values(defaults.built).map((action) => ({ id: action.id, input: action.input ?? {} })), ...catalogOfGenerated(versions)],
   };
   const passed = await generatedInForce(versions, checks, whose);
-  return { passed, reads, verified: verifyManifest(heldTo.candidate({ ...heldTo.built, ...passed.actions }, passed.fragments)) };
+  return { passed, reads, verified: verifyManifest(defaults.candidate({ ...defaults.built, ...passed.actions }, passed.fragments)) };
 };

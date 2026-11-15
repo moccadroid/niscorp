@@ -86,7 +86,7 @@ describe('a read vex wrote for a request, saved from a session', () => {
     expect(await running.cacheEntry('fp_written')).toBeUndefined();
   });
 
-  it('is answered as a query vex wrote is, held to vex’s limits: an entry the app ships is protected, and a saved read is not', async () => {
+  it('is answered as a query vex wrote is, checked against vex’s limits: an entry the app ships is protected, and a saved read is not', async () => {
     const { of, running } = await world();
     await of('ada').save([read('fp_written')]);
 

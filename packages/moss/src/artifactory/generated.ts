@@ -11,11 +11,11 @@ import type { SavedVersion } from './saves';
 
 export const generatedId = (): string => `${GENERATED_ID_PREFIX}${randomUUID()}`;
 
-export type GeneratedHeldTo = {
+export type GeneratedChecks = {
   kit: KitComponents;
   entryOf: (fingerprint: string) => SeedEntry | SeedMutation | undefined;
   replayable: () => Promise<ReadonlySet<string>>;
-  // The actions its owner holds, their own generated ones among them.
+  // The actions its owner has, their own generated ones among them.
   catalog: () => readonly AuditCatalogEntry[];
   mayCall: (name: string) => boolean;
 };
@@ -25,12 +25,12 @@ type Read<Body> = { body: Body } | { refusal: string };
 // No `{{`: a templated address is decided when it is called, and this is read before.
 const VEX_ROUTE = /^\/api\/(?:[A-Za-z0-9_-]+\/)?vex$/;
 
-const endpointRefusals = async (endpoints: ActionDefinition['endpoints'], heldTo: GeneratedHeldTo): Promise<string[]> => {
+const endpointRefusals = async (endpoints: ActionDefinition['endpoints'], checks: GeneratedChecks): Promise<string[]> => {
   const refusals: string[] = [];
   for (const [name, endpoint] of Object.entries(endpoints ?? {})) {
     if ('fn' in endpoint) {
       if (endpoint.fn.includes('{{')) refusals.push(`endpoint "${name}" names a function that is worked out when it is called, and what is generated names one written out`);
-      else if (!heldTo.mayCall(endpoint.fn)) refusals.push(`endpoint "${name}" calls the function "${endpoint.fn}", which its owner’s roles do not grant`);
+      else if (!checks.mayCall(endpoint.fn)) refusals.push(`endpoint "${name}" calls the function "${endpoint.fn}", which its owner’s roles do not grant`);
       continue;
     }
     if (endpoint.method !== 'POST' || !VEX_ROUTE.test(endpoint.url)) {
@@ -42,10 +42,10 @@ const endpointRefusals = async (endpoints: ActionDefinition['endpoints'], heldTo
       refusals.push(`endpoint "${name}" names no fingerprint`);
       continue;
     }
-    const entry = heldTo.entryOf(fingerprint);
+    const entry = checks.entryOf(fingerprint);
     if (entry === undefined) refusals.push(`endpoint "${name}" replays "${fingerprint}", which is no entry the app ships or was handed, nor a read its owner saved`);
     else if ('mutation' in entry) refusals.push(`endpoint "${name}" replays "${fingerprint}", which is a write, and what is generated only reads`);
-    else if (!(await heldTo.replayable()).has(fingerprint)) refusals.push(`endpoint "${name}" replays "${fingerprint}", which its owner may not replay`);
+    else if (!(await checks.replayable()).has(fingerprint)) refusals.push(`endpoint "${name}" replays "${fingerprint}", which its owner may not replay`);
   }
   return refusals;
 };
@@ -69,22 +69,22 @@ const layoutRefusals = (layout: ActionDefinition['layout'], kit: KitComponents):
 
 const passedOrRefused = <Body>(body: Body, refusals: readonly string[]): Read<Body> => (refusals.length > 0 ? { refusal: refusals.join('; ') } : { body });
 
-export const readAction = async (body: unknown, id: string, heldTo: GeneratedHeldTo): Promise<Read<ActionDefinition>> => {
+export const readAction = async (body: unknown, id: string, checks: GeneratedChecks): Promise<Read<ActionDefinition>> => {
   const parsed = parsedUnder(ActionDefinitionSchema, body, id);
   if ('refusal' in parsed) return parsed;
   const action = parsed.body;
   return passedOrRefused(action, [
-    ...layoutRefusals(action.layout, heldTo.kit),
-    ...(await endpointRefusals(action.endpoints, heldTo)),
-    ...auditAction(action, { catalog: heldTo.catalog() }).issues,
+    ...layoutRefusals(action.layout, checks.kit),
+    ...(await endpointRefusals(action.endpoints, checks)),
+    ...auditAction(action, { catalog: checks.catalog() }).issues,
   ]);
 };
 
-export const readFragment = async (body: unknown, id: string, heldTo: GeneratedHeldTo): Promise<Read<ActionFragment>> => {
+export const readFragment = async (body: unknown, id: string, checks: GeneratedChecks): Promise<Read<ActionFragment>> => {
   const parsed = parsedUnder(ActionFragmentSchema, body, id, { kind: 'fragment' });
   if ('refusal' in parsed) return parsed;
   const fragment = parsed.body;
-  return passedOrRefused(fragment, [...layoutRefusals(fragment.layout, heldTo.kit), ...(await endpointRefusals(fragment.endpoints, heldTo))]);
+  return passedOrRefused(fragment, [...layoutRefusals(fragment.layout, checks.kit), ...(await endpointRefusals(fragment.endpoints, checks))]);
 };
 
 const generatedIn = (inForce: readonly SavedVersion[], kind: string): SavedVersion[] => inForce.filter((version) => version.kind === kind && version.body !== null);
@@ -95,11 +95,11 @@ export const catalogOfGenerated = (inForce: readonly SavedVersion[]): AuditCatal
 export type Generated = { actions: Record<string, ActionDefinition>; fragments: Record<string, ActionFragment> };
 
 // `whose`: as the line says it of one that is left out, "of ada". Absent: nothing is said.
-export const generatedInForce = async (inForce: readonly SavedVersion[], heldTo: GeneratedHeldTo, whose: string | undefined): Promise<Generated> => {
-  const passed = async <Body>(kind: string, read: (body: unknown, id: string, heldTo: GeneratedHeldTo) => Promise<Read<Body>>): Promise<Record<string, Body>> => {
+export const generatedInForce = async (inForce: readonly SavedVersion[], checks: GeneratedChecks, whose: string | undefined): Promise<Generated> => {
+  const passed = async <Body>(kind: string, read: (body: unknown, id: string, checks: GeneratedChecks) => Promise<Read<Body>>): Promise<Record<string, Body>> => {
     const kept: Record<string, Body> = {};
     for (const version of generatedIn(inForce, kind)) {
-      const answered = version.unread !== undefined ? { refusal: version.unread } : await read(version.body, version.id, heldTo);
+      const answered = version.unread !== undefined ? { refusal: version.unread } : await read(version.body, version.id, checks);
       if ('body' in answered) kept[version.id] = answered.body;
       else if (whose !== undefined) console.error(`[moss] the ${kind} "${version.id}" ${whose} is left out: ${answered.refusal}`);
     }

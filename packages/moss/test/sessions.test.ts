@@ -147,7 +147,7 @@ describe('sign-out — session.revoke() under moss sessions', () => {
     return standHost(hostConfig({ ...ctx, ...(revokeSessions !== undefined ? { revokeSessions } : {}) }));
   };
 
-  it('deletes every session the principal holds — a copied token no longer signs in', async () => {
+  it('deletes every session the principal has — a copied token no longer signs in', async () => {
     const pool = await freshPool();
     const phone = await mintSession(pool, 'i_mara', 60_000);
     const laptop = await mintSession(pool, 'i_mara', 60_000);
@@ -183,7 +183,7 @@ describe('onSession — a microtask is enough to reach the shell', () => {
   // `onSession` runs before the shell exists, so an observer defers by a microtask.
   // An await between the seam and the shell (resolving phrases) must not make it
   // land mid-build, where the getter throws.
-  it('holds when the app resolves phrases asynchronously', async () => {
+  it('is still enough when the app resolves phrases asynchronously', async () => {
     const catalog = { ids: ['counter'], hash: 'h' };
     const reached: boolean[] = [];
     const app = {

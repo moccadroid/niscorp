@@ -47,7 +47,7 @@ export const actionsWithStoredLayouts = (definitions: Readonly<Record<string, Ac
   const layouts: Record<string, LayoutNode> = {};
   for (const [id, definition] of Object.entries(definitions)) {
     const layout = definition.layout;
-    // A string is already the name of a layout the store holds.
+    // A string is already the name of a layout the store has.
     if (layout === undefined || typeof layout === 'string') {
       actions[id] = definition;
       continue;
@@ -73,7 +73,7 @@ export const createRoleMemo = (config: {
   const catalogs = new Map<string, Catalog>();
   const variants = new Map<string, ReadonlyMap<string, LayoutNode>>();
   const stored = new Map<string, StoredLayouts>();
-  const kept = <Held>(memo: Map<string, Held>, key: string, resolve: () => Held): Held => {
+  const kept = <Value>(memo: Map<string, Value>, key: string, resolve: () => Value): Value => {
     const hit = memo.get(key);
     if (hit !== undefined) return hit;
     const resolved = resolve();

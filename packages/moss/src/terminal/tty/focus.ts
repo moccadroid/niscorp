@@ -2,7 +2,7 @@ import type { Interface } from 'node:readline';
 import type { TtyInteractive } from '@niscorp/nova/adapters/tty';
 
 export type Focus = {
-  held: () => boolean;
+  active: () => boolean;
   enter: (item: TtyInteractive) => void;
   exit: () => void;
   among: (interactives: readonly TtyInteractive[]) => TtyInteractive | undefined;
@@ -15,16 +15,16 @@ const focusPrompt = (item: TtyInteractive): string => `${item.path ?? item.ref} 
 export const createFocus = (rl: Interface, basePrompt: string): Focus => {
   let focus: { canvas: string; ref: string; name: string } | null = null;
   const among = (interactives: readonly TtyInteractive[]): TtyInteractive | undefined => {
-    const held = focus;
-    if (held === null) return undefined;
-    return interactives.find((item) => item.kind === 'model' && item.canvas === held.canvas && item.ref === held.ref);
+    const focused = focus;
+    if (focused === null) return undefined;
+    return interactives.find((item) => item.kind === 'model' && item.canvas === focused.canvas && item.ref === focused.ref);
   };
   const exit = (): void => {
     focus = null;
     rl.setPrompt(basePrompt);
   };
   return {
-    held: () => focus !== null,
+    active: () => focus !== null,
     enter: (item) => {
       focus = { canvas: item.canvas, ref: item.ref, name: item.path ?? item.ref };
       rl.setPrompt(focusPrompt(item));

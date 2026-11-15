@@ -19,15 +19,15 @@ export const laidOver = (inForce: readonly SavedVersion[], drafted: readonly Dra
 
 // A shell keeps its draft. What is added to one is checked here, and a draft is saved here, by what a session's save is made of.
 export const draftSaving = (deps: SavedArtifactsDeps) => {
-  const { requireHolder, ofKind, askedOf, checkedEach, write } = savingFor(deps, 'moss: nobody is signed in to this session, and a draft is somebody’s to save.');
+  const { requireOwner, ofKind, askedOf, checkedEach, write } = savingFor(deps, 'moss: nobody is signed in to this session, and a draft is somebody’s to save.');
   return {
-    // The draft with these added to it. Each is checked beside what is in force for its holder with the draft laid over.
+    // The draft with these added to it. Each is checked beside what is in force for its owner with the draft laid over.
     add: async (artifacts: unknown, drafted: readonly DraftArtifact[]): Promise<{ drafted: DraftArtifact[]; added: { kind: ArtifactKind; id: string }[] }> => {
-      const holderOf = requireHolder();
+      const ownerOf = requireOwner();
       const asked = askedOf(artifacts);
-      const { saved, heldTo } = await holderOf();
+      const { saved, checks } = await ownerOf();
       const inForce = laidOver(await saved.inForce(), drafted);
-      const versions = await checkedEach(asked, inForce, await heldTo(inForce));
+      const versions = await checkedEach(asked, inForce, await checks(inForce));
       const added = versions.map(({ kind, id, body }): DraftArtifact => ({ kind, id, body }));
       // As a save does: marking one in use for a ref takes the mark off the others for it.
       const marked = new Set(markedRefs(added));
@@ -41,15 +41,15 @@ export const draftSaving = (deps: SavedArtifactsDeps) => {
     },
 
     save: async (drafted: readonly DraftArtifact[]): Promise<{ save: string; artifacts: { kind: ArtifactKind; id: string }[] }> => {
-      const holderOf = requireHolder();
+      const ownerOf = requireOwner();
       if (drafted.length === 0) throw new Error('moss: the draft holds nothing to save.');
-      const { saved, heldTo } = await holderOf();
+      const { saved, checks } = await ownerOf();
       const inForce = await saved.inForce();
-      const held = await heldTo(laidOver(inForce, drafted));
+      const laidOverChecks = await checks(laidOver(inForce, drafted));
       const versions: (Written & { kind: ArtifactKind })[] = [];
       for (const one of drafted) {
         const kind = ofKind(one.kind);
-        versions.push({ kind, id: one.id, body: await checked(kind, one.id, one.body, held), copiedFrom: null });
+        versions.push({ kind, id: one.id, body: await checked(kind, one.id, one.body, laidOverChecks), copiedFrom: null });
       }
       return { save: await write(saved, versions, inForce), artifacts: idsOf(versions) };
     },

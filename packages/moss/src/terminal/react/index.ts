@@ -2,7 +2,7 @@ import { createElement, type FC } from 'react';
 import { createRoot, hydrateRoot } from 'react-dom/client';
 import type { NovaComponent } from '@niscorp/nova/adapters/react';
 import type { ComponentRegistry } from '@niscorp/nova';
-import { hideStatus, holdsDrawnScreen, showStatus } from '../targets';
+import { hideStatus, hasDrawnScreen, showStatus } from '../targets';
 import type { Target } from '../index';
 import { registerWireSlots, terminalFrame } from './slots';
 import type { TerminalSlotWrapper } from './slots';
@@ -16,7 +16,7 @@ export const reactTarget = (config: { root: HTMLElement; registry: ComponentRegi
 
   return (api) => {
     const Frame: FC = () => terminalFrame(api, registry);
-    const adopts = holdsDrawnScreen(root, api);
+    const adopts = hasDrawnScreen(root, api);
     showStatus(root, api.status());
     const reactRoot = adopts ? hydrateRoot(root, createElement(Frame)) : createRoot(root);
     const render = (): void => {

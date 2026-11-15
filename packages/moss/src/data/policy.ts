@@ -9,7 +9,7 @@ type PolicySource = Pick<NiscApp, 'charter' | 'behaviors'>;
 export const resolvePolicyForRoles = (app: PolicySource, grants: readonly string[], roles: readonly string[]): ScopePolicy => {
   const behaviors = app.behaviors ?? {};
   // One policy per role, then merged: each role's rows are scoped by that
-  // role's own reach, and the union is what somebody holding several may do.
+  // role's own reach, and the union is what somebody wearing several may do.
   return mergeScopePolicies(
     roles.map((role) =>
       createScopePolicy(resolvePrincipal(app.charter, grants, [role], 'data'), behaviors, resolveScoping(app.charter, role)),

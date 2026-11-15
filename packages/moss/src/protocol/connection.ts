@@ -41,4 +41,4 @@ export const DEFAULT_TOKEN_KEY = 'nisc.token';
 // on localhost would otherwise sign each other out.
 export const sessionNameOf = (key: string, port: string): string => `${key}${port === '' ? '' : `.${port}`}`;
 
-export const heldCookieName = (key = DEFAULT_TOKEN_KEY, port = ''): string => encodeURIComponent(`${sessionNameOf(key, port)}.held`);
+export const signedInCookieName = (key = DEFAULT_TOKEN_KEY, port = ''): string => encodeURIComponent(`${sessionNameOf(key, port)}.held`);

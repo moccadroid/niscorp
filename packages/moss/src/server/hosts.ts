@@ -52,9 +52,9 @@ const hostConfig = (deps: ShellHostsDeps, shell: ShellManifest, kept: boolean): 
   };
   return {
     composition: async (principal, drafted) => {
-      const { resolved, saved, ...held } = await callerOf(principal);
+      const { resolved, saved, ...caller } = await callerOf(principal);
       // Nobody signed in has no rows of their own: they share one `userId`.
-      const who = { principal, ...held, ...(principal === null ? {} : { saved, ...(drafted === undefined ? {} : { drafted }) }) };
+      const who = { principal, ...caller, ...(principal === null ? {} : { saved, ...(drafted === undefined ? {} : { drafted }) }) };
       return { roles: resolved.roles, scope: resolved.scope, ...(await running.artifactsFor(shell, who)) };
     },
     artifacts: (principal) => running.sessionArtifacts(principal, () => callerOf(principal)),

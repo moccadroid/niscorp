@@ -7,7 +7,7 @@ import { spanClock } from '../runtime';
 import { noDraft } from './draft';
 import { functionSessionFor, instrumentFunctions } from './sessions';
 import type { ShellRef } from './sessions';
-import { holdGranted, layoutsOf, withLayoutInPlace } from './host-state';
+import { keepGranted, layoutsOf, withLayoutInPlace } from './host-state';
 import type { HostState, Live, ShellFunctions } from './host-state';
 import { follow } from './stream';
 import type { ShellOpening } from './types';
@@ -163,8 +163,8 @@ export const buildShell = async (host: HostState, asked: BuildRequest): Promise<
     handlers[id] = execute;
     if (description !== '') descriptions[id] = description;
   }
-  const functions: ShellFunctions = { all: emit === undefined ? handlers : instrumentFunctions(handlers, emit, principal), held: {}, descriptions };
-  holdGranted(functions, made.grantedFunctions);
+  const functions: ShellFunctions = { all: emit === undefined ? handlers : instrumentFunctions(handlers, emit, principal), granted: {}, descriptions };
+  keepGranted(functions, made.grantedFunctions);
   if (kept) hooks.onSession?.(session);
 
   const layoutStore = createLayoutStore();
@@ -195,10 +195,10 @@ export const buildShell = async (host: HostState, asked: BuildRequest): Promise<
     transform: (config, source) =>
       evaluate(config, source !== null && typeof source === 'object' && !Array.isArray(source) ? { ...source, userId, today: today() } : source),
     fetch: wire,
-    functions: functions.held,
+    functions: functions.granted,
     ...(hooks.reconcilers === undefined ? {} : { reconcilers }),
     ...(config.limits?.endpointTimeoutMs === undefined ? {} : { endpointTimeoutMs: config.limits.endpointTimeoutMs }),
-    // An empty book is withheld: nova runs its phrase pass whenever one is given.
+    // An empty book is left out: nova runs its phrase pass whenever one is given.
     ...(Object.keys(phrases).length === 0 ? {} : { phrases }),
     ...(config.phraseKeys === undefined ? {} : { phraseKeys: config.phraseKeys }),
   });

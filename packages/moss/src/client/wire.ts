@@ -31,7 +31,7 @@ const createCredential = (tokens: WireTokenStore): Credential => {
       ...(tokens.held !== undefined && !sealUnavailable ? ['sealed=1'] : []),
     ],
     offered: () => offerToken(token, sealed),
-    // A browser that keeps the session itself holds it once the upgrade is answered, and the token
+    // A browser that keeps the session itself has it once the upgrade is answered, and the token
     // is let go of. One that does not (another origin, cookies refused) has it stored.
     upgradeAnswered: () => {
       leaving = false;

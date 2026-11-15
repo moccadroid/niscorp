@@ -63,7 +63,7 @@ describe('a verifier passed as a function is named at boot', () => {
   });
 });
 
-describe('sessionRevokerOf — who forgets every session a principal holds', () => {
+describe('sessionRevokerOf — who forgets every session a principal has', () => {
   it("under moss's own credential it deletes them, on the pool, for that principal", async () => {
     const asked: { sql: string; params: readonly unknown[] }[] = [];
     const pool: PgPool = { query: async (sql, params) => (asked.push({ sql, params: params ?? [] }), { rows: [] }) };

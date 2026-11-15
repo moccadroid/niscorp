@@ -206,7 +206,7 @@ describe('socket telemetry', () => {
 
   it.each([
     ['the verifier cannot be asked', { session: () => { throw new Error('the session store is unreachable'); } }, false],
-    ['what they hold cannot be asked', { catalog: () => { throw new Error('the database is down'); } }, true],
+    ['what they are granted cannot be asked', { catalog: () => { throw new Error('the database is down'); } }, true],
     ['their shell cannot be built', { shells: { session: async () => { throw new Error('a definition failed'); } } }, true],
   ] satisfies [string, Partial<SocketConfig>, boolean][])('a session that could not be opened because %s is an upgrade that failed', async (_label, failing, hasPrincipal) => {
     const logged = vi.spyOn(console, 'error').mockImplementation(() => {});

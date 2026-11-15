@@ -11,7 +11,7 @@ export type Generation = {
 
 export const DEFAULT_GENERATION_POLL_MS = 60 * 1000;
 
-// Node holds a timer's delay in 31 bits and cuts a longer one to 1 ms: an
+// Node keeps a timer's delay in 31 bits and cuts a longer one to 1 ms: an
 // interval above this is no poll, as `0` is.
 const MAX_INTERVAL_MS = 2 ** 31 - 1;
 

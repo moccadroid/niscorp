@@ -231,7 +231,7 @@ describe('renderDocument', () => {
 describe('renderDocument — the head a screen has', () => {
   const HEADED = TEMPLATE.replace('<head></head>', '<head><title>The site</title><link rel="canonical" href="https://example.com/"></head>');
 
-  it('the elements the screen’s head holds are written into the template’s head, escaped', async () => {
+  it('the elements in the screen’s head are written into the template’s head, escaped', async () => {
     const page = await renderDocument({ server: serverOf(), template: HEADED, request: { path: '/posts/intro' }, draw });
     expect(page.head).toEqual({
       elements: [

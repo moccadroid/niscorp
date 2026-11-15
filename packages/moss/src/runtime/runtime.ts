@@ -35,7 +35,7 @@ export type NiscRuntime = {
 
 export type TelemetrySpan = {
   name: string;
-  // A JS number cannot hold epoch nanoseconds exactly: the loss is far below
+  // A JS number cannot carry epoch nanoseconds exactly: the loss is far below
   // the milliseconds measured here.
   startUnixNano: number;
   endUnixNano: number;

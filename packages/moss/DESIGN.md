@@ -58,7 +58,7 @@ runs, each through one door: a set of actions is handed over
 each is verified before it is taken. The artifact library
 that makes publish a runtime write for every artifact is specified and unbuilt
 (see below). The mechanism is already the function it needs to be: what a set
-of roles holds, and the policy it reads and writes under, are derived from what
+of roles is granted, and the policy it reads and writes under, are derived from what
 is in force and dropped when that changes, so there is no invalidation
 protocol; a pointer in the database tells every other process that it did.
 The pointer tells them *that*, not *what*: another process reads again the
@@ -71,20 +71,20 @@ somebody authored (its actions, its frame and layout store, its fragments, the
 entries its reads replay) is answered by the running manifest in one function,
 for a shell and a principal with their roles (`artifactsFor`, `src/artifactory/running.ts`). A shell is built
 from that answer and adopts it: an adopt puts in place the actions that are
-held now, and each `{ ref }` of the layout store and each fragment that the
+granted now, and each `{ ref }` of the layout store and each fragment that the
 answer says differently from the last time. Every layout the shell draws is
-one of those refs, under the name of what draws it: the answer holds an
+one of those refs, under the name of what draws it: the answer keeps an
 action's in the layout store under `action/<id>`, and the definition names
 it; the shell's own is under `frame` and a canvas's under `canvas/<id>`
 (`shellWithStoredLayouts`, `src/artifactory/artifacts.ts`). So a layout is changed by setting
 a ref, which a screen that is open follows with its data kept, and not by
 registering the action again, which only a screen opened afterwards sees. It
 is also how a saved layout reaches a screen: under an action's ref the answer
-holds the principal's own layout that is marked in use, else the layout
-variant their roles hold, else the one published for everybody, else the
+carries the principal's own layout that is marked in use, else the layout
+variant their roles are granted, else the one published for everybody, else the
 build's. The first two tables of the
 library are built for that: a row for each save and a row for each version it
-holds, never changed (`src/artifactory/saves.ts`). A row is its principal's,
+has, never changed (`src/artifactory/saves.ts`). A row is its principal's,
 and vex keeps it so. What is published for everybody is the rows of one
 principal no caller is, under that same rule: publishing is the save a person
 makes, made by the app's own server code as that principal
@@ -98,7 +98,7 @@ it declares. (The
 canvases a manifest declares are what a shell starts with: an adopt does not
 take them again, a reset does. Nova gives a shell a canvas when something is
 first pushed onto it; an adopt takes out one the manifest does not declare
-once no layout in force holds a slot for it, where one did: `slottedCanvases`,
+once no layout in force has a slot for it, where one did: `slottedCanvases`,
 `src/artifactory/artifacts.ts`.) The
 entries vex replays it asks the running manifest for as well, before its own
 cache table; nothing else in moss reads one of the four off what the app
@@ -161,7 +161,7 @@ The organizing principle: an app hands over **artifacts** and an
   one verification (`src/manifest/verify.ts`): every action is one nova reads,
   the charter verifies (`verifyCharter`, with nova's closure audit over the
   definitions in force), every entry's `reach` names a profile the behaviors
-  declare, and nobody holds two layout variants of one action. It is asked at
+  declare, and nobody is granted two layout variants of one action. It is asked at
   boot, at every change (`refresh`, `replaceActions`), and of a manifest that
   is not served (`verifyApp`); a boot or a change that fails it throws. The closure audit's findings are not errors: they are
   filed under each role's `issues` in the report, and boot neither refuses on
@@ -186,11 +186,11 @@ open.)
 Per-principal UI difference is existence (ring 1) or a served variant (ring 2),
 never a runtime capability flag in a layout. A layout variant (`NiscApp.layouts`)
 is `{ action, layout }` under a minted id; the charter's `layouts` section
-selects who holds which. At shell build, moss puts the granted variant's
+selects who is granted which. At shell build, moss puts the granted variant's
 layout where that action's layout is kept *before* the shell exists, so every downstream render
 and serialize is already per-principal and the terminal renders what it is served
 — nothing on the wire says why a button is absent. The base layout is the floor
-(the least-privileged holder's shape); variants enrich upward as grants, so
+(the least-privileged principal's shape); variants enrich upward as grants, so
 `extends` composes them and a forgotten grant fails closed. This is the charter's
 extensibility paying off: one `Section` value, moss hands the universe in and
 compiles it.
@@ -208,12 +208,12 @@ entry.
    verifier, moss's stored credential, the browser's cookie and its seal), and
    a principal is a record (roles, scope values, what is installed for them).
 2. **What exists for them?** `artifactory`: what the app consists of right
-   now, with one writer, and what a set of roles holds of it. Every artifact a
+   now, with one writer, and what a set of roles is granted of it. Every artifact a
    shell is handed is asked of it: the actions, the frame and the layout
    store, the fragments and the entries, in one answer for a shell and a
    principal, and read off the app by nothing else. It keeps what somebody
    saved while the app runs (a layout, today) and answers it in the same
-   place. It is the one holder of the
+   place. It alone keeps the
    entries too: the ones the app shipped and each set handed over, compiled as
    vex replays them. It stands on `manifest`,
    the app as it was handed over: the types an app is written in, the schema
@@ -224,7 +224,7 @@ entry.
    role, and the tables with their migration. The engine's cache asks the
    artifactory for a fingerprint first, through two functions the server
    hands it, and its own table (`vex_cache`) for what the artifactory does not
-   hold: a query written for an intent while the app runs. Nothing is copied
+   have: a query written for an intent while the app runs. Nothing is copied
    into that table, and a copy an earlier release left in it is not replayed.
    So what a fingerprint resolves to is decided in `artifactory`, as what an
    action, a layout or a fragment resolves to is.
@@ -254,7 +254,7 @@ cannot write one. **The seams are made for the feature they are handed
 to, and what they reach is that feature's**: its own tables, which it names on
 itself before it runs (`Feature.tables.names`); its own set of actions, kept
 under its name, which it alone writes; the documents in its own rows. The core reads and
-writes no row of a feature, reads no header of one, and holds no setting of
+writes no row of a feature, reads no header of one, and keeps no setting of
 one (the key the integrations feature signs with is that feature's own).
 `feature` is the module that says what a feature and
 its seams are: types, and no code. There are two features: `integrations`
@@ -292,7 +292,7 @@ this is a copy of it:
 
 The table has no cycle, and what it leaves out is as deliberate as what it
 names. `shells` does not import `identity`: who somebody is, it is told.
-`socket` does not import `artifactory`: what somebody holds is a function it
+`socket` does not import `artifactory`: what somebody is granted is a function it
 is handed. `artifactory` and `data` do not import each other: the generation
 pointer's row is `data`'s, when it moves is the artifactory's, the entries
 over the artifactory's two tables are written by the artifactory and replayed
@@ -310,7 +310,7 @@ whole runtime: those two are handed to `createServer`, and the wiring hands on
 the parts. Each table and each long-lived piece of state has one owner, and
 nobody else authors what is written to it. What crosses a boundary (a
 manifest, a socket message, a route's body, a row, a token) is parsed by a
-schema in the module where it enters, and no module holds a type assertion.
+schema in the module where it enters, and no module contains a type assertion.
 And a function is at most 300 lines (200 is fine; 300 is the ceiling), a file
 at most 400 lines of code, a line at most 200 wide.
 
@@ -323,25 +323,25 @@ that made the table:
 | `sessions` | `identity` | `identity/sessions.ts`: five statements straight to the pool, before anybody is signed in | Its table is made in `data`'s one migration run (`migrateTables`, or boot under `migrations: 'apply'`; otherwise boot only checks it), from a sequence `identity` declares |
 | `moss_generation` | `data` | `data/own-entries.ts`: two entries, one that reads and one that moves | `artifactory` decides when it moves (`artifactory/generation.ts`), through a function `data` hands over |
 | `artifact_saves`, `artifacts` | `artifactory` | `artifactory/saves.ts`: four vex entries (what is in force, the history, a save, and the stamp that one was used) and the row rule they run under, replayed through a function `data` hands over (`Data.artifactEntries`) | The two tables are made by the core's sequence (`data/tables.ts`, `nisc.moss/5`). Their rows are somebody's, unlike the pointer's: the entries are replayed with the caller's scope, and vex keeps every read and write to the rows whose `principal` is the caller's `userId`. What is published for everybody is the rows of the principal `*`, replayed with that as the `userId` by the server's own code and by no caller. The one update is `last_used_at`, stamped when a shell is built for the owner. A stored body is not rewritten when a grammar moves: it is brought to the current grammars where it is read. The sweep that deletes what a person generated and nobody used (`runtime.artifactsUnusedMs`) is `data/aging.ts`: two statements straight to the pool, because vex keeps every statement to one principal's rows and the sweep crosses them all |
-| `integrations`, `integration_actions` | the `integrations` feature | `integrations/entries.ts`: vex entries, replayed through the seam the feature is handed | The two tables are made by the core's own sequence (`data/tables.ts`, `nisc.moss`): that is the history every database has run, and it is not edited. The documents stored in `integration_actions` are brought to the current grammars by `data`, which holds the pool, when the feature asks through its seam |
+| `integrations`, `integration_actions` | the `integrations` feature | `integrations/entries.ts`: vex entries, replayed through the seam the feature is handed | The two tables are made by the core's own sequence (`data/tables.ts`, `nisc.moss`): that is the history every database has run, and it is not edited. The documents stored in `integration_actions` are brought to the current grammars by `data`, which keeps the pool, when the feature asks through its seam |
 
-`data` holds the engine and the one ledgered migration run, so every owner's
+`data` has the engine and the one ledgered migration run, so every owner's
 entries and every owner's migrations run through it. It authors no statement
 on a table that is not its own, but for the aging sweep's two on the
 artifactory's. The app's own tables, and tide's when the app
 keeps them, are migrated in the same run (`runtime.tables`) and are the app's
 and tide's.
 
-What holds the rules is a build that fails, not this page: `pnpm
+What enforces the rules is a build that fails, not this page: `pnpm
 check:modules` (the table above, the doors, nothing flat, no cycle, and no
 feature in the core), `pnpm check:api` (an exported name is a line in
 `api.txt`, and a line there is an exported name), `pnpm check:raw-sql` (a
 statement outside vex is counted, with its reason) and `pnpm lint` (no type
 assertion, no `any` that becomes a typed value, no written type predicate, the
 two sizes and the width).
-**Narrow inputs and one owner are held by none of the four**: they are read
+**Narrow inputs and one owner are enforced by none of the four**: they are read
 for in review, and the table above is what a review found, not what a build
-checks. What each gate holds is said at the top of its script. The rules
+checks. What each gate enforces is said at the top of its script. The rules
 as somebody changing a package follows them are in
 `packages/nisc/CHANGING_A_PACKAGE.md`.
 
@@ -378,9 +378,9 @@ Operational shape, all falling out of "the message is state, not history":
 - **Delivery.** Events are fire-and-forget; the tree is the confirmation. No
   acks, no replay after reconnect — a replayed intention against a changed screen
   is worse than a lost one, so reconnect simply re-sends the current trees. The
-  same rule holds before the first connect: nothing is sent on a socket that is
-  not open and nothing is held for when it is. A server-drawn page (below) is on
-  screen before its socket, so a press in that moment is dropped.
+  same rule applies before the first connect: nothing is sent on a socket that
+  is not open and nothing is kept back for when it is. A server-drawn page
+  (below) is on screen before its socket, so a press in that moment is dropped.
 - **Durability.** The database is the durable thing; a shell is a warm cache,
   rebuilt on the next connection from definitions and whatever the app reads
   from rows as it builds. Evicting an idle shell, restarting the process and
@@ -402,10 +402,10 @@ Operational shape, all falling out of "the message is state, not history":
   nova's shell keeps a journal of the positions its navigations displaced, and
   `back` restores the newest one it can. So the browser's back button, a TUI's
   Escape and an app's own control are one message, an app authors nothing to
-  receive it, and the terminal holds no location that could drift out of step
+  receive it, and the terminal keeps no location that could drift out of step
   with the server's. It is also the answer to a real failure: with no history
   integration at all, a browser's back button unloaded the application.
-- **A connection that drops.** The trees a terminal holds stay on screen
+- **A connection that drops.** The trees a terminal has stay on screen
   while it reconnects: the current ones are re-sent when it does, and blanking
   in between would show a working app as an empty one. The price is that a
   screen left up by a dead socket looks exactly like a live one, so the
@@ -414,7 +414,7 @@ Operational shape, all falling out of "the message is state, not history":
   them. What is drawn for it is not moss's: the two console targets print a
   line, and the three that draw into an element say it on that element
   (`data-wire-status`) and leave what it looks like to the app's stylesheet.
-  The terminal holds one socket at a time — it lets go of the one it had
+  The terminal has one socket at a time — it lets go of the one it had
   before it makes another — so one connection writes the screen, whatever a
   person pressed while the last was still connecting.
 - **Emptiness.** A canvas whose layout renders no visible content is served as
@@ -425,7 +425,7 @@ Operational shape, all falling out of "the message is state, not history":
 
 ### Where a browser keeps its session
 
-A terminal served by the app it talks to does not hold its session. Its browser
+A terminal served by the app it talks to does not keep its session. Its browser
 does, in a cookie no script can read, and sends it by itself with the two
 requests that need to know who is asking: the page, and the upgrade that opens
 the socket. A token in the page — in storage, in a cookie script can read — is
@@ -438,7 +438,7 @@ cannot be taken from it.
   request is answered, and the answer carries the cookie.
 - **A sign-in over the socket reaches it sealed.** `session.grant` happens on a
   socket, which cannot write a cookie; the token has to travel through the
-  page to the next upgrade. It travels encrypted with a key the browser holds
+  page to the next upgrade. It travels encrypted with a key the browser keeps
   in a second cookie no script can read or set — the *seal*, given by the
   answer to the browser's first upgrade under a name (`__Http-`) a browser
   lets only an HTTP answer set. The page can hand a sealed sign-in back and
@@ -464,13 +464,13 @@ cannot be taken from it.
   would sign each other out. Over https it is `__Host-` prefixed and `Secure`,
   which a browser lets nothing but this host set.
 - **What the page sees is a flag** (`<name>.held=1`), with no secret in it: how
-  a terminal knows to let go of a token it was holding, and that a page drawn
+  a terminal knows to let go of a token it was keeping, and that a page drawn
   for somebody was drawn for it.
 - **Signing out says so.** moss revokes its own credential, and a cookie that
   no longer resolves is taken back on the next upgrade. An app's own provider's
   token may go on resolving, so a terminal that was signed out says it is
-  leaving, and the cookie is taken back whatever it holds.
-- **Any other terminal holds its own token** — a process, a page served from
+  leaving, and the cookie is taken back whatever it carries.
+- **Any other terminal keeps its own token** — a process, a page served from
   somewhere else, a browser that refuses cookies — offers it, and is handed a
   sign-in as its token, as before. A token such a page of the app's own offers
   (one an earlier build left in storage) is moved into the cookie and let go of.
@@ -494,7 +494,7 @@ Two reductions are available, and they are deliberately separate things:
   hundred thousand, which is the only reason it is a knob rather than a
   constant.
 - **Frame deltas** (`shellFrameDelta`, **off** by default) describe a changed
-  canvas against the frame the connection already holds, as copy runs plus
+  canvas against the frame the connection already has, as copy runs plus
   literal inserts (`src/protocol/delta.ts` — an encoder and a decoder, both readable in
   full, no dependency). Measured on Lyra: an in-place change (a keystroke
   filtering a list, one row's badge flipping) falls to **1–4%** of the frame; a
@@ -570,9 +570,9 @@ mechanism). Anonymous connections get a throwaway shell, disposed on detach,
 and so does every connection of a page.
 
 **Every living shell follows a change.** When what the app consists of
-changes, each shell that lives is brought level with what its principal holds
+changes, each shell that lives is brought level with what its principal is granted
 now, in place: the kept ones, a visitor's, and a page's, in every host. A
-host holds every shell it built from when its build lands until it ends, and
+host keeps every shell it built from when its build lands until it ends, and
 lets it go where it ends, so the walk is over the shells that live and no
 other. A role change (`invalidateIdentity`) rebuilds every living shell of
 that principal the same way: the kept one, and each one a page built for them.
@@ -596,12 +596,12 @@ the screen boot would serve that principal now — which is also the whole cost:
 a reset is not a repair that preserves what someone was doing.
 
 **One canvas cannot take the session down.** Rendering is guarded per canvas.
-A tree that throws holds its last good frame and its neighbours keep rendering,
+A tree that throws keeps its last good frame and its neighbours keep rendering,
 rather than killing the flush pass, escaping a microtask uncaught, and wedging
 the shell for the life of the process.
 
 The shell is built from the manifest: canvases and fragments are data; a canvas's
-`initial` may be a candidate list, and the first action the principal holds
+`initial` may be a candidate list, and the first action the principal is granted
 mounts — so login is the anonymous principal's application (the charter's
 `public` grant) by derivation, not a special case. The role name is fixed and
 the charter has to define it, as `public: []` if it grants nothing: boot does
@@ -636,7 +636,7 @@ The follow ends when the call's signal aborts (nova aborts it on unmount),
 when the last subscriber leaves (nova unsubscribes when a newer call to the
 same endpoint lands), or at once when nobody takes the response up — a server
 function reading through the same wire follows nothing. An answer that changed
-in the gap between the response and nova's subscription is held and handed
+in the gap between the response and nova's subscription is kept back and handed
 over on subscribe.
 
 This retires most of "writers announce, viewers react" for data: a screen whose
@@ -667,7 +667,7 @@ page carries its screen twice (markup and snapshot), 3–5 KB compressed.
 
 **The head of the page is part of the screen.** A title, a description and a
 preview card are facts about what the screen shows, so the page's `<head>` is a
-node in a layout (nova's `nova:head`, holding the elements a head holds) and
+node in a layout (nova's `nova:head`, carrying the elements a head contains) and
 rides in the same trees as everything else: `renderDocument` reads the
 elements off the snapshot and writes them into the template's `<head>`, and the
 terminal reads them off the wire to keep the page's head. Nothing was added to
@@ -717,7 +717,7 @@ are terminals like the others — handed a screen, they draw it — and the same
 shape as lyceum's SSH door, which has drawn served trees inside a server
 process since before this existed.
 
-One thing a kit must hold up its end of: its first pass in the browser has to
+One thing a kit must take care of: its first pass in the browser has to
 draw what the server drew. Anything that differs between the two — the window's
 width, a portal target, storage — may not decide a component's first render.
 Lyra's kit answered "is the window wide" from `window.matchMedia` in a state
@@ -725,12 +725,12 @@ initialiser, behind a `typeof window` guard; the guard is the bug, because it
 makes the two sides disagree about the same render, and on a wide screen React
 threw the page's elements away. What a component writes onto `<html>` from an
 effect (a palette) is not in the page until the script runs, so the app reads it
-off the snapshot and hands it to the document. Each app holds both with a check.
+off the snapshot and hands it to the document. Each app guards both with a check.
 
 ## Pages
 
 `shell` is the app: one durable shell per person, the thing that rearranges
-itself around whoever holds it. Not everything at a path is that. A welcome, the
+itself around whoever has it. Not everything at a path is that. A welcome, the
 docs, a published talk are read, not worked in, and a person who is signed in is
 still the same person when they open one.
 
@@ -754,7 +754,7 @@ still happen. Every reason a drawn screen is not finished is a declared part of
 an action — a `ui:` trigger, a two-way binding, a channel it waits on, a read
 that keeps answering — so the question is decidable from the definitions
 actually mounted, without running anything. Nova reports those facts
-(`livenessOf`); moss, which holds the entries behind each fingerprint, composes
+(`livenessOf`); moss, which keeps the entries behind each fingerprint, composes
 the verdict (`src/shells/snapshot.ts`) and puts it on the snapshot as `live`. A page that
 is not live is served as markup and its terminal opens no socket at all. A page
 that is live gets a shell for as long as its connection lasts — per connection,
@@ -784,8 +784,8 @@ the application guide puts it — shell state is the truth.
 The `fn:` escape hatch runs server-side, in-process, next to the durable shell.
 The manifest's `functions(session)` builds handlers once per session, closing
 over the living shell, who is calling (the principal, their roles, what they
-hold), the server's own surfaces as that session (`wire`), and `grant`/`revoke`.
-A session says who is calling and holds no key: it carries no database pool, no
+are granted), the server's own surfaces as that session (`wire`), and `grant`/`revoke`.
+A session says who is calling and has no key: it carries no database pool, no
 operator key and no policy object, and what app code needs of those has a call
 (DOCS.md, `FunctionSession`). Agents live here (their reads run under the
 caller's policy — they see what the caller sees); keys are `.env`. This is deliberately the *side-
@@ -868,7 +868,7 @@ nothing.
 | An auth provider | BYO identity. Who somebody is, the app decides at its own door (magic link is the default strategy); the server only asks who a token is. Moss does keep a credential an app may use for that: `mintSession` stores a token by its hash once the app has decided, and `'dev-open'` trusts an unsigned one for a harness. Neither decides anything. |
 | A framework | An assembly point. The intelligence lives in the artifacts; the server resolves, serves, pushes, enforces. Its core is eleven modules, each one question or the wiring, and a twelfth that runs it on Node (*How the code is laid out*). |
 | A place where policy hides | Every opinion it enforces is a readable artifact: charter, scope policy, assertion. No annotations, no interceptor magic. |
-| A second way to do anything | Reads are vex, writes are vex, compute is functions, UI is actions, permissions are the charter. Moss's core adds no vocabulary of its own, and holds itself to the same: the rows it keeps it reads and writes through vex entries, and the statements left outside vex are counted, each with its reason (`pnpm check:raw-sql`). |
+| A second way to do anything | Reads are vex, writes are vex, compute is functions, UI is actions, permissions are the charter. Moss's core adds no vocabulary of its own, and is bound by the same: the rows it keeps it reads and writes through vex entries, and the statements left outside vex are counted, each with its reason (`pnpm check:raw-sql`). |
 | A web framework | A page is a shell manifest at a path; a drawn document is a first frame delivered early. No file-system routes, no layouts-of-layouts, no loaders, and no chain of middleware for an app to configure (one gate may be laid over the operator prefix, `runtime.operatorGate`). A page's `<head>` is not managed either: it is a node in a layout, written into the document like the rest of the screen. The template, the route and the kit are the app's. |
 
 ## Deliberately unbuilt
@@ -883,15 +883,15 @@ On the record, so nothing reads as finished that isn't:
   dropping their data). Verify-at-boot becomes verify-at-publish, same gates.
 - **The `/fns` host** — named, side-effect-free, independently deployable
   functions under `/fns`, gated by catalog closure.
-- **The projection model** — per-identity state held in the DB, written-and-
-  pushed, seeded on login with no AI call, held while the principal is offline.
+- **The projection model** — per-identity state kept in the DB, written-and-
+  pushed, seeded on login with no AI call, kept while the principal is offline.
 - **The working set (level streaming).** For large apps and AI context budgets,
   the catalog itself streams: serve the graph neighborhood of a principal's
   active actions now, fault the rest in on demand. Level streaming for humans is
   context management for models — one mechanism, two products.
 - **Scale-out** beyond sticky sessions pinned by session id. What crosses
   processes today is invalidation only: `refresh` moves a generation pointer
-  every process polls (`src/artifactory/generation.ts` holds the clock; the row is
+  every process polls (`src/artifactory/generation.ts` keeps the clock; the row is
   read and moved through vex, `src/data/own-entries.ts`), and an optional fabric
   (`runtime.fabric`, `src/server/signals.ts`) carries identity invalidations, nudges, and the word to adopt for one principal.
   A set of actions does not cross: a process that follows the pointer reads
@@ -911,7 +911,7 @@ On the record, so nothing reads as finished that isn't:
   parameters: the app's shell is durable and shared across a person's
   terminals, so an opener has to be idempotent against whatever is already
   mounted, and decide what a reload means after they have moved on.
-- **Letting a page's connection go.** A terminal that holds a token on a page
+- **Letting a page's connection go.** A terminal that has a token on a page
   drawn for nobody (a file, on a static host) connects, and is served a page
   shell for as long as it stays — even when that page turns out not to be live
   for them either. Closing such a connection once its frames are sent is unbuilt.

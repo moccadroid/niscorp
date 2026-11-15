@@ -111,7 +111,7 @@ const fillOnlyInput = (repl: Repl, head: string, line: string): void => {
 };
 
 export const runLine = (repl: Repl, raw: string): boolean => {
-  if (repl.focus.held()) {
+  if (repl.focus.active()) {
     const target = repl.focus.among(repl.interactives());
     if (raw !== '' && target !== undefined) fill(repl, target, raw);
     repl.focus.exit();

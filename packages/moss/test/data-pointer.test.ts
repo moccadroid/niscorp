@@ -81,9 +81,9 @@ describe('the generation pointer’s row, moved through vex', () => {
     expect(written).toHaveLength(1);
     const sent = written[0];
     expect(sent?.sql).toMatch(/^UPDATE "?moss_generation"? SET "?n"? = \$(\d)\b.* WHERE .*\bid"? = 1\b.*\bn"? = \$(\d)\b/s);
-    const [, set, held] = /SET "?n"? = \$(\d)\b.*\bn"? = \$(\d)\b/s.exec(sent?.sql ?? '') ?? [];
+    const [, set, expected] = /SET "?n"? = \$(\d)\b.*\bn"? = \$(\d)\b/s.exec(sent?.sql ?? '') ?? [];
     expect(sent?.params[Number(set) - 1]).toBe(8);
-    expect(sent?.params[Number(held) - 1]).toBe(7);
+    expect(sent?.params[Number(expected) - 1]).toBe(7);
     expect(invalidated).toEqual([['moss_generation']]);
   });
 

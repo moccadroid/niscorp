@@ -135,7 +135,7 @@ describe('the wire — a page that needs no socket opens none', () => {
     expect(urls[0]).toContain('path=%2Ffind%2Fwine');
   });
 
-  it('a static page drawn for nobody, opened by somebody holding a token: it connects, as them', () => {
+  it('a static page drawn for nobody, opened by somebody with a token: it connects, as them', () => {
     createWire({ env: env('tok'), initial: { frame: [], trees: {}, principal: false, live: false, path: '/about' } });
     expect(urls).toHaveLength(1);
     expect(offeredToken(offers[0])).toBe('tok');

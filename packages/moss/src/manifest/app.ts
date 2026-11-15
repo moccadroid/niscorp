@@ -160,7 +160,7 @@ export type FunctionSession = {
 };
 
 export type CanvasSeed = string | { action: string; input?: Record<string, unknown>; with?: string[] };
-// A list of seeds is candidates: only the first action the principal holds mounts.
+// A list of seeds is candidates: only the first action the principal is granted mounts.
 export type ShellCanvas = Omit<CanvasConfig, 'initial'> & { initial?: CanvasSeed | CanvasSeed[] };
 
 export type ShellManifest = {

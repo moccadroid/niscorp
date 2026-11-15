@@ -85,9 +85,9 @@ const PAGE = 500;
 
 const VERSION_COLUMNS = ['save', 'kind', 'id', 'body', 'grammar', 'copied_from', 'created_at'];
 
-// `held` is a version, and this is a later one of the same artifact. Two written
+// A later version of the same artifact than the one the query is at. Two written
 // in the same instant are told apart by their save, so that one of them is the latest.
-const laterThanHeld: Filter = {
+const laterVersion: Filter = {
   and: [
     { eq: ['artifacts.kind', 'held.kind'] },
     { eq: ['artifacts.id', 'held.id'] },
@@ -95,7 +95,7 @@ const laterThanHeld: Filter = {
   ],
 };
 
-const afterHeld: Filter = {
+const afterCursor: Filter = {
   or: [{ gt: ['held.kind', { $context: 'after_kind' }] }, { and: [{ eq: ['held.kind', { $context: 'after_kind' }] }, { gt: ['held.id', { $context: 'after_id' }] }] }],
 };
 
@@ -105,7 +105,7 @@ const inForce: SeedEntry = {
   dsl: {
     from: [{ as: 'held', query: { from: ['artifacts'], fields: VERSION_COLUMNS.map((column) => `artifacts.${column}`) } }],
     fields: VERSION_COLUMNS.map((column) => `held.${column}`),
-    filter: { and: [{ not: { exists: { from: ['artifacts'], filter: laterThanHeld } } }, afterHeld] },
+    filter: { and: [{ not: { exists: { from: ['artifacts'], filter: laterVersion } } }, afterCursor] },
     sort: [
       { field: 'held.kind', dir: 'asc' },
       { field: 'held.id', dir: 'asc' },

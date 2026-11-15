@@ -167,7 +167,7 @@ describe('the place in a chain a request named', () => {
     ['written in hex', '0x2'],
     ['written with an exponent', '1e1'],
     ['signed', '+2'],
-    ['more than a whole number can hold', '9'.repeat(30)],
+    ['more than a whole number can contain', '9'.repeat(30)],
   ])('a depth that is %s is no position', async (_label, depth) => {
     expect(await askedAbout({ 'x-tide-cause': 'f_1', 'x-tide-depth': depth })).toBeUndefined();
   });

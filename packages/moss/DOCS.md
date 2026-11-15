@@ -87,10 +87,10 @@ reaction's `run` — and `features`. Absent `shell`, the app serves data only
   an org). Moss always injects `{ userId }` (the principal; `'anonymous'` for
   nobody signed in); this contributes the rest, merged
   server-side and asked per request, so a value derived from the clock is
-  never held for a session. Synchronous. `identity` is the record
+  never kept for a session. Synchronous. `identity` is the record
   `identity.resolve` answered: absent for nobody signed in, and in an app with
   no `identity` seam. What `scope` answers is merged over that record's
-  `scope`, the values that are held for the session.
+  `scope`, the values that are kept for the session.
 - `identity.resolve(principal, read)` — who a principal is, resolved once per
   session and cached by moss (bounded by `runtime.identityMax` /
   `identityIdleMs`, re-resolved every `sessionRevalidateMs`). Returns an
@@ -112,7 +112,7 @@ reaction's `run` — and `features`. Absent `shell`, the app serves data only
   twice.` A map of handlers by id still works and is deprecated.
   **`server.checkFunctions()`** builds nobody's shell once, drops it, and reads
   what its `functions(session)` returned, so what is wrong with the functions
-  is refused or said before anyone is served. The app calls it once it holds
+  is refused or said before anyone is served. The app calls it once it has
   the server, as a session hook may reach for the server, after it has
   mounted every route of its own, and before it listens. Nobody's shell
   makes its reads in-process, and the server takes no route once it has
@@ -124,22 +124,22 @@ reaction's `run` — and `features`. Absent `shell`, the app serves data only
   returned a map of handlers, which is deprecated: return a list of { id,
   description, execute }.`, or `[moss] functions with no description:
   auth.leave. Give each a description.` An empty description counts as none,
-  and a function given by a map has none. **A shell holds only the functions
+  and a function given by a map has none. **A shell has only the functions
   its principal's roles grant**, in the charter's `functions` part (names or
   globs, with `extends` and `deny`, as `actions`): a role with none may call
   none, and an `fn:` endpoint to one it does not grant fails when it is called.
-  What a living shell holds follows the roles an adopt answers, as its actions
+  What a living shell has follows the roles an adopt answers, as its actions
   do.
-  - **The boot is refused** where somebody holds an action that calls a
+  - **The boot is refused** where somebody is granted an action that calls a
     function their roles do not grant, and **`server.checkFunctions()` refuses**
     where an action, or a fragment the shells ship, calls a function the app
     does not have (`"home" calls "auth.leave", which the app has no function
     of`); an app with no `functions` has none. It reads the `fn:` endpoints of
-    the actions held by each role on its own, each combination `wearable` or
+    the actions granted to each role on its own, each combination `wearable` or
     `assignments` lists, and `public`, and of the fragments the shells ship,
     and lists every call that is missing: `"member" hold "chrome.topbar",
     which calls "auth.leave": their functions do not grant it`. A set handed
-    over while the app runs is held to the same. A name with a template in it
+    over while the app runs is checked the same way. A name with a template in it
     (`fn: '{{$.saveFn}}'`) is worked out when it is called, and the shell's map
     decides then.
   - **`functions: ['*']`** grants every function, as an app had before this
@@ -181,7 +181,7 @@ reaction's `run` — and `features`. Absent `shell`, the app serves data only
   `reconcile` step aims at it (nova's SHELL_DOCS.md, "A canvas that names its
   own reconciler"): handed each row as written, it decides what is kept,
   matched, moved and removed — several cards of one action on one list canvas,
-  matched by a key and kept in the list's order. Every shell moss builds holds
+  matched by a key and kept in the list's order. Every shell moss builds has
   them, the app's and each page's, the one a document is drawn from and the
   socket's: from one seed, a reconciler that answers the same rows the same
   way places the same instances in both. A reconciler
@@ -198,7 +198,7 @@ charter's `layouts` section selects who is granted which variant id, and moss
 puts the granted variant's layout where that action's layout is kept in the
 shell ("Where an action's layout is kept", under `createServer`). The base is
 the floor; variants enrich upward as grants. A role, or a combination
-of roles somebody may wear, that holds two variants of one action refuses the
+of roles somebody may wear, that is granted two variants of one action refuses the
 boot, and so does a variant of an action the app does not have.
 
 #### `ShellManifest`
@@ -227,15 +227,15 @@ they generated.
 A `CanvasSeed` is an action id or `{ action, input?, with? }`, and a
 `ShellCanvas` is nova's canvas config with `initial` widened to one seed or a
 list of candidates. Neither type is exported by name: `ShellManifest['canvases']`
-carries both. Of a list of candidates, the first action the principal holds
-mounts; a canvas none of whose candidates they hold starts empty. A canvas's
+carries both. Of a list of candidates, the first action the principal is granted
+mounts; a canvas none of whose candidates they are granted starts empty. A canvas's
 `reconcile` names one of the app's `reconcilers`.
 
 `components` is the kit as the server knows it: each component's name, with
 its `meta` (a `description`, and `propsSchema`, the zod schema of its props).
 A name listed there is registered in the shell whether or not a layout of the
 app uses it. The `components` of the app's own `shell` are also the kit a
-bundle's layouts are held to at intake, and the one the integrations'
+bundle's layouts are checked against at intake, and the one the integrations'
 contract lists ([`@niscorp/moss/integrations`](#niscorpmossintegrations)): a
 bundle's layout that uses a component not listed there is refused, and where
 a component's `propsSchema` is a zod object, so is a prop it has no place for.
@@ -344,7 +344,7 @@ throw, and so do `set` and `delete` on its `layoutStore`, which is to read. A
 definition read off it (`shell.getRuntime(id).definition`) is the action as it
 was written, with the layout it is drawn with now in place: where moss keeps a
 layout does not show. An action, a fragment, a canvas, a layout and the phrases reach a shell
-through moss, which verifies them and decides who holds them; added on the
+through moss, which verifies them and decides who is granted them; added on the
 shell directly they are not verified, are in nobody's catalog and are gone
 when the shell is rebuilt. Everything else (reads, navigation, `dispatch`,
 `publish`, the observers) works as on nova's `Shell`, which is still the
@@ -360,9 +360,9 @@ import type { ActionDefinition } from '@niscorp/nova';
 const register = (session: FunctionSession, definition: ActionDefinition): void => unverifiedShell(session).registerAction(definition);
 ```
 
-**A session says who is calling and holds no key.** It carries no `runtime`
+**A session says who is calling and has no key.** It carries no `runtime`
 (the database pool, the operator key) and no `policy` (the
-object the routes enforce for everybody holding those roles). What app code
+object the routes enforce for everybody wearing those roles). What app code
 needs of either has a call:
 
 - **A read or a write as the caller**: `session.wire`, the routes, enforced.
@@ -501,20 +501,20 @@ functions: (session) => [
   endpoints, and where both define an endpoint of one name the action's is
   the one called. What an assistant is told it may generate is the app's to
   decide: it writes the prompt, and its own function calls `save`.
-- **A generated action opens the actions its owner holds**, their own
+- **A generated action opens the actions its owner is granted**, their own
   generated ones among them, and no other: nova's audit is run on it with
   those as its catalog, and what it finds refuses the save, as it does for a
   saved layout. So do a component no shell of the app has, and a layout that
-  names a ref moss keeps a layout under (`action/…`, `canvas/…`, `frame`). A fragment is held to its schema, its id, its
-  layout and its endpoints, and not to that audit, which reads a whole action:
-  a step of a fragment that opens an action its owner does not hold is refused
+  names a ref moss keeps a layout under (`action/…`, `canvas/…`, `frame`). A fragment is checked against its schema, its id, its
+  layout and its endpoints, and not against that audit, which reads a whole action:
+  a step of a fragment that opens an action its owner is not granted is refused
   by nova when it runs, because that action is not in their shell.
 - **It is checked when it is saved and again when a shell is built.** One
   that no longer passes (its owner lost the grant its read needs, say) is left
   out of every shell built from then on, with a line (`[moss] the action "…"
   of … is left out: …`).
 - **A reset takes it out of its owner's shells**, and the layouts they saved
-  for it are not drawn while it is out: a layout whose action its holder has
+  for it are not drawn while it is out: a layout whose action its owner has
   no longer is not loaded. `list('layout')` still lists them. Going back to a
   version of the action brings both back.
 - **No action an app ships or hands over, and no fragment of a shell, has an
@@ -534,7 +534,7 @@ whose `principal` is their `userId`, and a row they insert or update carries
 it, whatever the statement says. Vex keeps that rule on every read and every
 write; moss's code passes no principal. **Who may save at all is the charter's**: a function that calls
 `session.artifacts.save` is the app's, an action calls it, and the charter
-says who holds that action. A session nobody is signed in to saves nothing
+says who is granted that action. A session nobody is signed in to saves nothing
 and lists nothing: everybody who is not signed in shares one `userId`.
 
 - The layout is the principal's and nobody else's. Moss gives it its id, a
@@ -564,9 +564,9 @@ comes with a body is refused.
 - **It is answered to the person who saved it and to nobody else.** When one
   of their requests replays that fingerprint, moss answers it, compiled, from
   their rows. Anybody else who sends the fingerprint gets what vex's own table
-  still holds under it, as for any query vex wrote and nobody saved, and a
+  still has under it, as for any query vex wrote and nobody saved, and a
   caller nobody is signed in for is never answered a saved read.
-- **It is a query vex wrote, and is held as one.** Vex's limits apply to it
+- **It is a query vex wrote, and is kept as one.** Vex's limits apply to it
   (`maxLimit`), as they do not to an entry the app ships. A request that names
   its fingerprint with an intent and a shape is written anew by vex into its
   own table; the saved read is what its owner is answered until they save the
@@ -591,12 +591,12 @@ comes with a body is refused.
 
 **What a shell draws under an action's ref**, the first of these that there
 is: the principal's own layout marked in use; the layout variant their roles
-hold (`app.layouts`); the layout published for everybody that is marked in use
+are granted (`app.layouts`); the layout published for everybody that is marked in use
 (`server.defaults`); the layout the build ships.
 
 **What is refused**, at a save and at a restore, in a sentence, with nothing
 written: a body that is not `{ ref, layout, use? }`; a `ref` nothing is kept
-under for the principal (an action they do not hold, or one that is not in
+under for the principal (an action they are not granted, or one that is not in
 force; an action with no layout of its own, or one that names a layout of the
 store by its id; any name that is none of `action/<id>`, `frame` and
 `canvas/<id>`); a component no shell of
@@ -609,8 +609,8 @@ a control the action listens on that the layout leaves out, a control no
 trigger handles). The same is asked of every saved layout when a shell is
 built, there against the components of that shell alone: one that does not
 pass is left out, what is under it is drawn, and a line says why (`[moss] the layout "…" of … is left out: …`). One whose ref
-its holder's store keeps nothing under any more (the action left, or they
-hold it no longer) is not loaded and nothing is said.
+its owner's store keeps nothing under any more (the action left, or they
+are granted it no longer) is not loaded and nothing is said.
 
 **The layouts of the app's own shell** are saved with the same calls: its own
 under `ref: 'frame'`, and a canvas's under `ref: 'canvas/<the canvas's id>'`.
@@ -642,11 +642,11 @@ true } }])`.
 gives a shell a canvas when something is first pushed onto it, whether or not
 its manifest declares it, and it is drawn where a layout has a canvas slot for
 it (`{ component: 'CanvasSlot', props: { canvasId: 'notes' } }`). Moss reads
-which canvases the layouts a shell is built from hold a slot for and its
+which canvases the layouts a shell is built from have a slot for and its
 manifest does not declare. Every layout counts (the frame, a canvas's, an
-action's that the principal holds, a fragment's, one the app keeps in its
+action's that the principal is granted, a fragment's, one the app keeps in its
 layout store), the build's and a saved or generated one alike. Once a layout
-leaves force and no other holds a slot for such a canvas, an open shell loses
+leaves force and no other has a slot for such a canvas, an open shell loses
 the canvas, with what is mounted on it. A slot whose `canvasId` is worked out
 when it is drawn (`'$.c.id'`, a template) counts for none. Moss gives a shell
 no canvas, and the canvases a manifest declares are never taken out. What is
@@ -657,7 +657,7 @@ any canvas no layout has a slot for.
 column moss changes is `last_used_at`, and the one delete is the aging sweep's
 ("It ages out when nobody uses it"). `list` answers the latest version of each
 of the principal's artifacts that has a body. `history` answers the versions
-of one, the newest first (the newest 500). `restore` is a new save that holds
+of one, the newest first (the newest 500). `restore` is a new save that contains
 a copy of a version and says which (`copiedFrom`); it is checked as a save
 is. `reset` is a new save whose version has no body: none of the principal's
 is in force under that id, and what is under it is drawn again. A reset is a
@@ -667,7 +667,7 @@ drawn. The next save that marks one for that ref, or takes the one in use out
 (a reset, or a save of it without the mark), takes the mark off the rest.
 
 The rows are in `artifact_saves` (one for each save) and `artifacts` (one for
-each version a save holds), which migration `nisc.moss/5` makes. They are
+each version a save contains), which migration `nisc.moss/5` makes. They are
 read and written through three vex entries of moss's own that no route serves
 (`src/artifactory/saves.ts`). What is in force for an artifact is its latest
 version by `created_at`; every id moss gives is a uuid. A body is kept with
@@ -748,9 +748,9 @@ functions: (session) => [
   refuses**, with the same sentences. Each artifact is checked beside what is
   in force for the principal with the draft laid over, so a layout may be for
   an action that is itself in the draft. A draft is one shell's, so what is
-  added to it is held to the components of that shell, where a save is held to
-  those of any shell of the app. A new action or fragment gets its
-  `generated.` id here, and keeps it when the draft is saved. An `id` names
+  added to it is checked against the components of that shell, where a save
+  is checked against those of any shell of the app. A new action or fragment
+  gets its `generated.` id here, and keeps it when the draft is saved. An `id` names
   one in the draft, or one the principal saved: a new take of it, which stands
   in for the saved one in this shell until the draft is saved or the take is
   taken out. An add that marks a layout `use: true` takes the mark off the
@@ -762,13 +762,13 @@ functions: (session) => [
 - **What the shell draws**: what is in the draft, then what `session.artifacts`
   would draw. A drafted layout marked `use: true` is drawn in place of a saved
   one that is marked for the same ref.
-- **`list`** answers what the draft holds, and **`remove`** takes one out of
+- **`list`** answers what the draft contains, and **`remove`** takes one out of
   it; what is under it is drawn again. **`discard`** empties it.
 - **Each add or removal is a numbered step**, from 1. **`show(step)`** has the
   shell show the draft as it was after that step, and `show(0)` none of it. A
   add or a removal while an earlier step is shown goes on from that step: the
   steps after it are dropped. The steps are the draft's and are saved nowhere.
-- **`save`** is one save of what the draft holds, as the principal's own and
+- **`save`** is one save of what the draft contains, as the principal's own and
   under the ids it had, checked once more. The draft is then empty and the
   shell keeps what it shows. An empty draft is refused.
 - **Calls on one draft are taken in turn**: each starts from the draft as the
@@ -815,7 +815,7 @@ the function form of `session`. The type is not exported by name.
 `socketCompression` and `socketMaxMessageBytes` are settings of the Node
 transport. The server reads them, once, and the socket it hands out
 (`server.socket`) carries them to whichever transport is handed it. So they
-hold wherever that socket is attached: under `serve`, `nisc start`, the dev
+apply wherever that socket is attached: under `serve`, `nisc start`, the dev
 plugin (`nisc dev`), and a host of the app's own that calls
 `attachSocket(httpServer, server.socket)`. No host says them again.
 
@@ -846,7 +846,7 @@ asked about again, an identity record older than it is resolved again when it
 is next read, and the generation pointer is polled
 ([Many processes](#many-processes)). `0` turns off all three, and so does
 `Infinity` or any interval above 2^31 − 1 ms (24.8 days), the longest a timer
-of Node's holds: a process then follows no `refresh`, `replaceActions` or
+of Node's can wait: a process then follows no `refresh`, `replaceActions` or
 approval of an integration that another process made.
 
 `operatorKey` is what a request under `/operator` presents as
@@ -870,10 +870,10 @@ Somebody signed in is served whatever the count is, and a shell one of the
 manifest's pages builds for somebody signed in takes no place.
 
 **What the limit is, exactly.** One count, for everybody with nobody signed
-in, in one process. It bounds what that process holds in memory for them, and
+in, in one process. It bounds what that process keeps in memory for them, and
 it does nothing else:
 
-- It is not a limit for each visitor. Whoever holds the places holds them:
+- It is not a limit for each visitor. Whoever takes the places keeps them:
   one client that opens `anonymousShellMax` connections and keeps them open
   has every place, and every other visitor with nobody signed in is sent
   `at_capacity` until one of those closes. People who are signed in go on
@@ -887,20 +887,20 @@ it does nothing else:
   close is like any other: the place is given back, a shell for nobody is
   disposed, and a signed-in person's shell starts its idle time.
 - It is counted by the process that takes the connection. A deployment of N
-  processes holds up to N times the limit.
+  processes allows up to N times the limit.
 - Moss builds no limit for each address, because the address is not moss's
   to know: behind a proxy every connection comes from the proxy, and which
   header says where the visitor is, is the proxy's to say.
 
 **A deployment that faces the internet** limits how many connections one
-address may hold where the address is known: at its proxy or load balancer,
+address may keep open where the address is known: at its proxy or load balancer,
 on the socket's path (`/socket`). With that in place, `anonymousShellMax` is
 what it is sized for here, memory. What an app can do on its own: a first
 screen for nobody that is a page which is not live opens no socket and takes
 no place (`nisc build` says which pages are live, and why).
 
 The default is from a measurement (2026-10-10, Node 24): lyceum's real boot,
-2,000 connections for nobody opened through `server.socket` and held, the heap
+2,000 connections for nobody opened through `server.socket` and kept open, the heap
 read after a forced collection before and after, with a transport that drops
 what it is sent.
 
@@ -928,7 +928,7 @@ the row.
   its own identity check and hands the token to the terminal (or sets it as
   the browser's cookie, [`sessionCookies`](#sessioncookiespage-token-options)).
   Expired rows are swept on every mint — no timer to run.
-- `revokeAllFor` deletes every token a principal holds: signed out everywhere.
+- `revokeAllFor` deletes every token a principal has: signed out everywhere.
   `session.revoke()` in a function calls it for the session's own principal;
   this is for signing out somebody else (an owner removes a member).
   No exported call deletes one token and leaves the principal's others.
@@ -948,10 +948,10 @@ the row.
   in a function closes that principal's terminals and disposes their shell,
   and forgets nothing: the app deletes its own credential where it signs
   somebody out. An app that wants moss's stored sessions and a rule of its
-  own on top (a member who was removed, an account on hold) sets
+  own on top (a member who was removed, a suspended account) sets
   `session: 'sessions'` and puts the rule where it belongs: `revokeAllFor`
   when the member is removed, or `identity.resolve` answering
-  `{ roles: ['public'], scope: {} }` for somebody who may hold nothing.
+  `{ roles: ['public'], scope: {} }` for somebody who may be granted nothing.
 
 ```typescript
 // the app's own door: who they are is the app's to establish, then a session
@@ -1007,7 +1007,7 @@ reason as `fingerprint: why` — and nothing was applied. It asks on every run,
 so a release that changes an entry and no table is checked too.
 
 One kind of entry is said and not refused: one that already did not fit before
-the run and that the cache table already holds a copy of, exactly as it is. That
+the run and that the cache table already has a copy of, exactly as it is. That
 is an old fault, not this run's. A new or changed entry gets no such pass. A
 copy is there where a release before 0.6.0 wrote it, or where the app writes
 one itself for an engine of its own (`seedCache`). Moss writes none since
@@ -1092,7 +1092,7 @@ order: the manifest is read and frozen; who a token is is resolved
 the tables are checked (migrated under `migrations: 'apply'`) and the data
 module stands; the running manifest is
 created, which is the boot check, and the data module is told to ask it for an
-entry (it compiles the ones it holds, and one vex cannot run refuses the boot);
+entry (it compiles the ones it keeps, and one vex cannot run refuses the boot);
 identity; the server's own routes (the
 authentication, `/catalog`, vex); the shell hosts, the app's and each page's;
 what crosses processes; the features, each started with seams made for it; the
@@ -1100,22 +1100,22 @@ operator prefix; the app's reactions hear a write; the generation pointer is
 watched; the socket.
 A step that refuses is the boot's refusal.
 
-**Where the app's entries are held.** In the running manifest
-(`src/artifactory/`), in memory, and nowhere else. It holds the entries the
+**Where the app's entries are kept.** In the running manifest
+(`src/artifactory/`), in memory, and nowhere else. It keeps the entries the
 app shipped and each set handed over with `server.replaceEntries`, compiled as
 vex replays them, and it is what the engine asks first: a request's
 fingerprint, and the list of fingerprints a feature or the operator is told
 of, resolve there. So what a fingerprint resolves to is what this process's
 app ships, read from the build at every boot.
 
-What the running manifest does not hold is asked of the cache table
+What the running manifest does not have is asked of the cache table
 (`vex_cache`, or the cache `runtime.cache` hands over). That table keeps what
 vex wrote itself while the app runs: a query `session.answerIntent` wrote.
 **Nothing is copied into it at boot, and a row in it that no request wrote is
 not replayed.** Vex gives a query it writes the hash of the request it was
 written for, and that is what moss asks of a row before it answers from it. A
 release before 0.6.0 copied every entry of the app there at each boot, and a
-database that ran one still holds those rows, which carry no such hash. Moss
+database that ran one still has those rows, which carry no such hash. Moss
 answers from none of them and deletes none: an entry the app no longer ships
 is refused (`cache_miss`). Two things an app may have leaned on are gone with
 the copy:
@@ -1131,7 +1131,7 @@ the copy:
 `action/<id>`. An app goes on writing an action's layout in its definition;
 where a shell is built, moss moves it into the store, and the definition the
 shell is handed names it by `{ ref: 'action/<id>' }`. A layout variant the
-person's roles hold is what the store holds under that name instead. An action
+person's roles are granted is what the store keeps under that name instead. An action
 with no layout, or one whose `layout` is already the name of a stored layout,
 is handed over as it is. Three things follow:
 
@@ -1142,7 +1142,7 @@ is handed over as it is. Three things follow:
   endpoints and its triggers.
 - **Code that reads an action's definition off its session's shell**
   (`session.shell.getRuntime(id).definition`) finds it as it was written, with
-  the layout in place: the one the store holds now, so a variant or a change
+  the layout in place: the one the store keeps now, so a variant or a change
   shows. `server.actions()` answers the definitions as they were written too.
   Only the whole shell (`unverifiedShell(session)`), which is nova's own,
   shows `{ ref }`; there the layout is `shell.layoutStore.get('action/<id>')`.
@@ -1188,11 +1188,11 @@ The manifest does not parse — refusing to serve:
 Each line is a place and what was expected there. An action, a fragment and a
 layout (a layout variant's, a canvas's, the frame's, the layout store's) are
 read by nova's schemas; an entry's `dsl` and `mutation` by vex's and its
-`mapping` by Prism's; `grammars` by strata's. Every other data field is held to
+`mapping` by Prism's; `grammars` by strata's. Every other data field is checked against
 the shape `NiscApp` gives it, and a field `NiscApp` does not have is refused.
-A code seam is held to being a function. A component's contract
+A code seam is checked to be a function. A component's contract
 (`shell.components`) is the kit's own record and may carry more than moss
-names. The charter and `behaviors` are held to being objects; the charter is
+names. The charter and `behaviors` are checked to be objects; the charter is
 verified by the check below and `behaviors` by vex when a policy is compiled.
 
 **Then it is frozen**, every level of it, in place. Once `createServer` has
@@ -1267,7 +1267,7 @@ It's a Hono app — mount it, extend it, or hand it to a listener.
   where it cannot see (a role, an install): run the check boot runs over what
   is in force (the charter, every entry's reach, the layout variants), drop
   every per-principal memo and identity record, and have every living shell
-  adopt: it is brought level with what its principal holds now, in place
+  adopt: it is brought level with what its principal is granted now, in place
   ("A change is the server's", under `shells` below). Every living shell is
   the one kept for each signed-in person, the one built for each connection
   of nobody signed in, and the one a page built for each connection. It also
@@ -1308,7 +1308,7 @@ It's a Hono app — mount it, extend it, or hand it to a listener.
   is refused from then on, and a name a feature keeps is not the app's. The
   entries in force are what the app shipped, then each set: an entry of a set
   is replayed in place of one the app shipped under the same fingerprint, for
-  as long as the set holds it. Every entry is read by the schema the
+  as long as the set contains it. Every entry is read by the schema the
   manifest's entries are read by, compiled, and checked before the set is
   taken: a write by vex's authoring lint, and the reach an entry declares by
   the check boot runs. Refused, the promise rejects with what was found
@@ -1330,7 +1330,7 @@ It's a Hono app — mount it, extend it, or hand it to a listener.
   shows the build's again. **A layout:** `server.defaults(who).save([{ kind:
   'layout', body: { ref: 'action/<id>', layout, use: true } }])` is drawn under
   that action's ref unless its principal has a layout of their own in use or
-  their roles hold a layout variant; `ref: 'frame'` and `ref: 'canvas/<id>'`
+  their roles are granted a layout variant; `ref: 'frame'` and `ref: 'canvas/<id>'`
   publish the layouts of the app's own shell. **An action or a fragment** is
   given its id by whoever publishes it, as a shipped one has one: `save([{
   kind: 'action', id: 'promo', body }])`; one without an id is refused, and so
@@ -1356,9 +1356,9 @@ It's a Hono app — mount it, extend it, or hand it to a listener.
   calls are ones the publisher's roles grant, its reads ones they may replay,
   no write), and then the whole as a manifest, as a set handed over is:
   `Publish refused — actions call functions the app does not have, or that
-  their holders’ charter does not grant:` lists a holder whose roles do not
-  grant a call. When the rows are read, the same again, and what does not pass
-  any more is left out with a line, said once for each read of the rows: a
+  their holders’ charter does not grant:` lists whoever is granted an action
+  whose call their roles do not grant. When the rows are read, the same
+  again, and what does not pass any more is left out with a line, said once for each read of the rows: a
   layout, an action or a fragment on its own where its own check refuses it
   (`[moss] the action "…" published for everybody is left out: …`), and the
   actions and fragments all together where the manifest refuses them (`[moss]
@@ -1366,7 +1366,7 @@ It's a Hono app — mount it, extend it, or hand it to a listener.
   …`). Once `checkFunctions` has read the app's functions, the rows are read
   again against them: a published action calling a function a new build
   dropped is left out, and the boot is not refused. When a shell is built, for
-  that shell and that principal: a layout for an action they do not hold is
+  that shell and that principal: a layout for an action they are not granted is
   not loaded, and a published fragment a shell cannot draw is left out of that
   shell (`[moss] the fragment "…" published for everybody is left out of a
   shell that cannot draw it: …`).
@@ -1377,16 +1377,16 @@ It's a Hono app — mount it, extend it, or hand it to a listener.
   A publish has every living shell adopt, as `refresh` does, and moves the
   pointer, whether or not the rows can be read back: every other process on
   the same database follows the pointer and reads them.
-- `catalogOf(principal): Promise<{ ids, hash }>` — what a principal holds of the
+- `catalogOf(principal): Promise<{ ids, hash }>` — what a principal is granted of the
   actions in force: `{ ids, hash }`, the granted action ids sorted, with a
   content-hash version token (equal hash, equal application). The principal is
   resolved the way a request resolves it (the `identity` seam, or
   `assignments`), so an integration's actions are there only where it is
   installed. `null` is nobody signed in.
-  There is no asking by a list of roles: what somebody holds depends on who
+  There is no asking by a list of roles: what somebody is granted depends on who
   they are resolved to be, installs included, and the server resolves it.
 - `policyForRoles(roles): ScopePolicy` — what a set of roles may read and
-  write: the vex policy a request by somebody holding exactly these roles is
+  write: the vex policy a request by somebody wearing exactly these roles is
   served under, compiled from the charter and `behaviors` over every table the
   database has. **One policy per role, merged** — a person may wear several (an
   instructor who also trains here), and reach belongs to the role rather than
@@ -1398,7 +1398,7 @@ It's a Hono app — mount it, extend it, or hand it to a listener.
   perRole }`, over the universes boot resolved against. Boot and `refresh` read
   `errors`, and boot prints the `shape` warnings (a key the charter does not
   read, a string where a list belongs) and nothing else, so this is where a host reads
-  it, to draw, log or hold a deploy on: `warnings` (an action no role grants, an
+  it, to draw, log or stop a deploy on: `warnings` (an action no role grants, an
   `allow` that matches nothing) and each role's closure `issues`. `errors` is
   always empty here. A push whose target is a binding (`@event.payload`,
   `$.target`) is listed among the `issues` as "not in the catalog", though it is
@@ -1406,18 +1406,18 @@ It's a Hono app — mount it, extend it, or hand it to a listener.
 - `invalidateIdentity(principal): boolean` — forget one principal's identity
   record and reset every living shell of theirs (a role change): the one the
   app keeps for them, and the one a page built for each connection of theirs.
-  `false` = no record was held.
+  `false` = no record was kept.
 - `invalidateTag(tag): number` — forget every identity record wearing the
   tag the app put on it (`IdentityRecord.tag`); answers how many. Then every
   living shell adopts, as after `refresh` ("A change is the server's", under
-  `shells` below): it is brought level with what its principal holds now, in
-  place, so a function or an action their new roles do not grant is no longer
-  held. No shell is reset: what people were in the middle of stays. Every
+  `shells` below): it is brought level with what its principal is granted now,
+  in place, so a function or an action their new roles do not grant is no
+  longer in their shell. No shell is reset: what people were in the middle of stays. Every
   living shell, not only those of the records forgotten: a record can be
   dropped while its shell lives (past `runtime.identityMax`, or unread for
   `runtime.identityIdleMs`), and no tag finds it then. So each call asks the app's
   `identity` again for every signed-in person with a living shell whose
-  record is not held.
+  record is not kept.
 - `identity(principal): Promise<IdentityRecord>` — who one principal is,
   resolved the way a request resolves it: `{ roles, scope, installed? }`,
   through the same cache the request path uses. `null` is nobody signed in.
@@ -1520,17 +1520,17 @@ is live when something on it can still happen:
 
 What can be pressed is read off the layout a screen is drawn with: a `{ ref }`
 in it, the one an action's own layout is named by included, is read through
-to the layout the shell's store holds under it.
+to the layout the shell's store keeps under it.
 
 A read made while the action opened is **finished**: its answer is in the tree
 (and listed in `drawnWith`). The app's own shell is always live for a signed-in
 principal — it is the thing that is kept. nova supplies the facts
 (`livenessOf`, `@niscorp/nova/reflect`); moss composes the verdict, because
-the running manifest holds the entries in force, by fingerprint
+the running manifest keeps the entries in force, by fingerprint
 (`src/shells/snapshot.ts`; the function is not exported, its answer is
 `live`, `why` and `drawnWith` on the snapshot). It reads that list and not
-the cache table, which can hold more: a fingerprint the running manifest does
-not hold (a query written by `answerIntent`) is the last line of the table.
+the cache table, which can have more: a fingerprint the running manifest does
+not have (a query written by `answerIntent`) is the last line of the table.
 
 When `live` is false the trees are the whole of the screen, and the terminal
 opens no socket.
@@ -1569,26 +1569,26 @@ What it is handed is `DocumentConfig`, and what it answers is `DrawnDocument`.
   the same node the effect reads it from. Values are escaped.
 - **The page's `<head>` is its screen's own.** It is a node in a layout —
   nova's `nova:head`, whose children (`nova:title`, `nova:meta`, `nova:link`,
-  `nova:script`) are the elements a head holds, their props the elements'
+  `nova:script`) are the elements a head contains, their props the elements'
   attributes. It is in the snapshot's trees like everything else on the screen,
   so the elements are read off them and written into the template's `<head>`:
   one takes the place of the tag that said the same thing, anything else is
   added, and the rest of the head is left as the template has it. `head` in the
   result is what was read (`{ elements, actions, refused }`); absent, the
   screen has no head and the page went out with the template's. What a head may
-  not hold — something that runs, or styles — is left out and logged. In the
+  not contain — something that runs, or styles — is left out and logged. In the
   browser the terminal keeps the page's head on the same node as the screen
   moves, and the template's own tags come back when it stops saying them.
 - **`site`** is the address the site is served at. With it, every path's
   document says its own canonical address (`<link rel="canonical">`, `og:url`).
   Without it the template's is left as it is.
-- **`template`** must hold the empty root (`root`, default
+- **`template`** must contain the empty root (`root`, default
   `<div id="root"></div>`). The screen goes inside it, the snapshot element
   straight after. `root` is an empty element written as it stands in the
   template, its opening tag and at once its closing tag: any element
-  (`<main id="app"></main>`), not only a `div`. A template that does not hold
+  (`<main id="app"></main>`), not only a `div`. A template that does not contain
   the root, or a root that is not an empty element (an opening tag alone, one
-  that holds something, one closed in its own tag), has no place for a screen:
+  that contains something, one closed in its own tag), has no place for a screen:
   the page goes out undrawn (`drawn: false`), and the second case is logged.
 - **`server`** is asked three things, and its type says so
   (`DocumentConfig['server']`): `principalOf(token)`, `page(path)` and
@@ -1643,7 +1643,7 @@ paths (`server.executeAs` runs a read the app serves as a charter role), are the
 caller's.
 
 `renderDocument` is the one way a page is drawn, and its parts are not
-exported. It reads the session the browser holds off the request's cookie, and
+exported. It reads the session the browser keeps off the request's cookie, and
 it writes the snapshot into the page as a
 `<script type="application/json" id="nisc-snapshot">` element with every `<`
 (and U+2028/2029) escaped: a tree carries what people typed, and a path is
@@ -1666,7 +1666,7 @@ const files: ExportedDocument[] = await exportDocuments({ ...drawing, paths: ['/
 The `Set-Cookie` values that keep `token` in the browser of the page at this
 origin — or, for `null`, take it back. For a sign-in the app answers over HTTP
 (a link redeemed, a provider's callback): set them on the response, and the
-page that follows is signed in having never held the token.
+page that follows is signed in having never had the token.
 
 ```typescript
 server.get('/login', async (c) => {
@@ -1722,7 +1722,7 @@ apart from `deliver`. An action must not treat what arrives on a channel as
 coming from the server: it re-reads what it needs under its own policy, as a
 reaction does.
 
-Two rules hold this lane honest:
+Two rules keep this lane honest:
 
 - **A reaction is told THAT a write landed, never what it wrote.** No rows.
   A receiver that wants the data re-reads it under its own policy — a row
@@ -1787,7 +1787,7 @@ it answers `undefined`, nothing is minted.
 `TIDE_DDL` are exported by `@niscorp/tide/postgres`. They were moss's, and do
 what they did: see tide's [DOCS.md](../tide/DOCS.md), "The driver" and "The
 Postgres store". `createTideStore(runtime.pool, { migrate: false })` takes the
-pool the runtime holds, with `TIDE_SEQUENCE` in `runtime.tables`, and its tables
+pool the runtime keeps, with `TIDE_SEQUENCE` in `runtime.tables`, and its tables
 are ordinary tables to moss: migrated by `nisc migrate`, introspected,
 grantable, and scoped by a behavior like any other.
 
@@ -1813,13 +1813,13 @@ them. The sequences are checked in the one ledgered run, before the feature
 starts (migrated there under `migrations: 'apply'`), and `migrateTables`
 applies them. A feature reads and writes those
 tables through vex, as an app does, with entries of its own: they are seeded into a
-cache of their own, held by an engine no route is handed, so `/api/vex`
+cache of their own, kept by an engine no route is handed, so `/api/vex`
 answers `cache_miss` for one of them whatever the charter grants whoever asks,
 and no surface lists it. They run under a policy that admits the tables the
 feature named as its own and no other, and asks for no principal. An entry
 that reads or writes any other table refuses the boot (`moss: the feature "…"
 handed over an entry that reads or writes a table that is not its own: "…"`).
-What another table holds, a feature reads as the app does: through the app's
+What another table contains, a feature reads as the app does: through the app's
 entries, under the charter. A write by a feature tells the app's engine which
 tables changed, so a reactive read over one of them answers again.
 
@@ -1833,7 +1833,7 @@ tables changed, so a reactive read over one of them answers again.
   `server.invalidateIdentity`, `invalidateTag` and `nudge` publish after
   applying locally: `invalidate-identity`, `invalidate-tag` and `nudge`. The
   fourth, `adopt`, names a principal and tells a process to bring the shells
-  it holds for them level with what they hold now; moss publishes it when a
+  it keeps for them level with what they are granted now; moss publishes it when a
   layout is saved for that principal (`session.artifacts`), and it says
   nothing of what was saved. Best-effort:
   each targets state that heals on its own clock. Unset, every path behaves as
@@ -1860,7 +1860,7 @@ tables changed, so a reactive read over one of them answers again.
   that is unset), and when it has moved it reads again every set of actions
   it has a loader for, drops what it had read of what is published for
   everybody (the next shell it builds reads that again), runs the check
-  boot runs over what it would then serve, drops what it derived (what each set of roles holds, the compiled
+  boot runs over what it would then serve, drops what it derived (what each set of roles is granted, the compiled
   policies, the identity records) and has its living shells adopt.
   **The pointer carries no set.** It says that something changed, and a
   process learns what by reading rows. The only set that has a loader is the
@@ -1873,7 +1873,7 @@ tables changed, so a reactive read over one of them answers again.
   what they derived and adopt again.
   The row is read and moved through vex, by two
   entries of moss's own that no route serves (`src/data/own-entries.ts`);
-  `src/artifactory/generation.ts` holds the clock and no SQL. A move is a compare
+  `src/artifactory/generation.ts` keeps the clock and no SQL. A move is a compare
   and a set: the next number is written where the counter is still what was
   read, and read again where it is not. A move a process could not follow is
   tried again at every poll until it is followed, and logged when that is
@@ -1882,13 +1882,13 @@ tables changed, so a reactive read over one of them answers again.
   has moved on or the reload fails another way, and once when it is followed
   (`followed the generation pointer to 4, after 12 looks that failed`). A
   reload that fails the same way for an hour is one line, not sixty.
-- The identity cache — what holds the records `app.identity` resolves. It is
+- The identity cache — what keeps the records `app.identity` resolves. It is
   the server's own (`src/identity/cache.ts`) and is not exported. Its limits
   are `runtime.identityMax` (default 10,000) and `runtime.identityIdleMs`
   (default 30 minutes). At `identityMax` the least recently read record is
   dropped to make room, and whoever it was is resolved again on their next
   request. A record is forgotten with `server.invalidateIdentity`,
-  `invalidateTag` and `refresh`, and what is held is read through
+  `invalidateTag` and `refresh`, and what is kept is read through
   `server.identities`.
 
 ### Telemetry
@@ -1906,13 +1906,13 @@ with `integrations/` and whose `hasPrincipal` is `false`. The generation
 counter's poll emits none. A `socket.upgrade` is `ok` (admitted), `refused` (the token
 offered is nobody's, or no place is left for a shell for nobody) or
 `error` (the session could not be opened: the verifier
-threw, what somebody holds could not be asked, their shell could not be built).
+threw, what somebody is granted could not be asked, their shell could not be built).
 A `socket.close` span runs from the upgrade to the close.
 `emit` is never awaited, and a sink that throws costs the caller nothing: the
 throw is caught where the span is emitted, and logged.
 
 `refused` is a no the server gave (a policy, a limit, an integration that is
-not installed): an outcome, and not a fault. `attributes` holds identifiers
+not installed): an outcome, and not a fault. `attributes` contains identifiers
 and measurements (a fingerprint, a count, a status) and never a payload, a
 row or who a principal is: a principal is there only as `hasPrincipal`. Moss
 sets none of `traceId`, `spanId` and `parentSpanId`.
@@ -1927,7 +1927,7 @@ const telemetry: Telemetry = { emit: (span) => void spans.push(span) };
 
 ### Resolution
 
-Who somebody is, what they hold and what they may read and write are asked of
+Who somebody is, what they are granted and what they may read and write are asked of
 the server, which resolves a principal the way a request does (the `identity`
 seam, or `assignments`): `(await server.identity(principal)).roles`,
 `server.catalogOf(principal)`, `server.policyForRoles(roles)`. Nothing is
@@ -1947,7 +1947,7 @@ app that resolves people through `identity`.
 - An entry that declares a `reach` (vex) is served under the same roles'
   grants recompiled at that named profile. The vex surfaces and `executeAs` do
   it themselves; it narrows rows, never widens verbs.
-- A layout variant a set of roles holds (ring 2) is put in place of its
+- A layout variant a set of roles is granted (ring 2) is put in place of its
   action's layout where a shell is built, in the shell's layout store.
   Nothing answers the variants by themselves.
 - `verifyApp(app, grants)` — the check boot runs, for an app
@@ -1991,7 +1991,7 @@ for (const error of report.errors) console.error(`${error.check}: ${error.detail
   is not exported). It is handed no manifest and no
   runtime, but a typed object of what it needs: one function that answers what
   a principal's shell is made of (who they are, the action definitions they
-  hold, the canvases and the frame, each naming its layout in the layout
+  are granted, the canvases and the frame, each naming its layout in the layout
   store, the layout store's seed with those layouts in it (for an action the
   published one over the build's, their roles' layout variant over that, and
   over it the layout of their own they marked in use), the
@@ -2004,11 +2004,11 @@ for (const error of report.errors) console.error(`${error.check}: ${error.detail
   reach a shell through that one answer, and the server's wiring reads none
   of them off the app. For an entry that is what a shell is told of the reads
   on its screens. What a read replays the engine asks the running manifest
-  for too (see "Where the app's entries are held", under `createServer`).
+  for too (see "Where the app's entries are kept", under `createServer`).
   A kept shell may sit unattached for
   `runtime.shellIdleMs` (default 30 minutes; `0` disables the sweep). A shell
   that is not kept (nobody signed in; any shell of a page's host) ends when
-  its last terminal leaves, and the host holds nothing of a shell that has
+  its last terminal leaves, and the host keeps nothing of a shell that has
   ended.
   - `session(token, principal, options?)` — `options = { seed?, inputs? }`;
     `snapshot` is described under [The document](#the-document), and what it
@@ -2026,13 +2026,13 @@ for (const error of report.errors) console.error(`${error.check}: ${error.detail
     so that a change can reach it. The socket ends it when the connection
     closes. Code that opens one in process and attaches nothing ends it
     itself, with `session.detach(connection)` (any connection: none was
-    attached); until then the host holds the shell.
+    attached); until then the host keeps the shell.
   - A host has no `adopt` and no `stop`. Each was a second way, for one
     host, to something a server does for all of them at once.
     **A change is the server's.** When what the app consists of changes
     (`server.refresh()`, `server.replaceActions()`, `server.replaceEntries()`, an integration approved
     or removed, a change another process made), every living shell of every
-    host adopts (a layout somebody saved for themselves is adopted by the shells of that principal alone): it is brought level with what its principal holds now, in
+    host adopts (a layout somebody saved for themselves is adopted by the shells of that principal alone): it is brought level with what its principal is granted now, in
     place. Every living shell: the ones a host keeps, and the ones it built
     for one connection, which for the app's host is each visitor's and for a
     page's host is everybody's. Definitions that arrived or changed are
@@ -2050,13 +2050,13 @@ for (const error of report.errors) console.error(`${error.check}: ${error.detail
     it. The canvases a shell's manifest declares, and what is mounted on any
     canvas, are the shell's own state and are not taken again: a reset builds
     that afresh. A canvas the manifest does not declare, that a layout in
-    force held a slot for, is taken out by an adopt, with what is mounted on
-    it, once no layout holds the slot. A
-    shell that cannot adopt is logged and keeps what it held; the rest go on.
+    force had a slot for, is taken out by an adopt, with what is mounted on
+    it, once no layout has the slot. A
+    shell that cannot adopt is logged and keeps what it had; the rest go on.
     Each shell adopts on its own: one whose principal is never answered (an
-    `identity` that hangs for them) holds up no other. So a change asks about
+    `identity` that hangs for them) delays no other. So a change asks about
     every living shell in the same moment, and an app's `identity` runs at
-    once for every signed-in principal whose record is not held.
+    once for every signed-in principal whose record is not kept.
     A shell whose build was under way adopts when it lands, and so does one a
     reset was replacing; no change waits for a build, or for another change.
     One built for the length of a `snapshot` is read and ended, and adopts
@@ -2087,7 +2087,7 @@ for (const error of report.errors) console.error(`${error.check}: ${error.detail
     Every living shell of theirs on this host: the one it keeps for them, or,
     on a host that keeps none (a page's), the one built for each of their
     connections, each replaced for itself.
-    `false` = they hold no shell, which is an answer, not an error. The
+    `false` = they have no shell, which is an answer, not an error. The
     replacement is built from what the shell was opened with (for a page's,
     the inputs of its path and its id seed), and a shell's resets run one
     after another. A reset that arrives while another waits for its turn is
@@ -2104,9 +2104,9 @@ for (const error of report.errors) console.error(`${error.check}: ${error.detail
   remote clients ride `attach`/`dispatch`. Nine members of `shell` throw, as
   on [`FunctionSession`](#functionsession): the whole shell is
   `unverifiedShell(session)`. `shell` is a **getter** — `reset`
-  replaces the shell under a session already held, so a snapshot of the field
+  replaces the shell under a session already handed out, so a snapshot of the field
   would go on addressing the disposed one.
-  `dispatch(canvas, event)` holds what a terminal sent to the shell: the
+  `dispatch(canvas, event)` checks what a terminal sent to the shell: the
   canvas must be one the shell has, an `origin` the event names must be an
   instance on that canvas (with none, the canvas's active instance is
   stamped), and the event must parse as one of nova's (`NovaEventSchema`:
@@ -2155,7 +2155,7 @@ server.nudge('usr_ada', 'notes-changed');
   transport: `server.socket(url, connection)`. `server.socket.stop()` ends
   revalidation (the timer is unref'd, so a plain process needn't call it).
   `createServer` builds it (`src/socket/`), handed who a token is, what
-  somebody holds, and where a session comes from for the app and for each
+  somebody is granted, and where a session comes from for the app and for each
   page. Neither its factory nor its type is exported by name: the type is
   `MossServer['socket']`.
 - **Identity is asked twice.** At upgrade, and then every
@@ -2164,7 +2164,7 @@ server.nudge('usr_ada', 'notes-changed');
   somebody else — gets an `invalid_token` error frame and a `4401` close, which
   is the recovery the terminal already performs: drop the token, reconnect
   anonymous, land on the served lock screen.
-  - Anonymous connections are never revalidated: nothing they hold can expire.
+  - Anonymous connections are never revalidated: nothing they have can expire.
   - A verifier that **throws** is a fault, not a sign-out — the connection is
     left alone and asked again next pass, so a database blip cannot become an
     outage. Only an explicit `null` (or a changed principal) closes. That it
@@ -2187,7 +2187,7 @@ server.nudge('usr_ada', 'notes-changed');
   catalog asked, its shell built) is not attached to a shell, so a kept shell
   idles and one built for that connection alone is disposed. The type also
   has `upgrade` (below) and `seal`. `seal` is set by the socket, on a
-  connection whose browser holds a seal: a transport leaves it out.
+  connection whose browser has a seal: a transport leaves it out.
 - `ServerMessage` (`@niscorp/moss/protocol`) — what the server sends: `hello | catalog | frame | render |
   render-delta | session | pong | error`.
 - What a terminal sends is `event | publish | resync | reset | back | popTo | ping`,
@@ -2224,7 +2224,7 @@ server.nudge('usr_ada', 'notes-changed');
   protocol-level, not app-level — no action declares it and no charter grants
   it — and it is answered by the frames it produces, not by an envelope of its
   own. Any terminal may send it, signed in or not, and each one that is acted
-  on is a whole build: who somebody is, what they hold, and the app's
+  on is a whole build: who somebody is, what they are granted, and the app's
   `inputs`, `phrases`, `functions` and `seeds`. Resets that arrive while one
   waits for its turn are answered by it (`reset(principal)`, under `shells`),
   so a burst costs two builds at most. Nothing limits how often: a terminal
@@ -2253,7 +2253,7 @@ server.nudge('usr_ada', 'notes-changed');
   - `4503`: the server is serving as many terminals with nobody signed in as
     `runtime.anonymousShellMax` allows, and built no shell for this one. An
     `at_capacity` error frame, then the close. Not a recovery: the terminal
-    keeps what it holds and reconnects with its usual backoff, which grows
+    keeps what it has and reconnects with its usual backoff, which grows
     for as long as it is refused.
   - `4426`: the two ends speak protocols the other cannot (below).
 - `error` codes: `invalid_token`, `session_failed`, `at_capacity`,
@@ -2269,7 +2269,7 @@ server.nudge('usr_ada', 'notes-changed');
 - **Who a terminal is** is decided on the upgrade request, from a header of
   it — never from its address, which is what every proxy on the way writes
   into its log. A terminal offers the subprotocol `nisc`, and beside it its
-  token when it holds one: `offerToken(token | null)` returns the list to
+  token when it has one: `offerToken(token | null)` returns the list to
   construct the socket with (`new WebSocket(url, offerToken(token))`), and the
   server answers `nisc`. A token in the address (`?token=`) is not read. A
   transport hands the offer over as `connection.upgrade.offered`
@@ -2281,13 +2281,13 @@ server.nudge('usr_ada', 'notes-changed');
   `runtime.origins` lists. A `Host` that writes out the scheme's own port
   (`app.example.com:443` for `https://app.example.com`, `:80` for `http`)
   names the same host. (Behind a proxy that rewrites `Host` and with
-  nothing listed, no page is the app's own: terminals hold their own tokens,
+  nothing listed, no page is the app's own: terminals keep their own tokens,
   as before, and moss says so once in the log.) A token such a page offers is who it is and is
   moved into the cookie by the answer to the upgrade; one that no longer
   resolves is nobody (served, not refused) and is taken back. `?key=` names
   which of the browser's sessions the terminal is — a seat; the cookie is named
   by it. `?leave=1` is a terminal that was signed out: it is nobody whatever
-  its browser holds, and the cookie is taken back. A transport passes what the
+  its browser has, and the cookie is taken back. A transport passes what the
   request carried as `connection.upgrade` — `{ offered, origin, host, cookie }`
   — and, when it has not answered the request yet, `answer(cookies)`: moss
   calls it once who is asking is decided, with the `Set-Cookie` values to
@@ -2377,12 +2377,12 @@ through the object form — when connection count matters more than bandwidth.
 An object is handed to `ws` verbatim; see its `perMessageDeflate` options.
 
 The setting is the Node transport's, and the server's socket carries it there
-from the runtime: it holds under `serve`, `nisc start`, the dev plugin, and a
+from the runtime: it applies under `serve`, `nisc start`, the dev plugin, and a
 host that attaches `server.socket` itself.
 
 #### Frame deltas — `runtime.shellFrameDelta`, default **off**
 
-A changed canvas, described against the frame that connection already holds:
+A changed canvas, described against the frame that connection already has:
 copy runs from the old frame plus literal inserts, checksummed.
 
 ```typescript
@@ -2402,7 +2402,7 @@ the same shell, in the same pass. The two kinds of connection coexist.
 **A canvas whose frame is over 64 KB is always sent whole.** Comparing two
 frames costs the server in proportion to their size, not to what changed, and
 it does that work on the thread every session shares — about 7 ms at 64 KB, a
-second at 2.7 MB. So when the frame a terminal holds, or the one replacing it,
+second at 2.7 MB. So when the frame a terminal has, or the one replacing it,
 is longer than 64 KB, the server does not compare them. It is not a setting.
 
 What it buys, measured on Lyra:
@@ -2466,7 +2466,7 @@ Correctness, which matters more than the saving:
   first; this is the catch-all. `owned` (default: moss's own prefixes) names
   what is never a page — an unknown path under one is a 404, not a screen. So is
   a **missing file**: a name with an extension that is neither a file in `dist`
-  nor a page of the manifest is answered 404 (a browser holding a page from
+  nor a page of the manifest is answered 404 (a browser keeping a page from
   before a deploy asks for its script by the old name, and needs "gone" back,
   not a document). A page's own path may have a dot in it (`/docs/v1.2`).
   What a browser may keep of these files, and compressing what goes out, is not
@@ -2637,7 +2637,7 @@ vocabulary, and the app that has it defines it.
 
   `check` and `prepare` are handed, as `bundle` (`ExtensionContext`), what moss
   knows of the bundle: `integration` (its id), `url` (where its service
-  lives), `actions` (its action definitions, each already held to its
+  lives), `actions` (its action definitions, each already checked against its
   namespace, its endpoints and the kit), `fingerprints` (the ones the app
   serves), and `layoutMisfits(layout)` (each place a layout does not fit the
   app's kit, for a vocabulary that lets a bundle carry one).
@@ -2646,7 +2646,7 @@ vocabulary, and the app that has it defines it.
   "console.log(require('node:crypto').randomBytes(32).toString('base64'))"`).
   With none, a keypair is made when the feature starts and kept nowhere, so
   each boot and each process has its own. Give one where an integration's
-  service holds the public half in its environment, or where a deployment
+  service keeps the public half in its environment, or where a deployment
   runs more than one process: the same seed is the same key everywhere. It is
   this feature's setting and no other feature is handed it. One that decodes
   to fewer than 32 bytes refuses the boot.
@@ -2676,14 +2676,14 @@ that:
 - `listIntegrations(): Promise<RegisteredIntegration<Extension>[]>` — every
   registered integration, in the order of the ids: `{ id, status, url,
   extension }`. `status` is `'pending'` or `'approved'`; `extension` is what
-  the row holds, read by the app's schema and so typed by it (`undefined`: the
+  the row stores, read by the app's schema and so typed by it (`undefined`: the
   bundle carried none, the app supplied no schema, or the schema no longer
   reads what was stored, which is logged with the integration's id). An app
   builds its placements, its listing and anything else from this.
 - `callIntegration(id, path, { principal, method?, body?, scope? }):
   Promise<Response>` — call an installed integration when
   nobody is driving; throws unless it is approved and installed for the
-  principal's tenant. It is not held to the integration's reach: an app calls
+  principal's tenant. It is not checked against the integration's reach: an app calls
   an endpoint its own vocabulary names (a preview, a page it mounts on a route
   of its own) with this. `principal` is who the call is made for, and who the
   assertion names. `method` defaults to `POST`; `body` is sent as JSON;
@@ -2704,7 +2704,7 @@ for everybody, and an empty list is none.
 The rule that reads it is this feature's (an
 `ext.<audience>.<integration>.<name>` action is there for somebody only where
 that integration is in their list), and it is laid when the feature starts:
-an app that names no feature has no such rule, and holds an `ext.…` action
+an app that names no feature has no such rule, and has an `ext.…` action
 of its own wherever the charter grants it.
 
 What the feature serves once it is started:
@@ -2717,10 +2717,10 @@ What the feature serves once it is started:
 
 A bearer token with the `ik_` prefix is an integration key: it is resolved to
 the integration it was issued to and, through `integrationActor`, to a
-principal (`401` unknown key, `403` no actor). No two integrations hold the
+principal (`401` unknown key, `403` no actor). No two integrations have the
 hash of one key (a unique index on `integrations.key_hash`).
 
-**What intake holds a bundle to**, before any of it is kept. It is upgraded by
+**What intake checks a bundle against**, before any of it is kept. It is upgraded by
 its grammar stamps and read by the bundle's schema. Each action is named
 `ext.<audience>.<integration>.<name>` under the integration's own id; each of
 its endpoints is a fingerprint the app serves, called on one of the app's vex
@@ -2732,7 +2732,7 @@ routed: a `..`, `.`, `%2e` or `\` that would move it is refused, and so is a
 `{{…}}` template, which is filled in when the endpoint is called; one in the
 query is taken. Its layout composes what the app's kit has; and no
 chain of its steps, laid over the app's own actions, runs for ever. Then
-`extension` is read by the app's schema and held to the app's `check`. Every
+`extension` is read by the app's schema and checked by the app's `check`. Every
 reason, moss's and the app's, is reported together, and any one refuses the
 bundle whole: the last good import keeps serving.
 
@@ -2745,7 +2745,7 @@ bundle whole: the last good import keeps serving.
   its actions in place of the ones it shipped before, and the hash of its key
   on the import a key is issued with. It lands whole, or the import before it
   is still there, whole. The answer carries `key` once, on the registration
-  whose key the row holds: the hash is written where the row holds none, so of
+  whose key the row stores: the hash is written where the row has none, so of
   two registrations of one new integration in the same moment one is answered
   the key and the other is answered as a later import is, with none.
 - *Approve* (`POST /operator/integrations/:id/approve`) reads what the
@@ -2771,7 +2771,7 @@ bundle whole: the last good import keeps serving.
 - *The proxy* (`/integrations/:id/*`) forwards a signed-in caller's call to an
   approved integration that is installed for them, with an assertion that
   says who they are. It forwards the paths the integration's actions declare
-  as endpoints, each for whoever holds an action that declares it, and
+  as endpoints, each for whoever is granted an action that declares it, and
   answers `404` for any other path.
 - *A webhook* (`POST /integrations/:id/hook/*`) takes no session and no
   assertion is minted for it: the body goes on to the integration's service
@@ -2813,12 +2813,12 @@ app's own vex entry reads `integrations.extension` as it reads any column.
 | `extension` | what its bundle said in the app's own vocabulary, as the app's `prepare` answered it |
 | `last_import_at`, `last_error` | when the last good import landed, and why the last one did not |
 
-`integration_actions` holds one row for each action: `integration_id`,
+`integration_actions` has one row for each action: `integration_id`,
 `action_id`, `definition`, and `grammar`, the stamps the definition is written
 at.
 
 The feature reads and writes them through vex, with entries of its own that no
-route serves (see [Features](#features)); it holds no SQL. Landing a bundle is
+route serves (see [Features](#features)); it contains no SQL. Landing a bundle is
 a batch, so `runtime.db` has to have `transaction`, as it does for any batch an
 app writes.
 
@@ -2848,7 +2848,7 @@ const approved = async (): Promise<RegisteredIntegration<Listing>[]> => (await i
 
 `{ verifyKey, mint(claims, ttlMs?) }` — the ed25519 assertion the feature signs
 every call to an integration with, for a check or a service in the same
-workspace that wants to mint or hold one. An integration verifies it against
+workspace that wants to mint or keep one. An integration verifies it against
 `GET /api/integrations/verify-key`.
 
 `seed` is 32 bytes as base64, and makes the same keypair wherever it is given:
@@ -2960,7 +2960,7 @@ goes around moss: see [`FunctionSession`](#functionsession).
 - `initial` — pass what `readDocumentSnapshot()` returned. The wire starts from
   it instead of from nothing, so the first render matches the page's HTML and
   the first frames off the socket confirm it. It is used only when it was drawn
-  for who this terminal is — signed in and holding a token, or neither;
+  for who this terminal is — signed in and with a token, or neither;
   anything else is somebody else's screen and the wire starts empty. Its `seed`
   is named on the first connect only. Its `path` is named on every connect
   (`config.path` overrides it; a page that was not drawn on the server passes
@@ -3006,7 +3006,7 @@ is the same recovery a layer down. It is also the way out of `incompatible`,
 once the server has been updated: the connection it makes is found compatible
 or not on its own account, and is retried like any other when it drops.
 
-**The wire holds one socket at a time.** Before it makes one it lets go of the
+**The wire has one socket at a time.** Before it makes one it lets go of the
 one it had: its handlers come off and it is closed. That one may have closed
 already, may have carried another principal, or may be a connect still in
 flight when `reset()` was called; whichever, nothing it says afterwards is
@@ -3061,7 +3061,7 @@ one pressed once the connection is open drops them and is sent, because it was
 pressed on the screen the person sees now. `publish`, `back` and `popTo` name
 no canvas to check against, and are dropped unless the connection is open.
 
-`back()` sends `{ type: 'back' }` and nothing else — no location is held here,
+`back()` sends `{ type: 'back' }` and nothing else — no location is kept here,
 so what comes back is whatever canvases moved, over the same stream every other
 change arrives on. It is dropped on a closed socket rather than queued: a back
 pressed during an outage is about a screen the person is no longer being served,
@@ -3134,7 +3134,7 @@ in the subpaths.
   status.
 
 **The connection's status reaches every target, the same way.** When a
-connection drops, the trees the terminal holds stay on screen: a reconnect
+connection drops, the trees the terminal has stay on screen: a reconnect
 re-sends the current ones, and blanking in between would show a working app as
 an empty one. So a screen left up by a dead socket looks exactly like a live
 one, and every target is told which it is: `api.status()` is `'connecting' |
@@ -3184,7 +3184,7 @@ Requires the optional `react`/`react-dom` peers.
   SlotWrapper. Served trees carry identity only, so its props
   (`TerminalSlotWrapperProps`) are `{ canvasId, instanceId, definitionId }`
   and the content as `children` — `definitionId`, not `action`.
-- **Adoption.** A `root` that already holds elements, on a wire that has a
+- **Adoption.** A `root` that already contains elements, on a wire that has a
   frame, was drawn on the server from the snapshot the wire started from: the
   target adopts those elements (`hydrateRoot`) instead of replacing them. An
   empty root, or a wire with no frame (the page was drawn for somebody else),
@@ -3201,7 +3201,7 @@ Requires the optional `react`/`react-dom` peers.
   one. It is drawn with the status the page's terminal starts in: `'static'`
   when `live` is `false` (no socket is opened for that page), `'connecting'`
   otherwise. So a kit component that draws the status draws the same thing on
-  both sides. The same holds for the Vue entry below.
+  both sides. The same applies to the Vue entry below.
 
 **What a kit owes a server-drawn page.** The first pass in the browser must
 draw exactly what the server drew, so nothing that differs between the two may
@@ -3215,7 +3215,7 @@ decide a component's first render:
 - What a component puts on `<html>` from an effect is not in the page until the
   script runs; give it to `renderDocument`'s `htmlAttributes`.
 
-An app holds this with a check: draw the page, open it in a DOM with the real
+An app guards this with a check: draw the page, open it in a DOM with the real
 wire and target, and assert React said nothing (atrium's and lyra's `ssr-check`).
 
 ## `@niscorp/moss/terminal/vue`
@@ -3237,7 +3237,7 @@ Requires the optional `vue` peer.
 - `TerminalSlotWrapper` — a Vue component wrapping each action instance at
   the `ActionSlot` boundary, handed `{ canvasId, instanceId, definitionId }`
   as props (`TerminalSlotWrapperProps`) and the content as its default slot.
-- **Adoption**, as the react target: a root that holds server-drawn elements,
+- **Adoption**, as the react target: a root that contains server-drawn elements,
   on a wire with a frame, is mounted with `createSSRApp` and adopted.
 
 ### `@niscorp/moss/terminal/vue/server`

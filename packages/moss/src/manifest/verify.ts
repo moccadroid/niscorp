@@ -90,7 +90,7 @@ const layoutNameErrors = (actions: ManifestCandidate['actions']): string[] =>
     return refusal === undefined ? [] : [`"${id}" ${refusal}`];
   });
 
-// The id a definition carries is held to it as the one it is listed under is: a shell registers an action under the first.
+// The id a definition carries is checked as the one it is listed under is: a shell registers an action under the first.
 const generatedIdErrors = (actions: ManifestCandidate['actions']): string[] =>
   Object.entries(actions).flatMap(([listed, definition]) => {
     const taken = [listed, definition.id].find((id) => id.startsWith(GENERATED_ID_PREFIX));
@@ -121,19 +121,19 @@ const combinationsOf = (candidate: Pick<ManifestCandidate, 'charter' | 'wearable
   return [...combinations.values()];
 };
 
-// A function an action calls is one its holder's roles grant, or the call fails when it is made.
+// A function an action calls is one its wearer's roles grant, or the call fails when it is made.
 const functionGrantErrors = (candidate: Pick<ManifestCandidate, 'charter' | 'actions' | 'fragmentCalls' | 'wearable'>): string[] => {
   const errors = new Set<string>();
   for (const roles of combinationsOf(candidate)) {
-    let held: ReadonlySet<string>;
+    let actions: ReadonlySet<string>;
     try {
-      held = resolvePrincipal(candidate.charter, Object.keys(candidate.actions), roles, 'actions');
+      actions = resolvePrincipal(candidate.charter, Object.keys(candidate.actions), roles, 'actions');
     } catch {
       continue;
     }
-    if (held.size === 0) continue;
+    if (actions.size === 0) continue;
     const calls = [
-      ...[...held].flatMap((id) => functionsCalledBy(candidate.actions[id] ?? {}).map((fn) => ({ by: `"${id}"`, fn }))),
+      ...[...actions].flatMap((id) => functionsCalledBy(candidate.actions[id] ?? {}).map((fn) => ({ by: `"${id}"`, fn }))),
       ...candidate.fragmentCalls.flatMap(({ id, calls: fns }) => fns.map((fn) => ({ by: `the fragment "${id}", which any of them may wear`, fn }))),
     ];
     const granted = resolvePrincipal(candidate.charter, calls.map((call) => call.fn), roles, 'functions');
@@ -286,18 +286,18 @@ export const verifyVariants = (app: Pick<NiscApp, 'charter' | 'actions' | 'layou
       const variant = variants[id];
       if (variant !== undefined) byAction.set(variant.action, [...(byAction.get(variant.action) ?? []), id]);
     }
-    for (const [action, held] of byAction) {
-      if (held.length > 1) {
-        errors.push(`${who} holds ${held.length} variants of "${action}" (${held.sort().join(', ')}) — one variant per action per principal`);
+    for (const [action, worn] of byAction) {
+      if (worn.length > 1) {
+        errors.push(`${who} holds ${worn.length} variants of "${action}" (${worn.sort().join(', ')}) — one variant per action per principal`);
       }
     }
   }
   return errors;
 };
 
-export const variantLayouts = (variants: Readonly<Record<string, LayoutVariant>>, held: Iterable<string>): ReadonlyMap<string, LayoutNode> => {
+export const variantLayouts = (variants: Readonly<Record<string, LayoutVariant>>, granted: Iterable<string>): ReadonlyMap<string, LayoutNode> => {
   const layouts = new Map<string, LayoutNode>();
-  for (const id of held) {
+  for (const id of granted) {
     const variant = variants[id];
     if (variant !== undefined) layouts.set(variant.action, variant.layout);
   }

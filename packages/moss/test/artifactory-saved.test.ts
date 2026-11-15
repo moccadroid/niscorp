@@ -68,7 +68,7 @@ const forAll = (ref: string, text: string): { kind: 'layout'; body: unknown } =>
 const mine = (text: string, use?: boolean): { kind: 'layout'; body: unknown } => ({ kind: 'layout', body: { ref: 'action/home', layout: saying(text), ...(use === undefined ? {} : { use }) } });
 
 describe('a layout saved from a session', () => {
-  it('is its principal’s alone: marked in use, their shell’s store holds it under the action’s ref and nobody else’s does', async () => {
+  it('is its principal’s alone: marked in use, their shell’s store keeps it under the action’s ref and nobody else’s does', async () => {
     const { of, storeOf, running, rows } = world();
     const saved = await of('ada').save([mine('home, as ada has it', true)]);
 
@@ -160,7 +160,7 @@ describe('a layout saved from a session', () => {
 });
 
 describe('history, going back to a version, and reset', () => {
-  it('every save of an artifact is a version, newest first; going back is a new save that holds a copy of the version and says which', async () => {
+  it('every save of an artifact is a version, newest first; going back is a new save that carries a copy of the version and says which', async () => {
     const { of, storeOf } = world();
     const ada = of('ada');
     const first = await ada.save([mine('the first', true)]);
@@ -216,7 +216,7 @@ describe('what is refused, in a sentence, with nothing written', () => {
     expect(rows.asked).toEqual([]);
   });
 
-  it('a save that holds nothing, or something that is not an artifact to save', async () => {
+  it('a save that carries nothing, or something that is not an artifact to save', async () => {
     const sentence = 'moss: a save holds one or several artifacts, each `{ kind, id?, body }` and nothing else.';
     await refused(({ of }) => of('ada').save([]), sentence);
     await refused(({ of }) => of('ada').save([{ ...mine('x'), for: 'everybody' } as unknown as { kind: 'layout'; body: unknown }]), sentence);
@@ -313,7 +313,7 @@ describe('what is refused, in a sentence, with nothing written', () => {
 });
 
 describe('what nova’s audit finds of an action as it is built', () => {
-  it('is not held against a layout saved for it: only what the saved layout adds is', async () => {
+  it('is not counted against a layout saved for it: only what the saved layout adds is', async () => {
     const { of, storeOf } = world();
     const kept: LayoutNode = { component: 'Stack', children: [{ component: 'Text', children: '$.title' }, { component: 'Button', ref: 'nowhere' }] };
 
@@ -339,7 +339,7 @@ describe('a saved layout that does not pass any more', () => {
     }
   };
 
-  it('is left out with a line, and what is under it shows; one for an action its holder has no longer is not loaded, and nothing is said', () =>
+  it('is left out with a line, and what is under it shows; one for an action its owner has no longer is not loaded, and nothing is said', () =>
     saidWhile(async (said) => {
       const rows = rowsDouble();
       await stored(rows, 'ada', 'broken', { ref: 'action/home', layout: { component: 'Carousel' }, use: true });
@@ -449,7 +449,7 @@ describe('a saved layout that does not pass any more', () => {
 });
 
 describe('a layout published for everybody', () => {
-  it('is drawn for everybody who holds its action: under one’s own in use and the layout variant of one’s roles, over the build’s', async () => {
+  it('is drawn for everybody who is granted its action: under one’s own in use and the layout variant of one’s roles, over the build’s', async () => {
     const { of, published, storeOf } = world();
     await of('ada').save([mine('home, as ada has it', true)]);
     await published.save([forAll('action/home', 'home, as published')]);
@@ -494,29 +494,29 @@ describe('a layout published for everybody', () => {
 
   it('of two publishes close together the later is drawn, though a read of the rows begun before it answers after it', async () => {
     const rows = rowsDouble();
-    const held: (() => void)[] = [];
-    const holding = { reads: false };
+    const waiting: (() => void)[] = [];
+    const pausing = { reads: false };
     const reader = async (): Promise<SavedVersion[]> => {
       const read = await rows.as('*').inForce();
-      if (holding.reads) await new Promise<void>((release) => held.push(release));
+      if (pausing.reads) await new Promise<void>((release) => waiting.push(release));
       return read;
     };
     const { published, storeOf } = world({ published: reader }, rows);
     await published.save([forAll('action/home', 'the first')]);
-    holding.reads = true;
+    pausing.reads = true;
     const early = storeOf('ben');
-    await vi.waitFor(() => expect(held).toHaveLength(1));
-    holding.reads = false;
+    await vi.waitFor(() => expect(waiting).toHaveLength(1));
+    pausing.reads = false;
 
     await published.save([forAll('action/home', 'the second')]);
 
     expect((await storeOf('cy'))['action/home']).toEqual(saying('the second'));
-    held[0]?.();
+    waiting[0]?.();
     expect((await early)['action/home']).toEqual(saying('the first'));
     expect((await storeOf('dan'))['action/home']).toEqual(saying('the second'));
   });
 
-  it('one for an action that only some hold is drawn for them, and is not loaded for the rest', async () => {
+  it('one for an action that only some are granted is drawn for them, and is not loaded for the rest', async () => {
     const { published, storeOf } = world();
     await published.save([forAll('action/desk', 'desk, as published')]);
 
@@ -736,7 +736,7 @@ describe('an app with several shells', () => {
     }
   });
 
-  it('what one shell says of a component’s props holds, though another lists the component and says nothing', async () => {
+  it('what one shell says of a component’s props stands, though another lists the component and says nothing', async () => {
     const strict: ShellManifest = { ...SHELL, components: { Heading: { meta: { propsSchema: z.object({ level: z.number() }) } } } };
     const silent: ShellManifest = { ...page, components: { Heading: {} } };
     for (const shells of [[strict, silent], [silent, strict]]) {

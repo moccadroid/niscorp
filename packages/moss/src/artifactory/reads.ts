@@ -16,7 +16,7 @@ export type ReadSources = {
   compile: (dsl: SavedRead['dsl']) => void;
 };
 
-export type ReadHeldTo = { isAppEntry: (fingerprint: string) => boolean; sources: ReadSources };
+export type ReadChecks = { isAppEntry: (fingerprint: string) => boolean; sources: ReadSources };
 
 type Read = { body: SavedRead } | { refusal: string };
 
@@ -24,7 +24,7 @@ const sentenceOf = (error: unknown): string => (error instanceof Error ? error.m
 
 export const seedOf = (fingerprint: string, read: SavedRead): SeedEntry => ({ fingerprint, ...read });
 
-// Not protected, as an entry the app ships is: vex holds a query nobody reviewed to its limits, and lets a request write it anew.
+// Not protected, as an entry the app ships is: vex keeps a query nobody reviewed to its limits, and lets a request write it anew.
 export const compiledRead = async (fingerprint: string, read: SavedRead): Promise<CacheEntry | undefined> => {
   const compiled = (await compileEntries([seedOf(fingerprint, read)])).get(fingerprint);
   if (compiled === undefined) return undefined;
@@ -35,8 +35,8 @@ export const compiledRead = async (fingerprint: string, read: SavedRead): Promis
 const shippedRefusal = (fingerprint: string): string =>
   `"${fingerprint}" is the fingerprint of an entry the app ships or was handed, and a read somebody generated never answers in its place`;
 
-export const readSaved = async (body: unknown, fingerprint: string, heldTo: ReadHeldTo): Promise<Read> => {
-  if (heldTo.isAppEntry(fingerprint)) return { refusal: shippedRefusal(fingerprint) };
+export const readSaved = async (body: unknown, fingerprint: string, checks: ReadChecks): Promise<Read> => {
+  if (checks.isAppEntry(fingerprint)) return { refusal: shippedRefusal(fingerprint) };
   // First: the schema recurses, and a deep enough body overflows the stack.
   if (exceedsDepth(body)) return { refusal: depthRefusal() };
   const parsed = SavedReadSchema.safeParse(body);
@@ -45,7 +45,7 @@ export const readSaved = async (body: unknown, fingerprint: string, heldTo: Read
     return { refusal: first === undefined ? 'no reason given' : `${first.path.join('.') || '(the body)'}: ${first.message}` };
   }
   try {
-    heldTo.sources.compile(parsed.data.dsl);
+    checks.sources.compile(parsed.data.dsl);
     await compiledRead(fingerprint, parsed.data);
   } catch (error) {
     return { refusal: sentenceOf(error) };
@@ -53,9 +53,9 @@ export const readSaved = async (body: unknown, fingerprint: string, heldTo: Read
   return { body: parsed.data };
 };
 
-export const readWritten = async (fingerprint: string, heldTo: ReadHeldTo): Promise<Read> => {
-  if (heldTo.isAppEntry(fingerprint)) return { refusal: shippedRefusal(fingerprint) };
-  const entry = await heldTo.sources.written(fingerprint);
+export const readWritten = async (fingerprint: string, checks: ReadChecks): Promise<Read> => {
+  if (checks.isAppEntry(fingerprint)) return { refusal: shippedRefusal(fingerprint) };
+  const entry = await checks.sources.written(fingerprint);
   if (entry === undefined || entry.requestHash === undefined) return { refusal: `vex holds no query it wrote under "${fingerprint}"` };
   if (entry.kind !== 'ok') return { refusal: `vex found no query to answer under "${fingerprint}"` };
   if (entry.shape !== undefined && entry.mapping === undefined) {
@@ -71,7 +71,7 @@ export const readWritten = async (fingerprint: string, heldTo: ReadHeldTo): Prom
       ...(entry.refresh !== undefined ? { refresh: entry.refresh } : {}),
     },
     fingerprint,
-    heldTo,
+    checks,
   );
 };
 
@@ -83,11 +83,11 @@ export const answeredRead = async (fingerprint: string, body: unknown): Promise<
 };
 
 // One that does not pass any more (a column it reads was dropped) is left out, and a line says why.
-export const readsInForce = async (inForce: readonly SavedVersion[], heldTo: ReadHeldTo, whose?: string): Promise<ReadonlyMap<string, SavedRead>> => {
+export const readsInForce = async (inForce: readonly SavedVersion[], checks: ReadChecks, whose?: string): Promise<ReadonlyMap<string, SavedRead>> => {
   const reads = new Map<string, SavedRead>();
   for (const version of inForce) {
     if (version.kind !== 'read' || version.body === null) continue;
-    const read = version.unread !== undefined ? { refusal: version.unread } : await readSaved(version.body, version.id, heldTo);
+    const read = version.unread !== undefined ? { refusal: version.unread } : await readSaved(version.body, version.id, checks);
     if ('body' in read) reads.set(version.id, read.body);
     else if (whose !== undefined) console.error(`[moss] the read "${version.id}" ${whose} is left out: ${read.refusal}`);
   }

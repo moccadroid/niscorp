@@ -16,10 +16,10 @@ import { offerToken, PROTOCOL } from '../src/protocol';
 import { browserEnv, createWire } from '../src/client';
 import type { Wire } from '../src/client';
 
-const until = (holds: () => boolean, why: string, ms = 8000): Promise<void> =>
+const until = (isTrue: () => boolean, why: string, ms = 8000): Promise<void> =>
   new Promise((resolve, reject) => {
     const started = Date.now();
-    const tick = (): void => (holds() ? resolve() : Date.now() - started > ms ? reject(new Error(`timed out: ${why}`)) : void setTimeout(tick, 15));
+    const tick = (): void => (isTrue() ? resolve() : Date.now() - started > ms ? reject(new Error(`timed out: ${why}`)) : void setTimeout(tick, 15));
     tick();
   });
 
@@ -130,7 +130,7 @@ const signIn = async (wire: Wire, who: string): Promise<void> => {
 };
 
 describe('a browser on the app’s own page', () => {
-  it('signs in over the socket: the browser holds the session where script cannot read it, and the page stores nothing', async () => {
+  it('signs in over the socket: the browser keeps the session where script cannot read it, and the page stores nothing', async () => {
     const page = browser();
     const first = load();
     await signIn(first, 'ada');
@@ -265,7 +265,7 @@ describe('a browser on the app’s own page', () => {
     socket.close();
   });
 
-  it('a page on another origin, sent with everything her browser holds, is nobody', async () => {
+  it('a page on another origin, sent with everything her browser keeps, is nobody', async () => {
     const page = browser();
     await signIn(load(), 'ada');
     const served = await new Promise<unknown>((resolve) => {
@@ -280,7 +280,7 @@ describe('a browser on the app’s own page', () => {
 });
 
 describe('under an app’s own identity provider', () => {
-  it('signing out leaves a token that still resolves — and the browser no longer holds it', async () => {
+  it('signing out leaves a token that still resolves — and the browser no longer keeps it', async () => {
     const { at, server: own } = await serving(appWith((who) => `idp.${who}`), (token) => (token.startsWith('idp.') ? token.slice(4) : null));
     const page = browser(at);
     const wire = load();

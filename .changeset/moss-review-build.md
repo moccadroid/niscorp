@@ -19,3 +19,5 @@ In `nisc dev` (`mossDev`), what the charter does not read as written (a misspelt
 DOCS says that a channel is not a trusted lane: the person's own terminal can publish any channel with any payload into their own shell, as `deliver` does.
 
 DOCS shows a read saved with `body: undefined`, as `SessionArtifacts.save`'s type asks, and gives the limit `runtime.artifactsUnusedMs` refuses at boot: anything under two hours or not a whole number of milliseconds.
+
+The word "held" and its relatives leave moss's internal names, comments, test titles and DOCS/DESIGN/README. Nothing public changes: `WireTokenStore.held`, the `<session>.held` cookie and every message moss prints or throws keep their wording.

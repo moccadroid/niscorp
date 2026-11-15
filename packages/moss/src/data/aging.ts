@@ -1,6 +1,6 @@
 import type { PgPool } from '@niscorp/vex';
 
-// Raw, and the one place moss deletes what the artifactory holds: vex keeps every
+// Raw, and the one place moss deletes what the artifactory keeps: vex keeps every
 // statement of its own to one principal's rows, and what nobody has used for long
 // enough is unused whoever's it is. What is published for everybody never ages.
 const UNUSED_VERSIONS = /* sql */ `DELETE FROM artifacts a

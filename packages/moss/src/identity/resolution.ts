@@ -51,7 +51,7 @@ const IdentityRecordSchema = z.looseObject({
   tag: z.string().optional(),
 });
 
-// Names the field and what was expected there, never what the record held:
+// Names the field and what was expected there, never what the record said:
 // that is somebody's roles and tenant.
 const recordRefusal = (issues: readonly z.core.$ZodIssue[]): Error =>
   new Error(
@@ -103,7 +103,7 @@ export const createIdentity = (config: IdentityConfig): Identity => {
     return fromAssignments(principal);
   };
 
-  // The scope hook is applied last and for each request, never held with the
+  // The scope hook is applied last and for each request, never kept with the
   // record: its values may follow the clock.
   const composeScope = (principal: string | null, resolved: ResolvedIdentity): Record<string, unknown> => ({
     userId: principal ?? NOBODY_USER_ID,

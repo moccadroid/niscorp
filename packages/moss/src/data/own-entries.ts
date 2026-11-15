@@ -7,7 +7,7 @@ export type OwnEntries = {
   entries: readonly (SeedEntry | SeedMutation)[];
   tables: readonly string[];
   // What a caller reads and writes of a table whose rows are somebody's. A
-  // table with none holds rows that are nobody's, and its owner's entries
+  // table with none has rows that are nobody's, and its owner's entries
   // reach all of them.
   rules?: Readonly<Record<string, ScopeRules>>;
 };

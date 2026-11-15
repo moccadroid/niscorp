@@ -15,7 +15,7 @@ const recordFor = (principal: string): IdentityRecord => ({
 });
 
 describe('identity cache', () => {
-  it('resolves once per principal and serves the held record after that', async () => {
+  it('resolves once per principal and serves the cached record after that', async () => {
     let calls = 0;
     const cache = createIdentityCache({
       resolve: async (p) => {
@@ -89,7 +89,7 @@ describe('identity cache', () => {
     cache.stop();
   });
 
-  it('is bounded: the ceiling holds and eviction is least-recently-read', async () => {
+  it('is bounded: the ceiling stands and eviction is least-recently-read', async () => {
     const cache = createIdentityCache({ resolve: async (p) => recordFor(p), max: 3, idleMs: 0 });
 
     await cache.get('a');
@@ -111,7 +111,7 @@ describe('identity cache', () => {
     expect(() => createIdentityCache({ resolve: async (p) => recordFor(p), max, idleMs: 0 })).toThrow(/identityMax.*at least one/);
   });
 
-  it('a ceiling of one holds one', async () => {
+  it('a ceiling of one keeps one', async () => {
     const cache = createIdentityCache({ resolve: async (p) => recordFor(p), max: 1, idleMs: 0 });
     await cache.get('a');
     await cache.get('b');
@@ -120,7 +120,7 @@ describe('identity cache', () => {
     cache.stop();
   });
 
-  it('re-resolving somebody already held evicts nobody', async () => {
+  it('re-resolving somebody already cached evicts nobody', async () => {
     const cache = createIdentityCache({ resolve: async (p) => recordFor(p), max: 2, idleMs: 0 });
     await cache.get('a');
     await cache.get('b');
@@ -156,7 +156,7 @@ describe('identity cache', () => {
     cache.stop();
   });
 
-  it('a tag forgets one group and leaves the rest held', async () => {
+  it('a tag forgets one group and leaves the rest cached', async () => {
     let calls = 0;
     const cache = createIdentityCache({
       resolve: async (p) => {
@@ -222,7 +222,7 @@ describe('identity cache', () => {
     cache.stop();
   });
 
-  it('never inspects what it holds', async () => {
+  it('never inspects what it keeps', async () => {
     const booby = {
       roles: ['member'],
       get scope(): Record<string, unknown> {
@@ -321,7 +321,7 @@ describe('identity cache — an invalidation while a resolve is out', () => {
     cache.stop();
   });
 
-  it('holds for a record being revalidated: the re-read that was out is not kept', async () => {
+  it('applies to a record being revalidated: the re-read that was out is not kept', async () => {
     let t = 1_000;
     const app = seam();
     const cache = createIdentityCache({ resolve: app.resolve, idleMs: 0, revalidateMs: 60_000, now: () => t });
@@ -338,7 +338,7 @@ describe('identity cache — an invalidation while a resolve is out', () => {
     cache.stop();
   });
 
-  it('holds for everybody at once', async () => {
+  it('applies to everybody at once', async () => {
     const app = seam();
     const cache = createIdentityCache({ resolve: app.resolve, idleMs: 0 });
     const ava = cache.get('p_ava');
@@ -351,7 +351,7 @@ describe('identity cache — an invalidation while a resolve is out', () => {
     cache.stop();
   });
 
-  it('holds for a tag: somebody resolved for the first time who turns out to wear it is not kept', async () => {
+  it('applies to a tag: somebody resolved for the first time who turns out to wear it is not kept', async () => {
     const app = seam();
     const cache = createIdentityCache({ resolve: app.resolve, idleMs: 0 });
     const asked = cache.get('a_1');
@@ -380,7 +380,7 @@ describe('identity cache — an invalidation while a resolve is out', () => {
     cache.stop();
   });
 
-  it('holds for somebody held under the tag whose re-read was out: it is not kept, whichever tag it comes back wearing', async () => {
+  it('applies to somebody cached under the tag whose re-read was out: it is not kept, whichever tag it comes back wearing', async () => {
     let t = 1_000;
     const app = seam();
     const cache = createIdentityCache({ resolve: app.resolve, idleMs: 0, revalidateMs: 60_000, now: () => t });
@@ -417,7 +417,7 @@ describe('identity cache — the idle sweep', () => {
       await cache.get('p_busy');
       await vi.advanceTimersByTimeAsync(4_000);
 
-      expect(cache.list().map((held) => held.principal)).toEqual(['p_busy']);
+      expect(cache.list().map((entry) => entry.principal)).toEqual(['p_busy']);
       expect(cache.meter()).toMatchObject({ size: 1, evicted: 1 });
       await cache.get('p_idle');
       expect(resolved).toEqual(['p_idle', 'p_busy', 'p_idle']);
@@ -432,6 +432,6 @@ describe('identity cache — the idle sweep', () => {
     await cache.get('p_idle');
     cache.stop();
     await vi.advanceTimersByTimeAsync(60_000);
-    expect(cache.list().map((held) => held.principal)).toEqual(['p_idle']);
+    expect(cache.list().map((entry) => entry.principal)).toEqual(['p_idle']);
   });
 });

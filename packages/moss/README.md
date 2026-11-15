@@ -39,7 +39,7 @@ const app = defineApp({
                   // floor; variants enrich upward as grants, never reduce
   entries,        // the reads and writes the app serves — the API surface, as data
   behaviors,      // row-level scope semantics; each role's `scoping` picks among them,
-                  // one policy per role, merged — a person may hold several
+                  // one policy per role, merged — a person may have several
   resources,      // entity subgraphs → /api/<name>/vex
   shell,          // the canvas manifest (the shell runs on the server) — the app
   pages,          // what is drawn at a path and kept by nothing — optional
@@ -94,8 +94,8 @@ once. Who may keep the page follows from who asked: drawn for nobody it is the
 same for everybody; drawn for somebody it is `private, no-store`. A page that
 cannot be drawn goes out undrawn.
 
-The page's `<head>` is a node in a layout too — nova's `nova:head`, holding
-the elements a head holds, bound to the action's data. It is read off the
+The page's `<head>` is a node in a layout too — nova's `nova:head`, carrying
+the elements a head contains, bound to the action's data. It is read off the
 snapshot and written into the template, and the terminal keeps the page's head
 on it as the screen moves. With `site`, every path says its own canonical
 address.
@@ -151,7 +151,7 @@ never in moss core.
 
 ## Subpaths
 
-- **`@niscorp/moss`** — the server: `defineApp`, `createServer`, the drawn document (`renderDocument`, `exportDocuments`), moss's stored session credential (`mintSession`), `migrateTables`, and the types an app names (`NiscApp`, `NiscRuntime`, `MossServer`, `FunctionSession`). [DOCS.md](DOCS.md) documents every name each entry exports; the list itself is `packages/moss/api.txt` in the repository, which a build holds the entries to.
+- **`@niscorp/moss`** — the server: `defineApp`, `createServer`, the drawn document (`renderDocument`, `exportDocuments`), moss's stored session credential (`mintSession`), `migrateTables`, and the types an app names (`NiscApp`, `NiscRuntime`, `MossServer`, `FunctionSession`). [DOCS.md](DOCS.md) documents every name each entry exports; the list itself is `packages/moss/api.txt` in the repository, which a build checks the entries against.
 - **`@niscorp/moss/node`** — the Node listener: `serve` + `attachSocket` (raw `ws`), and `mountSite(server, { dist, draw })` — the built terminal served by the same process, every page drawn. Bun swaps this file, never the app.
 - **`@niscorp/moss/integrations`** — a feature, not part of the core: `createIntegrations(config)` makes the object an app puts in its manifest's `features` to take in separate services that add screens (registration, approval, the proxy, webhooks), and carries the calls the app makes on it afterwards. A bundle is nisc's own five fields and `extension`, the app's own vocabulary: the app supplies the schema that reads it (`extension: { schema, check?, prepare?, contract? }`) and reads it back with `integrations.listIntegrations()`.
 - **`@niscorp/moss/tide`** — a feature too: `createTideFacts({ tide, identity, chain })` mints each committed write into [tide](../tide/README.md) as a fact, for the identity the write's own scope names. It is what moss keeps of hosting tide: the Postgres store (`@niscorp/tide/postgres`) and the driver (`createTideDriver`) are tide's own, and `@niscorp/tide` is an optional peer.
@@ -172,7 +172,7 @@ never in moss core.
 
 - **`/catalog`** — the application, resolved for you (granted action ids + a version token).
 - **`/api/vex`, `/api/<resource>/vex`** — reads and writes, locked (replay-only), scoped per principal. The model never writes SQL; the policy it can't see enforces access.
-- **the socket** — the authority channel: the served frame and per-canvas `RenderNode` trees down, `NovaEvent`s up (a message a terminal sends is at most 256 KB). Session lifecycle (sign-in grant, sign-out revoke) rides it. Two optional reductions sit under it, both invisible to an app: `permessage-deflate` (on by default) and frame deltas (`shellFrameDelta`, off) — a changed canvas sent as a checksummed delta against the frame the terminal already holds, 1–4% of the frame on an in-place change. See [DOCS.md § Wire size](DOCS.md#wire-size).
+- **the socket** — the authority channel: the served frame and per-canvas `RenderNode` trees down, `NovaEvent`s up (a message a terminal sends is at most 256 KB). Session lifecycle (sign-in grant, sign-out revoke) rides it. Two optional reductions sit under it, both invisible to an app: `permessage-deflate` (on by default) and frame deltas (`shellFrameDelta`, off) — a changed canvas sent as a checksummed delta against the frame the terminal already has, 1–4% of the frame on an in-place change. See [DOCS.md § Wire size](DOCS.md#wire-size).
 
 ## Tables and documents, versioned
 

@@ -54,7 +54,7 @@ describe('createRunningManifest — creating it is the boot check', () => {
     }
   });
 
-  it('holds the entries the app serves: the list as it shipped them, and each by its fingerprint for a shell', async () => {
+  it('keeps the entries the app serves: the list as it shipped them, and each by its fingerprint for a shell', async () => {
     const shipped = shippedApp();
     const manifest = running(shipped);
     expect(manifest.entries()).toEqual(shipped.entries);
@@ -77,7 +77,7 @@ describe('replace — a named set of actions that arrived while the app runs', (
     expect(Object.keys(manifest.actions())).toEqual(['home', 'panel', grades.id, pay.id]);
   });
 
-  it('accepted: what each set of roles held is dropped, and whoever listens is told once', async () => {
+  it('accepted: what each set of roles had is dropped, and whoever listens is told once', async () => {
     const manifest = running(shippedApp());
     const told = vi.fn();
     const stop = manifest.onChange(told);
@@ -103,15 +103,15 @@ describe('replace — a named set of actions that arrived while the app runs', (
     expect(told).toHaveBeenCalledTimes(1);
   });
 
-  it('refused: the actions in force, what the roles held and whoever listens are untouched', async () => {
+  it('refused: the actions in force, what the roles had and whoever listens are untouched', async () => {
     const shipped = shippedApp();
     const manifest = running(shipped);
     manifest.replace('bundles', { [desk.id]: desk });
     const told = vi.fn();
     manifest.onChange(told);
     const inForce = manifest.actions();
-    const held = manifest.catalogFor(['member'], undefined);
-    const definitionsHeld = await definitionsOf(manifest, ['member']);
+    const catalogFirst = manifest.catalogFor(['member'], undefined);
+    const definitionsFirst = await definitionsOf(manifest, ['member']);
     const verifiedBy = manifest.report();
     const appsRecord = shipped.actions;
 
@@ -119,8 +119,8 @@ describe('replace — a named set of actions that arrived while the app runs', (
 
     expect(manifest.actions()).toBe(inForce);
     expect(Object.keys(manifest.actions())).toEqual(['home', 'panel', desk.id]);
-    expect(manifest.catalogFor(['member'], undefined)).toBe(held);
-    expect(await definitionsOf(manifest, ['member'])).toBe(definitionsHeld);
+    expect(manifest.catalogFor(['member'], undefined)).toBe(catalogFirst);
+    expect(await definitionsOf(manifest, ['member'])).toBe(definitionsFirst);
     expect(manifest.report()).toBe(verifiedBy);
     expect(told).not.toHaveBeenCalled();
     expect(shipped.actions).toBe(appsRecord);
@@ -162,7 +162,7 @@ describe('replace — a named set of actions that arrived while the app runs', (
 });
 
 describe('replace — a set that is refused, and what a set is tried against', () => {
-  it('a set holding a definition nova does not read is refused with a sentence, and nothing is switched', () => {
+  it('a set carrying a definition nova does not read is refused with a sentence, and nothing is switched', () => {
     const manifest = running(shippedApp());
     const typo: Record<string, ActionDefinition> = { [desk.id]: JSON.parse('{"id":"ext.belts.desk","tittle":"A typo"}') };
     const inForce = manifest.actions();
@@ -172,7 +172,7 @@ describe('replace — a set that is refused, and what a set is tried against', (
     expect(Object.isFrozen(typo)).toBe(false);
   });
 
-  it('tries the set IN PLACE of the one of that name: what the old set held is not part of the candidate', () => {
+  it('tries the set IN PLACE of the one of that name: what the old set had is not part of the candidate', () => {
     const opens: ActionDefinition = { id: 'panel', triggers: [{ event: 'ui:click', ref: 'open', do: [{ push: { action: desk.id } }] }] };
     const manifest = running({ ...shippedApp(), actions: { home, panel: opens } });
     manifest.replace('bundles', { [desk.id]: desk });
@@ -186,7 +186,7 @@ describe('replace — a set that is refused, and what a set is tried against', (
   });
 });
 
-describe('what a set of roles holds', () => {
+describe('what a set of roles has', () => {
   it('is kept by roles and install list, through the filter it was handed', () => {
     const manifest = running(shippedApp());
     manifest.replace('bundles', { [desk.id]: desk, [pay.id]: pay });
@@ -232,12 +232,12 @@ describe('what a set of roles holds', () => {
     expect(manifest.catalogFor(['member'], ['belts']).ids).toEqual([desk.id, 'home', 'panel']);
   });
 
-  it('the one a manifest is made with is held to it too', () => {
+  it('the one a manifest is made with is bound by that too', () => {
     const manifest = createRunningManifest({ shipped: shippedApp(), grants: scopeGrants(['deals']), installedOnly: (ids) => [...ids, 'panel'], shells: [] });
     expect(manifest.catalogFor(['public'], undefined).ids).toEqual(['home']);
   });
 
-  it('the definitions held are the granted ones, each naming its layout by ref, and the store holds the layout variant those roles hold in its place', async () => {
+  it('the definitions a set of roles has are the granted ones, each naming its layout by ref, and the store keeps the layout variant those roles are granted in its place', async () => {
     const base: ActionDefinition = { id: 'panel', layout: { component: 'Text', children: 'base' } };
     const layoutsOf = async (roles: readonly string[], installed?: readonly string[]): Promise<Readonly<Record<string, unknown>>> => (await manifest.artifactsFor(SHELL, nobody(roles, installed))).layoutStore;
     const shipped: ShippedManifest = {
@@ -270,7 +270,7 @@ describe('what a set of roles holds', () => {
     expect(Object.keys(await definitionsOf(manifest, ['member']))).toEqual([desk.id, 'home', 'panel']);
   });
 
-  it('what a shell is made of is one answer: the definitions held, the shell as its manifest says it, and the entries', async () => {
+  it('what a shell is made of is one answer: the definitions the roles have, the shell as its manifest says it, and the entries', async () => {
     const wide = { component: 'Text', children: 'wide' };
     const shipped: ShippedManifest = {
       ...shippedApp(),
@@ -361,14 +361,14 @@ describe('what the app shipped, and a set that was taken', () => {
     const told = vi.fn();
     manifest.onChange(told);
     const inForce = Object.keys(manifest.actions());
-    const held = manifest.catalogFor(['member'], undefined);
+    const catalogBefore = manifest.catalogFor(['member'], undefined);
     const verifiedBy = manifest.report();
 
     manifest.refresh();
 
     expect(Object.keys(manifest.actions())).toEqual(inForce);
-    expect(manifest.catalogFor(['member'], undefined)).not.toBe(held);
-    expect(manifest.catalogFor(['member'], undefined)).toEqual(held);
+    expect(manifest.catalogFor(['member'], undefined)).not.toBe(catalogBefore);
+    expect(manifest.catalogFor(['member'], undefined)).toEqual(catalogBefore);
     expect(manifest.report()).not.toBe(verifiedBy);
     expect(manifest.report().errors).toEqual([]);
     expect(told).toHaveBeenCalledTimes(1);
@@ -533,14 +533,14 @@ describe('watch — the pointer the other processes poll', () => {
       await aMoment();
       const told = vi.fn();
       there.onChange(told);
-      const heldThere = there.catalogFor(['member'], undefined);
+      const catalogThere = there.catalogFor(['member'], undefined);
 
       here.replace('bundles', { [pay.id]: pay });
       await aMoment();
 
       expect(there.generation()).toBe(here.generation());
       expect(told).toHaveBeenCalledTimes(1);
-      expect(there.catalogFor(['member'], undefined)).not.toBe(heldThere);
+      expect(there.catalogFor(['member'], undefined)).not.toBe(catalogThere);
       expect(Object.keys(here.actions())).toEqual(['home', 'panel', pay.id]);
       expect(Object.keys(there.actions())).toEqual(['home', 'panel', desk.id]);
     } finally {
@@ -624,7 +624,7 @@ describe('the functions a principal’s shell may call', () => {
     actions: { home },
   };
 
-  it('are the ones their roles grant, of the names the app’s functions hold', async () => {
+  it('are the ones their roles grant, of the names the app’s functions have', async () => {
     const manifest = running(functionsApp);
     const said = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     try {
@@ -637,7 +637,7 @@ describe('the functions a principal’s shell may call', () => {
     }
   });
 
-  it('a set of actions handed over that calls a function its holders’ roles do not grant is refused, with the list', () => {
+  it('a set of actions handed over that calls a function the roles it is granted to do not grant is refused, with the list', () => {
     const manifest = running(functionsApp);
     expect(() => manifest.replace('bundles', { 'notes.purge': { id: 'notes.purge', endpoints: { purge: { fn: 'notes.purge.all' } } } })).not.toThrow();
     expect(() => manifest.replace('bundles', { home: { id: 'home', endpoints: { leave: { fn: 'auth.leave' } } } })).toThrow(

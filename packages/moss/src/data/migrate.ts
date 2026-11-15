@@ -61,10 +61,10 @@ const canonical = (value: unknown): string => {
 };
 
 const isSeededAs = async (cache: CacheBackend, entry: Entry): Promise<boolean> => {
-  const held = await cache.get(entry.fingerprint);
-  if (held === undefined || held.protected !== true) return false;
-  if ('mutation' in entry) return held.kind === 'mutation' && canonical(held.mutation) === canonical(entry.mutation);
-  return held.kind === 'ok' && canonical(held.dsl) === canonical(entry.dsl);
+  const cached = await cache.get(entry.fingerprint);
+  if (cached === undefined || cached.protected !== true) return false;
+  if ('mutation' in entry) return cached.kind === 'mutation' && canonical(cached.mutation) === canonical(entry.mutation);
+  return cached.kind === 'ok' && canonical(cached.dsl) === canonical(entry.dsl);
 };
 
 const changesBetween = (before: DatabaseSchema, after: DatabaseSchema): { removed: string[]; retyped: string[] } => {

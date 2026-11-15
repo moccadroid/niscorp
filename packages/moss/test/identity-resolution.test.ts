@@ -176,14 +176,14 @@ describe('what the identity seam answers is parsed', () => {
     ['a scope that is not an object', { roles: ['member'], scope: 'st_a' }],
     ['installs that are not a list', { roles: ['member'], scope: {}, installed: 'mail' }],
     ['a tag that is not a string', { roles: ['member'], scope: {}, tag: 7 }],
-  ])('refuses %s with a sentence, and holds nothing', async (_what, answered) => {
+  ])('refuses %s with a sentence, and keeps nothing', async (_what, answered) => {
     const identity = createIdentity({ seam: answering(answered), readAs: noRows, idleMs: 0 });
     await expect(identity.resolve('p_ava')).rejects.toThrow(/identity\.resolve/);
     expect(identity.roster?.meter().size).toBe(0);
     identity.stop();
   });
 
-  it('says which field, and nothing of what the record held', async () => {
+  it('says which field, and nothing of what the record carried', async () => {
     const identity = createIdentity({ seam: answering({ roles: 's3cret-role', scope: { email: 'ava@s3cret.example' }, tag: 7 }), readAs: noRows, idleMs: 0 });
     const refusal = await identity.resolve('p_ava').then(
       () => '',
@@ -195,7 +195,7 @@ describe('what the identity seam answers is parsed', () => {
     identity.stop();
   });
 
-  it('a refusal is not held: the next ask goes back to the seam', async () => {
+  it('a refusal is not kept: the next ask goes back to the seam', async () => {
     let attempt = 0;
     const identity = createIdentity({
       seam: { resolve: async () => ((attempt += 1), attempt === 1 ? ({ roles: 'member' } as unknown as IdentityRecord) : { roles: ['member'], scope: {} }) },

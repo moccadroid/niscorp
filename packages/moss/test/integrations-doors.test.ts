@@ -78,7 +78,7 @@ describe('the operator’s routes', () => {
 
   it('a new import of an approved integration that the app would not serve is refused before anything is written', async () => {
     const REFUSAL = 'Refresh refused — charter incoherent over the new artifacts:\n  no role grants "ext.desk.belts.roster"';
-    const { register, written, reloads } = await routes({ registration: { status: 'approved', key_hash: 'held' }, refusalOf: (actions) => (roster.id in actions ? REFUSAL : undefined) });
+    const { register, written, reloads } = await routes({ registration: { status: 'approved', key_hash: 'a-key-hash' }, refusalOf: (actions) => (roster.id in actions ? REFUSAL : undefined) });
     const answered = await register();
     expect(answered.status).toBe(422);
     expect(await answered.json()).toEqual({ message: 'Refused — the app would not serve this.', reasons: [`Error: ${REFUSAL}`] });
@@ -87,7 +87,7 @@ describe('the operator’s routes', () => {
   });
 
   it('…and one that is still pending lands unverified: nothing of it is served until it is approved', async () => {
-    const { register, written } = await routes({ registration: { status: 'pending', key_hash: 'held' }, refusalOf: () => 'the app would not serve this' });
+    const { register, written } = await routes({ registration: { status: 'pending', key_hash: 'a-key-hash' }, refusalOf: () => 'the app would not serve this' });
     const answered = await register();
     expect(answered.status).toBe(200);
     expect(await answered.json()).toEqual({ id: 'belts', status: 'pending', actions: 1 });
@@ -125,12 +125,12 @@ describe('the operator’s routes', () => {
   });
 });
 
-describe('the proxy — a declared path is for whoever holds the action that declared it', () => {
+describe('the proxy — a declared path is for whoever is granted the action that declared it', () => {
   const found = { url: 'https://belts.example', status: 'approved', reach: { '/integrations/belts/roster': ['ext.member.belts.card'], '/integrations/belts/payouts': ['ext.desk.belts.payouts'] } };
-  const door = (held: readonly string[]) => {
+  const door = (granted: readonly string[]) => {
     const service = serviceAnswering(() => new Response('{"rows":[]}', { status: 200, headers: json }));
     const proxied = proxyRoutes({
-      grantedActionIds: () => [...held],
+      grantedActionIds: () => [...granted],
       forward: createForwarder({
         find: async (id) => (id === 'belts' ? found : undefined),
         resolveIdentity: async () => ({ roles: ['member'], installed: undefined }),
@@ -164,7 +164,7 @@ describe('the proxy — a declared path is for whoever holds the action that dec
   });
 });
 
-describe('reachOf — what a bundle declares is what its own prefix holds', () => {
+describe('reachOf — what a bundle declares is what lies under its own prefix', () => {
   it('an endpoint outside the integration’s own prefix is no reach of its', () => {
     const declared = BundleSchema.parse({
       integration: 'belts',

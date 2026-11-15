@@ -7,7 +7,7 @@ import type { NiscApp } from '../src/manifest';
 import { buildRunningManifest } from '../src/server/server';
 import { rowsDouble } from './saved-double';
 
-type Held = Parameters<Data['entriesHeldBy']>[0];
+type EntriesAskedFirst = Parameters<Data['askEntriesFirst']>[0];
 
 const open: SeedEntry = { fingerprint: 'deals/open', dsl: { from: ['deals'], fields: ['deals.id'] } };
 const close: SeedMutation = { fingerprint: 'deals/close', mutation: { op: 'update', table: 'deals', set: { open: false }, where: { eq: ['deals.id', { $context: 'id' }] } } };
@@ -15,16 +15,16 @@ const unbounded: SeedMutation = { fingerprint: 'deals/clear', mutation: { op: 'd
 
 const appWith = (more: Partial<NiscApp> = {}): NiscApp => ({ charter: { public: ['home'] }, actions: { home: { id: 'home' } }, entries: [open, close], ...more });
 
-const dataDouble = (): { data: Pick<Data, 'grants' | 'dropOnChange' | 'pointer' | 'entriesHeldBy' | 'vexEntry' | 'compileQuery'>; asked: Held[] } => {
-  const asked: Held[] = [];
+const dataDouble = (): { data: Pick<Data, 'grants' | 'dropOnChange' | 'pointer' | 'askEntriesFirst' | 'vexEntry' | 'compileQuery'>; asked: EntriesAskedFirst[] } => {
+  const asked: EntriesAskedFirst[] = [];
   return {
     asked,
     data: {
       grants: scopeGrants(['deals']),
       dropOnChange: () => undefined,
       pointer: { read: async () => 0, move: async () => true },
-      entriesHeldBy: (held) => {
-        asked.push(held);
+      askEntriesFirst: (first) => {
+        asked.push(first);
       },
       vexEntry: async () => undefined,
       compileQuery: () => undefined,

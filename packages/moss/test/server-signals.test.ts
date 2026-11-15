@@ -108,7 +108,7 @@ describe('the signals of a server — a nudge', () => {
     });
   });
 
-  it('crosses the fabric: every other process tells the shells it holds for them, and the sender is told once', async () => {
+  it('crosses the fabric: every other process tells the shells it has for them, and the sender is told once', async () => {
     const bus = createBus();
     const [a, b] = [processOn(bus.endpoint()), processOn(bus.endpoint())];
     await stopping([a, b], async () => {
@@ -145,7 +145,7 @@ describe('the signals of a server — what a reaction delivers', () => {
 });
 
 describe('the signals of a server — who somebody is changed', () => {
-  it('`invalidateIdentity` forgets them and rebuilds their shells in every process, and answers whether this one held them', async () => {
+  it('`invalidateIdentity` forgets them and rebuilds their shells in every process, and answers whether this one knew them', async () => {
     const bus = createBus();
     const [a, b] = [processOn(bus.endpoint()), processOn(bus.endpoint())];
     await stopping([a, b], async () => {
@@ -208,8 +208,8 @@ describe('the signals of a server — what a tenant’s people may reach changed
       runtime: {},
       identity: {
         resolve: async (principal) => {
-          const held = principal === null ? ['public'] : (await records.get(principal)).roles;
-          return { roles: held, scope: {}, installed: undefined, memoKey: memoKey(held, undefined) };
+          const worn = principal === null ? ['public'] : (await records.get(principal)).roles;
+          return { roles: worn, scope: {}, installed: undefined, memoKey: memoKey(worn, undefined) };
         },
         composeScope: () => ({}),
       },
@@ -228,11 +228,11 @@ describe('the signals of a server — what a tenant’s people may reach changed
       adoptAll: hosts.adopt,
       deliver: hosts.deliver,
     });
-    const held = (principal: string): string[] => sessions.get(principal)?.functions().map((one) => one.id) ?? [];
-    return { hosts, signals, held, dropRecord: records.invalidate };
+    const granted = (principal: string): string[] => sessions.get(principal)?.functions().map((one) => one.id) ?? [];
+    return { hosts, signals, granted, dropRecord: records.invalidate };
   };
 
-  it('`invalidateTag` has every living shell adopt in every process: a function the new roles do not grant is no longer held, though the record had been dropped', async () => {
+  it('`invalidateTag` has every living shell adopt in every process: a function the new roles do not grant is no longer among their functions, though the record had been dropped', async () => {
     const bus = createBus();
     const roles = new Map<string, readonly string[]>([
       ['acme_ada', ['member']],
@@ -243,7 +243,7 @@ describe('the signals of a server — what a tenant’s people may reach changed
       const bens = await a.hosts.shells?.session('t', 'acme_ben');
       const adas = await b.hosts.shells?.session('t', 'acme_ada');
       const before = [bens?.shell, adas?.shell];
-      expect([a.held('acme_ben'), b.held('acme_ada')]).toEqual([['notes.add'], ['notes.add']]);
+      expect([a.granted('acme_ben'), b.granted('acme_ada')]).toEqual([['notes.add'], ['notes.add']]);
 
       a.dropRecord('acme_ben');
       roles.set('acme_ada', ['public']);
@@ -251,7 +251,7 @@ describe('the signals of a server — what a tenant’s people may reach changed
       a.signals.invalidateTag('acme');
       for (let i = 0; i < 5; i += 1) await turn();
 
-      expect([a.held('acme_ben'), b.held('acme_ada')]).toEqual([[], []]);
+      expect([a.granted('acme_ben'), b.granted('acme_ada')]).toEqual([[], []]);
       expect([bens?.shell, adas?.shell]).toEqual(before);
     } finally {
       a.hosts.stop();

@@ -28,8 +28,8 @@ type Process = {
   onThePage: (principal: string) => Promise<FunctionSession>;
   // What each of the next times somebody's identity is asked does, in order: it fails, or it waits to be let go.
   identityAsked: { next: ('fails' | 'waits' | 'answers')[]; letGo: (howMany?: number) => void };
-  // Whether each of the next answers of what a shell is made of is held back once it is composed.
-  composed: { next: ('held' | 'handed over')[]; letGo: () => void };
+  // Whether each of the next answers of what a shell is made of is kept back once it is composed.
+  composed: { next: ('kept back' | 'handed over')[]; letGo: () => void };
   running: ReturnType<typeof createRunningManifest>;
 };
 
@@ -50,8 +50,8 @@ const process = (rows: RowsDouble = rowsDouble()): Process => {
   const running = createRunningManifest({ shipped: app, grants: scopeGrants([]), shells: [shell, page] });
   const waiting: (() => void)[] = [];
   const identityAsked: Process['identityAsked'] = { next: [], letGo: (howMany = waiting.length) => waiting.splice(0, howMany).forEach((go) => go()) };
-  const held: (() => void)[] = [];
-  const composed: Process['composed'] = { next: [], letGo: () => held.splice(0).forEach((go) => go()) };
+  const keptBack: (() => void)[] = [];
+  const composed: Process['composed'] = { next: [], letGo: () => keptBack.splice(0).forEach((go) => go()) };
   const identity = {
     resolve: async () => {
       const does = identityAsked.next.shift();
@@ -69,7 +69,7 @@ const process = (rows: RowsDouble = rowsDouble()): Process => {
       ...running,
       artifactsFor: async (...asked) => {
         const made = await running.artifactsFor(...asked);
-        if (composed.next.shift() === 'held') await new Promise<void>((go) => held.push(go));
+        if (composed.next.shift() === 'kept back') await new Promise<void>((go) => keptBack.push(go));
         return made;
       },
     },
@@ -305,8 +305,8 @@ describe('the draft of a function’s session', () => {
       await settle();
       const notes: ActionDefinition = { id: 'ext.notes', layout: saying('handed over while the add was taken') };
 
-      // What the shell is made of with the add is composed, and held back.
-      here.composed.next = ['held'];
+      // What the shell is made of with the add is composed, and kept back.
+      here.composed.next = ['kept back'];
       const adding = ada.session.draft.add([generated('added before the app changed')]);
       await settle();
       // The app changes, and the shell adopts that.

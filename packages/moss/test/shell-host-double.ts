@@ -32,17 +32,17 @@ export const hostConfig = (setup: HostSetup): ShellHostConfig => {
   return {
     composition: async (principal) => {
       const who = await setup.resolve(principal);
-      const held = actionsWithStoredLayouts(definitionsFor(actions(), who.catalog.ids, who.variants));
+      const stored = actionsWithStoredLayouts(definitionsFor(actions(), who.catalog.ids, who.variants));
       const { layouts: ofShell, ...named } = shellWithStoredLayouts(shell);
       return {
         roles: who.roles,
         scope: who.scope,
-        actions: held.actions,
+        actions: stored.actions,
         components: shellComponents({ actions: actions(), layouts: app.layouts }, shell),
         ...named,
         // Its catalog is handed over, not read off the charter: so are the functions it may call, all of them.
         grantedFunctions: (names) => new Set(names),
-        layoutStore: { ...shell.layoutStore, ...ofShell, ...held.layouts },
+        layoutStore: { ...shell.layoutStore, ...ofShell, ...stored.layouts },
         ...(shell.fragments !== undefined ? { fragments: shell.fragments } : {}),
         ...(setup.entries !== undefined ? { entries: setup.entries } : {}),
       };

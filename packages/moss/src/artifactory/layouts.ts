@@ -25,12 +25,12 @@ export const actionAtRef =
     return action === undefined || layout === undefined ? undefined : { ...action, layout };
   };
 
-export type LayoutHeldTo = {
+export type LayoutChecks = {
   // The action whose layout the store of whoever the layout is for keeps under
   // this ref, with that layout in place.
   actionAt: (ref: string) => ActionDefinition | undefined;
   // The names the app's own shell keeps its own layouts under (the frame's and
-  // each canvas's), and what a layout saved for one is held to. Absent in a
+  // each canvas's), and what a layout saved for one is checked against. Absent in a
   // page's shell: a page draws the layouts it declares.
   ownShell?: { refs: ReadonlySet<string>; kit: KitComponents };
   kit: KitComponents;
@@ -41,16 +41,16 @@ const nothingKeptUnder = (ref: string): string =>
   'or of one the app’s own shell declares: its own under "frame", a canvas’s under "canvas/<the canvas’s id>".';
 
 // What a layout saved under this ref takes the place of: an action's layout, or one of the app's own shell.
-const targetAt = (ref: string, heldTo: LayoutHeldTo): { kit: KitComponents; action?: ActionDefinition } | undefined => {
-  if (heldTo.ownShell?.refs.has(ref) === true) return { kit: heldTo.ownShell.kit };
-  const action = heldTo.actionAt(ref);
-  return action === undefined ? undefined : { kit: heldTo.kit, action };
+const targetAt = (ref: string, checks: LayoutChecks): { kit: KitComponents; action?: ActionDefinition } | undefined => {
+  if (checks.ownShell?.refs.has(ref) === true) return { kit: checks.ownShell.kit };
+  const action = checks.actionAt(ref);
+  return action === undefined ? undefined : { kit: checks.kit, action };
 };
 
 export type InUseFor = {
   // Whose the layouts are, as a line says it of one that is left out: "of ada".
   whose: string;
-  heldTo: LayoutHeldTo;
+  checks: LayoutChecks;
   say?: (line: string) => void;
 };
 
@@ -59,7 +59,7 @@ export const refOf = (body: unknown): string | undefined => {
   return typeof ref === 'string' ? ref : undefined;
 };
 
-export const readLayout = (body: unknown, heldTo: LayoutHeldTo): { layout: SavedLayout } | { refusal: string } => {
+export const readLayout = (body: unknown, checks: LayoutChecks): { layout: SavedLayout } | { refusal: string } => {
   // First: the schema recurses, and a deep enough body overflows the stack.
   if (exceedsDepth(body)) return { refusal: depthRefusal() };
   const parsed = SavedLayoutSchema.safeParse(body);
@@ -68,7 +68,7 @@ export const readLayout = (body: unknown, heldTo: LayoutHeldTo): { layout: Saved
     return { refusal: first === undefined ? 'no reason given' : `${first.path.join('.') || '(the body)'}: ${first.message}` };
   }
   const { ref, layout } = parsed.data;
-  const target = targetAt(ref, heldTo);
+  const target = targetAt(ref, checks);
   if (target === undefined) return { refusal: nothingKeptUnder(ref) };
   const misfits = layoutMisfits(layout, target.kit);
   if (misfits.length > 0) return { refusal: misfits.join('; ') };
@@ -85,11 +85,11 @@ export const readLayout = (body: unknown, heldTo: LayoutHeldTo): { layout: Saved
 };
 
 // A layout whose ref the store does not keep is not loaded, and nothing is said:
-// its action left, or its holder has it no longer.
-const loaded = (version: SavedVersion, { whose, heldTo, say }: InUseFor): SavedLayout | undefined => {
+// its action left, or its owner has it no longer.
+const loaded = (version: SavedVersion, { whose, checks, say }: InUseFor): SavedLayout | undefined => {
   const ref = refOf(version.body);
-  if (ref === undefined || targetAt(ref, heldTo) === undefined) return undefined;
-  const read = version.unread !== undefined ? { refusal: version.unread } : readLayout(version.body, heldTo);
+  if (ref === undefined || targetAt(ref, checks) === undefined) return undefined;
+  const read = version.unread !== undefined ? { refusal: version.unread } : readLayout(version.body, checks);
   if ('layout' in read) return read.layout;
   (say ?? console.error)(`[moss] the layout "${version.id}" ${whose} is left out: ${read.refusal}`);
   return undefined;
@@ -106,8 +106,8 @@ export const layoutsInUse = (inForce: readonly SavedVersion[], drawnFor: InUseFo
   for (const version of inForce.filter(isInUse)) {
     const ref = refOf(version.body);
     if (ref === undefined) continue;
-    const held = marked.get(ref);
-    if (held === undefined || isLater(version, held)) marked.set(ref, version);
+    const latest = marked.get(ref);
+    if (latest === undefined || isLater(version, latest)) marked.set(ref, version);
   }
   const layouts: Record<string, LayoutNode> = {};
   for (const version of marked.values()) {

@@ -47,7 +47,7 @@ const whole = (): NiscApp => ({
 });
 
 describe('the manifest’s schema', () => {
-  it('reads a manifest that holds every field', () => {
+  it('reads a manifest that has every field', () => {
     expect(manifestMisfits(whole())).toEqual([]);
     expect(() => receiveManifest(whole())).not.toThrow();
   });
@@ -56,7 +56,7 @@ describe('the manifest’s schema', () => {
     expect(manifestMisfits({ charter: {}, actions: {} })).toEqual([]);
   });
 
-  it('holds an action, a layout and a fragment to nova’s schemas, and says where', () => {
+  it('checks an action, a layout and a fragment against nova’s schemas, and says where', () => {
     const misfits = manifestMisfits({
       ...whole(),
       actions: { home: { ...home, tittle: 'Home' }, panel: { id: 'panel', layout: { component: 7 } } },
@@ -71,7 +71,7 @@ describe('the manifest’s schema', () => {
     ]);
   });
 
-  it('holds an entry to vex’s schemas: a read to a query, a write to a mutation', () => {
+  it('checks an entry against vex’s schemas: a read against a query, a write against a mutation', () => {
     const misfits = manifestMisfits({
       ...whole(),
       entries: [
@@ -89,8 +89,8 @@ describe('the manifest’s schema', () => {
     ]);
   });
 
-  it('holds a feature to a name and a function to start it with, and leaves what else it carries', () => {
-    const calls = { name: 'thing', start: async () => undefined, callThing: () => 'answered', held: { anything: 1 } };
+  it('checks that a feature has a name and a function to start it with, and leaves what else it carries', () => {
+    const calls = { name: 'thing', start: async () => undefined, callThing: () => 'answered', kept: { anything: 1 } };
     expect(manifestMisfits({ ...whole(), features: [calls] })).toEqual([]);
     expect(manifestMisfits({ ...whole(), features: [{ name: 'thing' }, { start: () => undefined }, 'thing'] })).toEqual([
       'features.0.start: expected a function',
@@ -104,7 +104,7 @@ describe('the manifest’s schema', () => {
     expect(manifestMisfits({ ...whole(), facts: { tide: () => undefined, identity: () => undefined } })).toEqual(['(the manifest): Unrecognized key: "facts"']);
   });
 
-  it('holds a canvas, a page and the lists to their shapes', () => {
+  it('checks a canvas, a page and the lists against their shapes', () => {
     const misfits = manifestMisfits({
       ...whole(),
       shell: { canvases: [{ id: 'main', mode: 'pile' }, { id: 'tray', initial: [{ input: {} }] }] },
@@ -176,7 +176,7 @@ describe('the manifest’s schema', () => {
     ]);
   });
 
-  it('holds a seam to being a function', () => {
+  it('checks that a seam is a function', () => {
     const misfits = manifestMisfits({
       ...whole(),
       scope: { tenant: 'north' },

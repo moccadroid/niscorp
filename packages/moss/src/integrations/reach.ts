@@ -11,8 +11,8 @@ export const reachOf = (bundle: Bundle, integrationId: string): Reach => {
   const admit = (url: string, actionId: string): void => {
     if (!url.startsWith(own)) return;
     const key = normalizePath(url);
-    const held = (reach[key] ??= []);
-    if (!held.includes(actionId)) held.push(actionId);
+    const declaring = (reach[key] ??= []);
+    if (!declaring.includes(actionId)) declaring.push(actionId);
   };
   for (const [actionId, action] of Object.entries(bundle.actions)) {
     for (const endpoint of Object.values(action.endpoints ?? {})) {
@@ -22,7 +22,7 @@ export const reachOf = (bundle: Bundle, integrationId: string): Reach => {
   return Object.fromEntries(Object.entries(reach).sort(([a], [b]) => a.localeCompare(b)));
 };
 
-export const reachAdmits = (reach: Reach, path: string, held: ReadonlySet<string>): boolean =>
-  (reach[normalizePath(path)] ?? []).some((actionId) => held.has(actionId));
+export const reachAdmits = (reach: Reach, path: string, granted: ReadonlySet<string>): boolean =>
+  (reach[normalizePath(path)] ?? []).some((actionId) => granted.has(actionId));
 
 export const reachDeclares = (reach: Reach, path: string): boolean => reach[normalizePath(path)] !== undefined;

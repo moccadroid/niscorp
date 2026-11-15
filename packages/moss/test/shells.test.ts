@@ -53,7 +53,7 @@ describe('shells — the shell host', () => {
     expect(a.shell).toBe(b.shell);
   });
 
-  it('who somebody is and what they hold is asked once for each shell that is built', async () => {
+  it('who somebody is and what they are granted is asked once for each shell that is built', async () => {
     const asked: (string | null)[] = [];
     const host = standHost(hostConfig({ ...ctx, resolve: async (principal) => (asked.push(principal), ctx.resolve(principal)) }));
     await host.session('t', 'usr_1');
@@ -92,13 +92,13 @@ describe('shells — the shell host', () => {
     expect(session.shell.getState().canvases['main']?.active).toBeUndefined();
   });
 
-  it('a held variant replaces the definition layout; behavior is untouched (ring 2)', async () => {
+  it('a granted variant replaces the definition layout; behavior is untouched (ring 2)', async () => {
     const withLayouts = {
       ...app,
       actions: { counter: { ...counter, layout: { component: 'Text', children: 'base' } } },
       layouts: { 'counter.basic': { action: 'counter', layout: { component: 'Text', children: 'variant' } } },
     } as unknown as NiscApp;
-    const rendered = async (principal: string, held: boolean): Promise<string> => {
+    const rendered = async (principal: string, granted: boolean): Promise<string> => {
       const host = standHost(hostConfig({
         ...ctx,
         app: withLayouts,
@@ -106,15 +106,15 @@ describe('shells — the shell host', () => {
           roles: ['public'],
           scope: {},
           catalog: { ids: ['counter'], hash: 'h' },
-          variants: held ? new Map([['counter', { component: 'Text', children: 'variant' }]]) : new Map(),
+          variants: granted ? new Map([['counter', { component: 'Text', children: 'variant' }]]) : new Map(),
         }),
       }));
       return JSON.stringify((await host.session('t', principal)).shell.flattenRenderTree((await host.session('t', principal)).shell.getCanvasRenderTree('main')));
     };
     expect(await rendered('usr_base', false)).toContain('base');
     expect(await rendered('usr_base', false)).not.toContain('variant');
-    expect(await rendered('usr_held', true)).toContain('variant');
-    expect(await rendered('usr_held', true)).not.toContain('"base"');
+    expect(await rendered('usr_granted', true)).toContain('variant');
+    expect(await rendered('usr_granted', true)).not.toContain('"base"');
 
     const host = standHost(hostConfig({
       ...ctx,
@@ -200,7 +200,7 @@ describe('shells — the session app code is handed', () => {
   const writers = { generateDsl: async () => ({ from: ['notes'] }), mapToShape: async () => ({ ir: {}, transformed: null }) } as unknown as Parameters<FunctionSession['answerIntent']>[0];
   const asked = { intent: 'every note', shape: [] };
 
-  it('holds the functions its principal’s roles grant, and names them; the shell is handed those alone', async () => {
+  it('has the functions its principal’s roles grant, and names them; the shell is handed those alone', async () => {
     const seen: { session?: FunctionSession } = {};
     const withFunctions = {
       ...app,
@@ -218,7 +218,7 @@ describe('shells — the session app code is handed', () => {
     expect(seen.session?.functions()).toEqual([{ id: 'notes.list' }]);
   });
 
-  it('the functions it holds follow the roles an adopt answers, as its actions do', async () => {
+  it('the functions it has follow the roles an adopt answers, as its actions do', async () => {
     const seen: { session?: FunctionSession } = {};
     const withFunctions = {
       ...app,
@@ -323,24 +323,24 @@ describe('shells — the session app code is handed', () => {
 });
 
 const answeredByHand = (first: readonly string[]) => {
-  const held = { ids: first, asked: 0 };
+  const state = { ids: first, asked: 0 };
   const unanswered: (() => void)[] = [];
   const told: { count: number; tell: () => void }[] = [];
   const resolve: HostSetup['resolve'] = async () => {
-    const ids = held.ids;
-    held.asked += 1;
+    const ids = state.ids;
+    state.asked += 1;
     for (const one of told.splice(0)) {
-      if (one.count <= held.asked) one.tell();
+      if (one.count <= state.asked) one.tell();
       else told.push(one);
     }
-    if (held.asked > 1) await new Promise<void>((answer) => unanswered.push(answer));
+    if (state.asked > 1) await new Promise<void>((answer) => unanswered.push(answer));
     return { roles: ['public'], scope: {}, catalog: { ids }, variants: new Map() };
   };
   return {
     resolve,
-    hold: (ids: readonly string[]): void => void (held.ids = ids),
-    asked: (): number => held.asked,
-    askedBy: (count: number): Promise<void> => (held.asked >= count ? Promise.resolve() : new Promise<void>((tell) => told.push({ count, tell }))),
+    grant: (ids: readonly string[]): void => void (state.ids = ids),
+    asked: (): number => state.asked,
+    askedBy: (count: number): Promise<void> => (state.asked >= count ? Promise.resolve() : new Promise<void>((tell) => told.push({ count, tell }))),
     answer: (): void => unanswered.shift()?.(),
   };
 };
@@ -409,7 +409,7 @@ describe('shells — reset', () => {
     }
   });
 
-  it('the durable map holds the replacement — a later connection joins it, not the disposed one', async () => {
+  it('the durable map has the replacement — a later connection joins it, not the disposed one', async () => {
     const host = standHost(hostConfig(ctx));
     const first = await host.session('t', 'usr_1');
     await tick();
@@ -449,7 +449,7 @@ describe('shells — reset', () => {
 
     session.reset();
     await who.askedBy(2);
-    who.hold(['counter', 'extra']);
+    who.grant(['counter', 'extra']);
     session.reset();
 
     who.answer();
@@ -520,7 +520,7 @@ describe('shells — reset', () => {
     expect(shown()).toEqual({ id: 'act-abcdef0123-1', slug: 'intro' });
   });
 
-  it('resetting a principal who holds no shell answers false rather than throwing', async () => {
+  it('resetting a principal who has no shell answers false rather than throwing', async () => {
     const host = standHost(hostConfig(ctx));
     expect(host.reset('usr_nobody')).toBe(false);
     await host.session('t', 'usr_1');
@@ -655,7 +655,7 @@ describe('shells — a build is bounded by the endpoint timeout', () => {
       host.stop();
     }));
 
-  it('a reset whose build never lands holds up no later reset of that shell beyond the timeout, and nobody else’s at all', () =>
+  it('a reset whose build never lands delays no later reset of that shell beyond the timeout, and nobody else’s at all', () =>
     clocked(async (pass) => {
       const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
       try {
@@ -934,17 +934,17 @@ describe('shells — frame deltas', () => {
     session.attach(asked, { delta: true });
     await tick();
 
-    let held = asked.texts.filter((t) => (JSON.parse(t) as { type: string }).type === 'render').at(-1)!;
+    let frame = asked.texts.filter((t) => (JSON.parse(t) as { type: string }).type === 'render').at(-1)!;
     for (let i = 0; i < 4; i += 1) {
       asked.texts.length = 0;
       session.dispatch('main', { type: 'ui:click', ref: 'bump' });
       await tick();
       const delta = lastOfType(asked.texts, 'render-delta');
       expect(delta).toBeDefined();
-      held = applyDelta(held, delta!['ops'] as DeltaOp[]);
-      expect(frameHash(held)).toBe(delta!['hash']);
+      frame = applyDelta(frame, delta!['ops'] as DeltaOp[]);
+      expect(frameHash(frame)).toBe(delta!['hash']);
     }
-    expect((JSON.parse(held) as { tree: unknown[] }).tree).toEqual(
+    expect((JSON.parse(frame) as { tree: unknown[] }).tree).toEqual(
       (session.shell.flattenRenderTree(session.shell.getCanvasRenderTree('main')) as unknown[]),
     );
   });
@@ -1236,7 +1236,7 @@ describe('shells — the frame layout store and re-send', () => {
     expect(frames(first).filter((frame) => JSON.stringify(frame).includes('swapped-dock'))).toHaveLength(1);
   });
 
-  it('a frame that fails to render for a newcomer is not taken for the one everybody holds', async () => {
+  it('a frame that fails to render for a newcomer is not taken for the one everybody has', async () => {
     const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
     try {
       const host = standHost(hostConfig(refCtx));
@@ -1244,7 +1244,7 @@ describe('shells — the frame layout store and re-send', () => {
       const first = fakeConnection();
       session.attach(first);
       await tick();
-      const held = frames(first).length;
+      const sentBefore = frames(first).length;
 
       const render = session.shell.getShellRenderTree.bind(session.shell);
       unverifiedShell(session).getShellRenderTree = () => {
@@ -1253,7 +1253,7 @@ describe('shells — the frame layout store and re-send', () => {
       const second = fakeConnection();
       session.attach(second);
       expect(frames(second).at(-1)).toEqual({ type: 'frame', tree: [] });
-      expect(frames(first)).toHaveLength(held);
+      expect(frames(first)).toHaveLength(sentBefore);
 
       unverifiedShell(session).getShellRenderTree = render;
       session.dispatch('main', { type: 'ui:click', ref: 'bump' });
@@ -1339,9 +1339,9 @@ describe('shells — adopt', () => {
   const ledger = { id: 'ledger', data: {}, layout: { component: 'Ledger', children: 'a ledger' } };
   const base = { ...app, actions: { home }, shell: { canvases: [{ id: 'main', initial: 'home' }] } } as unknown as NiscApp;
 
-  const world = (setup: Partial<HostSetup> = {}): { host: ReturnType<typeof standHost>; force: (actions: Record<string, unknown>) => void; hold: (principal: string, ids: string[] | Error) => void } => {
+  const world = (setup: Partial<HostSetup> = {}): { host: ReturnType<typeof standHost>; force: (actions: Record<string, unknown>) => void; grant: (principal: string, ids: string[] | Error) => void } => {
     let inForce: Record<string, unknown> = { home, extra };
-    const held = new Map<string, string[] | Error>();
+    const granted = new Map<string, string[] | Error>();
     const host = standHost(
       hostConfig({
         ...ctx,
@@ -1349,13 +1349,13 @@ describe('shells — adopt', () => {
         app: setup.app ?? base,
         actions: () => inForce as ReturnType<NonNullable<HostSetup['actions']>>,
         resolve: async (principal) => {
-          const ids = held.get(principal ?? '') ?? Object.keys(inForce);
+          const ids = granted.get(principal ?? '') ?? Object.keys(inForce);
           if (ids instanceof Error) throw ids;
           return { roles: ['member'], scope: {}, catalog: { ids: ids.filter((id) => id in inForce) }, variants: new Map() };
         },
       }),
     );
-    return { host, force: (actions) => void (inForce = actions), hold: (principal, ids) => void held.set(principal, ids) };
+    return { host, force: (actions) => void (inForce = actions), grant: (principal, ids) => void granted.set(principal, ids) };
   };
   const mounted = (session: Awaited<ReturnType<ReturnType<typeof standHost>['session']>>): string[] => session.shell.getCanvasState('main').stack.map((item) => item.definitionId);
   const settle = async (): Promise<void> => {
@@ -1382,15 +1382,15 @@ describe('shells — adopt', () => {
     expect(served).not.toContain('an extra screen');
   });
 
-  it('an action its principal is no longer granted leaves too, and stays for whoever still holds it', async () => {
-    const { host, hold } = world();
+  it('an action its principal is no longer granted leaves too, and stays for whoever is still granted it', async () => {
+    const { host, grant } = world();
     const revoked = await host.session('t', 'usr_1');
     const kept = await host.session('t', 'usr_2');
     revoked.shell.push('main', 'extra');
     kept.shell.push('main', 'extra');
     await settle();
 
-    hold('usr_1', ['home']);
+    grant('usr_1', ['home']);
     host.adopt();
     await settle();
 
@@ -1419,11 +1419,11 @@ describe('shells — adopt', () => {
   it('a principal whose shell cannot adopt is said, and does not stop the rest', async () => {
     const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
     try {
-      const { host, force, hold } = world();
+      const { host, force, grant } = world();
       const first = await host.session('t', 'usr_1');
       const second = await host.session('t', 'usr_2');
 
-      hold('usr_1', new Error('this one cannot be resolved'));
+      grant('usr_1', new Error('this one cannot be resolved'));
       force({ home, extra, ledger });
       host.adopt();
       await settle();
@@ -1484,7 +1484,7 @@ describe('shells — adopt', () => {
     shell: { canvases: [{ id: 'main', initial: 'home' }], inputs: ({ principal }) => (principal === 'usr_stuck' ? new Promise<never>(() => undefined) : {}) },
   });
 
-  it('a build that never lands holds no later change back from anybody else', async () => {
+  it('a build that never lands keeps no later change back from anybody else', async () => {
     const { host, force } = world({ app: stuck() });
     const session = await host.session('t', 'usr_1');
     // Refused when the endpoint timeout runs out, which nobody here waits for.
@@ -1549,7 +1549,7 @@ describe('shells — adopt', () => {
     };
   };
 
-  it('a principal who is never answered holds up nobody after them, in that change', async () => {
+  it('a principal who is never answered delays nobody after them, in that change', async () => {
     const { host, change } = neverAnswered('usr_stuck');
     const before = await host.session('t', 'usr_before');
     // Built before the two after it, so a walk reaches it before them.
@@ -1588,7 +1588,7 @@ describe('shells — adopt', () => {
     }
   });
 
-  it('a build that was under way through two changes holds what is in force when it lands', async () => {
+  it('a build that was under way through two changes has what is in force when it lands', async () => {
     let release = (): void => undefined;
     const waiting = new Promise<void>((resolve) => void (release = resolve));
     const slow: NiscApp = { ...base, shell: { canvases: [{ id: 'main', initial: 'home' }], inputs: async () => (await waiting, {}) } };
@@ -1775,7 +1775,7 @@ describe('shells — adopt', () => {
     });
   });
 
-  describe('a canvas the shell’s layouts hold a slot for', () => {
+  describe('a canvas the shell’s layouts have a slot for', () => {
     const canvasesWorld = (slotted: string[] = []) => {
       const answer = { slotted };
       const config = hostConfig({ ...ctx, app: base, resolve: async () => ({ roles: ['member'], scope: {}, catalog: { ids: ['home'] }, variants: new Map() }) });
@@ -1785,7 +1785,7 @@ describe('shells — adopt', () => {
     const canvasesOf = (session: Awaited<ReturnType<ReturnType<typeof standHost>['session']>>): string[] => Object.keys(session.shell.getState().canvases);
     const lastOn = (connection: ReturnType<typeof fakeConnection>, canvas: string): unknown => connection.sent.filter((message) => message['type'] === 'render' && message['canvas'] === canvas).at(-1);
 
-    it('is nova’s to give the shell, when something is first pushed onto it; once no layout holds the slot it is taken out with what is mounted on it, and the others keep what is on them', async () => {
+    it('is nova’s to give the shell, when something is first pushed onto it; once no layout has the slot it is taken out with what is mounted on it, and the others keep what is on them', async () => {
       const { host, answer } = canvasesWorld();
       const session = await host.session('t', 'usr_1');
       const connection = fakeConnection();
@@ -1815,7 +1815,7 @@ describe('shells — adopt', () => {
       expect(session.shell.getCanvasState('main').stack.at(-1)?.id).toBe(open);
     });
 
-    it('one a layout held the slot for when the shell was built is taken out the same way, and a canvas no layout ever held a slot for stays', async () => {
+    it('one a layout had the slot for when the shell was built is taken out the same way, and a canvas no layout ever had a slot for stays', async () => {
       const { host, answer } = canvasesWorld(['notes']);
       const session = await host.session('t', 'usr_1');
       await settle();
@@ -1834,13 +1834,13 @@ describe('shells — adopt', () => {
   });
 
   it('every shell of one principal on a host that keeps none adopts, each for itself', async () => {
-    const { host, hold } = world({ kept: false });
+    const { host, grant } = world({ kept: false });
     const tabs = [await host.session('t', 'usr_1'), await host.session('t', 'usr_1')];
     const other = await host.session('t', 'usr_2');
     for (const session of [...tabs, other]) session.shell.push('main', 'extra');
     await settle();
 
-    hold('usr_1', ['home']);
+    grant('usr_1', ['home']);
     host.adopt();
     await settle();
 
@@ -1905,7 +1905,7 @@ describe('shells — a shell that ended is let go', () => {
     expect(living.shell.getCanvasState('main').stack).toHaveLength(1);
   });
 
-  it('a shell that is not kept and has not ended is held, and one that attached nothing is ended by a detach', async () => {
+  it('a shell that is not kept and has not ended stays in memory, and one that attached nothing is ended by a detach', async () => {
     const host = standHost(hostConfig(ctx));
     const dropped = await (async (): Promise<WeakRef<object>> => new WeakRef((await host.session(null, null)).shell))();
     const detached = await (async (): Promise<WeakRef<object>> => {

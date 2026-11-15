@@ -1,7 +1,7 @@
 import { createApp, createSSRApp, shallowRef } from 'vue';
 import type { NovaComponent } from '@niscorp/nova/adapters/vue';
 import type { ComponentRegistry } from '@niscorp/nova';
-import { hideStatus, holdsDrawnScreen, showStatus } from '../targets';
+import { hideStatus, hasDrawnScreen, showStatus } from '../targets';
 import type { Target, TerminalApi } from '../index';
 import { registerWireSlots, terminalFrame } from './slots';
 import type { TerminalSlotWrapper } from './slots';
@@ -42,7 +42,7 @@ export const vueTarget = (config: VueTargetConfig): Target => {
 
     const Frame = terminalFrame(live, registry);
 
-    const adopts = holdsDrawnScreen(root, api);
+    const adopts = hasDrawnScreen(root, api);
     showStatus(root, api.status());
     const app = adopts ? createSSRApp(Frame) : createApp(Frame);
     app.mount(root);

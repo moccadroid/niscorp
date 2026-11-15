@@ -109,7 +109,7 @@ describe('serve', () => {
     warned.mockRestore();
   });
 
-  it('told nothing, a connection is held to the transport’s own limit of 256 KB', async () => {
+  it('told nothing, a connection is bound to the transport’s own limit of 256 KB', async () => {
     const { port } = await serving();
     const client = await opened(`ws://127.0.0.1:${port}/socket`);
     const answer = new Promise<string>((resolve) => client.once('message', (data) => resolve(String(data))));

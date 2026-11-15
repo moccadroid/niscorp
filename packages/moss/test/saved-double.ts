@@ -23,7 +23,7 @@ export const rowsDouble = (): RowsDouble => {
       inForce: async () => {
         asked.push(principal);
         const latest = new Map<string, Row>();
-        for (const row of rows.filter((held) => held.principal === principal).sort(newestFirst)) {
+        for (const row of rows.filter((stored) => stored.principal === principal).sort(newestFirst)) {
           const key = `${row.kind}\0${row.id}`;
           if (!latest.has(key)) latest.set(key, row);
         }

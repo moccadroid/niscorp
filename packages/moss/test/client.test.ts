@@ -22,7 +22,7 @@ class FakeSocket {
     this.offered = upgrade.offered;
     FakeSocket.instances.push(this);
   }
-  // Everything the wire sends is held to the schema the server parses with.
+  // Everything the wire sends is checked against the schema the server parses with.
   send(text: string): void {
     ClientMessageSchema.parse(JSON.parse(text));
     this.sent.push(text);
@@ -477,11 +477,11 @@ describe('the wire — what the server sends is parsed', () => {
     ['a frame whose tree is not a tree', { type: 'frame', tree: [{ type: 'text', value: 7 }] }],
   ])('%s is said and not put on the screen', (_label, message) => {
     const { wire, socket, warn } = shown();
-    const held = wire.snapshot();
+    const before = wire.snapshot();
     let ticks = 0;
     wire.subscribe(() => (ticks += 1));
     socket.emit(message);
-    expect(wire.snapshot()).toBe(held);
+    expect(wire.snapshot()).toBe(before);
     expect(ticks).toBe(0);
     expect(warn).toHaveBeenCalledOnce();
     expect(String(warn.mock.calls[0]?.[0])).toContain(message.type);
@@ -490,9 +490,9 @@ describe('the wire — what the server sends is parsed', () => {
 
   it('text that is not JSON is said and dropped, not thrown into the socket', () => {
     const { wire, socket, warn } = shown();
-    const held = wire.snapshot();
+    const before = wire.snapshot();
     expect(() => socket.onmessage?.({ data: '{"type":"render","canvas":"main"' })).not.toThrow();
-    expect(wire.snapshot()).toBe(held);
+    expect(wire.snapshot()).toBe(before);
     expect(warn).toHaveBeenCalledOnce();
     expect(wire.status()).toBe('open');
   });
@@ -518,19 +518,19 @@ describe('the wire — what the server sends is parsed', () => {
 
   it('a delta that rebuilds, to the checksum, something that is not a render is not put on the screen: it asks for whole frames', () => {
     const { wire, socket } = shown();
-    const held = wire.snapshot();
+    const before = wire.snapshot();
     const base = JSON.stringify({ type: 'render', canvas: 'main', tree: [row] });
     const next = JSON.stringify({ type: 'render', canvas: 'main', tree: [{ type: 'table', rows: [] }] });
     socket.emit({ type: 'render-delta', canvas: 'main', ops: encodeDelta(base, next), hash: frameHash(next) });
-    expect(wire.snapshot()).toBe(held);
+    expect(wire.snapshot()).toBe(before);
     expect(socket.envelopes().filter((m) => m['type'] === 'resync')).toHaveLength(1);
   });
 
   it('a delta whose ops are not ops is not applied', () => {
     const { wire, socket, warn } = shown();
-    const held = wire.snapshot();
+    const before = wire.snapshot();
     socket.emit({ type: 'render-delta', canvas: 'main', ops: [[2, 'x'], 'copy'], hash: 1 });
-    expect(wire.snapshot()).toBe(held);
+    expect(wire.snapshot()).toBe(before);
     expect(warn).toHaveBeenCalledOnce();
   });
 
@@ -633,15 +633,15 @@ describe('the wire — frame deltas', () => {
     const wire = createWire({ url: URL, env: env(), delta: true });
     const socket = FakeSocket.last();
     socket.serve();
-    let held = render([{ type: 'text', value: 'chrome that never changes at all' }, { type: 'text', value: '0' }]);
-    socket.onmessage?.({ data: held });
+    let previous = render([{ type: 'text', value: 'chrome that never changes at all' }, { type: 'text', value: '0' }]);
+    socket.onmessage?.({ data: previous });
 
     for (const n of ['1', '2', '3']) {
       const next = render([{ type: 'text', value: 'chrome that never changes at all' }, { type: 'text', value: n }]);
-      socket.emit({ type: 'render-delta', canvas: 'main', ops: encodeDelta(held, next), hash: frameHash(next) });
-      held = next;
+      socket.emit({ type: 'render-delta', canvas: 'main', ops: encodeDelta(previous, next), hash: frameHash(next) });
+      previous = next;
     }
-    expect(wire.snapshot().trees.get('main')).toEqual((JSON.parse(held) as { tree: unknown[] }).tree);
+    expect(wire.snapshot().trees.get('main')).toEqual((JSON.parse(previous) as { tree: unknown[] }).tree);
     expect(socket.envelopes().some((m) => m['type'] === 'resync')).toBe(false);
   });
 
@@ -652,13 +652,13 @@ describe('the wire — frame deltas', () => {
     socket.serve();
     const base = render([{ type: 'text', value: 'a long steady line of chrome' }, { type: 'text', value: '1' }]);
     socket.onmessage?.({ data: base });
-    const held = wire.snapshot().trees.get('main');
+    const before = wire.snapshot().trees.get('main');
 
     const next = render([{ type: 'text', value: 'a long steady line of chrome' }, { type: 'text', value: '2' }]);
     socket.emit({ type: 'render-delta', canvas: 'main', ops: encodeDelta(base, next), hash: frameHash(next) + 1 });
 
     expect(socket.envelopes().filter((m) => m['type'] === 'resync')).toHaveLength(1);
-    expect(wire.snapshot().trees.get('main')).toBe(held);
+    expect(wire.snapshot().trees.get('main')).toBe(before);
   });
 
   it('asks to resync when a delta arrives with no base to apply it to', () => {
@@ -883,7 +883,7 @@ describe('the wire — on a host whose browser keeps the session', () => {
     kept = false;
   });
 
-  it('a token left in storage is offered once, and let go of when the browser holds the session', () => {
+  it('a token left in storage is offered once, and let go of when the browser keeps the session', () => {
     storage.setItem('nisc.token', 'tok-1');
     createWire({ url: URL, env: host() });
     expect(upgrade(FakeSocket.last()).token).toBe('tok-1');
@@ -942,7 +942,7 @@ describe('the wire — on a host whose browser keeps the session', () => {
     expect(FakeSocket.last().url).not.toContain('leave');
   });
 
-  it('a token that was refused is dropped without leaving: whatever the browser holds still speaks', () => {
+  it('a token that was refused is dropped without leaving: whatever the browser keeps still speaks', () => {
     storage.setItem('nisc.token', 'stale');
     createWire({ url: URL, env: host() });
     FakeSocket.last().serverClose(CLOSE_INVALID_TOKEN);
@@ -958,7 +958,7 @@ describe('the wire — on a host whose browser keeps the session', () => {
     expect(FakeSocket.last().url).not.toContain('key=');
   });
 
-  it('starts from a page drawn for somebody when the browser holds the session, though the page holds no token', () => {
+  it('starts from a page drawn for somebody when the browser keeps the session, though the page carries no token', () => {
     const drawn = { frame: [{ type: 'text' as const, value: 'her home' }], trees: {}, principal: true };
     expect(createWire({ url: URL, env: host(), initial: drawn }).snapshot().frame).toEqual([]);
     kept = true;

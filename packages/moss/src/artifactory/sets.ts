@@ -13,8 +13,8 @@ export const createSetOwners = (): SetOwners => {
   return {
     ownerRefusalOf,
     claim: (source, owner, handedOver) => {
-      const held = owners.get(source);
-      if (held !== undefined) throw new Error(`moss: the set "${source}" is ${held}'s, and ${owner} claims it too. A set has one writer.`);
+      const claimed = owners.get(source);
+      if (claimed !== undefined) throw new Error(`moss: the set "${source}" is ${claimed}'s, and ${owner} claims it too. A set has one writer.`);
       if (handedOver) throw new Error(`moss: the set "${source}" was handed over by the app, and ${owner} claims it. A set has one writer.`);
       owners.set(source, owner);
     },

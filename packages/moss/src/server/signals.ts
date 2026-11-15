@@ -23,9 +23,9 @@ export type SignalDeps = {
 export const buildSignals = ({ fabric, identity, reset, adopt, adoptAll, deliver }: SignalDeps): Signals => {
   const origin = randomBytes(8).toString('hex');
   const applyInvalidateIdentity = (principal: string): boolean => {
-    const held = identity.invalidate(principal);
+    const forgotten = identity.invalidate(principal);
     reset(principal);
-    return held;
+    return forgotten;
   };
   // Adopts and does not reset, unlike `invalidateIdentity`: what a tenant's
   // people may reach changed, not who they are, and a reset would discard what
@@ -49,9 +49,9 @@ export const buildSignals = ({ fabric, identity, reset, adopt, adoptAll, deliver
 
   return {
     invalidateIdentity: (principal) => {
-      const held = applyInvalidateIdentity(principal);
+      const forgotten = applyInvalidateIdentity(principal);
       publish({ kind: 'invalidate-identity', principal });
-      return held;
+      return forgotten;
     },
     invalidateTag: (tag) => {
       const forgotten = applyInvalidateTag(tag);

@@ -19,14 +19,14 @@ import { neverAnswers } from './never-answers';
 type Row = Record<string, unknown>;
 
 const replayOver =
-  (held: { keys?: Record<string, string>; stored?: Row[]; found?: Record<string, Row> }): Replay =>
+  (tables: { keys?: Record<string, string>; stored?: Row[]; found?: Record<string, Row> }): Replay =>
   async (fingerprint, context) => {
     if (fingerprint === 'integrations/by-key') {
-      const id = Object.entries(held.keys ?? {}).find(([key]) => hashIntegrationKey(key) === context['key_hash'])?.[1];
+      const id = Object.entries(tables.keys ?? {}).find(([key]) => hashIntegrationKey(key) === context['key_hash'])?.[1];
       return id === undefined ? [] : [{ id }];
     }
-    if (fingerprint === 'integrations/stored-actions') return held.stored ?? [];
-    if (fingerprint === 'integrations/find') return [held.found?.[String(context['id'])]].filter((row) => row !== undefined);
+    if (fingerprint === 'integrations/stored-actions') return tables.stored ?? [];
+    if (fingerprint === 'integrations/find') return [tables.found?.[String(context['id'])]].filter((row) => row !== undefined);
     return [];
   };
 
@@ -123,7 +123,7 @@ describe('createIntegrations — before a server has started it', () => {
     expect(integrationOfAction('people.detail')).toBeUndefined();
   });
 
-  it('is what a manifest holds in `features`: a name, the tables it keeps, and a function to start it with', () => {
+  it('is what a manifest carries in `features`: a name, the tables it keeps, and a function to start it with', () => {
     const integrations = createIntegrations();
     expect(integrations.name).toBe('integrations');
     // Moss's own sequence creates these tables, so the feature names no sequence.
@@ -187,7 +187,7 @@ describe('createIntegrations — started with the seams', () => {
     ]);
   });
 
-  it('an outbound timeout a timer cannot hold is refused where the feature is created', () => {
+  it('an outbound timeout a timer cannot be set to is refused where the feature is created', () => {
     for (const outboundTimeoutMs of [Infinity, Number.NaN, 1.5, 0, -1, 2 ** 31]) {
       expect(() => createIntegrations({ outboundTimeoutMs })).toThrow(/`outboundTimeoutMs` of `createIntegrations`/);
     }
@@ -278,52 +278,52 @@ describe('createIntegrations — started with the seams', () => {
 describe('the operator approves an integration', () => {
   const REFUSAL = 'Refresh refused — charter incoherent over the new artifacts:\n  no role grants "ext.desk.belts.roster"';
   const registered = () => {
-    const held = { status: 'pending', writes: [] as string[], kept: [] as Record<string, unknown>[] };
+    const registration = { status: 'pending', writes: [] as string[], kept: [] as Record<string, unknown>[] };
     const shipped = { integration_id: 'belts', action_id: desk.id, definition: desk, grammar: {} };
     const replay: Replay = async (fingerprint, context) => {
       const isBelts = context['id'] === 'belts';
       if (fingerprint === 'integrations/requested') return isBelts ? [{ requested_data: ['people.read'] }] : [];
       if (fingerprint === 'integrations/actions-of') return isBelts ? [shipped] : [];
-      if (fingerprint === 'integrations/stored-actions') return held.status === 'approved' ? [shipped] : [];
+      if (fingerprint === 'integrations/stored-actions') return registration.status === 'approved' ? [shipped] : [];
       if (fingerprint === 'integrations/approve' || fingerprint === 'integrations/set-back-to-pending') {
-        held.writes.push(fingerprint);
+        registration.writes.push(fingerprint);
         const { id: _id, ...kept } = context;
-        held.kept.push(kept);
-        if (isBelts) held.status = fingerprint === 'integrations/approve' ? 'approved' : 'pending';
+        registration.kept.push(kept);
+        if (isBelts) registration.status = fingerprint === 'integrations/approve' ? 'approved' : 'pending';
       }
       return [];
     };
-    return { held, replay };
+    return { registration, replay };
   };
   const approve = (operator: Hono<FeatureEnv>, id: string): Promise<Response> => Promise.resolve(operator.request(`/integrations/${id}/approve`, { method: 'POST' }));
 
   it('one the app would not serve is refused before anything is written', async () => {
-    const { held, replay } = registered();
+    const { registration, replay } = registered();
     const { seams, said, operator } = await world({ replay, refuses: (actions) => (desk.id in actions ? REFUSAL : undefined) });
     await createIntegrations().start(seams);
 
     const answered = await approve(operator, 'belts');
     expect(answered.status).toBe(422);
     expect(await answered.json()).toEqual({ message: 'Refused — the app would not serve this.', reasons: [`Error: ${REFUSAL}`] });
-    expect(held.writes).toEqual([]);
-    expect(held.status).toBe('pending');
+    expect(registration.writes).toEqual([]);
+    expect(registration.status).toBe('pending');
     expect(said.replaced).toEqual([]);
   });
 
   it('one the app would serve is written once, and its actions are handed to the running manifest', async () => {
-    const { held, replay } = registered();
+    const { registration, replay } = registered();
     const { seams, said, operator } = await world({ replay });
     await createIntegrations().start(seams);
 
     const answered = await approve(operator, 'belts');
     expect(answered.status).toBe(200);
     expect(await answered.json()).toEqual({ id: 'belts', status: 'approved', granted: ['people.read'] });
-    expect(held.writes).toEqual(['integrations/approve']);
+    expect(registration.writes).toEqual(['integrations/approve']);
     expect(said.replaced).toEqual([{ [desk.id]: desk }]);
   });
 
   it('one whose actions the app then does not take is taken back: pending again, with why on the row and in the answer', async () => {
-    const { held, replay } = registered();
+    const { registration, replay } = registered();
     // Not refused when asked; refused when the set is handed over.
     const handed = { count: 0 };
     const { seams, said, operator } = await world({ replay, refuses: (actions) => (desk.id in actions && (handed.count += 1) > 1 ? REFUSAL : undefined) });
@@ -332,9 +332,9 @@ describe('the operator approves an integration', () => {
     const answered = await approve(operator, 'belts');
     expect(answered.status).toBe(422);
     expect(await answered.json()).toEqual({ message: 'Refused — the app would not serve this.', reasons: [`Error: ${REFUSAL}`] });
-    expect(held.writes).toEqual(['integrations/approve', 'integrations/set-back-to-pending']);
-    expect(held.kept[1]).toEqual({ last_error: `Error: ${REFUSAL}` });
-    expect(held.status).toBe('pending');
+    expect(registration.writes).toEqual(['integrations/approve', 'integrations/set-back-to-pending']);
+    expect(registration.kept[1]).toEqual({ last_error: `Error: ${REFUSAL}` });
+    expect(registration.status).toBe('pending');
     expect(said.replaced).toEqual([{}]);
   });
 
@@ -359,13 +359,13 @@ describe('the operator approves an integration', () => {
   });
 
   it('one that is not there is a 404, and nothing is written', async () => {
-    const { held, replay } = registered();
+    const { registration, replay } = registered();
     const { seams, operator } = await world({ replay });
     await createIntegrations().start(seams);
 
     const answered = await approve(operator, 'ghost');
     expect(answered.status).toBe(404);
-    expect(held.writes).toEqual([]);
+    expect(registration.writes).toEqual([]);
   });
 });
 

@@ -183,15 +183,15 @@ describe('the server, assembled — a boot that fails stops what it started', ()
     const { made, outcome } = await intervalsDuring(() => assemble(appWith({ pages: { page } })));
     try {
       expect(made).toHaveLength(5);
-      const holding = made.map((handle) => (handle !== null && typeof handle === 'object' && 'hasRef' in handle && typeof handle.hasRef === 'function' ? Boolean(handle.hasRef()) : true));
-      expect(holding).toEqual([false, false, false, false, false]);
+      const keepsAlive = made.map((handle) => (handle !== null && typeof handle === 'object' && 'hasRef' in handle && typeof handle.hasRef === 'function' ? Boolean(handle.hasRef()) : true));
+      expect(keepsAlive).toEqual([false, false, false, false, false]);
     } finally {
       if (outcome !== null && typeof outcome === 'object' && 'close' in outcome && typeof outcome.close === 'function') outcome.close();
     }
   });
 });
 
-describe('the server, assembled — what holds only because of where a line stands', () => {
+describe('the server, assembled — what is true only because of where a line stands', () => {
   const quiet = (): void => {
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
   };
@@ -420,7 +420,7 @@ describe('the server, assembled — what holds only because of where a line stan
     }
   });
 
-  it('a set of entries handed over is replayed by the next request, and refused again once the set no longer holds it', async () => {
+  it('a set of entries handed over is replayed by the next request, and refused again once the set no longer has it', async () => {
     quiet();
     const server = await assemble(appWith({ charter: { public: { actions: ['home'], data: ['notes.read'] } } }));
     const asked = async (): Promise<unknown> => {

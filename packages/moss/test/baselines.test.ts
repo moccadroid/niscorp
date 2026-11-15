@@ -87,7 +87,7 @@ describe('boot — every owner through one ledger', () => {
       { id: 'two', body: layout('two') },
     ]);
     const reset = await save(ada, [{ id: 'two', body: null }]);
-    // The same id as one of ada's: an id is its holder's, and is nobody else's row.
+    // The same id as one of ada's: an id is its owner's, and is nobody else's row.
     const bens = await save(ben, [{ id: 'one', body: layout('ben’s') }]);
 
     const stored = async (table: string, columns: string): Promise<unknown[]> => (await pool.query(`SELECT DISTINCT ${columns} FROM ${table} ORDER BY 1`)).rows;

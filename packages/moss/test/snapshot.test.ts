@@ -157,7 +157,7 @@ describe('snapshot — whether anything can still happen', () => {
 
   it('a host that cannot ask does not conclude a screen is finished', async () => {
     const ctx = contextOf(appOf({ canvases: [{ id: 'main', initial: 'words' }] }));
-    const { entries: _withheld, ...unable } = ctx;
+    const { entries: _entries, ...unable } = ctx;
     expect((await standHost(hostConfig(unable)).snapshot(null, null)).live).toBe(true);
   });
 });

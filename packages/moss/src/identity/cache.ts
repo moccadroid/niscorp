@@ -28,16 +28,16 @@ export const DEFAULT_IDENTITY_IDLE_MS = 30 * 60 * 1000;
 
 const SWEEP_EVERY_MS = 60 * 1000;
 
-type Held = {
+type Resident = {
   record: IdentityRecord;
   since: number;
   lastSeen: number;
 };
 
-const createHeldRecords = (max: number) => {
+const createResidentRecords = (max: number) => {
   // A Map keeps insertion order, and that is the eviction order: a read
   // deletes and re-sets its entry to make it the youngest.
-  const held = new Map<string, Held>();
+  const resident = new Map<string, Resident>();
 
   const tagged = new Map<string, Set<string>>();
 
@@ -53,15 +53,15 @@ const createHeldRecords = (max: number) => {
   };
 
   const forget = (principal: string): boolean => {
-    const entry = held.get(principal);
+    const entry = resident.get(principal);
     if (entry === undefined) return false;
     untag(principal, entry.record);
-    held.delete(principal);
+    resident.delete(principal);
     return true;
   };
 
   const evictOldest = (): void => {
-    const oldest = held.keys().next();
+    const oldest = resident.keys().next();
     if (oldest.done === true) return;
     forget(oldest.value);
     evicted += 1;
@@ -69,10 +69,10 @@ const createHeldRecords = (max: number) => {
 
   const remember = (principal: string, record: IdentityRecord, at: number): void => {
     forget(principal);
-    // After the forget above, so re-resolving somebody already held evicts
+    // After the forget above, so re-resolving somebody already resident evicts
     // nobody to make room it does not need.
-    while (held.size >= max) evictOldest();
-    held.set(principal, { record, since: at, lastSeen: at });
+    while (resident.size >= max) evictOldest();
+    resident.set(principal, { record, since: at, lastSeen: at });
     if (record.tag !== undefined) {
       const group = tagged.get(record.tag) ?? new Set<string>();
       group.add(principal);
@@ -81,16 +81,16 @@ const createHeldRecords = (max: number) => {
   };
 
   return {
-    of: (principal: string): Held | undefined => held.get(principal),
-    touch: (principal: string, entry: Held, at: number): void => {
-      held.delete(principal);
+    of: (principal: string): Resident | undefined => resident.get(principal),
+    touch: (principal: string, entry: Resident, at: number): void => {
+      resident.delete(principal);
       entry.lastSeen = at;
-      held.set(principal, entry);
+      resident.set(principal, entry);
     },
     forget,
     remember,
     forgetAll: (): void => {
-      held.clear();
+      resident.clear();
       tagged.clear();
     },
     forgetTag: (tag: string): string[] => {
@@ -99,15 +99,15 @@ const createHeldRecords = (max: number) => {
       return principals;
     },
     forgetIdle: (at: number, idleMs: number): void => {
-      for (const [principal, entry] of [...held]) {
+      for (const [principal, entry] of [...resident]) {
         if (at - entry.lastSeen >= idleMs) {
           forget(principal);
           evicted += 1;
         }
       }
     },
-    list: (): IdentityReport[] => [...held].map(([principal, entry]) => ({ principal, since: entry.since, lastSeen: entry.lastSeen })),
-    size: (): number => held.size,
+    list: (): IdentityReport[] => [...resident].map(([principal, entry]) => ({ principal, since: entry.since, lastSeen: entry.lastSeen })),
+    size: (): number => resident.size,
     evicted: (): number => evicted,
   };
 };
@@ -121,7 +121,7 @@ export const createIdentityCache = (ctx: IdentityCacheContext): IdentityCache =>
   const revalidateMs = ctx.revalidateMs ?? 0;
   const now = ctx.now ?? Date.now;
 
-  const held = createHeldRecords(max);
+  const records = createResidentRecords(max);
 
   const pending = new Map<string, { work: Promise<IdentityRecord>; forgotten: Set<string> }>();
 
@@ -130,11 +130,11 @@ export const createIdentityCache = (ctx: IdentityCacheContext): IdentityCache =>
 
   const get = async (principal: string): Promise<IdentityRecord> => {
     const at = now();
-    const hit = held.of(principal);
+    const hit = records.of(principal);
     if (hit !== undefined) {
       const stale = revalidateMs > 0 && at - hit.since >= revalidateMs;
       if (!stale) {
-        held.touch(principal, hit, at);
+        records.touch(principal, hit, at);
         return hit.record;
       }
       expired += 1;
@@ -144,7 +144,7 @@ export const createIdentityCache = (ctx: IdentityCacheContext): IdentityCache =>
     if (inFlight !== undefined) return inFlight.work;
 
     // An invalidation while this resolve is out wins: the resolve read its
-    // rows before it. Whoever waits is still answered, but the record is held
+    // rows before it. Whoever waits is still answered, but the record is kept
     // only if this is still the resolve in flight for the principal and it
     // wears no tag forgotten meanwhile (a tag is known only once it lands).
     const forgotten = new Set<string>();
@@ -154,7 +154,7 @@ export const createIdentityCache = (ctx: IdentityCacheContext): IdentityCache =>
       .then((record) => {
         resolved += 1;
         const wearsForgottenTag = record.tag !== undefined && forgotten.has(record.tag);
-        if (isStillOut() && !wearsForgottenTag) held.remember(principal, record, now());
+        if (isStillOut() && !wearsForgottenTag) records.remember(principal, record, now());
         return record;
       })
       .finally(() => {
@@ -164,27 +164,27 @@ export const createIdentityCache = (ctx: IdentityCacheContext): IdentityCache =>
     return work;
   };
 
-  const sweep = idleMs > 0 ? setInterval(() => held.forgetIdle(now(), idleMs), Math.min(SWEEP_EVERY_MS, idleMs)) : undefined;
+  const sweep = idleMs > 0 ? setInterval(() => records.forgetIdle(now(), idleMs), Math.min(SWEEP_EVERY_MS, idleMs)) : undefined;
   sweep?.unref?.();
 
   return {
     get,
     invalidate: (principal) => {
       pending.delete(principal);
-      return held.forget(principal);
+      return records.forget(principal);
     },
     invalidateAll: () => {
-      held.forgetAll();
+      records.forgetAll();
       pending.clear();
     },
     invalidateTag: (tag) => {
-      const principals = held.forgetTag(tag);
+      const principals = records.forgetTag(tag);
       for (const principal of principals) pending.delete(principal);
       for (const flight of pending.values()) flight.forgotten.add(tag);
       return principals;
     },
-    list: held.list,
-    meter: () => ({ size: held.size(), max, resolved, evicted: held.evicted(), expired }),
+    list: records.list,
+    meter: () => ({ size: records.size(), max, resolved, evicted: records.evicted(), expired }),
     stop: () => {
       if (sweep !== undefined) clearInterval(sweep);
     },

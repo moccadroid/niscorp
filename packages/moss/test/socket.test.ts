@@ -122,13 +122,13 @@ describe('socket — the authority channel', () => {
     ['moss’s own', 'st_Zm9v-YmFy_QQ'],
     ['a provider’s, with dots, padding and symbols', 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJhZGEifQ==.a+b/c=d'],
     ['not ASCII at all', 'ключ-🔑'],
-  ])('the token a terminal offers arrives as it was held: %s', async (_label, held) => {
+  ])('the token a terminal offers arrives exactly as the terminal had it: %s', async (_label, offered) => {
     const asked: string[] = [];
     const accept = createSocket(ctxWith({ session: (token) => (asked.push(token), 'usr_1') }));
-    const conn = new FakeConnection().offering(held);
+    const conn = new FakeConnection().offering(offered);
     expect(conn.upgrade?.offered.every((entry) => /^[\w.-]+$/.test(entry))).toBe(true);
     await accept(SOCKET, conn);
-    expect(asked).toEqual([held]);
+    expect(asked).toEqual([offered]);
     expect(conn.first('hello')?.principal).toBe('usr_1');
   });
 
@@ -461,7 +461,7 @@ describe('socket — revalidating a live connection', () => {
     }
   });
 
-  it('anonymous connections are never revalidated — nothing they hold can expire', async () => {
+  it('anonymous connections are never revalidated — nothing they have can expire', async () => {
     vi.useFakeTimers();
     const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
     try {
@@ -514,7 +514,7 @@ describe('socket — revalidating a live connection', () => {
     }
   });
 
-  it('an interval longer than Node can hold disables it too — it does not become a pass every millisecond', async () => {
+  it('an interval longer than Node can schedule disables it too — it does not become a pass every millisecond', async () => {
     let asked = 0;
     const accept = createSocket(ctxWith({ session: (token) => ((asked += 1), token === 'good' ? 'usr_1' : null), revalidateMs: 2 ** 31 }));
     const conn = new FakeConnection();
@@ -709,13 +709,13 @@ describe('socket — revalidating a live connection', () => {
     vi.useFakeTimers();
     try {
       const answers: ((principal: string | null) => void)[] = [];
-      const asking = { held: false };
-      const session: SocketConfig['session'] = () => (asking.held ? new Promise<string | null>((answer) => answers.push(answer)) : 'usr_1');
+      const asking = { waits: false };
+      const session: SocketConfig['session'] = () => (asking.waits ? new Promise<string | null>((answer) => answers.push(answer)) : 'usr_1');
       const accept = createSocket(ctxWith({ session, revalidateMs: 1000 }));
       const conn = new FakeConnection();
       await accept(SOCKET, conn.offering('good'));
 
-      asking.held = true;
+      asking.waits = true;
       await vi.advanceTimersByTimeAsync(1000);
       expect(answers).toHaveLength(1);
       conn.close(1000, 'the terminal left');
@@ -928,7 +928,7 @@ describe('socket — a browser on the app’s own page', () => {
     expect(conn.answered).toEqual(['__Host-nisc.token=; HttpOnly; Path=/; SameSite=Lax; Secure; Max-Age=0', 'nisc.token.held=; Path=/; SameSite=Lax; Secure; Max-Age=0']);
   });
 
-  it('a terminal that says it is leaving is nobody whatever its browser holds, and the cookie is taken back', async () => {
+  it('a terminal that says it is leaving is nobody whatever its browser keeps, and the cookie is taken back', async () => {
     const session = vi.fn(() => 'usr_1');
     const conn = new FakeConnection().from({ ...HERE, cookie: '__Host-nisc.token=good' });
     await createSocket(ctxWith({ session }))(`${SOCKET}&leave=1`, conn);
@@ -937,7 +937,7 @@ describe('socket — a browser on the app’s own page', () => {
     expect(conn.answered?.[0]).toContain('Max-Age=0');
   });
 
-  it('nobody, holding nothing: no cookie is written for them', async () => {
+  it('nobody, with nothing: no cookie is written for them', async () => {
     const conn = new FakeConnection().from(HERE);
     await createSocket(ctxWith())(SOCKET, conn);
     expect(conn.first('hello')?.principal).toBeNull();
@@ -958,13 +958,13 @@ describe('socket — a browser on the app’s own page', () => {
   });
 
   it.each([
-    ['holds what a name does not', 'not a name;'],
+    ['contains what a name does not', 'not a name;'],
     ['is longer than a name', 'k'.repeat(65)],
   ])('a seat that %s is no seat: the terminal is in the default one', async (_why, key) => {
     const asked = `${SOCKET}&key=${encodeURIComponent(key)}`;
-    const held = new FakeConnection().from({ ...HERE, cookie: '__Host-nisc.token=good' });
-    await createSocket(ctxWith())(asked, held);
-    expect(held.first('hello')?.principal).toBe('usr_1');
+    const seated = new FakeConnection().from({ ...HERE, cookie: '__Host-nisc.token=good' });
+    await createSocket(ctxWith())(asked, seated);
+    expect(seated.first('hello')?.principal).toBe('usr_1');
     const signingIn = new FakeConnection().from(HERE).offering('good');
     await createSocket(ctxWith())(asked, signingIn);
     expect(signingIn.answered?.map((cookie) => cookie.split('=')[0])).toEqual(['__Host-nisc.token', 'nisc.token.held']);
@@ -1139,7 +1139,7 @@ describe('socket — a connection that closed before its session was ready', () 
     };
   };
 
-  const heldBack = (host: ShellHost): { shells: Pick<ShellHost, 'session'>; built: () => ShellSession | undefined; release: () => void } => {
+  const buildWaiting = (host: ShellHost): { shells: Pick<ShellHost, 'session'>; built: () => ShellSession | undefined; release: () => void } => {
     let built: ShellSession | undefined;
     let release = (): void => {};
     const gate = new Promise<void>((resolve) => void (release = resolve));
@@ -1158,15 +1158,15 @@ describe('socket — a connection that closed before its session was ready', () 
 
   it('somebody signed in: their shell has nothing attached, and idles from then', async () => {
     const host = realHost();
-    const held = heldBack(host);
-    const accept = createSocket(ctxWith({ shells: held.shells, revalidateMs: 0 }));
+    const waiting = buildWaiting(host);
+    const accept = createSocket(ctxWith({ shells: waiting.shells, revalidateMs: 0 }));
     const { connection, drop } = droppable();
     connection.upgrade = { offered: offerToken('good') };
     const accepting = accept(SOCKET, connection);
-    await vi.waitFor(() => expect(held.built()).toBeDefined());
+    await vi.waitFor(() => expect(waiting.built()).toBeDefined());
 
     drop();
-    held.release();
+    waiting.release();
     await accepting;
 
     expect(host.list().map((shell) => ({ principal: shell.principal, connections: shell.connections, idle: shell.idleSince !== null }))).toEqual([{ principal: 'usr_1', connections: 0, idle: true }]);
@@ -1175,17 +1175,17 @@ describe('socket — a connection that closed before its session was ready', () 
 
   it('nobody signed in: the shell built for that connection is disposed', async () => {
     const host = realHost();
-    const held = heldBack(host);
-    const accept = createSocket(ctxWith({ shells: held.shells, revalidateMs: 0 }));
+    const waiting = buildWaiting(host);
+    const accept = createSocket(ctxWith({ shells: waiting.shells, revalidateMs: 0 }));
     const { connection, drop } = droppable();
     const accepting = accept(SOCKET, connection);
-    await vi.waitFor(() => expect(held.built()).toBeDefined());
+    await vi.waitFor(() => expect(waiting.built()).toBeDefined());
 
     drop();
-    held.release();
+    waiting.release();
     await accepting;
 
-    expect(() => held.built()?.shell.push('main', 'counter')).toThrow();
+    expect(() => waiting.built()?.shell.push('main', 'counter')).toThrow();
     host.stop();
   });
 
@@ -1211,7 +1211,7 @@ describe('socket — a connection that closed before its session was ready', () 
     expect(sent.slice(saidBefore)).toEqual([]);
   });
 
-  it('a connection that closes while what it holds is being asked is not handed to a shell host at all', async () => {
+  it('a connection that closes while what it is granted is being asked is not handed to a shell host at all', async () => {
     const session = recordingSession();
     const asked = vi.fn(async () => session);
     let release = (): void => {};
@@ -1329,7 +1329,7 @@ describe('socket — shells for nobody alive at once', () => {
     }
   });
 
-  it('…and is not asked about again: a session that was refused holds no credential', async () => {
+  it('…and is not asked about again: a session that was refused has no credential', async () => {
     vi.useFakeTimers();
     const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
     try {

@@ -296,7 +296,7 @@ describe('the ink target — the focus ring and leaving', () => {
     t.wipe();
     t.state.trees = { main: [component('Text', {}, [text('two')])] };
     t.mount.update();
-    // Waits on the clock: ink holds a frame back for about 30 ms, so an update that
+    // Waits on the clock: ink keeps a frame back for about 30 ms, so an update that
     // was going to paint has painted well within 100.
     await new Promise((resolve) => setTimeout(resolve, 100));
     expect(t.shown()).not.toContain('two');

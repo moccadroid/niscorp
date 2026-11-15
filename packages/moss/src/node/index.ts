@@ -47,7 +47,7 @@ export const mountSite = (server: MossServer, config: SiteConfig): void => {
   server.get('*', async (c) => {
     if (owned.test(c.req.path)) return c.notFound();
     // A name with an extension that the static server did not find is a missing
-    // file, not a page: a browser holding a page from before a deploy asks for
+    // file, not a page: a browser that has a page from before a deploy asks for
     // its old script, and needs a 404.
     if (extname(c.req.path) !== '' && c.req.path !== '/index.html' && server.page(c.req.path) === undefined) return c.notFound();
     const template = await readFile(join(dist, 'index.html'), 'utf8');

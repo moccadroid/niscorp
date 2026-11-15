@@ -12,7 +12,7 @@ import { createDataWith } from '../src/data/data';
 import { createEntryCache, createGrammarUpgrader } from '../src/data/engine';
 import { featureTablesOf } from '../src/data/migrate';
 import { tableSequencesOf } from '../src/data/migrate';
-import { NOTES_SCHEMA, READ_NOTES, engineDouble, heldDouble, tableNamed } from './data-double';
+import { NOTES_SCHEMA, READ_NOTES, engineDouble, entriesDouble, tableNamed } from './data-double';
 
 const charter: Charter = {
   public: [],
@@ -259,7 +259,7 @@ describe("the data module — a feature's own entries", () => {
     expect(written[0]?.params).toEqual([4]);
   });
 
-  it('are served by no route: whoever holds every grant is told the fingerprint is unknown, and no surface lists it', async () => {
+  it('are served by no route: whoever has every grant is told the fingerprint is unknown, and no surface lists it', async () => {
     const { data, server, written, read } = await world();
     await data.ownEntries('tagging', own);
     const asOwner = { 'content-type': 'application/json', 'x-test-role': 'owner' };
@@ -427,7 +427,7 @@ describe('the data module — the fingerprints somebody may be told of', () => {
     expect(Object.keys(data)).not.toContain('engine');
   });
 
-  it("are never a feature's own entries, whatever the caller holds", async () => {
+  it("are never a feature's own entries, whatever the caller is granted", async () => {
     const { data } = await world();
     await data.ownEntries('tagging', [TAGS, ADD_TAG]);
     expect(await data.fingerprintsFor(who('owner'))).toEqual(['notes/add', 'notes/all', 'notes/mine']);
@@ -440,20 +440,20 @@ describe('the data module — the entries the app serves', () => {
   const ASK = { fingerprint: 'notes/bodies', context: {} };
   const WRITTEN = 'fp_0123456789abcdef';
 
-  it('replays an entry the artifactory holds, with nothing in the table', async () => {
+  it('replays an entry the artifactory has, with nothing in the table', async () => {
     const { post, table } = await world();
     expect(await table.keys()).toEqual([]);
     expect(await post('reader', READ)).toMatchObject({ result: [{ id: 1, body: 'first' }] });
   });
 
-  it('replays an entry once the artifactory holds it, and not before', async () => {
+  it('replays an entry once the artifactory has it, and not before', async () => {
     const { data, post } = await world();
     expect(await post('reader', ASK)).toMatchObject({ error: 'cache_miss' });
-    data.entriesHeldBy(await heldDouble([READ_NOTES, BODIES]));
+    data.askEntriesFirst(await entriesDouble([READ_NOTES, BODIES]));
     expect(await post('reader', ASK)).toMatchObject({ result: [{ id: 1, body: 'first' }] });
   });
 
-  it('refuses an entry that left the app, though the table still holds the copy an earlier version put there', async () => {
+  it('refuses an entry that left the app, though the table still has the copy an earlier version put there', async () => {
     const { post, table } = await world();
     await table.set(BODIES.fingerprint, { kind: 'ok', dsl: BODIES.dsl, prismIr: await compile({ $ref: '$.result' }), protected: true, createdAt: 1 });
     expect(await post('reader', ASK)).toMatchObject({ error: 'cache_miss' });
@@ -468,7 +468,7 @@ describe('the data module — the entries the app serves', () => {
     expect(await post('writer', { fingerprint: 'notes/put', context: {} })).toMatchObject({ error: 'cache_miss' });
   });
 
-  it('answers an entry the artifactory holds in place of a row the table holds under its fingerprint', async () => {
+  it('answers an entry the artifactory has in place of a row the table keeps under its fingerprint', async () => {
     const { post, table, tablesRead } = await world();
     await table.set('notes/all', { kind: 'ok', dsl: { from: ['tags'], fields: ['tags.id'] }, prismIr: await compile({ $ref: '$.result' }), requestHash: 'asked', createdAt: 1 });
     await post('owner', READ);
@@ -481,7 +481,7 @@ describe('the data module — the entries the app serves', () => {
     expect(await post('reader', { fingerprint: WRITTEN, context: {} })).toMatchObject({ result: [{ id: 1, body: 'first' }] });
   });
 
-  it('lists the fingerprints the artifactory holds and those written while the app runs, and no old copy', async () => {
+  it('lists the fingerprints the artifactory has and those written while the app runs, and no old copy', async () => {
     const { data, table } = await world();
     const prismIr = await compile({ $ref: '$.result' });
     await table.set(WRITTEN, { kind: 'ok', dsl: BODIES.dsl, prismIr, requestHash: 'asked', createdAt: 1 });
@@ -495,12 +495,12 @@ describe('the data module — the entries the app serves', () => {
     await table.set(WRITTEN, { kind: 'ok', dsl: BODIES.dsl, requestHash: 'asked', createdAt: 1 });
     await table.set(BODIES.fingerprint, { kind: 'ok', dsl: BODIES.dsl, protected: true, createdAt: 1 });
     const { cache, askFirst } = createEntryCache({ get: table.get, set: table.set, delete: table.delete, clear: table.clear, keys: table.keys });
-    askFirst(await heldDouble([READ_NOTES]));
+    askFirst(await entriesDouble([READ_NOTES]));
     expect((await cache.keys()).sort()).toEqual([WRITTEN, 'notes/all']);
     expect(((await cache.entries?.()) ?? []).map((row) => row.key).sort()).toEqual([WRITTEN, 'notes/all']);
   });
 
-  it('writes nothing to the table when an entry the artifactory holds is replayed', async () => {
+  it('writes nothing to the table when an entry the artifactory has is replayed', async () => {
     const { post, table } = await world();
     await post('reader', READ);
     await post('writer', ADD);

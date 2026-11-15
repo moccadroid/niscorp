@@ -85,7 +85,7 @@ describe('what is published for everybody: every kind a person saves', () => {
     );
   });
 
-  it('a published action is held as a generated one is, as the publisher; and it is held as a default is, to every holder’s grants', async () => {
+  it('a published action is checked as a generated one is, as the publisher; and it is checked as a default is, against the grants of everyone it is granted to', async () => {
     const { running, publishedBy } = await world();
     await expect(publishedBy(['member']).save([{ kind: 'action', id: 'promo', body: calling('deals.close') }])).rejects.toThrow(
       'endpoint "run" calls the function "deals.close", which its owner’s roles do not grant',

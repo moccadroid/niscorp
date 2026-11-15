@@ -11,7 +11,7 @@ export type ShellArtifacts = {
   canvases: readonly ShellCanvas[];
   // The name of the shell's layout in the layout store.
   frame?: string;
-  // The canvases its layouts hold a slot for and its manifest does not declare.
+  // The canvases its layouts have a slot for and its manifest does not declare.
   slottedCanvases: readonly string[];
   // Of these names of the app's functions, the ones its principal's roles grant.
   grantedFunctions: (names: readonly string[]) => ReadonlySet<string>;
@@ -23,7 +23,7 @@ export type ShellArtifacts = {
 
 type ShellStoredLayouts = Pick<ShellArtifacts, 'canvases' | 'frame'> & { layouts: Readonly<Record<string, LayoutNode>> };
 
-// A string is already the name of a layout the store holds, and with none nova draws its own.
+// A string is already the name of a layout the store has, and with none nova draws its own.
 const isKept = (layout: LayoutNode | string | undefined) => layout !== undefined && layout !== null && typeof layout !== 'string';
 
 export const shellWithStoredLayouts = (shell: ShellManifest): ShellStoredLayouts => {

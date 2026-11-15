@@ -18,7 +18,7 @@ export type MossServer = Hono<Env> & {
   page: (path: string) => { name: string; host: ShellHost; inputs: Record<string, Record<string, unknown>> } | undefined;
   pages: readonly { name: string; path: string }[];
   // Builds nobody's shell once and drops it, and refuses as the boot does where the
-  // functions it was given are wrong. The app calls it once it holds the server and
+  // functions it was given are wrong. The app calls it once it has the server and
   // before it listens: a session hook may reach for the server, and it is here that
   // one first runs.
   checkFunctions: () => Promise<void>;
@@ -28,7 +28,7 @@ export type MossServer = Hono<Env> & {
   actions: () => Readonly<Record<string, ActionDefinition>>;
   // What is published for everybody, with the calls a session's `artifacts` has.
   // `publisher`: who a publish is made by. No session reaches these rows: only
-  // the app's own code on the server calls this, and its charter says who holds
+  // the app's own code on the server calls this, and its charter says who is granted
   // the action that does.
   defaults: (publisher: string) => SessionArtifacts;
   catalogOf: (principal: string | null) => Promise<Catalog>;

@@ -55,7 +55,7 @@ export const embedSnapshot = (snapshot: ShellSnapshot, principal: string | null,
 export const documentHeaders = (principal: string | null): Record<string, string> =>
   principal === null ? { 'cache-control': 'no-cache', vary: 'Cookie' } : { 'cache-control': 'private, no-store', vary: 'Cookie' };
 
-const rootHolding = (root: string): ((screen: string) => string) | undefined => {
+const screenInRoot = (root: string): ((screen: string) => string) | undefined => {
   const closing = root.lastIndexOf('</');
   if (closing <= 0 || !root.startsWith('<') || root[closing - 1] !== '>' || !root.endsWith('>')) return undefined;
   return (screen) => `${root.slice(0, closing)}${screen}${root.slice(closing)}`;
@@ -69,8 +69,8 @@ export const renderDocument = async (config: DocumentConfig): Promise<DrawnDocum
   const root = config.root ?? DEFAULT_ROOT;
   const undrawn: DrawnDocument = { html: template, headers: documentHeaders(null), drawn: false, principal: null };
   if (!template.includes(root)) return undrawn;
-  const holding = rootHolding(root);
-  if (holding === undefined) {
+  const inRoot = screenInRoot(root);
+  if (inRoot === undefined) {
     console.error(`[moss/document] the root ${root} has no place for a screen — a root is an empty element, like ${DEFAULT_ROOT}. "${request.path}" is served undrawn.`);
     return undrawn;
   }
@@ -97,7 +97,7 @@ export const renderDocument = async (config: DocumentConfig): Promise<DrawnDocum
       .join('');
     const placed = template
       // By functions, so nothing in the screen is read as a replacement pattern.
-      .replace(root, () => `${holding(screen)}${embedSnapshot(snapshot, principal, request.path)}`)
+      .replace(root, () => `${inRoot(screen)}${embedSnapshot(snapshot, principal, request.path)}`)
       .replace(/<html([^>]*)>/, (whole, existing: string) => (attributes === '' ? whole : `<html${existing}${attributes}>`));
     const head = headOf({ frame: () => snapshot.frame, canvasTree: (id) => snapshot.trees[id] ?? [] });
     for (const why of head?.refused ?? []) console.error(`[moss/document] "${request.path}" — ${why}`);

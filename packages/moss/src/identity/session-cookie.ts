@@ -34,7 +34,7 @@ const cookiesAt = (where: { port: string; secure: boolean }, key: string, token:
   const name = encodeURIComponent(sessionNameOf(key, where.port));
   const life = token === null ? '; Max-Age=0' : typeof lastsMs === 'number' ? `; Max-Age=${Math.max(0, Math.floor(lastsMs / 1000))}` : '';
   const kept = `Path=/; SameSite=Lax${where.secure ? '; Secure' : ''}${life}`;
-  // The second cookie is readable by script and says only that the browser holds a session.
+  // The second cookie is readable by script and says only that the browser keeps a session.
   return [`${where.secure ? '__Host-' : ''}${name}=${encodeURIComponent(token ?? '')}; HttpOnly; ${kept}`, `${name}.held=${token === null ? '' : '1'}; ${kept}`];
 };
 
@@ -68,12 +68,12 @@ export const sessionTokenOf = (
 
 // A sign-in made over the socket cannot write a cookie, so its token travels
 // through the page to the next upgrade encrypted with a key, the seal, that
-// the browser holds in a cookie no script can read: the page can hand the
+// the browser keeps in a cookie no script can read: the page can hand the
 // token back and cannot open it.
 const SEALED_FOR_MS = 60_000;
 const SealedSchema = z.object({ token: z.string(), until: z.number() });
 // Over https the name is `__Http-` prefixed, which a browser lets only an HTTP
-// answer set: a script cannot plant a seal it holds the key of.
+// answer set: a script cannot plant a seal it has the key of.
 const sealName = (secure: boolean): string => `${secure ? '__Http-' : ''}nisc.seal`;
 const toBase64Url = (bytes: Uint8Array): string => btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 const fromBase64Url = (text: string): Uint8Array<ArrayBuffer> => Uint8Array.from(atob(text.replace(/-/g, '+').replace(/_/g, '/')), (char) => char.charCodeAt(0));

@@ -21,21 +21,21 @@ import type { ShellArtifacts } from './artifacts';
 import { createComponentNames, shellComponents, shellWithStoredLayouts, slottedCanvases } from './artifacts';
 import { draftSaving, laidOver } from './draft';
 import { answeredRead, compiledRead, readsInForce, seedOf } from './reads';
-import type { ReadHeldTo, ReadSources, SavedRead } from './reads';
+import type { ReadChecks, ReadSources, SavedRead } from './reads';
 import { compileEntries, createEntriesInForce } from './entries';
 import { createGeneration } from './generation';
 import type { Generation, Pointer } from './generation';
 import { catalogOfGenerated, generatedInForce } from './generated';
-import type { GeneratedHeldTo } from './generated';
+import type { GeneratedChecks } from './generated';
 import { actionAtRef, layoutsInUse } from './layouts';
 import { NO_DEFAULTS, checkedDefaults, createPublishedMemo, drawableIn, hasDefaults } from './published';
-import type { Defaults, DefaultsHeldTo } from './published';
-import type { LayoutHeldTo } from './layouts';
+import type { Defaults, DefaultsChecks } from './published';
+import type { LayoutChecks } from './layouts';
 import { actionsWithStoredLayouts, createRoleMemo, narrowedBy } from './roles';
 import type { Catalog, CatalogFilter, StoredLayouts } from './roles';
 import type { SavedRows, SavedVersion } from './saves';
 import { savedArtifacts } from './session';
-import type { HeldTo, SavedArtifactsDeps, Written } from './session';
+import type { SaveChecks, SavedArtifactsDeps, Written } from './session';
 import { createSetOwners } from './sets';
 import { TOUCH_EVERY_MS, createUsage } from './usage';
 
@@ -60,14 +60,14 @@ export type RunningManifestConfig = {
 };
 
 // `replayable`: the fingerprints their policy may replay. Absent: none.
-export type RolesHeld = { roles: readonly string[]; installed: readonly string[] | undefined; replayable?: () => Promise<readonly string[]> };
+export type CallerRoles = { roles: readonly string[]; installed: readonly string[] | undefined; replayable?: () => Promise<readonly string[]> };
 
-// Whoever a session is for, as the server resolved them: what they hold, and their rows.
-export type Caller = RolesHeld & { saved: SavedRows };
+// Whoever a session is for, as the server resolved them: their roles, and their rows.
+export type Caller = CallerRoles & { saved: SavedRows };
 
 // `saved`: the rows of that principal. Nobody signed in has none.
-// `drafted`: what the draft of the shell this is asked for holds.
-export type Who = RolesHeld & { principal: string | null; saved?: SavedRows; drafted?: readonly DraftArtifact[] };
+// `drafted`: what is in the draft of the shell this is asked for.
+export type Who = CallerRoles & { principal: string | null; saved?: SavedRows; drafted?: readonly DraftArtifact[] };
 
 export type OwnedActions = {
   replace: (actions: Record<string, ActionDefinition>) => void;
@@ -100,10 +100,10 @@ export type ForShells = {
   // only once a session is: this is when they are checked, and the boot refuses on them.
   functionsWritten: (written: WrittenFunctions) => void;
   sessionArtifacts: (principal: string | null, callerOf: () => Promise<Caller>) => SessionArtifacts;
-  // `shell`: the one the draft is in. What is added to it is held to what that shell can draw.
+  // `shell`: the one the draft is in. What is added to it is checked against what that shell can draw.
   draftSavingFor: (shell: ShellManifest, principal: string | null, callerOf: () => Promise<Caller>) => ReturnType<typeof draftSaving>;
-  // `saved`: the rows of what is published. `publisher`: whose roles and reads a publish is held to.
-  publishedArtifacts: (saved: SavedRows, publisher: () => Promise<Pick<RolesHeld, 'roles' | 'replayable'>>) => SessionArtifacts;
+  // `saved`: the rows of what is published. `publisher`: whose roles and reads a publish is checked against.
+  publishedArtifacts: (saved: SavedRows, publisher: () => Promise<Pick<CallerRoles, 'roles' | 'replayable'>>) => SessionArtifacts;
   // Asks the rows what is published, so that a boot that cannot read it fails.
   // One answer serves every shell until this process publishes or the pointer
   // moves: the next shell then asks again.
@@ -136,8 +136,8 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
   let defaults: Defaults = NO_DEFAULTS;
   const usage = createUsage(config.touchEveryMs ?? TOUCH_EVERY_MS);
   let functionIds: ReadonlySet<string> | undefined;
-  const candidate = (actions: Actions, held = entries.list(), fragments = defaults.fragments): ManifestCandidate =>
-    withFragments({ ...candidateOf(shipped, { actions, entries: held }, config.grants), ...(functionIds === undefined ? {} : { functionIds }) }, fragments);
+  const candidate = (actions: Actions, listed = entries.list(), fragments = defaults.fragments): ManifestCandidate =>
+    withFragments({ ...candidateOf(shipped, { actions, entries: listed }, config.grants), ...(functionIds === undefined ? {} : { functionIds }) }, fragments);
 
   const own: Actions = shipped.actions;
   const loaders = new Map<string, ActionLoader>();
@@ -170,13 +170,13 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
     manifest: () => ({ charter: shipped.charter, actions: inForce, layouts: shipped.layouts }),
     installedOnly: (ids, installed) => catalogFilters.reduce((kept, narrow) => narrowedBy(narrow, kept, installed), ids),
   });
-  // A layout is saved for every shell its holder may open, and drawn by one:
-  // at a save it is held to what any shell of the app can draw, and when a shell
+  // A layout is saved for every shell its owner may open, and drawn by one:
+  // at a save it is checked against what any shell of the app can draw, and when a shell
   // is built to what that shell can.
   const kitOf = (shell?: ShellManifest): KitComponents => (shell === undefined ? (ofTheApp ??= componentsOf(config.shells)) : componentsOf([shell]));
   const ownShell = shipped.shell;
   const ownShellRefs: ReadonlySet<string> = new Set(ownShell === undefined ? [] : Object.keys(shellWithStoredLayouts(ownShell).layouts));
-  const heldTo = ({ actions, layouts }: StoredLayouts, shell?: ShellManifest): LayoutHeldTo => {
+  const layoutChecksOf = ({ actions, layouts }: StoredLayouts, shell?: ShellManifest): LayoutChecks => {
     const kit = kitOf(shell);
     return {
       kit,
@@ -213,17 +213,17 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
     (roles: readonly string[]) =>
     (names: readonly string[]): ReadonlySet<string> =>
       resolvePrincipal(shipped.charter, names, roles, 'functions');
-  const readsHeldTo: ReadHeldTo | undefined =
+  const readChecks: ReadChecks | undefined =
     readSources === undefined ? undefined : { isAppEntry: (fingerprint) => entries.byFingerprint().has(fingerprint), sources: readSources };
   // What somebody generated and has in force is laid beside what their roles
-  // hold: an action of theirs may open either, and a layout of theirs may be for
+  // grant: an action of theirs may open either, and a layout of theirs may be for
   // either. `whose`: as a line says it of one that is left out. Absent: nothing is said.
-  // `roles`: whose roles the functions a generated action calls are held to. Absent: it may call none.
-  const heldWithGenerated = async (held: StoredLayouts, versions: readonly SavedVersion[], who: Partial<Pick<RolesHeld, 'replayable' | 'roles'>>, shell?: ShellManifest, whose?: string) => {
+  // `roles`: whose roles the functions a generated action calls are checked against. Absent: it may call none.
+  const checksWithGenerated = async (granted: StoredLayouts, versions: readonly SavedVersion[], who: Partial<Pick<CallerRoles, 'replayable' | 'roles'>>, shell?: ShellManifest, whose?: string) => {
     let replayable: Promise<ReadonlySet<string>> | undefined;
-    let catalog: ReturnType<GeneratedHeldTo['catalog']> | undefined;
-    const reads = new Map([...defaults.reads, ...(readsHeldTo === undefined ? [] : await readsInForce(versions, readsHeldTo, whose))]);
-    const checks: GeneratedHeldTo = {
+    let catalog: ReturnType<GeneratedChecks['catalog']> | undefined;
+    const reads = new Map([...defaults.reads, ...(readChecks === undefined ? [] : await readsInForce(versions, readChecks, whose))]);
+    const checks: GeneratedChecks = {
       kit: kitOf(shell),
       entryOf: (fingerprint) => {
         const read = reads.get(fingerprint);
@@ -231,13 +231,13 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
       },
       replayable: () => (replayable ??= (async () => new Set([...((await who.replayable?.()) ?? []), ...reads.keys()]))()),
       mayCall: (name) => who.roles !== undefined && resolvePrincipal(shipped.charter, [name], who.roles, 'functions').has(name),
-      catalog: () => (catalog ??= [...Object.values(held.actions).map((action) => ({ id: action.id, input: action.input ?? {} })), ...catalogOfGenerated(versions)]),
+      catalog: () => (catalog ??= [...Object.values(granted.actions).map((action) => ({ id: action.id, input: action.input ?? {} })), ...catalogOfGenerated(versions)]),
     };
     const passed = await generatedInForce(versions, checks, whose);
     const stored = actionsWithStoredLayouts(passed.actions);
     const all: StoredLayouts =
-      Object.keys(passed.actions).length === 0 ? held : { actions: { ...held.actions, ...stored.actions }, layouts: { ...held.layouts, ...stored.layouts } };
-    return { all, fragments: passed.fragments, heldTo: { layouts: heldTo(all, shell), generated: checks, ...(readsHeldTo !== undefined ? { reads: readsHeldTo } : {}) } satisfies HeldTo };
+      Object.keys(passed.actions).length === 0 ? granted : { actions: { ...granted.actions, ...stored.actions }, layouts: { ...granted.layouts, ...stored.layouts } };
+    return { all, fragments: passed.fragments, checks: { layouts: layoutChecksOf(all, shell), generated: checks, ...(readChecks !== undefined ? { reads: readChecks } : {}) } satisfies SaveChecks };
   };
   const listeners = new Set<() => void>();
   const listenersFor = new Set<(principal: string) => void>();
@@ -245,14 +245,14 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
   const sessionDeps = (principal: string | null, callerOf: () => Promise<Caller>, shell?: ShellManifest): SavedArtifactsDeps => ({
     whose: 'of yours',
     kinds,
-    holder:
+    owner:
       principal === null
         ? undefined
         : async () => {
             await publishedNow();
             const caller = await callerOf();
-            const held = roleMemo.storedLayoutsFor(caller.roles, caller.installed);
-            return { saved: caller.saved, heldTo: async (inForce) => (await heldWithGenerated(held, inForce, caller, shell)).heldTo };
+            const granted = roleMemo.storedLayoutsFor(caller.roles, caller.installed);
+            return { saved: caller.saved, checks: async (inForce) => (await checksWithGenerated(granted, inForce, caller, shell)).checks };
           },
     written: () => {
       if (principal !== null) for (const listener of [...listenersFor]) tell(listener, principal);
@@ -261,17 +261,17 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
   let pointer: Generation | undefined;
 
   const memo = createPublishedMemo();
-  const defaultsHeldTo = (): DefaultsHeldTo => ({
+  const defaultsChecks = (): DefaultsChecks => ({
     kit: kitOf(),
     entryOf: (fingerprint) => entries.byFingerprint().get(fingerprint),
     fingerprints: () => entries.byFingerprint().keys(),
-    reads: readsHeldTo,
+    reads: readChecks,
     built: mergedActions(own, sets),
     candidate: (actions, fragments) => candidate(actions, entries.list(), fragments),
   });
   const applyPublished = async (versions: readonly SavedVersion[]): Promise<void> => {
     const over = sets;
-    const { passed, reads, verified } = await checkedDefaults(versions, defaultsHeldTo(), 'published for everybody');
+    const { passed, reads, verified } = await checkedDefaults(versions, defaultsChecks(), 'published for everybody');
     if (sets !== over) return applyPublished(versions);
     const refusal = refusalOf(verified, 'boot');
     if (refusal !== undefined) memo.sayOnce(`[moss] what is published for everybody is left out, and the build’s copies stand: ${refusal}`);
@@ -283,8 +283,8 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
     dropMemos();
   };
   const publishedNow = (): Promise<readonly SavedVersion[]> => {
-    const held = memo.held();
-    if (held !== undefined) return held;
+    const current = memo.current();
+    if (current !== undefined) return current;
     const read = (async () => {
       const versions = (await config.published?.()) ?? [];
       await applyPublished(versions);
@@ -365,7 +365,7 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
     },
     cacheEntries: async () => [...(await entries.compiled())].map(([key, entry]) => ({ key, entry })),
     claim: (source, owner) => {
-      owners.claim(source, owner, sets.has(source) || entries.holdsSet(source));
+      owners.claim(source, owner, sets.has(source) || entries.hasSet(source));
       return {
         replace: (actions) => applySets(new Map([[source, actions]]), true),
         setLoader: (load) => {
@@ -401,13 +401,13 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
       const versions = own.length === 0 && drafted === undefined ? [] : laidOver(own, drafted);
       const everybodysVersions = await publishedNow();
       const whose = `of ${principal ?? 'nobody'}`;
-      const theirOwn = await heldWithGenerated(roleMemo.storedLayoutsFor(roles, installed), versions, { replayable, roles }, shell, whose);
-      const drawable = theirOwn.heldTo.layouts;
-      const theirs = layoutsInUse(versions, { whose, heldTo: drawable });
+      const theirOwn = await checksWithGenerated(roleMemo.storedLayoutsFor(roles, installed), versions, { replayable, roles }, shell, whose);
+      const drawable = theirOwn.checks.layouts;
+      const theirs = layoutsInUse(versions, { whose, checks: drawable });
       // The layout variant of their roles is over what is published: under one, nothing published is loaded.
       const variants = roleMemo.variantsFor(roles);
-      const underVariants: LayoutHeldTo = { ...drawable, actionAt: (ref) => (variants.has(actionOfLayoutRef(ref) ?? '') ? undefined : drawable.actionAt(ref)) };
-      const everybodys = layoutsInUse(everybodysVersions, { whose: 'published for everybody', heldTo: underVariants, say: memo.sayOnce });
+      const underVariants: LayoutChecks = { ...drawable, actionAt: (ref) => (variants.has(actionOfLayoutRef(ref) ?? '') ? undefined : drawable.actionAt(ref)) };
+      const everybodys = layoutsInUse(everybodysVersions, { whose: 'published for everybody', checks: underVariants, say: memo.sayOnce });
       const laidOverShell = { ...drawableIn(defaults.fragments, kitOf(shell), memo.sayOnce), ...theirOwn.fragments };
       const fragments = Object.keys(laidOverShell).length === 0 ? shell.fragments : { ...shell.fragments, ...laidOverShell };
       const { layouts: ofShell, ...named } = shellWithStoredLayouts(shell);
@@ -425,21 +425,21 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
     },
     sessionArtifacts: (principal, callerOf) => savedArtifacts(sessionDeps(principal, callerOf)),
     draftSavingFor: (shell, principal, callerOf) => draftSaving(sessionDeps(principal, callerOf, shell)),
-    // Held to every action in force with the layout it is built with: who holds
+    // Checked against every action in force with the layout it is built with: who has
     // which is asked when a shell is built for them.
     publishedArtifacts: (saved, publisher) =>
       savedArtifacts({
         whose: 'published for everybody',
         kinds,
-        holder: async () => {
+        owner: async () => {
           const who = await publisher();
-          return { saved, heldTo: async (inForce) => (await heldWithGenerated(actionsWithStoredLayouts(mergedActions(own, sets)), inForce, who)).heldTo };
+          return { saved, checks: async (inForce) => (await checksWithGenerated(actionsWithStoredLayouts(mergedActions(own, sets)), inForce, who)).checks };
         },
         defaults: {
           verify: async (versions, inForce) => {
-            const kept = inForce.filter((held) => !versions.some((version) => version.kind === held.kind && version.id === held.id));
+            const kept = inForce.filter((current) => !versions.some((version) => version.kind === current.kind && version.id === current.id));
             const asked: SavedVersion[] = versions.map((version: Written) => ({ ...version, save: '', createdAt: '' }));
-            const refusal = refusalOf((await checkedDefaults([...kept, ...asked], defaultsHeldTo(), undefined)).verified, 'publish');
+            const refusal = refusalOf((await checkedDefaults([...kept, ...asked], defaultsChecks(), undefined)).verified, 'publish');
             if (refusal !== undefined) throw new Error(refusal);
           },
         },

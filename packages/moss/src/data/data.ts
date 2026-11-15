@@ -54,12 +54,12 @@ export type DataRoutesConfig<E extends Env> = {
 export type Data = {
   grants: readonly string[];
   grammars: Upgrader;
-  entriesHeldBy: EntryCache['askFirst'];
+  askEntriesFirst: EntryCache['askFirst'];
   policyOf: (who: Caller) => ScopePolicy;
   policyForRoles: (roles: readonly string[]) => ScopePolicy;
   fingerprints: () => Promise<readonly string[]>;
   fingerprintsFor: (who: Caller) => Promise<string[]>;
-  // What vex's cache answers under a fingerprint for nobody in particular: an entry the artifactory holds, or one vex wrote.
+  // What vex's cache answers under a fingerprint for nobody in particular: an entry the artifactory keeps, or one vex wrote.
   vexEntry: (fingerprint: string) => Promise<CacheEntry | undefined>;
   // Throws, with vex's sentence, where the query does not run against the schema.
   compileQuery: (dsl: Query) => void;
@@ -183,7 +183,7 @@ export const createDataWith = (
   return {
     grants,
     grammars,
-    entriesHeldBy: prepared.askFirst,
+    askEntriesFirst: prepared.askFirst,
     fingerprints: async () => (await engine.cache.keys?.()) ?? [],
     policyOf: policies.of,
     // Compiled afresh and not taken from the kept ones: the caller owns its

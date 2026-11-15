@@ -59,7 +59,7 @@ export const authenticateUpgrade = async (
   const secure = page?.protocol === 'https:';
   // The session cookie is read for the app's own page only: a browser sends it
   // with a stranger's page all the same.
-  const held = page === undefined ? null : sessionTokenOf(upgrade?.cookie, { port: page.port, secure }, key);
+  const fromCookie = page === undefined ? null : sessionTokenOf(upgrade?.cookie, { port: page.port, secure }, key);
   // A sign-in over the socket is handed to the page sealed. The browser of a
   // terminal that says `sealed=1` is given a seal (a key in a cookie no script
   // reads) by the answer to its first upgrade; the page offers the sealed
@@ -78,9 +78,9 @@ export const authenticateUpgrade = async (
   const seal = !sealing || sealLost ? null : (hadSeal ?? (upgrade?.answer === undefined ? null : newSeal()));
   const offered = offeredToken(upgrade?.offered) ?? (sealedOffer === null || hadSeal === null ? null : await openSealed(hadSeal, sealedOffer));
   // `leave`: the terminal was signed out. It says so because the cookie may
-  // hold a token that still resolves (an app's own provider's is not moss's to
+  // carry a token that still resolves (an app's own provider's is not moss's to
   // revoke).
-  const carried = offered ?? (parameters.leave === '1' ? null : (held?.token ?? null));
+  const carried = offered ?? (parameters.leave === '1' ? null : (fromCookie?.token ?? null));
   const principal = carried === null ? null : await config.session(carried);
   if (offered !== null && principal === null) return 'invalid_token';
   // A cookie's token that no longer resolves is nobody, not a refusal: the page
@@ -90,10 +90,10 @@ export const authenticateUpgrade = async (
   // plain http on the default port a copy readable by script has this cookie's
   // name.
   const cookies = [
-    ...(page === undefined || (offered === null && (held?.token ?? null) === token)
+    ...(page === undefined || (offered === null && (fromCookie?.token ?? null) === token)
       ? []
       : token === null
-        ? (held?.clear ?? [])
+        ? (fromCookie?.clear ?? [])
         : sessionCookies(page.origin, token, { key, lastsMs: (await config.sessionLastsMs?.(token)) ?? null })),
     ...(seal !== null && hadSeal === null ? [sealCookie(seal, { secure, path: new URL(url, 'http://nisc.local').pathname })] : []),
   ];

@@ -177,7 +177,7 @@ const assemble = async ({ app, runtime, session, revokeSessions, data }: ServerD
 export const buildRunningManifest = async (
   app: NiscApp,
   runtime: Pick<NiscRuntime, 'sessionRevalidateMs'>,
-  data: Pick<Data, 'grants' | 'dropOnChange' | 'pointer' | 'entriesHeldBy' | 'vexEntry' | 'compileQuery'>,
+  data: Pick<Data, 'grants' | 'dropOnChange' | 'pointer' | 'askEntriesFirst' | 'vexEntry' | 'compileQuery'>,
   saved?: Pick<SavedRowsOf, 'of' | 'published'>,
 ): Promise<RunningManifest> => {
   const running = createRunningManifest({
@@ -189,7 +189,7 @@ export const buildRunningManifest = async (
     ...(saved !== undefined ? { published: saved.published().inForce, reads: { written: data.vexEntry, compile: data.compileQuery, savedOf: saved.of } } : {}),
   });
   data.dropOnChange(running.onChange);
-  data.entriesHeldBy({ get: running.cacheEntry, entries: running.cacheEntries });
+  data.askEntriesFirst({ get: running.cacheEntry, entries: running.cacheEntries });
   // Asked here, which compiles them: a boot refuses an entry vex cannot run.
   await running.cacheEntries();
   return running;

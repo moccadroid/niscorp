@@ -57,7 +57,7 @@ describe('charterReport — the report the server booted on', () => {
     server.close();
   });
 
-  it('is replaced by a change that passes, with the actions in force and what each principal holds', async () => {
+  it('is replaced by a change that passes, with the actions in force and what each principal has', async () => {
     const server = await boot(manifest());
     const booted = server.charterReport();
     expect(booted.warnings.some((warning) => warning.rule === 'dead-allow')).toBe(true);
@@ -79,14 +79,14 @@ describe('charterReport — the report the server booted on', () => {
     server.replaceActions('reports', { [daily.id]: daily });
     const served = server.charterReport();
     const inForce = server.actions();
-    const held = await server.catalogOf(null);
+    const catalogBefore = await server.catalogOf(null);
 
     expect(() => server.replaceActions('reports', unservable)).toThrow(/^Refresh refused — charter incoherent over the new artifacts:\n {2}leaves-only: id "home" is a namespace of "home.sub"/);
 
     expect(server.charterReport()).toBe(served);
     expect(server.actions()).toBe(inForce);
     expect(Object.keys(server.actions())).toEqual(['home', 'admin.panel', 'stray', 'reports.daily']);
-    expect(await server.catalogOf(null)).toBe(held);
+    expect(await server.catalogOf(null)).toBe(catalogBefore);
     server.close();
   });
 });

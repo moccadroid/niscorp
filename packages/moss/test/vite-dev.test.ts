@@ -248,7 +248,7 @@ describe('the dev server’s socket', () => {
     for (const listener of listeners) listener.close();
   });
 
-  const appHolding = (maxMessageBytes: number): DevApp => ({
+  const appWithLimit = (maxMessageBytes: number): DevApp => ({
     server: serverOf({
       socket: Object.assign(
         async (_url: string, connection: Parameters<SocketAccept>[1]): Promise<void> => {
@@ -292,7 +292,7 @@ describe('the dev server’s socket', () => {
     try {
       const boot = { finish: (): void => {} };
       const booting = new Promise<void>((resolve) => void (boot.finish = resolve));
-      const { url } = await dev([async () => (await booting, appHolding(1024))]);
+      const { url } = await dev([async () => (await booting, appWithLimit(1024))]);
       const early = opened(url);
       boot.finish();
       expect(await sent2000(await early)).toBe(1009);
@@ -303,7 +303,7 @@ describe('the dev server’s socket', () => {
   });
 
   it('after an edit, as the app that booted then says; and the connections of the app that was let go are closed', async () => {
-    const { url, edit, said } = await dev([async () => appHolding(1024), async () => appHolding(4096)]);
+    const { url, edit, said } = await dev([async () => appWithLimit(1024), async () => appWithLimit(4096)]);
     const before = await opened(url);
     const beforeClosed = new Promise<number>((resolve) => before.once('close', (code) => resolve(code)));
     edit('/project/src/app/app.ts');
@@ -316,7 +316,7 @@ describe('the dev server’s socket', () => {
   });
 
   it('an app that did not boot refuses the upgrade (503), and the next one that boots is served', async () => {
-    const { url, edit, said } = await dev([async () => Promise.reject(new Error('a broken edit')), async () => appHolding(4096)]);
+    const { url, edit, said } = await dev([async () => Promise.reject(new Error('a broken edit')), async () => appWithLimit(4096)]);
     const refused = await new Promise<string>((resolve) => {
       const client = new WebSocket(url);
       client.once('open', () => resolve('opened'));

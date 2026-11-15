@@ -83,7 +83,7 @@ const writeBundle: SeedMutation = {
   mutation: writeBundleStatements,
 };
 
-// The key's hash is a statement of its own, written only where the row holds none. Of two
+// The key's hash is a statement of its own, written only where the row has none. Of two
 // registrations of one new integration in the same moment, the later waits for the earlier
 // one's row and writes nothing; set with the row, it would replace the first key's hash.
 const writeBundleAndKeepKey: SeedMutation = {

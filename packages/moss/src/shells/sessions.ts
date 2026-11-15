@@ -61,7 +61,7 @@ const revoke = (host: HostState, shellRef: ShellRef, principal: string | null): 
     const live = shellRef.live;
     if (live === undefined) return;
     endShell(host, live);
-    // Only while the map still holds this shell: a reset since the sign-out
+    // Only while the map still has this shell: a reset since the sign-out
     // has put another in its cell.
     if (principal !== null && durable.get(principal)?.live === live) durable.delete(principal);
     for (const connection of [...live.connections]) connection.close(CLOSE_SIGNED_OUT, 'signed out');
@@ -106,7 +106,7 @@ export const functionSessionFor = (
     },
     functions: () => {
       const functions = shellRef.live?.functions;
-      return Object.keys(functions?.held ?? {}).map((id) => {
+      return Object.keys(functions?.granted ?? {}).map((id) => {
         const description = functions?.descriptions[id];
         return description === undefined ? { id } : { id, description };
       });
@@ -133,7 +133,7 @@ export const sessionOn = (host: HostState, cell: Cell, ephemeral: boolean, reset
   },
   // An event without an origin goes to every instance of the shell, so one for
   // a canvas the shell does not have is dropped. An origin a terminal names
-  // comes off the wire and is held to that canvas; with none named, the
+  // comes off the wire and must be on that canvas; with none named, the
   // canvas's active instance is the origin.
   dispatch: (canvas, event) => {
     const { shell } = cell.live;

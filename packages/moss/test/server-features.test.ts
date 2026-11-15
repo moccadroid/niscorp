@@ -87,7 +87,7 @@ describe('the features — what somebody else wrote', () => {
     return probe.seams();
   };
 
-  it('a layout is held to the app’s kit: a component it has none for, a prop the component has no place for, a value its schema refuses', async () => {
+  it('a layout is checked against the app’s kit: a component it has none for, a prop the component has no place for, a value its schema refuses', async () => {
     const seams = await started();
     expect(seams.layoutMisfits({ component: 'Text', children: [{ component: 'Badge', props: { tone: 'calm' } }] })).toEqual([]);
     expect(

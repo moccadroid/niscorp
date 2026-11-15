@@ -42,7 +42,7 @@ const loopback = (): BlockList => {
 const LOOPBACK = loopback();
 
 // By the socket's address alone: `X-Forwarded-For` is written by whoever sent
-// the request. `BlockList` holds an IPv4-mapped IPv6 address
+// the request. `BlockList` checks an IPv4-mapped IPv6 address
 // (`::ffff:127.0.0.1`) to the IPv4 rule.
 const isFromThisMachine = (address: string | undefined): boolean =>
   address !== undefined && (isIPv4(address) ? LOOPBACK.check(address, 'ipv4') : isIPv6(address) && LOOPBACK.check(address, 'ipv6'));

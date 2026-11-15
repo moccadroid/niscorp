@@ -14,11 +14,11 @@ import { messageHandler } from './routing';
 
 export type SessionSource = Pick<ShellHost, 'session'>;
 
-export type HeldCatalog = { ids: readonly string[]; hash: string };
+export type PrincipalCatalog = { ids: readonly string[]; hash: string };
 
 export type SocketConfig = {
   session: (token: string) => string | null | Promise<string | null>;
-  catalog: (principal: string | null) => HeldCatalog | Promise<HeldCatalog>;
+  catalog: (principal: string | null) => PrincipalCatalog | Promise<PrincipalCatalog>;
   shells?: SessionSource;
   page?: (path: string) => { host: SessionSource; inputs: Record<string, Record<string, unknown>> } | undefined;
   anonymousShellMax?: number;
@@ -159,10 +159,10 @@ const served = async (
   return session;
 };
 
-type Held = { config: SocketConfig; foreignPageWarning: WarnedOnce; revalidation: Revalidation; anonymousShells: AnonymousShellLimit };
+type SocketState = { config: SocketConfig; foreignPageWarning: WarnedOnce; revalidation: Revalidation; anonymousShells: AnonymousShellLimit };
 
-const open = async (held: Held, url: string, connection: Connection, send: (message: ServerMessage) => void, span: Span | undefined, found: { principal: boolean }): Promise<void> => {
-  const { config, foreignPageWarning, revalidation, anonymousShells } = held;
+const open = async (state: SocketState, url: string, connection: Connection, send: (message: ServerMessage) => void, span: Span | undefined, found: { principal: boolean }): Promise<void> => {
+  const { config, foreignPageWarning, revalidation, anonymousShells } = state;
   const params = parametersOf(url);
   const mismatch = protocolRefusal(params);
   if (mismatch !== undefined) {
@@ -195,7 +195,7 @@ const open = async (held: Held, url: string, connection: Connection, send: (mess
     return;
   }
 
-  revalidation.hold(connection, token !== null && token !== '' && principal !== null ? { token, principal } : null);
+  revalidation.track(connection, token !== null && token !== '' && principal !== null ? { token, principal } : null);
   // Before anything below awaits (`closeOf`).
   const close = closeOf(connection);
   close.whenClosed(() => revalidation.release(connection));
@@ -213,7 +213,7 @@ export const createSocket = (config: SocketConfig): SocketAccept => {
   const emit = emitterOf(config.telemetry);
   const revalidation = createRevalidation(config);
   const anonymousShells = createAnonymousShellLimit(config.anonymousShellMax ?? DEFAULT_ANONYMOUS_SHELL_MAX);
-  const held: Held = { config, foreignPageWarning: { warned: false }, revalidation, anonymousShells };
+  const state: SocketState = { config, foreignPageWarning: { warned: false }, revalidation, anonymousShells };
 
   // `accept` never rejects: a transport calls it without awaiting, and an
   // unhandled rejection ends the process for every session on it.
@@ -222,7 +222,7 @@ export const createSocket = (config: SocketConfig): SocketAccept => {
     const span = spanOf(emit);
     const found = { principal: false };
     try {
-      await open(held, url, connection, send, span, found);
+      await open(state, url, connection, send, span, found);
     } catch (error) {
       console.error('[moss/socket] refused a session:', error);
       span?.('socket.upgrade', 'error', found.principal);

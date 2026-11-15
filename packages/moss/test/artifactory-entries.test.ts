@@ -26,7 +26,7 @@ const running = (shipped: ShippedManifest = shipping(open, close), more: Partial
   createRunningManifest({ shipped, grants: scopeGrants(['deals']), shells: [], ...more });
 
 const SHELL: ShellManifest = { canvases: [] };
-const held = async (manifest: RunningManifest): Promise<string[]> => (await manifest.cacheEntries()).map((row) => row.key).sort();
+const entryKeys = async (manifest: RunningManifest): Promise<string[]> => (await manifest.cacheEntries()).map((row) => row.key).sort();
 
 describe('the entries in force — what the app shipped', () => {
   it('each is answered as vex replays it: compiled, protected, and born of no request', async () => {
@@ -37,7 +37,7 @@ describe('the entries in force — what the app shipped', () => {
     expect(read?.requestHash).toBeUndefined();
     expect(await manifest.cacheEntry('deals/close')).toMatchObject({ kind: 'mutation', protected: true, mutation: close.mutation });
     expect(await manifest.cacheEntry('deals/closed')).toBeUndefined();
-    expect(await held(manifest)).toEqual(['deals/close', 'deals/open']);
+    expect(await entryKeys(manifest)).toEqual(['deals/close', 'deals/open']);
   });
 
   it('a write that fails the authoring lint refuses whoever asks first, in vex’s words', async () => {
@@ -51,23 +51,23 @@ describe('replaceEntries — a named set of entries that arrived while the app r
   it('is answered beside what the app shipped, and a shell is told of it', async () => {
     const manifest = running();
     await manifest.replaceEntries('bundles', [won, lost]);
-    expect(await held(manifest)).toEqual(['deals/close', 'deals/open', 'ext/lost', 'ext/won']);
+    expect(await entryKeys(manifest)).toEqual(['deals/close', 'deals/open', 'ext/lost', 'ext/won']);
     expect(await manifest.cacheEntry('ext/won')).toMatchObject({ kind: 'ok', protected: true, dsl: won.dsl });
     expect(manifest.entries().map((entry) => entry.fingerprint)).toEqual(['deals/open', 'deals/close', 'ext/won', 'ext/lost']);
     expect((await manifest.artifactsFor(SHELL, nobody(['public']))).entries.get('ext/won')).toBe(won);
   });
 
-  it('replaces the set of its name whole: an entry it no longer holds is gone', async () => {
+  it('replaces the set of its name whole: an entry it no longer has is gone', async () => {
     const manifest = running();
     await manifest.replaceEntries('bundles', [won, lost]);
     await manifest.replaceEntries('payments', [{ ...won, fingerprint: 'pay/won' }]);
     await manifest.replaceEntries('bundles', [lost]);
-    expect(await held(manifest)).toEqual(['deals/close', 'deals/open', 'ext/lost', 'pay/won']);
+    expect(await entryKeys(manifest)).toEqual(['deals/close', 'deals/open', 'ext/lost', 'pay/won']);
     expect(await manifest.cacheEntry('ext/won')).toBeUndefined();
     expect((await manifest.artifactsFor(SHELL, nobody(['public']))).entries.has('ext/won')).toBe(false);
   });
 
-  it('an entry of a set is answered in place of the one the app shipped under that fingerprint, for as long as the set holds it', async () => {
+  it('an entry of a set is answered in place of the one the app shipped under that fingerprint, for as long as the set has it', async () => {
     const manifest = running();
     const wider: SeedEntry = { ...open, dsl: { from: ['deals'], fields: ['deals.id', 'deals.title'] } };
     await manifest.replaceEntries('bundles', [wider]);
@@ -77,7 +77,7 @@ describe('replaceEntries — a named set of entries that arrived while the app r
     expect(await manifest.cacheEntry('deals/open')).toMatchObject({ dsl: open.dsl });
   });
 
-  it('of two sets that hold one fingerprint, the one handed over under the later name is answered', async () => {
+  it('of two sets that both have one fingerprint, the one handed over under the later name is answered', async () => {
     const manifest = running();
     const narrow: SeedEntry = { ...won, dsl: { from: ['deals'], fields: ['deals.id'] } };
     await manifest.replaceEntries('bundles', [won]);
@@ -94,16 +94,16 @@ describe('replaceEntries — a named set of entries that arrived while the app r
     const earlier = manifest.replaceEntries('bundles', many);
     const later = manifest.replaceEntries('bundles', [lost]);
     await Promise.all([earlier, later]);
-    expect(await held(manifest)).toEqual(['deals/close', 'deals/open', 'ext/lost']);
+    expect(await entryKeys(manifest)).toEqual(['deals/close', 'deals/open', 'ext/lost']);
   });
 
-  it('a set that is refused does not hold up the one handed over after it', async () => {
+  it('a set that is refused does not block the one handed over after it', async () => {
     const manifest = running();
     const refused = manifest.replaceEntries('bundles', [unbounded]);
     const taken = manifest.replaceEntries('bundles', [won]);
     await expect(refused).rejects.toThrow(/authoring lint/);
     await taken;
-    expect(await held(manifest)).toEqual(['deals/close', 'deals/open', 'ext/won']);
+    expect(await entryKeys(manifest)).toEqual(['deals/close', 'deals/open', 'ext/won']);
   });
 
   it('accepted: whoever listens is told once, the set is frozen where it stands, and the report is the one it was verified by', async () => {
@@ -138,7 +138,7 @@ describe('replaceEntries — a named set of entries that arrived while the app r
 
     expect(manifest.entries()).toBe(before);
     expect(manifest.report()).toBe(verifiedBy);
-    expect(await held(manifest)).toEqual(['deals/close', 'deals/open', 'ext/won']);
+    expect(await entryKeys(manifest)).toEqual(['deals/close', 'deals/open', 'ext/won']);
     expect(told).not.toHaveBeenCalled();
   });
 

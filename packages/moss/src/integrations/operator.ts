@@ -81,7 +81,7 @@ const register = <Extension>(deps: OperatorDeps<Extension>, routes: Hono<Feature
       return c.json(taken.answer, taken.status);
     }
 
-    const { approved: wasApproved, holdsKey } = await registrationOf(deps.replay, id);
+    const { approved: wasApproved, hasKey } = await registrationOf(deps.replay, id);
     // Asked before anything is written: rows the app cannot be served with would take it down
     // until somebody deleted them by hand.
     if (wasApproved) {
@@ -89,7 +89,7 @@ const register = <Extension>(deps: OperatorDeps<Extension>, routes: Hono<Feature
       if (refusal !== undefined) return c.json({ message: 'Refused — the app would not serve this.', reasons: [`Error: ${refusal}`] }, 422);
     }
 
-    const key = holdsKey ? undefined : mintIntegrationKey();
+    const key = hasKey ? undefined : mintIntegrationKey();
 
     const { keptKey } = await writeBundle(deps.replay, {
       id,
@@ -173,7 +173,7 @@ export type Contract = {
   extension?: unknown;
 };
 
-// Asked by Standard JSON Schema, so it holds whichever copy of zod the kit built the schema with.
+// Asked by Standard JSON Schema, so it reads whichever copy of zod the kit built the schema with.
 const convertsItself = (value: unknown): boolean => {
   if (typeof value !== 'object' || value === null) return false;
   const standard: unknown = Reflect.get(value, '~standard');

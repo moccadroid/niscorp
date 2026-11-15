@@ -12,7 +12,7 @@ export type ShellComposition = {
   canvases: readonly ShellCanvas[];
   // The name of the shell's layout in the layout store. With none, nova's own is drawn.
   frame?: string;
-  // The canvases the shell's layouts hold a slot for, beside `canvases`.
+  // The canvases the shell's layouts have a slot for, beside `canvases`.
   slottedCanvases?: readonly string[];
   // Of these names of the app's functions, the ones its principal's roles grant.
   grantedFunctions: (names: readonly string[]) => ReadonlySet<string>;
@@ -49,7 +49,7 @@ export type DraftSaving = {
 };
 
 export type ShellHostConfig = {
-  // `drafted`: what the draft of the shell this is asked for holds.
+  // `drafted`: what is in the draft of the shell this is asked for.
   composition: (principal: string | null, drafted?: readonly DraftArtifact[]) => Promise<ShellComposition>;
   hooks: ShellHooks;
   phraseKeys?: PhraseKeys;

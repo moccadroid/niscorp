@@ -6,7 +6,7 @@ import type { BuildRequest } from './build';
 import { SHELL_GONE, draftedIn } from './draft';
 import type { DraftState } from './draft';
 import type { OwnedShellHost, ShellComposition, ShellHost, ShellHostConfig, ShellReport } from './types';
-import { endShell, holdGranted, layoutsOf } from './host-state';
+import { endShell, keepGranted, layoutsOf } from './host-state';
 import type { Cell, HostState, Live } from './host-state';
 import { sessionOn } from './sessions';
 import { DEFAULT_SNAPSHOT_WAIT_MS, needOf, read, settle } from './snapshot';
@@ -76,8 +76,8 @@ const takeLayouts = (live: Live, made: ShellComposition): void => {
 };
 
 // Nova gives a shell a canvas when something is first pushed onto it, and
-// keeps it out of the canvases a frame loops over. One that a layout held a
-// slot for, and none holds now, is taken out with what is mounted on it.
+// keeps it out of the canvases a frame loops over. One that a layout had a
+// slot for, and none has now, is taken out with what is mounted on it.
 const takeCanvases = (live: Live, made: ShellComposition): void => {
   const slotted = new Set(made.slottedCanvases);
   for (const id of live.slottedCanvases) if (!slotted.has(id)) live.shell.removeCanvas(id);
@@ -94,7 +94,7 @@ const takeComposition = (live: Live, made: ShellComposition): void => {
   live.entries = made.entries;
   takeLayouts(live, made);
   takeCanvases(live, made);
-  holdGranted(live.functions, made.grantedFunctions);
+  keepGranted(live.functions, made.grantedFunctions);
 };
 
 // For the one shell whose draft is to change, and awaited by whoever changes
@@ -125,7 +125,7 @@ const adopt = (host: HostState, cell: Cell): void => {
     // Read before the await, so the answer reflects at least this many changes.
     const changes = host.changes;
     const made = await host.config.composition(cell.principal, draftedIn(drafted));
-    // The answer holds the draft of the shell it was asked for, and is that
+    // The answer carries the draft of the shell it was asked for, and is that
     // shell's alone. Where a reset replaced it meanwhile the answer is dropped:
     // the new shell has no draft, and adopts for itself where it is behind
     // (`registerLiving`).
@@ -224,7 +224,7 @@ const replaceShell = async (host: HostState, cell: Cell): Promise<void> => {
   const stands = (): boolean => !cell.live.ended;
   if (!stands()) return;
   // Built before the old shell is disposed: the build runs app code, and a
-  // throw after the disposal would leave the session holding nothing.
+  // throw after the disposal would leave the session with nothing.
   const built = await build(host, { token: cell.token, principal: cell.principal, ...(cell.opening !== undefined ? { opening: cell.opening } : {}), reset: true }, stands);
   if (built === undefined) return;
   const old = cell.live;

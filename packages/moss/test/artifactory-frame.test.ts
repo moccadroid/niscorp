@@ -46,7 +46,7 @@ const nothingUnder = (ref: string): string =>
   `moss: the layout for "${ref}" is refused: nothing is kept under "${ref}". A saved layout takes the place of the layout of an action its holder has, under "action/<the action’s id>", or of one the app’s own shell declares: its own under "frame", a canvas’s under "canvas/<the canvas’s id>".`;
 
 describe('the layout of the app’s own shell, saved from a session', () => {
-  it('is its principal’s alone and is drawn in the app’s own shell: marked in use it is what the store holds under `frame`, for nobody else, and a page keeps its own', async () => {
+  it('is its principal’s alone and is drawn in the app’s own shell: marked in use it is what the store keeps under `frame`, for nobody else, and a page keeps its own', async () => {
     const { of, frameOf, madeFor } = world();
     const adas = framed('as ada has it', slot('side'));
     await of('ada').save([frame(adas)]);
@@ -190,7 +190,7 @@ describe('the layout of a canvas of the app’s own shell, saved from a session'
     await expect(of('ada').save([under('canvas/side')])).resolves.toBeDefined();
   });
 
-  it('is held to what a frame is: the components of the app’s own shell, and no name moss keeps a layout under', async () => {
+  it('is checked against what a frame is: the components of the app’s own shell, and no name moss keeps a layout under', async () => {
     const { of } = world();
     await expect(of('ada').save([forSide({ component: 'Banner' })])).rejects.toThrow('moss: the layout for "canvas/side" is refused: layout uses "Banner", which this app has no component for');
     await expect(of('ada').save([forSide({ component: 'Frame', children: [{ ref: 'canvas/side' }] })])).rejects.toThrow(
@@ -199,7 +199,7 @@ describe('the layout of a canvas of the app’s own shell, saved from a session'
   });
 });
 
-describe('the canvases a shell’s layouts hold a slot for, beside the ones its manifest declares', () => {
+describe('the canvases a shell’s layouts have a slot for, beside the ones its manifest declares', () => {
   it('a saved frame with a slot for a canvas the shell does not declare: that canvas is answered for that person’s own shell alone, and no longer once the frame is reset', async () => {
     const { of, slottedOf, madeFor } = world();
     const saved = await of('ada').save([frame(framed('with notes', slot('side'), slot('notes')))]);
@@ -231,7 +231,7 @@ describe('the canvases a shell’s layouts hold a slot for, beside the ones its 
     expect(await slottedOf('ada')).toEqual([]);
   });
 
-  it('every layout a shell is built from counts: an action’s that its person holds, a fragment’s, one the app keeps in its layout store', async () => {
+  it('every layout a shell is built from counts: an action’s that its person is granted, a fragment’s, one the app keeps in its layout store', async () => {
     const shell: ShellManifest = {
       canvases: [{ id: 'main', initial: 'home' }],
       layoutStore: { dock: { component: 'Frame', children: [slot('tray'), slot('main')] } },

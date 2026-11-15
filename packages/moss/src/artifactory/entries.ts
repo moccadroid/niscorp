@@ -20,7 +20,7 @@ const mergedEntries = (own: readonly Entry[], sets: ReadonlyMap<string, readonly
 type EntriesInForce = {
   list: () => readonly Entry[];
   byFingerprint: () => ReadonlyMap<string, Entry>;
-  holdsSet: (source: string) => boolean;
+  hasSet: (source: string) => boolean;
   withSet: (source: string, handed: readonly Entry[]) => readonly Entry[];
   takeSet: (source: string, handed: readonly Entry[], compiled: CompiledEntries) => void;
   compiled: () => Promise<CompiledEntries>;
@@ -37,7 +37,7 @@ export const createEntriesInForce = (own: readonly Entry[]): EntriesInForce => {
   return {
     list: () => list,
     byFingerprint: () => byFingerprint,
-    holdsSet: (source) => sets.has(source),
+    hasSet: (source) => sets.has(source),
     withSet: (source, handed) => mergedEntries(own, new Map([...sets, [source, handed]])),
     takeSet: (source, handed, taken) => {
       sets = new Map([...sets, [source, handed]]);

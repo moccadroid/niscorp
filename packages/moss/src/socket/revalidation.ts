@@ -4,14 +4,14 @@ import type { Connection, SocketConfig } from './socket';
 
 export const DEFAULT_REVALIDATE_MS = 60 * 1000;
 
-// Node holds a timer's delay in 31 bits and cuts a longer one to 1 ms: an
+// Node keeps a timer's delay in 31 bits and cuts a longer one to 1 ms: an
 // interval above this is no revalidation, as `0` is.
 const MAX_INTERVAL_MS = 2 ** 31 - 1;
 
 export type Credential = { token: string; principal: string } | null;
 
 export type Revalidation = {
-  hold: (connection: Connection, credential: Credential) => void;
+  track: (connection: Connection, credential: Credential) => void;
   release: (connection: Connection) => void;
   stop: () => void;
 };
@@ -102,7 +102,7 @@ export const createRevalidation = (config: Pick<SocketConfig, 'session' | 'reval
   }
 
   return {
-    hold: (connection, credential) => {
+    track: (connection, credential) => {
       live.set(connection, credential);
     },
     release: (connection) => {

@@ -37,7 +37,7 @@ export const DocumentSnapshotSchema = z.strictObject({
 });
 export type DocumentSnapshot = z.infer<typeof DocumentSnapshotSchema>;
 
-// [0, offset, length] copies a run of the base frame; [1, text] is text the base does not hold.
+// [0, offset, length] copies a run of the base frame; [1, text] is text the base does not have.
 export const DeltaOpSchema = z.union([z.tuple([z.literal(0), z.number(), z.number()]), z.tuple([z.literal(1), z.string()])]);
 export type DeltaOp = z.infer<typeof DeltaOpSchema>;
 
@@ -59,7 +59,7 @@ const ServerMessageByTypeSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('error'), code: z.string(), message: z.string(), canvas: z.string().optional() }),
 ]);
 
-// `session` is two shapes under one type, which a union discriminated on the type cannot hold:
+// `session` is two shapes under one type, which a union discriminated on the type cannot express:
 // they sit beside it.
 export const ServerMessageSchema = z.union([
   ServerMessageByTypeSchema,

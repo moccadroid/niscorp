@@ -19,7 +19,7 @@ export type IntegrationsConfig<Extension = undefined> = {
 
 const DEFAULT_OUTBOUND_TIMEOUT_MS = 30_000;
 
-// The longest delay a timer of Node's holds: a longer one is cut to 1 ms.
+// The longest delay a timer of Node's keeps: a longer one is cut to 1 ms.
 const MAX_TIMEOUT_MS = 2 ** 31 - 1;
 
 const outboundTimeoutOf = (asked: number | undefined): number => {

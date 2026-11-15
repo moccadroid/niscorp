@@ -7,14 +7,14 @@ import { PRISM_SEQUENCE } from '@niscorp/prism/migrations';
 import { VEX_SEQUENCE } from '@niscorp/vex/migrations';
 import type { TelemetrySpan } from '../runtime';
 
-export type HeldEntries = {
+export type EntriesAskedFirst = {
   get: (fingerprint: string, scope?: Record<string, unknown>) => Promise<CacheEntry | undefined>;
   entries: () => Promise<{ key: string; entry: CacheEntry }[]>;
 };
 
 export type EntryCache = {
   cache: CacheBackend;
-  askFirst: (held: HeldEntries) => void;
+  askFirst: (first: EntriesAskedFirst) => void;
 };
 
 // The table answers for what a request wrote and for nothing else in it: vex
@@ -22,7 +22,7 @@ export type EntryCache = {
 const isWrittenForRequest = (entry: CacheEntry): boolean => entry.kind === 'unsatisfiable' || entry.requestHash !== undefined;
 
 export const createEntryCache = (table: CacheBackend): EntryCache => {
-  let held: HeldEntries | undefined;
+  let askedFirst: EntriesAskedFirst | undefined;
   const fromTable = (entry: CacheEntry | undefined): CacheEntry | undefined => (entry !== undefined && isWrittenForRequest(entry) ? entry : undefined);
 
   const tableEntries = async (): Promise<{ key: string; entry: CacheEntry }[]> => {
@@ -34,17 +34,17 @@ export const createEntryCache = (table: CacheBackend): EntryCache => {
   };
 
   const entries = async (): Promise<{ key: string; entry: CacheEntry }[]> => {
-    const first = (await held?.entries()) ?? [];
+    const first = (await askedFirst?.entries()) ?? [];
     const answered = new Set(first.map((row) => row.key));
     return [...first, ...(await tableEntries()).filter((row) => !answered.has(row.key))];
   };
 
   return {
-    askFirst: (holder) => {
-      held = holder;
+    askFirst: (first) => {
+      askedFirst = first;
     },
     cache: {
-      get: async (key, scope) => (await held?.get(key, scope)) ?? fromTable(await table.get(key)),
+      get: async (key, scope) => (await askedFirst?.get(key, scope)) ?? fromTable(await table.get(key)),
       // Vex stamps an entry it replays by writing it back: one that was not written for a request is not the table's to keep.
       set: async (key, entry) => {
         if (isWrittenForRequest(entry)) await table.set(key, entry);

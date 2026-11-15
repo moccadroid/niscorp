@@ -125,7 +125,7 @@ export const attach = (live: Live, connection: ShellConnection, wantsDelta: bool
   }
 };
 
-// What `sentByCanvas` holds, not a fresh render: the connection ends level with the
+// What `sentByCanvas` has, not a fresh render: the connection ends level with the
 // baseline the others share, and stays delta-capable.
 export const resync = (live: Live, connection: ShellConnection): void => {
   if (!live.connections.has(connection)) return;

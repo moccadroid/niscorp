@@ -228,7 +228,7 @@ describe('the ws transport — the upgrade says who is asking', () => {
     return { url: `ws://127.0.0.1:${address.port}/socket`, requestLines, asked, served, gone };
   };
 
-  it('a terminal holding a token is served as its principal, and the token is in no request line', async () => {
+  it('a terminal with a token is served as its principal, and the token is in no request line', async () => {
     const { url, requestLines, asked, served } = await serving();
     const tokenFile = join(mkdtempSync(join(tmpdir(), 'moss-upgrade-')), 'token');
     writeFileSync(tokenFile, 'tok/with+symbols=\n');

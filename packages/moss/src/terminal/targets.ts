@@ -44,7 +44,7 @@ export const drawnApi = (snapshot: DrawnSnapshot): TerminalApi => ({
 
 // Adopted only with a frame to match: a wire that did not start from the page's snapshot has
 // none, and the elements are replaced.
-export const holdsDrawnScreen = (root: HTMLElement, api: TerminalApi): boolean => root.firstElementChild !== null && api.frame().length > 0;
+export const hasDrawnScreen = (root: HTMLElement, api: TerminalApi): boolean => root.firstElementChild !== null && api.frame().length > 0;
 
 type SlotSinks = {
   dispatch: (event: NovaEvent) => void;

@@ -15,26 +15,26 @@ export const layoutsOf = (made: Pick<ShellComposition, 'layoutStore' | 'fragment
 });
 
 // An action's layout is kept in the shell's layout store and named by ref:
-// this is the definition as it was written, with the layout the store holds now.
+// this is the definition as it was written, with the layout the store has now.
 export const withLayoutInPlace = (definition: ActionDefinition, store: Shell['layoutStore']): ActionDefinition => {
   const layout = definition.layout;
   return layout === undefined || typeof layout === 'string' ? definition : { ...definition, layout: store.resolveReferences(layout) };
 };
 
-// `held` is the map nova calls into, by reference: what a shell may call
+// `granted` is the map nova calls into, by reference: what a shell may call
 // follows the roles an adopt answers, as its actions do.
 export type ShellFunctions = {
   all: Readonly<Record<string, FunctionHandler>>;
-  held: Record<string, FunctionHandler>;
+  granted: Record<string, FunctionHandler>;
   descriptions: Readonly<Record<string, string>>;
 };
 
-export const holdGranted = (functions: ShellFunctions, granted: ShellComposition['grantedFunctions']): void => {
+export const keepGranted = (functions: ShellFunctions, granted: ShellComposition['grantedFunctions']): void => {
   const callable = granted(Object.keys(functions.all));
-  for (const name of Object.keys(functions.held)) if (!callable.has(name)) Reflect.deleteProperty(functions.held, name);
+  for (const name of Object.keys(functions.granted)) if (!callable.has(name)) Reflect.deleteProperty(functions.granted, name);
   for (const name of callable) {
     const handler = functions.all[name];
-    if (handler !== undefined) functions.held[name] = handler;
+    if (handler !== undefined) functions.granted[name] = handler;
   }
 };
 
@@ -60,7 +60,7 @@ export type Live = {
 
 export const canvasesOf = (live: Live): string[] => Object.keys(live.shell.getState().canvases);
 
-// Every holder addresses a shell through its cell, so a reset that replaces
+// Everything that addresses a shell does so through its cell, so a reset that replaces
 // `live` reaches them all.
 export type Cell = {
   live: Live;

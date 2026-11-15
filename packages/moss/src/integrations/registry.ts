@@ -27,7 +27,7 @@ const RegistrationRowSchema = z.object({ status: z.string(), key_hash: z.string(
 const WrittenRowSchema = z.looseObject({ key_hash: z.string().nullish() });
 const WrittenSchema = z.union([z.array(WrittenRowSchema), WrittenRowSchema.transform((row) => [row]), z.undefined().transform(() => [])]);
 const RequestedRowSchema = z.object({ requested_data: strings });
-const KeyHolderRowSchema = z.object({ id: z.string() });
+const KeyOwnerRowSchema = z.object({ id: z.string() });
 
 const actionKey = { integration_id: z.string(), action_id: z.string() };
 const afterAction = (last: { integration_id: string; action_id: string } | undefined): Record<string, string> => ({
@@ -76,9 +76,9 @@ export const recordFailedImport = async (replay: Replay, id: string, url: string
   await replay('integrations/record-failed-import', { id, url, last_error: error });
 };
 
-export const registrationOf = async (replay: Replay, id: string): Promise<{ approved: boolean; holdsKey: boolean }> => {
+export const registrationOf = async (replay: Replay, id: string): Promise<{ approved: boolean; hasKey: boolean }> => {
   const row = RegistrationRowSchema.optional().parse(rowsOf(await replay('integrations/registration', { id }))[0]);
-  return { approved: row?.status === 'approved', holdsKey: typeof row?.key_hash === 'string' && row.key_hash !== '' };
+  return { approved: row?.status === 'approved', hasKey: typeof row?.key_hash === 'string' && row.key_hash !== '' };
 };
 
 export type BundleImport = {
@@ -111,7 +111,7 @@ export const writeBundle = async (replay: Replay, imported: BundleImport): Promi
     return { keptKey: false };
   }
   // A batch answers the rows its statements wrote, one alone as itself. The statement that keeps
-  // the key writes no row where one was held, so the key was kept exactly when its hash came back.
+  // the key writes no row where one was kept, so the key was kept exactly when its hash came back.
   const written = WrittenSchema.parse(await replay('integrations/write-bundle-and-keep-key', { ...said, key_hash: imported.keyHash }));
   return { keptKey: written.some((row) => row.key_hash === imported.keyHash) };
 };
@@ -132,7 +132,7 @@ export const removeIntegration = async (replay: Replay, id: string): Promise<voi
 };
 
 export const integrationByKey = async (replay: Replay, key: string): Promise<string | undefined> =>
-  KeyHolderRowSchema.optional().parse(rowsOf(await replay('integrations/by-key', { key_hash: hashIntegrationKey(key) }))[0])?.id;
+  KeyOwnerRowSchema.optional().parse(rowsOf(await replay('integrations/by-key', { key_hash: hashIntegrationKey(key) }))[0])?.id;
 
 // Two reads: vex cannot put a count of another table's rows beside each row and keep the rows with none.
 export const listIntegrations = async (replay: Replay): Promise<IntegrationRow[]> => {

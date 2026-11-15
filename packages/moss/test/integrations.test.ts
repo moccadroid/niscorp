@@ -321,7 +321,7 @@ describe('the registry as vex entries — each statement, against a database', (
     expect(await actionsOf('late')).toEqual([{ integration_id: 'late', ...action('late', 'roster') }]);
   });
 
-  it('7 · ...and a row that holds a key keeps it: a landing that comes with another lands its bundle and not its key', async () => {
+  it('7 · ...and a row that has a key keeps it: a landing that comes with another lands its bundle and not its key', async () => {
     const rowsIn = (answered: unknown): unknown[] => (Array.isArray(answered) ? answered : [answered]);
     const keptIn = (answered: unknown, hash: string): boolean => rowsIn(answered).some((row) => typeof row === 'object' && row !== null && 'key_hash' in row && row.key_hash === hash);
 
@@ -361,26 +361,26 @@ describe('the registry as vex entries — each statement, against a database', (
     const bundleOf = (asks: string, names: readonly string[]): Bundle =>
       BundleSchema.parse({ integration: 'atomic', grants: { data: [asks] }, actions: Object.fromEntries(names.map((name) => [`ext.desk.atomic.${name}`, { id: `ext.desk.atomic.${name}`, title: name }])) });
     const landingOf = (bundle: Bundle): BundleImport => ({ id: 'atomic', url: 'https://atomic.example', bundle, extension: undefined, stamp: { 'nisc.nova': 3 } });
-    const held = async (): Promise<unknown> => ({
+    const stored = async (): Promise<unknown> => ({
       row: await rows(`SELECT * FROM integrations WHERE id = 'atomic'`),
       actions: await rows(`SELECT * FROM integration_actions WHERE integration_id = 'atomic' ORDER BY action_id`),
     });
 
     await writeBundle(replay, landingOf(bundleOf('members.read', ['one', 'two'])));
-    const before = await held();
+    const before = await stored();
     expect(before).toMatchObject({ row: [{ requested_data: ['members.read'] }], actions: [{ action_id: 'ext.desk.atomic.one' }, { action_id: 'ext.desk.atomic.two' }] });
 
     // The statement that writes the actions fails, after the row is written
     // and the old actions are taken out.
     const broken = await registryOver(pool, failingAt(pool, /^INSERT INTO integration_actions/));
     await expect(writeBundle(broken, landingOf(bundleOf('bookings.read', ['three'])))).rejects.toThrow(/the database went away/);
-    expect(await held()).toEqual(before);
+    expect(await stored()).toEqual(before);
 
     await writeBundle(replay, landingOf(bundleOf('bookings.read', ['three'])));
-    expect(await held()).toMatchObject({ row: [{ requested_data: ['bookings.read'] }], actions: [{ action_id: 'ext.desk.atomic.three' }] });
+    expect(await stored()).toMatchObject({ row: [{ requested_data: ['bookings.read'] }], actions: [{ action_id: 'ext.desk.atomic.three' }] });
   });
 
-  it('two integrations cannot hold the hash of one key, and any number can hold none', async () => {
+  it('two integrations cannot both have the hash of one key, and any number can have none', async () => {
     await replay('integrations/write-bundle-and-keep-key', { ...landing('twin-a'), key_hash: 'one-hash', actions: [] });
     await expect(replay('integrations/write-bundle-and-keep-key', { ...landing('twin-b'), key_hash: 'one-hash', actions: [] })).rejects.toThrow(/integrations_key_hash_unique/);
     expect(await rows(`SELECT id FROM integrations WHERE key_hash = 'one-hash' OR id = 'twin-b'`)).toEqual([{ id: 'twin-a' }]);

@@ -1,11 +1,11 @@
-import { DEFAULT_TOKEN_KEY, DocumentSnapshotSchema, SNAPSHOT_ELEMENT_ID, heldCookieName } from '../protocol';
+import { DEFAULT_TOKEN_KEY, DocumentSnapshotSchema, SNAPSHOT_ELEMENT_ID, signedInCookieName } from '../protocol';
 import type { DocumentSnapshot } from '../protocol';
 
 export type WireTokenStore = {
   load: () => string | null;
   save: (token: string) => void;
   clear: () => void;
-  // Whether the browser itself holds the session, in a cookie the page cannot read.
+  // Whether the browser itself keeps the session, in a cookie the page cannot read.
   held?: () => boolean;
   key?: string;
 };
@@ -70,7 +70,7 @@ const browserTokens = (tokenKey: string, named: boolean): WireTokenStore => ({
   },
   held: () => {
     try {
-      return document.cookie.split('; ').includes(`${heldCookieName(tokenKey, window.location.port)}=1`);
+      return document.cookie.split('; ').includes(`${signedInCookieName(tokenKey, window.location.port)}=1`);
     } catch {
       return false;
     }

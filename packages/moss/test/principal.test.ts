@@ -98,7 +98,7 @@ const varApp = {
 } as unknown as NiscApp;
 
 describe('principal — ring-2 variant resolution', () => {
-  it('a granted variant binds its action to its layout; holding none binds nothing', () => {
+  it('a granted variant binds its action to its layout; having none binds nothing', () => {
     expect(resolveVariants(varApp, 'usr_2').get('crm.deals')).toBe(basic);
     expect(resolveVariants(varApp, 'usr_1').size).toBe(0);
     expect(resolveVariants(varApp, null).size).toBe(0);
@@ -114,7 +114,7 @@ describe('principal — ring-2 variant resolution', () => {
     expect(verifyVariants(broken).some((e) => e.includes('unknown action "crm.ghost"'))).toBe(true);
   });
 
-  it('two variants of one action — held by a role, or only by a principal\'s role UNION — are refused', () => {
+  it('two variants of one action — granted to a role, or only by a principal\'s role UNION — are refused', () => {
     const twoOnRole = {
       ...varApp,
       layouts: {

@@ -231,7 +231,7 @@ describe('generation pointer', () => {
     expect(moves).toBe(0);
   });
 
-  it('an interval longer than Node can hold is no poll — it does not become a read every millisecond', async () => {
+  it('an interval longer than a Node timer allows is no poll — it does not become a read every millisecond', async () => {
     // Real timers: the fake ones do not cut a delay the way Node does.
     vi.useRealTimers();
     for (const everyMs of [Infinity, 2 ** 31]) {

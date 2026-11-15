@@ -20,7 +20,7 @@ describe('wire follower', () => {
     expect(bodies).toEqual([['a']]);
   });
 
-  it('holds an answer that changed before anybody subscribed, and hands it over', () => {
+  it('keeps an answer that changed before anybody subscribed, and hands it over', () => {
     const follower = createWireFollower(new AbortController().signal);
     follower.live.onChange(answer(['early']));
     const bodies: unknown[] = [];

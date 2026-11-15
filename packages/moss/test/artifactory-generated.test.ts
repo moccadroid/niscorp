@@ -108,7 +108,7 @@ describe('a generated action saved from a session', () => {
     expect((await shellOf('ada')).layoutStore[`action/${id}`]).toEqual(saying('the open deals, again'));
   });
 
-  it('may open the actions its owner holds, their own generated ones among them, and no other', async () => {
+  it('may open the actions its owner is granted, their own generated ones among them, and no other', async () => {
     const { of, shellOf } = world();
     const ada = of('ada');
     const first = await ada.save([{ kind: 'action', body: reading('deals/open') }]);
@@ -135,7 +135,7 @@ describe('a generated action saved from a session', () => {
 });
 
 describe('a shell for nobody signed in', () => {
-  it('holds nothing anybody generated, whatever rows are handed over with it', async () => {
+  it('has nothing anybody generated, whatever rows are handed over with it', async () => {
     const { of, running, rows } = world();
     await of('ada').save([{ kind: 'action', body: reading('deals/open') }]);
     await of('ada').save([{ kind: 'layout', body: { ref: 'action/home', layout: saying('home, as ada has it'), use: true } }]);
@@ -329,7 +329,7 @@ describe('a generated fragment', () => {
     expect((await shellOf('ada')).fragments).toEqual(SHELL.fragments);
   });
 
-  it('is held to what a generated action is held to: its id, what it calls, and what its layout names', async () => {
+  it('is checked against what a generated action is checked against: its id, what it calls, and what its layout names', async () => {
     const { of, rows } = world();
     const refusedOf = (body: unknown): Promise<unknown> => of('ada').save([{ kind: 'fragment', body }]);
 
@@ -360,7 +360,7 @@ describe('what is published for everybody', () => {
 describe('the ids moss gives to what is generated', () => {
   const generatedId: ActionDefinition = { id: 'generated.by-the-app', layout: saying('shipped under a generated id') };
 
-  it('are held to the id a definition carries as to the one it is listed under', () => {
+  it('are checked against the id a definition carries as against the one it is listed under', () => {
     const { running } = world();
     expect(() => running.replace('extras', { listedOtherwise: generatedId })).toThrow('"generated.by-the-app" begins with "generated.", which is where what somebody generated is kept');
   });

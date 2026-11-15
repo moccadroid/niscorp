@@ -152,7 +152,7 @@ describe('migrateTables — the step', () => {
     expect(await ledger()).toEqual(['walk.app/1', 'walk.app/2']);
   });
 
-  it('a row the database holds but nobody seeded is not a seed: the entry is new, and refused', async () => {
+  it('a row the database has but nobody seeded is not a seed: the entry is new, and refused', async () => {
     const { runtimeOf, pool } = database();
     await migrateTables(runtimeOf(tables(NOTES)), appOf(read('notes/all', 'id', 'body'), add('body')));
     const learned = read('notes/learned', 'id', 'gone');
