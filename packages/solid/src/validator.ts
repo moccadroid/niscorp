@@ -38,7 +38,7 @@ export type Validator = {
 export const createValidator = (deps: ValidatorDeps): Validator => {
   let failed = false;
   const finalizeChecked = new Set<string>();
-  // A key may hold a dot, so a joined path cannot be split back into its keys.
+  // A key may have a dot in it, so a joined path cannot be split back into its keys.
   const containerSegments = new Map<string, readonly string[]>([['', []]]);
 
   const valueOpen = (segments: readonly string[], kind: ValueKind): 'accept' | 'skip' => {
