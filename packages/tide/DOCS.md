@@ -711,6 +711,11 @@ its work.
 - **A row is read by a schema.** What comes back from the database is parsed,
   one schema for each table: a row that does not fit throws where it is read,
   naming the table and the field.
+- **A string in a JSON column.** A payload, an input or an output that is a
+  string reads back as itself when it is not JSON text (`'hello'`). On a
+  driver that parses jsonb itself (`pg`, PGlite) one that is JSON text reads
+  back parsed: `'123'` as `123`, `'{"a":1}'` as `{ a: 1 }`. A host that needs
+  such a string back exactly puts it inside an object.
 - **A serial group is claimed by one instance at a time.** Asking whether a
   group is held and claiming in it run in one transaction, behind an advisory
   lock on the group (`pg_try_advisory_xact_lock`). An instance that does not

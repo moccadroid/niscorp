@@ -457,6 +457,52 @@ describe('facts on postgres', () => {
   });
 });
 
+describe('a string in a JSON column on postgres', () => {
+  const hook: ReflexInput = {
+    id: 'hook.forward',
+    intent: 'Forward a hook body.',
+    on: { fact: { signal: 'hook' } },
+    effect: { name: 'send', input: { body: { $ref: '$.fact.payload' } } },
+  };
+
+  it('a string payload and a string output read back as themselves', async () => {
+    const { tide, calls } = await harness([hook], { send: { run: () => 'msg_8812' } });
+    await tide.ingest({ kind: 'signal', name: 'hook', payload: 'hello', at: T0 });
+    await tide.advance({ now: T0 });
+
+    expect(calls).toEqual([{ body: 'hello' }]);
+    expect((await tide.ledger.tasks())[0]?.output).toBe('msg_8812');
+    expect((await tide.ledger.facts()).map((fact) => fact.payload)).toContain('hello');
+  });
+
+  it('a string that is JSON text reads back parsed, as it always has', async () => {
+    const { tide } = await harness([], {});
+    const numeric = await tide.ingest({ kind: 'signal', name: 'other', payload: '123', at: T0 });
+    const object = await tide.ingest({ kind: 'signal', name: 'other', payload: '{"a":1}', at: T0 });
+    expect([numeric?.payload, object?.payload]).toEqual([123, { a: 1 }]);
+  });
+
+  it('a driver that hands jsonb back as text reads the same values', async () => {
+    const { db } = await database.emptied();
+    const asText = { parsers: { 3802: (value: string) => value, 114: (value: string) => value } };
+    const pool: TidePool = {
+      query: (text, values) => db.query(text, values, asText),
+      transaction: (fn) => db.transaction((tx) => fn({ query: (text, values) => tx.query(text, values, asText) })),
+    };
+    const store = createTideStore(pool);
+    await store.ready;
+    const tide = createTide({ store, transform, effects: { send: { run: () => 'msg_8812' } } });
+    await tide.load([hook], { at: T0 });
+    const numeric = await tide.ingest({ kind: 'signal', name: 'other', payload: '123', at: T0 });
+    const object = await tide.ingest({ kind: 'signal', name: 'other', payload: { a: 1 }, at: T0 });
+    await tide.ingest({ kind: 'signal', name: 'hook', payload: 'hello', at: T0 });
+    await tide.advance({ now: T0 });
+
+    expect([numeric?.payload, object?.payload]).toEqual(['123', { a: 1 }]);
+    expect((await tide.ledger.tasks())[0]?.output).toBe('msg_8812');
+  });
+});
+
 describe('overlap, order and retention on postgres', () => {
   it('`skip` refuses to start while the previous run is unsettled', async () => {
     const reflex: ReflexInput = {
