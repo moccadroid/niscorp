@@ -234,7 +234,7 @@ export const createTide = (config: TideConfig): Tide => {
         // Two reads, as the query grammar has no OR: a run fact names its reflex, a manual fact its target.
         const minted = await config.store.query({ table: 'fact', where: { reflex: filter.reflexId }, ...newest });
         const aimed = await config.store.query({ table: 'fact', where: { target: filter.reflexId }, ...newest });
-        const matched = [...minted, ...aimed].sort((left, right) => right.at - left.at);
+        const matched = [...new Map([...minted, ...aimed].map((fact) => [fact.id, fact])).values()].sort((left, right) => right.at - left.at);
         return filter.limit === undefined ? matched : matched.slice(0, filter.limit);
       },
       fact: (id) => one('fact', id),

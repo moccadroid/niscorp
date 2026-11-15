@@ -921,4 +921,11 @@ describe('reading the ledger', () => {
     expect(facts.map((fact) => fact.at)).toEqual([T0 + 61]);
     expect(factsRead).toBeLessThanOrEqual(2);
   });
+
+  it('a fact that names the reflex twice is listed once', async () => {
+    const { tide } = await harness([{ id: 'tally', intent: 'Count a vote.', on: { manual: {} }, effect: { name: 'work' } }], { work: { run: () => null } });
+    await tide.ingest({ kind: 'manual', target: 'tally', reflex: 'tally', at: T0 });
+
+    expect(await tide.ledger.facts({ reflexId: 'tally' })).toHaveLength(1);
+  });
 });
