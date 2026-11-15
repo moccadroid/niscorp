@@ -286,7 +286,8 @@ Rules the loop lives by:
 - **Streaming is the default.** The loop consumes `signal.stepStream`
   unless the agent sets `transport: 'step'`, which calls `llm.step()`
   and emits no deltas or partials (§11); `await run.result` is the
-  consumer's opt-out.
+  consumer's opt-out. Either call is handed the run's abort signal,
+  and an abort during it ends the run `aborted`.
 
 Bounds are `stopWhen` predicates — one vocabulary instead of v1's
 maxToolIterations / maxTicks / maxDurationMs / budget tangle:

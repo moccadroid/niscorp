@@ -156,7 +156,9 @@ and a tool whose name is not in it is not offered on that step. The
 `transport: 'step'` calls the model without streaming: the run emits
 no `model-delta`, `output-delta` or `output-partial`. It is for a
 provider and model pair that assembles tool-call arguments more
-reliably outside streaming. The default is `'stream'`.
+reliably outside streaming. The default is `'stream'`. Under either
+transport the model call is handed the run's abort signal, and a run
+aborted during the call ends with `code: 'aborted'`.
 
 Multi-turn history is caller-owned: `input` accepts a `string`, a
 `Message[]` transcript, or any JSON value.

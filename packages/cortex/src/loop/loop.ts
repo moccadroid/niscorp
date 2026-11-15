@@ -346,10 +346,10 @@ export const runLoop = async <TData, TDeps>(
   };
 
   const streamEmittedOutput = cfg.resolved.transport !== 'respond';
-  const oneStep = async (llm: SignalClient, request: StepRequest): Promise<Result<StepResult>> => {
+  const callModel = async (llm: SignalClient, request: StepRequest): Promise<Result<StepResult>> => {
     if (cfg.transport === 'step') {
       try {
-        return ok(await llm.step(request));
+        return ok(await llm.step(request, { signal: cfg.abort }));
       } catch (cause) {
         const message = cause instanceof Error ? cause.message : String(cause);
         return err(makeError('model_call_failed', message, { ...errorContext, cause }));
@@ -387,8 +387,12 @@ export const runLoop = async <TData, TDeps>(
       return err(makeError('model_call_failed', message, { ...errorContext, cause }));
     }
     if (final) return ok(final);
-    if (cfg.abort.aborted) return err(makeError('aborted', 'run aborted during model call', errorContext));
     return err(makeError('model_call_failed', 'stream ended without a done event', errorContext));
+  };
+  const oneStep = async (llm: SignalClient, request: StepRequest): Promise<Result<StepResult>> => {
+    const called = await callModel(llm, request);
+    if (cfg.abort.aborted) return err(makeError('aborted', 'run aborted during model call', errorContext));
+    return called;
   };
 
   let lastAttempt: unknown;
