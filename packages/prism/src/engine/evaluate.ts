@@ -9,6 +9,7 @@ import { desugar } from '../sugar/desugar';
 import { createBudget, measure, measureString, spendStep, type Limits } from './budget';
 import { optimize } from './optimize';
 import { placeError } from './place';
+import { writeOwnKey } from '../utils/own-keys';
 
 import {
   isRefNode, isConstNode, isVarNode, isGetNode, isWithNode,
@@ -70,7 +71,7 @@ const evaluateUnbudgeted = (node: unknown, context: EvalContext): JsonValue => {
   if (isPlainObject(obj)) {
     const result: Record<string, JsonValue> = {};
     if (!(OPTIONAL_FIELDS_KEY in obj)) {
-      for (const key of Object.keys(obj)) result[key] = evaluateNode(obj[key], context);
+      for (const key of Object.keys(obj)) writeOwnKey(result, key, evaluateNode(obj[key], context));
       return result;
     }
     const optionalFields = new Set<string>(
@@ -84,7 +85,7 @@ const evaluateUnbudgeted = (node: unknown, context: EvalContext): JsonValue => {
       try {
         const evaluated = evaluateNode(value, context);
         if (isOptional && (evaluated === null || evaluated === undefined)) continue;
-        result[key] = evaluated;
+        writeOwnKey(result, key, evaluated);
       } catch (error) {
         if (isOptional && error instanceof PrismError && error.code === ErrorCode.MISSING_PATH) continue;
         throw error;

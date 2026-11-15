@@ -4,6 +4,7 @@ import { ErrorCode, failAt } from '../errors';
 import { INDEX_TEXT, parseJsonPathCached, getByPath, jsonPathUpTo, whereStopped, type JsonPathSegment, type Step } from '../utils/jsonpath';
 import { isJsonObject, isJsonArray } from '../schemas/guards';
 import { measure } from '../engine/budget';
+import { readOwnKey, writeOwnKey } from '../utils/own-keys';
 
 const SEGMENTS_KEY = '__segments';
 
@@ -37,7 +38,7 @@ export const opConst = (node: ConstNode, context: EvalContext, _evaluate: Evalua
   context.kept === true ? copyOf(node.$const as JsonValue) : (node.$const as JsonValue);
 
 export const opVar = (node: VarNode, context: EvalContext, _evaluate: EvaluateFn): JsonValue => {
-  const value = context.vars[node.$var];
+  const value = readOwnKey(context.vars, node.$var);
   if (value === undefined) {
     const names = Object.keys(context.vars).filter((name) => !name.startsWith('__'));
     const scope = names.length === 0 ? 'No variable is in scope here.' : `In scope: ${names.join(', ')}.`;
@@ -84,7 +85,7 @@ export const opGet = (node: GetNode, context: EvalContext, evaluate: EvaluateFn)
         if (fallback !== undefined) return evaluate(fallback, context);
         return failAt(getStopped(node, root, i + 1, context, evaluate), ErrorCode.TYPE, { op: '$get' }, { node, op: '$get', field: 'path', form: true });
       }
-      current = current[key];
+      current = readOwnKey(current, key);
     }
   }
 
@@ -100,9 +101,10 @@ export const opWith = (node: WithNode, context: EvalContext, evaluate: EvaluateF
   const { let: declarations, value } = node.$with;
   const extendedVars = { ...context.vars };
   for (const [name, expr] of Object.entries(declarations)) {
-    extendedVars[name] = evaluate(expr, context);
+    const bound = evaluate(expr, context);
+    writeOwnKey(extendedVars, name, bound);
     // Read any number of times below: nested, a binding of [x, x] doubles.
-    measure(extendedVars[name] ?? null, context.budget, node);
+    measure(bound, context.budget, node);
   }
   return evaluate(value, { ...context, vars: extendedVars });
 };
