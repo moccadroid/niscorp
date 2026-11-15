@@ -16,6 +16,8 @@ import { isVexError } from './errors.js';
 import { depthRefusal, exceedsDepth } from '@niscorp/strata';
 import { canReadTable } from './scope/apply.js';
 import { discoverEntities } from './scope/discover.js';
+import { pruneOptional } from './engine/optional.js';
+import type { Query } from './schemas/query.schema.js';
 
 export type VexHandlerConfig = {
   engine: QueryEngine;
@@ -155,8 +157,19 @@ const WRITES_OF: Record<MutationEffect['op'], readonly ('insert' | 'update' | 'd
 const canWriteTable = (policy: ScopePolicy, table: string, op: MutationEffect['op']): boolean =>
   WRITES_OF[op].some((write) => typeof writeGateOf(table, write, policy) !== 'string');
 
+// Read the way the engine reads it: every optional condition kept. A query whose
+// optional conditions cannot be resolved runs for nobody, so nobody sees it.
+const tablesRead = (dsl: Query): string[] | undefined => {
+  try {
+    return [...discoverEntities(pruneOptional(dsl, 'all'))];
+  } catch (err) {
+    if (isVexError(err)) return undefined;
+    throw err;
+  }
+};
+
 const entryVisible = (policy: ScopePolicy, entry: CacheEntry): boolean => {
-  if (entry.kind === 'ok') return [...discoverEntities(entry.dsl)].every((t) => canReadTable(policy, t));
+  if (entry.kind === 'ok') return tablesRead(entry.dsl)?.every((t) => canReadTable(policy, t)) ?? false;
   if (entry.kind === 'mutation') return mutationEffect(entry.mutation).every((e) => canWriteTable(policy, e.table, e.op));
   return false;
 };
