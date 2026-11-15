@@ -1,3 +1,5 @@
+import { ownEntry } from '../shared/common';
+
 export type Props = Record<string, unknown>;
 
 export const num = (props: Props, key: string): number | undefined => {
@@ -15,4 +17,4 @@ export const bool = (props: Props, key: string): boolean => props[key] === true;
 const ICON: Record<string, string> = {
   plus: '+', bell: '\u{1F514}', sparkles: '✨', more: '⋯', search: '\u{1F50D}', check: '✓', close: '✕', settings: '⚙',
 };
-export const iconGlyph = (name: string): string => ICON[name] ?? name;
+export const iconGlyph = (name: string): string => ownEntry(ICON, name) ?? name;

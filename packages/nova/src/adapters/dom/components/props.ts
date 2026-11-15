@@ -1,3 +1,4 @@
+import { ownEntry } from '../../../shared/common';
 import { bool, num, str, type Props } from '../../prop-readers';
 
 export { num, str, bool, iconGlyph, type Props } from '../../prop-readers';
@@ -37,7 +38,7 @@ export const boxStyle = (props: Props): Record<string, string | undefined> => {
     'padding-top': px(num(props, 'py')),
     'padding-bottom': px(num(props, 'py')),
     'flex-grow': bool(props, 'grow') ? '1' : undefined,
-    background: bg === undefined ? undefined : BG[bg] ?? bg,
+    background: bg === undefined ? undefined : ownEntry(BG, bg) ?? bg,
     'border-radius': px(num(props, 'radius')),
     border: border === true ? '1px solid var(--dom-line)' : undefined,
     [`border-${typeof border === 'string' ? border : 'x'}`]: typeof border === 'string' ? '1px solid var(--dom-line)' : undefined,
@@ -48,8 +49,8 @@ export const flexStyle = (props: Props, direction: 'row' | 'column'): Record<str
   display: 'flex',
   'flex-direction': direction,
   gap: px(num(props, 'gap')),
-  'align-items': ALIGN[str(props, 'align') ?? ''],
-  'justify-content': JUSTIFY[str(props, 'justify') ?? ''],
+  'align-items': ownEntry(ALIGN, str(props, 'align') ?? ''),
+  'justify-content': ownEntry(JUSTIFY, str(props, 'justify') ?? ''),
   'flex-wrap': bool(props, 'wrap') ? 'wrap' : undefined,
 });
 
@@ -65,7 +66,7 @@ export const gridStyle = (props: Props): Record<string, string | undefined> => {
     display: 'grid',
     'grid-template-columns': template,
     gap: px(num(props, 'gap')),
-    'align-items': ALIGN[str(props, 'align') ?? ''],
+    'align-items': ownEntry(ALIGN, str(props, 'align') ?? ''),
   };
 };
 
@@ -74,9 +75,9 @@ export const textStyle = (props: Props): Record<string, string | undefined> => {
   const weightNum = num(props, 'weight');
   const color = str(props, 'color');
   return {
-    'font-size': size === undefined ? undefined : SIZE[size] ?? size,
-    'font-weight': weightNum !== undefined ? String(weightNum) : WEIGHT[str(props, 'weight') ?? ''],
-    color: color === undefined ? undefined : COLOR[color] ?? color,
+    'font-size': size === undefined ? undefined : ownEntry(SIZE, size) ?? size,
+    'font-weight': weightNum !== undefined ? String(weightNum) : ownEntry(WEIGHT, str(props, 'weight') ?? ''),
+    color: color === undefined ? undefined : ownEntry(COLOR, color) ?? color,
     'text-transform': bool(props, 'upper') ? 'uppercase' : undefined,
     'letter-spacing': bool(props, 'upper') ? '0.04em' : undefined,
   };

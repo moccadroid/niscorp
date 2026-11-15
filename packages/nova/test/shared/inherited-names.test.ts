@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { ActionDefinition } from '@action';
-import { createLayoutStore, fillSlots, render } from '@layout';
-import type { LayoutNode } from '@layout';
+import { HEAD_NAME, createLayoutStore, fillSlots, render } from '@layout';
+import type { LayoutNode, RenderNode } from '@layout';
 import { harvestLayout, missingFrom } from '../../src/i18n';
 import { UnknownActionError, UnknownFragmentError } from '@shared/errors';
-import { createShell, shellIdle } from '@shell';
+import { createShell, headOf, shellIdle } from '@shell';
 import { createPermissiveRegistry } from '../helpers';
 
 const page: ActionDefinition = {
@@ -92,5 +92,13 @@ describe('an object key named after an inherited property is not a directive', (
     const layout: LayoutNode = { component: 'Text', props: { opts: { toString: 'a', constructor: 'c', b: '$.x' } } };
     const out = render({ layout, data: { x: 1 }, store: createLayoutStore(), registry: createPermissiveRegistry() });
     expect(out[0]?.type === 'component' ? out[0].props['opts'] : undefined).toEqual({ toString: 'a', constructor: 'c', b: 1 });
+  });
+});
+
+describe('a head child named after an inherited property is not something a head holds', () => {
+  it('is refused by name', () => {
+    const child: RenderNode = { type: 'component', name: 'constructor', props: {}, children: [] };
+    const frame = (): RenderNode[] => [{ type: 'component', name: HEAD_NAME, props: {}, children: [child] }];
+    expect(headOf({ frame, canvasTree: () => [] })?.refused).toEqual([`${HEAD_NAME}: "constructor" is not something a head holds`]);
   });
 });

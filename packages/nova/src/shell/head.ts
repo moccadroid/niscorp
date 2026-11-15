@@ -1,3 +1,4 @@
+import { ownEntry } from '../shared/common';
 import { HEAD_LINK_NAME, HEAD_META_NAME, HEAD_NAME, HEAD_SCRIPT_NAME, HEAD_TITLE_NAME, headKeyOf } from '../layout/head';
 import type { HeadElement } from '../layout/head';
 import type { RenderNode } from '../layout';
@@ -98,7 +99,7 @@ export const headOf = (api: Pick<RenderApi, 'frame' | 'canvasTree'>): ScreenHead
         continue;
       }
       if (node.type !== 'component') continue;
-      const read = READERS[node.name];
+      const read = ownEntry(READERS, node.name);
       if (read === undefined) {
         refused.push(`${HEAD_NAME}: "${node.name}" is not something a head holds`);
         continue;
