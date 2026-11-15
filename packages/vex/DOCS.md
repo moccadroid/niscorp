@@ -876,7 +876,7 @@ only narrow rows, never widen phases. A caller with no verb for the table is
 still refused. A mutation entry takes `reach` the same way (`SeedMutation.reach`),
 and the write is compiled at that profile whoever asks.
 
-The host supplies `policyForReach(reach)` (hono: `getPolicyForReach(c, reach)`),
+The host supplies `policyForReach(reach)` (hono: `getPolicyForReach(c, reach)`; express: `getPolicyForReach(req, reach)`),
 because vex knows neither grants nor behaviors. **The handler fails closed both
 ways:** an entry declaring a reach no host can resolve is a 500, and a host
 returning `undefined` is a 403. Falling back to the caller's own reach would be
@@ -1574,9 +1574,12 @@ app.all('/api/orders/vex', vex({
 }));
 ```
 
-`VexExpressConfig` also takes `locked` and `mutations`
-(`{ client, policy, onWrite? }`). It has no per-request policy hook. Any method
-other than `GET`/`POST`/`PATCH`/`DELETE` answers 405.
+`VexExpressConfig` also takes `locked`, `mutations` (`{ client, policy, onWrite? }`),
+`getPolicy(req)`, `getPolicyForReach(req, reach)` and `onExecute`. These mean
+what they mean for Hono: `getPolicy` governs reads, mutation replay and
+discovery, and when it returns `undefined` the engine's policy and
+`mutations.policy` stay in force. `PATCH` and `DELETE` carry no per-request
+policy. Any method other than `GET`/`POST`/`PATCH`/`DELETE` answers 405.
 
 ### The endpoints
 

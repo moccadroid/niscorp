@@ -1,5 +1,10 @@
 import { describe, it, expect, beforeAll } from 'vitest';
+import { PGlite } from '@electric-sql/pglite';
 import { vex } from '../../src/adapters/express/index.js';
+import { createPglitePool } from '../../src/adapters/pglite/index.js';
+import { createPostgresAdapter } from '../../src/adapters/postgres/index.js';
+import { seedCache } from '../../src/cache/seed.js';
+import { createScopePolicy } from '../../src/scope/grants.js';
 import type { VexExpressRequest, VexExpressResponse } from '../../src/adapters/express/index.js';
 import { createQueryEngine } from '../../src/engine/runtime.js';
 import type { QueryEngine } from '../../src/types.js';
@@ -185,5 +190,49 @@ describe('express adapter', () => {
 
       await handler(req, res);
     });
+  });
+});
+
+describe('express adapter with per-request policy hooks', () => {
+  const db = new PGlite();
+  const engine = createQueryEngine({ adapter: createPostgresAdapter({ pool: createPglitePool(db) }) });
+  const behaviors = {
+    tasks: {
+      default: { read: [{ match: 'tenant_id', to: 'tenantId' }] },
+      personal: { read: [{ match: 'tenant_id', to: 'tenantId' }, { match: 'owner_id', to: 'userId' }] },
+    },
+  };
+  const grants = new Set(['tasks.read']);
+  const handler = vex({
+    engine,
+    getScope: () => ({ tenantId: 'A', userId: 'u1' }),
+    getPolicy: () => createScopePolicy(grants, behaviors),
+    getPolicyForReach: (_req, reach) => createScopePolicy(grants, behaviors, reach),
+  });
+
+  beforeAll(async () => {
+    await db.exec(`CREATE TABLE tasks (id TEXT PRIMARY KEY, tenant_id TEXT, owner_id TEXT, title TEXT);
+      CREATE TABLE secrets (id TEXT PRIMARY KEY, val TEXT);
+      INSERT INTO tasks VALUES ('t1', 'A', 'u1', 'mine'), ('t2', 'A', 'u2', 'theirs');`);
+    await engine.introspect();
+    await seedCache(engine.cache, [
+      { fingerprint: 'tasks/mine', reach: 'personal', dsl: { from: ['tasks'], fields: ['tasks.title'] }, shape: [{ title: '' }] },
+    ]);
+  });
+
+  it('lists in discovery only what getPolicy reaches', async () => {
+    const { res, result } = mockRes();
+    await handler(mockReq('GET'), res);
+
+    const entities = (result.body as { entities: Array<{ name: string }> }).entities;
+    expect(entities.map((e) => e.name)).toEqual(['tasks']);
+  });
+
+  it('serves an entry with a reach under getPolicyForReach', async () => {
+    const { res, result } = mockRes();
+    await handler(mockReq('POST', { fingerprint: 'tasks/mine', context: {} }), res);
+
+    expect(result.statusCode).toBe(200);
+    expect(result.body).toMatchObject({ result: [{ title: 'mine' }] });
   });
 });
