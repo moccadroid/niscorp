@@ -633,7 +633,8 @@ of one operation and diverged three ways.
   second loses the race. `onePer: { column, held, only }` lets at most one row
   per value of `column` be held at a time, counting rows that match `held`
   from an earlier claim; it applies to the values listed in `only`, and every
-  other value claims freely.
+  other value claims freely. Rows are taken in `order` either way: a value in
+  `only` that has nothing to claim takes no room from the others.
 - **`cas`** is the fence: a timed-out attempt finishing late finds its token
   superseded and is discarded. Setting a field to `undefined` clears it.
 - **`transact`** is required. Fan-out committing with its run's transition, and

@@ -1,3 +1,4 @@
+import { PRIMARY_KEY } from '../../types';
 import type { ClaimSpec, TableName, TideStore } from '../../types';
 import { compileOrder, compileSet, compileWhere, sortRows } from './compile';
 import type { Fields } from './compile';
@@ -33,14 +34,28 @@ export const claimOver =
 
     if (spec.onePer === undefined) return take(client, {}, spec.limit);
 
-    // Postgres refuses a window function beside FOR UPDATE, so the restricted groups are claimed one
-    // at a time. Asking whether a group is held and then claiming in it are two statements: they run
-    // in a transaction behind an advisory lock on the group, because under READ COMMITTED two
-    // instances would both be told nothing is held.
+    // What the claim may take, in order: every row outside `only`, and the first row of each group in
+    // `only` that no earlier claim holds. Postgres refuses a window function beside FOR UPDATE, so these
+    // rows are read first and claimed after, the groups in `only` one at a time. Asking whether a group
+    // is held and then claiming in it are two statements: they run in a transaction behind an advisory
+    // lock on the group, because under READ COMMITTED two instances would both be told nothing is held.
     const { column, held, only } = spec.onePer;
-    const restricted = [...only];
-    // Room is reserved for the serial groups before the bulk claim, or a busy parallel reflex starves them.
-    const claimed = await take(client, { [column]: { notIn: restricted } }, spec.limit - restricted.length);
+    const key = snake(PRIMARY_KEY[spec.table]);
+    const where = compileWhere(spec.where, 1, 'c');
+    const holding = compileWhere(held, where.params.length + 1, 'h');
+    const candidates = await client.query(
+      `SELECT e.${key} AS key, e.${snake(column)} AS grp FROM (
+         SELECT c.*, row_number() OVER (PARTITION BY c.${snake(column)}${order}) AS nth FROM ${table} c WHERE ${where.sql}
+       ) e
+       WHERE NOT (e.${snake(column)} = ANY($${where.params.length + holding.params.length + 1}))
+          OR (e.nth = 1 AND NOT EXISTS (SELECT 1 FROM ${table} h WHERE ${holding.sql} AND h.${snake(column)} = e.${snake(column)}))
+       ${compileOrder(spec.order, 'e')} LIMIT ${Math.floor(spec.limit)}`,
+      [...where.params, ...holding.params, [...only]],
+    );
+    const restricted = new Set<unknown>(only);
+    const free = candidates.rows.filter((row) => !restricted.has(row['grp'])).map((row) => row['key']);
+    const firsts = candidates.rows.filter((row) => restricted.has(row['grp'])).map((row) => String(row['grp']));
+    const claimed = await take(client, { [PRIMARY_KEY[spec.table]]: { in: free } }, free.length);
 
     const takeOneOf = (group: string) =>
       atomically(async (tx) => {
@@ -52,10 +67,7 @@ export const claimOver =
         return take(tx, { [column]: group }, 1);
       });
 
-    for (const group of restricted) {
-      if (claimed.length >= spec.limit) break;
-      claimed.push(...(await takeOneOf(group)));
-    }
+    for (const group of firsts) claimed.push(...(await takeOneOf(group)));
 
-    return claimed;
+    return sortRows(claimed, spec.order);
   };

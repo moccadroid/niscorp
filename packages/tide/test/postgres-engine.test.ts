@@ -516,6 +516,23 @@ describe('overlap, order and retention on postgres', () => {
     expect((await tide.ledger.tasks({ state: 'done' })).length).toBe(3);
   });
 
+  it('a hundred serial reflexes with nothing to do do not keep a parallel task from being claimed', async () => {
+    const serial = Array.from({ length: 100 }, (_, n): ReflexInput => ({
+      id: `serial.${n}`,
+      intent: 'One at a time.',
+      on: { manual: {} },
+      effect: { name: 'work' },
+      policy: { order: 'serial' },
+    }));
+    const parallel: ReflexInput = { id: 'parallel', intent: 'Any number at once.', on: { manual: {} }, effect: { name: 'work' } };
+    const { tide, calls } = await harness([...serial, parallel], { work: noop });
+
+    await tide.fire('parallel', { now: T0 });
+    await tide.advance({ now: T0 });
+
+    expect(calls).toHaveLength(1);
+  });
+
   it('sweeping a run takes its tasks with it', async () => {
     const reflex: ReflexInput = { id: 'once', intent: 'Once.', on: { manual: {} }, effect: { name: 'work' } };
     const { tide } = await harness([reflex], { work: noop });
