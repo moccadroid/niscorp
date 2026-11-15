@@ -1713,6 +1713,13 @@ and each one a page built for them, with the payload; every other process is
 nudged on the same channel, without it. `false`: no shell of theirs lives
 here.
 
+**A channel is not a trusted lane.** The person's own terminal can publish
+any channel with any payload into their own shell (`{ type: 'publish',
+channel, payload }` on the socket), and inside the shell that cannot be told
+apart from `deliver`. An action must not treat what arrives on a channel as
+coming from the server: it re-reads what it needs under its own policy, as a
+reaction does.
+
 Two rules hold this lane honest:
 
 - **A reaction is told THAT a write landed, never what it wrote.** No rows.
@@ -2061,7 +2068,9 @@ for (const error of report.errors) console.error(`${error.check}: ${error.detail
     it built for each of their connections.) `false` = they have no living
     shell in this host; nothing is built. This host, in this process: it
     reaches no page's shell and no other process. To tell somebody's screens
-    that something changed, wherever they live, a server calls `nudge`.
+    that something changed, wherever they live, a server calls `nudge`. The
+    person's own terminal can publish the same channel with any payload, so
+    what arrives on a channel is a ping, not the server's word.
   - `list()` — every durable shell alive right now, each as
     `{ principal, connections, since, idleSince, canvases }`. moss owns the map,
     so moss enumerates it; an app keeping its own note beside it can only drift.
