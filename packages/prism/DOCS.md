@@ -180,7 +180,7 @@ Reduces an array to a single value. Binds each element as `as` and the running a
 
 Source: `{ "numbers": [1, 2, 3] }` → `6`
 
-The `acc` name defaults to `"acc"` if omitted.
+The `acc` name defaults to `"acc"` if omitted. When `as` and `acc` are one name (`"as": "acc"` with no `acc`, for one), the body sees the accumulator, not the item.
 
 ### `$slice` — Slice array or string
 
