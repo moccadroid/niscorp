@@ -1,5 +1,4 @@
-export { parse } from './compile/parse.js';
-export { toNova, ERROR_NAMESPACE, type NovaEditor } from './compile/to-nova.js';
+export { parse, toNova, ERROR_NAMESPACE, Roles, type NovaEditor, type Role } from './compile/index.js';
 export { attachValidation } from './validate.js';
 export {
   createLoomEditor,
@@ -12,9 +11,7 @@ export {
   type WidgetBinding,
   type Document,
   type DocumentLayout,
-} from './editor/editor.js';
-export { Roles } from './compile/roles.js';
-export type { Role } from './compile/roles.js';
+} from './editor/index.js';
 export type {
   CompileOptions,
   EmptyValue,
@@ -25,4 +22,4 @@ export type {
   ObjectField,
   Pattern,
   Variant,
-} from './compile/types.js';
+} from './compile/index.js';

@@ -1,6 +1,5 @@
 import type { CSSProperties } from 'react';
-import { isRecord } from '@compile/parse';
-import type { Pattern } from '@compile/types';
+import { isRecord, type Pattern } from '@compile';
 import { COLORS } from './tokens.js';
 
 export const inputStyle: CSSProperties = { padding: '6px 10px', border: `1px solid ${COLORS.border}`, borderRadius: 6, fontSize: 14, width: '100%', boxSizing: 'border-box' };

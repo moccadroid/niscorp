@@ -1,8 +1,7 @@
 import type { CSSProperties } from 'react';
 import type { NovaComponent } from '@niscorp/nova/adapters/react';
-import { isRecord } from '@compile/parse';
-import type { Pattern } from '@compile/types';
-import { LOOM_COLUMN } from '@editor/default.layout';
+import { isRecord, type Pattern } from '@compile';
+import { LOOM_COLUMN } from '@editor';
 import { useModelWrite } from '../hooks/model.js';
 import { decodeLiteral, inputStyle, matches } from './shared.js';
 import { ActionMenu, MenuItem, SubMenu } from './menu.js';

@@ -1,7 +1,7 @@
 import type { CSSProperties, FC } from 'react';
 import type { NovaComponent } from '@niscorp/nova/adapters/react';
 import { ConfigSchema, evaluateSafe, type JsonObject } from '@niscorp/prism';
-import { COLORS } from '@react/kit/tokens.js';
+import { COLORS } from '@react/kit';
 
 const mono = 'ui-monospace, SFMono-Regular, Menlo, monospace';
 

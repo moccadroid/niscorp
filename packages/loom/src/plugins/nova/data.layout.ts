@@ -1,5 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
-import { isRecord } from '@compile/parse';
+import { isRecord } from '@compile';
 
 const fieldFor = (key: string, value: unknown): LayoutNode => ({
   component: 'loom:field',

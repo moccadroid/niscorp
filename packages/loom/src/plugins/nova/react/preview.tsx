@@ -1,8 +1,8 @@
 import type { CSSProperties, FC } from 'react';
 import type { LayoutNode } from '@niscorp/nova';
 import { Nova, type NovaComponent } from '@niscorp/nova/adapters/react';
-import { isRecord } from '@compile/parse';
-import { COLORS } from '@react/kit/tokens.js';
+import { isRecord } from '@compile';
+import { COLORS } from '@react/kit';
 
 const frame: CSSProperties = {
   padding: 24,

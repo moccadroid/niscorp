@@ -1,6 +1,6 @@
 import type { Shell } from '@niscorp/nova';
 import type { ZodType } from 'zod';
-import { ERROR_NAMESPACE } from './compile/to-nova.js';
+import { ERROR_NAMESPACE } from './compile/index.js';
 
 type Doc = Record<string, unknown>;
 

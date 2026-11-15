@@ -1,7 +1,6 @@
 import type { ZodType } from 'zod';
 import { QuerySchema, type DatabaseSchema, type Query } from '@niscorp/vex';
-import { mountView } from '@editor/view';
-import type { LoomPlugin } from '@editor/types';
+import { mountView, type LoomPlugin } from '@editor';
 import { vexWidgets } from './widgets.js';
 import { previewAction } from './preview.action.js';
 

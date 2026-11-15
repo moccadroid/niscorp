@@ -1,7 +1,6 @@
 import { createContext, useContext, type CSSProperties } from 'react';
 import type { NovaComponent } from '@niscorp/nova/adapters/react';
-import { isRecord } from '@compile/parse';
-import type { Pattern } from '@compile/types';
+import { isRecord, type Pattern } from '@compile';
 import { useModelWrite } from '../hooks/model.js';
 import { decodeLiteral, inputStyle, matches } from './shared.js';
 

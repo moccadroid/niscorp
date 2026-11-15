@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type FC } from 'react';
 import type { NovaComponent } from '@niscorp/nova/adapters/react';
 import type { Query, VexRunResult } from '../index.js';
-import { COLORS } from '@react/kit/tokens.js';
+import { COLORS } from '@react/kit';
 
 type State =
   | { status: 'empty' }

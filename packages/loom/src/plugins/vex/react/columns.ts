@@ -1,5 +1,5 @@
 import { getPath } from '@niscorp/nova';
-import { useLoomDocument } from '@react/hooks/document';
+import { useLoomDocument } from '@react';
 import type { Catalog } from '../widgets.js';
 
 export const useScopedColumns = (catalog: Catalog): string[] => {

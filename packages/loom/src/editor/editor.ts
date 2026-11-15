@@ -1,8 +1,6 @@
 import { z, type ZodType } from 'zod';
 import { createLayoutStore, createShell, type ActionDefinition, type Shell } from '@niscorp/nova';
-import { parse, buildDocument, isRecord } from '@compile/parse';
-import type { Field } from '@compile/types';
-import { toNova, ERROR_NAMESPACE } from '@compile/to-nova';
+import { parse, buildDocument, isRecord, toNova, ERROR_NAMESPACE, type Field } from '@compile';
 import { attachValidation, stripErrors } from '../validate.js';
 import { defaultCanvasLayout } from './default.layout.js';
 import type { LoomArtifact, LoomEditor, LoomEditorConfig, LoomEvent, LoomPlugin } from './types.js';

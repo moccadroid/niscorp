@@ -1,15 +1,13 @@
 import { useState, type FC, type ReactNode } from 'react';
 import type { NovaComponent, NovaModelBinding } from '@niscorp/nova/adapters/react';
-import { useModelWrite } from '@react/hooks/model';
-import { JsonEditor } from '@react/kit';
-import { KeyInput } from '@react/kit/key-input.js';
-import { isRecord } from '@compile/parse';
+import { useModelWrite } from '@react';
+import { COLORS, JsonEditor, KeyInput } from '@react/kit';
+import { isRecord } from '@compile';
 import type { Catalog } from '../widgets.js';
 import { useScopedColumns } from './columns.js';
 import { Combo } from './combobox.js';
 import { fieldStyle, controlBtn } from './styles.js';
 import type { WidgetProps } from './widget.js';
-import { COLORS } from '@react/kit/tokens.js';
 
 // Rows are keyed by index, so renaming an alias does not remount its value editor.
 const RecordRows: FC<{

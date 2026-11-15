@@ -1,6 +1,6 @@
 import { useState, type CSSProperties, type FC } from 'react';
 import { fieldStyle } from './styles.js';
-import { COLORS } from '@react/kit/tokens.js';
+import { COLORS } from '@react/kit';
 
 const comboListStyle: CSSProperties = { position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 20, marginTop: 2, maxHeight: 200, overflowY: 'auto', background: COLORS.surface, border: `1px solid ${COLORS.border}`, borderRadius: 6, boxShadow: `0 6px 16px ${COLORS.shadow}` };
 const comboItemStyle: CSSProperties = { padding: '6px 10px', fontSize: 13, cursor: 'pointer', fontFamily: 'ui-monospace, Menlo, monospace' };

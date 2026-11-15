@@ -2,7 +2,7 @@ export { LoomEditor, type LoomEditorProps, type LoomEditorPlugin } from './edito
 export { defaultPlugins } from './editor/defaults.js';
 export { useLoomDocument, type LoomDocument } from './hooks/document.js';
 export { useModelWrite } from './hooks/model.js';
-export type { FieldContext } from '@compile/types';
+export type { FieldContext } from '@compile';
 export {
   createLoomRegistry,
   loomComponents,

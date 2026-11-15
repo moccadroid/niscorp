@@ -280,6 +280,15 @@ The controller produces the structure and
 drives the shell; React only mounts it and supplies components. A Vue surface
 later would be the same controller with a Vue kit.
 
+## How the code is laid out
+
+Each directory under `src/` is reached through its `index.ts`: `compile/` (the
+compiler: `parse`, `toNova`, roles, the field model), `editor/` (the editor
+host), `react/` (the React surface), and `react/kit/` for the kit's parts the
+plugins draw with (`JsonEditor`, `KeyInput`, `JsonPane`, the menus, `COLORS`).
+Each plugin's `index.ts`, and its `react/index.ts`, is an entry point of the
+package. `validate.ts` sits beside `src/index.ts`.
+
 ## Locked decisions
 
 These are settled, with the reason each is held.

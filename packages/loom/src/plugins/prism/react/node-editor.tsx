@@ -2,13 +2,9 @@ import { useState, type CSSProperties, type FC, type ReactNode } from 'react';
 import type { NovaComponent } from '@niscorp/nova/adapters/react';
 import { NodeSchema, OP_KEYS } from '@niscorp/prism';
 import { PRISM_EXAMPLES, PRISM_EXAMPLE_GROUPS } from '@niscorp/prism/examples';
-import { parse, buildDocument } from '@compile/parse';
-import type { Field, Variant } from '@compile/types';
-import { useModelWrite } from '@react/hooks/model.js';
-import { JsonEditor } from '@react/kit/json-editor.js';
-import { KeyInput } from '@react/kit/key-input.js';
-import { ActionMenu, MenuItem, SubMenu } from '@react/kit/menu.js';
-import { COLORS } from '@react/kit/tokens.js';
+import { parse, buildDocument, type Field, type Variant } from '@compile';
+import { useModelWrite } from '@react';
+import { ActionMenu, COLORS, JsonEditor, KeyInput, MenuItem, SubMenu } from '@react/kit';
 
 type NodeKind = { id: string; label: string; category: string; variant: Variant };
 

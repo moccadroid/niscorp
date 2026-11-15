@@ -1,5 +1,4 @@
-import { mountView } from '@editor/view';
-import type { LoomPlugin } from '@editor/types';
+import { mountView, type LoomPlugin } from '@editor';
 import { validationAction } from './validation.action.js';
 
 export { VALIDATION } from './validation.layout.js';
