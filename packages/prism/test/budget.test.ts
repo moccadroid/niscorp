@@ -22,6 +22,15 @@ describe('the evaluation budget', () => {
     expect(() => evaluate({ $with: { let: { x: [1] }, value: config } } as Parameters<typeof evaluate>[0], {})).toThrow(/too many values/);
   });
 
+  it('stops a $fill whose slots double the text at each level before it builds the whole text', () => {
+    let phrase: unknown = 'x';
+    for (let i = 0; i < 25; i++) phrase = { phrase: '{a}{a}', slots: { a: phrase } };
+    const started = Date.now();
+    expect(() => evaluate({ $fill: { $ref: '$.p' } }, { p: phrase }, { limits: { maxStringLength: 1000 } })).toThrow(/limit 1000/);
+    expect(Date.now() - started).toBeLessThan(200);
+    expect(evaluate({ $fill: { $ref: '$.p' } }, { p: { phrase: '{n} items', slots: { n: 3 } } })).toBe('3 items');
+  });
+
   it('stops nested maps that evaluate too many nodes', () => {
     expect(() => evaluate(cubed, items(200))).toThrow(/too many nodes/);
   });
