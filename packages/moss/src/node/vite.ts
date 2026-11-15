@@ -57,6 +57,20 @@ const signInRefusal = (req: Connect.IncomingMessage, fromNetwork: boolean): stri
   return undefined;
 };
 
+// What a header says decides nothing here: a sign-in that a proxy on this machine, a tunnel among
+// them, carried for somebody elsewhere is only said in the log.
+const carriedFor = (req: Connect.IncomingMessage): string | undefined => {
+  const header = (name: string): string => {
+    const value = req.headers[name];
+    return Array.isArray(value) ? value.join(',') : (value ?? '');
+  };
+  const listed = `${header('x-forwarded-for')},${header('x-real-ip')}`.split(',');
+  const named = [...header('forwarded').matchAll(/for="?\[?([^\]";,]+)/gi)].map((found) => found[1] ?? '');
+  return [...listed, ...named]
+    .map((address) => address.trim().replace(/^(\d+\.\d+\.\d+\.\d+):\d+$/, '$1'))
+    .find((address) => address !== '' && !isFromThisMachine(address));
+};
+
 type Booted = { app: DevApp; listener: ReturnType<typeof getRequestListener>; transport?: Transport };
 
 const retire = async (booted: Booted): Promise<void> => {
@@ -87,6 +101,14 @@ const devMiddleware =
             res.setHeader('content-type', 'text/plain; charset=utf-8');
             res.end(refusal);
             return;
+          }
+          const elsewhere = options.signInFromNetwork === true ? undefined : carriedFor(req);
+          if (elsewhere !== undefined) {
+            vite.config.logger.warn(
+              `[${options.label ?? 'moss'}] /dev/as/${who} was answered for a request a proxy on this machine carried for ${elsewhere}. ` +
+                'Through a tunnel, anybody who has its address signs in as anybody: close the tunnel, or keep it away from /dev/as.',
+              { timestamp: true },
+            );
           }
           const token = await app.signIn(decodeURIComponent(who));
           if (token === null) {

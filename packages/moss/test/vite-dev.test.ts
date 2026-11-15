@@ -16,7 +16,7 @@ const standIn = (app: () => Promise<DevApp>, httpServer: Server | null = null, o
   const watching: ((file: string) => void)[] = [];
   const said: string[] = [];
   const vite = {
-    config: { logger: { error: (line: string) => void said.push(line), info: (line: string) => void said.push(line) }, root: '.' },
+    config: { logger: { error: (line: string) => void said.push(line), info: (line: string) => void said.push(line), warn: (line: string) => void said.push(line) }, root: '.' },
     httpServer,
     watcher: { on: (_event: string, fn: (file: string) => void) => void watching.push(fn) },
     ws: { send: () => {} },
@@ -29,14 +29,14 @@ const standIn = (app: () => Promise<DevApp>, httpServer: Server | null = null, o
 
 const serverOf = (parts: { socket?: SocketAccept }): MossServer => ({ fetch: async () => new Response('app'), close: () => {}, ...parts }) as unknown as MossServer;
 
-type SignInAnswer = { status: number; headers: Record<string, string | string[]>; body: string; passedOn: boolean; asked: string[] };
+type SignInAnswer = { status: number; headers: Record<string, string | string[]>; body: string; passedOn: boolean; asked: string[]; said: string[] };
 const signInAt = async (
   who: string,
   headers: Record<string, string>,
   over: { tokenKey?: string; from?: string | undefined; options?: Omit<MossDevOptions, 'app'>; noSignIn?: boolean } = {},
 ): Promise<SignInAnswer> => {
   const asked: string[] = [];
-  const { middleware } = standIn(
+  const { middleware, said } = standIn(
     async () => ({
       server: serverOf({}),
       ...(over.noSignIn === true ? {} : { signIn: (name: string) => (asked.push(name), name === 'ada' ? 'st_abc' : null) }),
@@ -53,9 +53,9 @@ const signInAt = async (
         answered.status = code;
       },
       setHeader: (name: string, value: string | string[]) => void (answered.headers[name] = value),
-      end: (body?: string) => resolve({ ...answered, body: body ?? '', passedOn: false, asked }),
+      end: (body?: string) => resolve({ ...answered, body: body ?? '', passedOn: false, asked, said }),
     };
-    middleware()?.({ url: `/dev/as/${who}`, headers, socket: { remoteAddress } }, res, () => resolve({ ...answered, body: '', passedOn: true, asked }));
+    middleware()?.({ url: `/dev/as/${who}`, headers, socket: { remoteAddress } }, res, () => resolve({ ...answered, body: '', passedOn: true, asked, said }));
   });
 };
 
@@ -111,6 +111,21 @@ describe('the dev server’s sign-in', () => {
       expect(answer.status).toBe(403);
       expect(answer.asked).toEqual([]);
     });
+
+    it('a request a proxy on this machine carried for somebody elsewhere, as a tunnel does, is signed in as before, and said in the log', async () => {
+      const answer = await signInAt('ada', { host: 'abc.tunnel.example', 'x-forwarded-for': '203.0.113.9' });
+      expect(answer.status).toBe(302);
+      expect(answer.said.join(' ')).toContain('/dev/as/ada was answered for a request a proxy on this machine carried for 203.0.113.9');
+    });
+
+    it.each<Record<string, string>>([{ 'x-forwarded-for': '127.0.0.1' }, { 'x-real-ip': '::1' }, { forwarded: 'for="127.0.0.1:5173"' }, { forwarded: 'for="[::1]:5173"' }, {}])(
+      'a proxy on this machine that names this machine (%o) signs in with nothing said',
+      async (headers) => {
+        const answer = await signInAt('ada', { host: 'localhost:5173', ...headers });
+        expect(answer.status).toBe(302);
+        expect(answer.said).toEqual([]);
+      },
+    );
 
     it('`signInFromNetwork: true` opens it to every device that can reach the dev server', async () => {
       const answer = await signInAt('ada', { host: '192.168.1.5:5173' }, { from: '192.168.1.20', options: { signInFromNetwork: true } });

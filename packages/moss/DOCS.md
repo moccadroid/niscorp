@@ -2506,9 +2506,13 @@ Requires the optional `vite` peer.
     end of the request's socket is loopback (`127.0.0.0/8`, `::1`, or either
     written as an IPv4-mapped IPv6 address). Any other request is answered
     `403` with a sentence that says why, and the app is not asked. What a
-    header says of where a request came from (`X-Forwarded-For`) is not read;
-    behind a proxy on the same machine every request is the proxy's, and is
-    this machine's.
+    header says of where a request came from (`X-Forwarded-For`) decides
+    nothing; behind a proxy on the same machine every request is the proxy's,
+    and is this machine's. A tunnel (ngrok, cloudflared, a dev tunnel) is such
+    a proxy: anybody who has its address signs in as anybody. When
+    `X-Forwarded-For`, `X-Real-IP` or `Forwarded: for=` names an address other
+    than this machine, the sign-in is answered as before and the dev log says
+    so.
   - `signInFromNetwork?: boolean` (default `false`) answers the sign-in to
     every device that can reach the dev server, for trying a signed-in screen
     on a phone. It hands out a session for whoever the address names: with it
