@@ -9,3 +9,5 @@ An abort now ends `stream()`, `stepStream()` and `complete()` at once while the 
 A custom provider naming an unknown `wire` strategy id now throws a `SignalError` with code `E_VALIDATION_FAILED` and `context.wire`, with the same message; before, it was a plain `Error`.
 
 DOCS says which value answers when an OpenAI reply holds several JSON values: the first that passes the schema.
+
+DOCS shows a multi-turn conversation that sends the system prompt and the schema once a turn, says that `stream()` throws a missing key when it is called, and names the second "Abort" heading "Abort a decision".

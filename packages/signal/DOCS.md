@@ -219,6 +219,8 @@ await signal.complete([
 
 The same run as `complete()`, delivered as it happens. Returns `AsyncIterable<StreamEvent<T>>`; `options.signal` (an `AbortSignal`) aborts it.
 
+A missing API key throws `E_MISSING_API_KEY` (and a custom provider with no model `E_MISSING_MODEL`) when `stream()` is called, before anything is read: a `try` around the call catches it, not one around the loop alone.
+
 ```typescript
 for await (const event of signal.stream('Tell me a story')) {
   if (event.type === 'text') process.stdout.write(event.text);
@@ -420,11 +422,11 @@ Signal is stateless — it doesn't track conversation history. The caller owns h
 const signal = createSignal('groq');
 
 const r1 = await signal.complete('My name is Alice.');
-const r2 = await signal.history(r1.history).complete('What is my name?');
+const r2 = await signal.history(r1.history.filter((m) => m.role !== 'system')).complete('What is my name?');
 // r2.response contains "Alice"
 ```
 
-`complete()` returns `history` which includes all messages (system, user, assistant, tool calls). Pass it back via `.history()` for the next turn.
+`complete()` returns `history` which includes every message it sent and got back: the system prompt, with a schema the schema's system message, and the user, assistant and tool messages. Each call adds the system prompt and the schema message again, so pass the history back without its system messages, as above. Passed back whole, each turn sends them once more: `system system user system assistant user system` on the second turn.
 
 ---
 
@@ -575,7 +577,7 @@ const { decisions } = await jev.decide({
 
 A key that is not a uuid fails with `E_VALIDATION_FAILED` on every provider. A request with no images, or `images: {}`, is sent exactly as one without the field.
 
-### Abort
+### Abort a decision
 
 ```typescript
 const controller = new AbortController();
