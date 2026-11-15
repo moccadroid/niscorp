@@ -474,10 +474,9 @@ in `from`. A table with a foreign key to itself can be listed twice and is
 joined to itself along it; every path names the last copy, and scope rules
 apply to both.
 
-A key whose value is `null` is read as left out, in the query and in its sort
-entries, `exists`, `semantic` and `fuzzy` filters: `"limit": null` is no limit
-stated. A `null` that is a value, as in `{ "eq": ["notes.title", null] }`,
-stays.
+A query is refused when an optional key is `null`: `"limit": null` is an
+error, not a missing limit. The query agent's tools read a top-level `null`
+argument as left out.
 
 ```json
 { "from": ["order", "customer"],

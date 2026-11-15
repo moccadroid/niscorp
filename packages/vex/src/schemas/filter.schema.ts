@@ -3,17 +3,6 @@ import { ContextRefSchema, ScopeRefSchema, FieldOrValueSchema } from './value.sc
 import { FieldPathSchema } from './identifier.schema.js';
 import type { ContextRef, ScopeRef, FieldOrValue } from './value.schema.js';
 
-// A model writes null for a key it leaves out, so a key whose value is null is
-// read as absent before the object is checked.
-export const nullKeysAbsent = <T extends z.ZodType>(schema: T) =>
-  z.preprocess(
-    (value: unknown) =>
-      value !== null && typeof value === 'object' && !Array.isArray(value)
-        ? Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== null))
-        : value,
-    schema,
-  );
-
 export type ExistsQuery = {
   from: string[];
   filter?: Filter;
@@ -55,14 +44,12 @@ const collectionTarget = z
   .describe('A set of values or a reference that resolves to an array');
 
 const ExistsSchema: z.ZodType<ExistsQuery> = z.lazy(() =>
-  nullKeysAbsent(
-    z
-      .object({
-        from: z.array(z.string()).min(1).describe('Entities the subquery reads. Joined by foreign key like any other from.'),
-        filter: FilterSchema.optional().describe('The correlation, and any extra condition. Reference the outer query by its own entity path: { eq: ["<inner>.<fk>", "<outer>.id"] }.'),
-      })
-      .strict(),
-  ),
+  z
+    .object({
+      from: z.array(z.string()).min(1).describe('Entities the subquery reads. Joined by foreign key like any other from.'),
+      filter: FilterSchema.optional().describe('The correlation, and any extra condition. Reference the outer query by its own entity path: { eq: ["<inner>.<fk>", "<outer>.id"] }.'),
+    })
+    .strict(),
 );
 
 export const FilterSchema: z.ZodType<Filter> = z.lazy(() =>
@@ -84,18 +71,18 @@ export const FilterSchema: z.ZodType<Filter> = z.lazy(() =>
     z.object({ or: z.array(FilterSchema).min(2) }).strict().describe('Logical OR: at least one condition must be true'),
     z.object({ not: FilterSchema }).strict().describe('Logical NOT: negates the condition'),
     z.object({
-      semantic: nullKeysAbsent(z.object({
+      semantic: z.object({
         field: FieldPathSchema.describe('Vector column field path (entity.field)'),
         query: z.union([ContextRefSchema, ScopeRefSchema]).describe('Text to embed and compare'),
         minScore: z.number().min(0).max(1).optional().describe('Minimum cosine similarity (0–1)'),
-      }).strict()),
+      }).strict(),
     }).strict().describe('Semantic vector similarity search'),
     z.object({
-      fuzzy: nullKeysAbsent(z.object({
+      fuzzy: z.object({
         field: FieldPathSchema.describe('String field path'),
         query: z.union([ContextRefSchema, ScopeRefSchema]).describe('Text to fuzzy-match'),
         maxDistance: z.number().int().nonnegative().optional().describe('Maximum Levenshtein edit distance'),
-      }).strict()),
+      }).strict(),
     }).strict().describe('Fuzzy string match'),
     z.object({
       optional: z.object({

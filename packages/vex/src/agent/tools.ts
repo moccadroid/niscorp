@@ -213,7 +213,8 @@ export const createQueryTools = (deps: QueryToolDeps): ReturnType<typeof defineT
     input: TestQueryInputSchema,
     execute: async (input: TestQueryInput): Promise<TestQueryResult> => {
       if (exceedsDepth(input)) return { rows: [], sql: '', warnings: [], errors: [depthRefusal()] };
-      const parseResult = QuerySchema.safeParse(input);
+      // A top-level key the model sent as null is one it left out.
+      const parseResult = QuerySchema.safeParse(Object.fromEntries(Object.entries(input).filter(([, value]) => value !== null)));
       if (!parseResult.success) {
         const validationErrors = parseResult.error.issues.map(
           issue => `${issue.path.join('.')}: ${issue.message}`,
