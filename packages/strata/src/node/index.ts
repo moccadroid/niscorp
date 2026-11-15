@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { createUpgrader, type Stamp, type Transform } from '../documents';
 import type { Sequence } from '../schema';
@@ -39,6 +39,30 @@ export const runSourceUpgrade = async (options: SourceUpgradeOptions, argv: read
   const work = join(options.root, options.workDir ?? join('.strata', 'upgrade'));
   // POSIX separators on every platform: these paths land in REPORT.md, plan.json and the log.
   const rel = (path: string): string => relative(options.root, path).split(sep).join('/');
+  const planPath = join(work, 'plan.json');
+  const reportPath = join(work, 'REPORT.md');
+  const expectedPathOf = (doc: { kind: string; id: string }): string => join(work, 'expected', doc.kind.replace(/[^a-z0-9.-]/gi, '_'), `${doc.id.replace(/[^A-Za-z0-9._-]/g, '_')}.json`);
+
+  // The work directory can be any directory, the project's own included: only the files a plan wrote
+  // are removed, and a directory only once it is empty.
+  const removeIfEmpty = (dir: string): void => {
+    if (existsSync(dir) && statSync(dir).isDirectory() && readdirSync(dir).length === 0) rmdirSync(dir);
+  };
+  const removeWork = (): void => {
+    let planned: { kind: string; id: string }[] = [];
+    try {
+      const raw: unknown = existsSync(planPath) ? JSON.parse(readFileSync(planPath, 'utf8')) : undefined;
+      if (isRecord(raw) && Array.isArray(raw['documents']))
+        planned = raw['documents'].flatMap((d: unknown) => (isRecord(d) && typeof d['kind'] === 'string' && typeof d['id'] === 'string' ? [{ kind: d['kind'], id: d['id'] }] : []));
+    } catch {
+      planned = [];
+    }
+    for (const doc of planned) rmSync(expectedPathOf(doc), { force: true });
+    for (const doc of planned) removeIfEmpty(join(expectedPathOf(doc), '..'));
+    removeIfEmpty(join(work, 'expected'));
+    rmSync(planPath, { force: true });
+    rmSync(reportPath, { force: true });
+  };
 
   const upgrader = await createUpgrader(options.grammars, { transform: options.transform });
   const descriptions = new Map<string, string>(options.grammars.flatMap((g) => g.migrations.map((m, i): [string, string] => [`${g.id}/${i + 1}`, m.description])));
@@ -129,27 +153,25 @@ export const runSourceUpgrade = async (options: SourceUpgradeOptions, argv: read
         return { ...doc, lookIn };
       }),
     };
-    rmSync(work, { recursive: true, force: true });
+    removeWork();
     mkdirSync(work, { recursive: true });
-    const expectedPathOf = (doc: { kind: string; id: string }): string => join(work, 'expected', doc.kind.replace(/[^a-z0-9.-]/gi, '_'), `${doc.id.replace(/[^A-Za-z0-9._-]/g, '_')}.json`);
     for (const doc of plan.documents) {
       const path = expectedPathOf(doc);
       mkdirSync(join(path, '..'), { recursive: true });
       writeFileSync(path, `${JSON.stringify(doc.expected, null, 2)}\n`);
     }
-    writeFileSync(join(work, 'plan.json'), `${JSON.stringify(plan, null, 2)}\n`);
-    writeFileSync(join(work, 'REPORT.md'), `${renderReport(plan, (d) => rel(expectedPathOf(d)))}\n`);
+    writeFileSync(planPath, `${JSON.stringify(plan, null, 2)}\n`);
+    writeFileSync(reportPath, `${renderReport(plan, (d) => rel(expectedPathOf(d)))}\n`);
     log(`[plan] ${stampText(plan.from)} → ${stampText(plan.to)}: ${plan.migrations.length} migration(s)`);
     for (const m of plan.migrations) log(`       ${m.ref}  ${m.description}`);
     log(`       ${plan.documents.length} artifact(s) to edit, ${plan.untouched.length} untouched.`);
     for (const d of plan.documents) log(`       ${d.file ?? '(file not found)'}  ${d.id}`);
-    log(`       Report: ${rel(join(work, 'REPORT.md'))} — edit, then: strata verify`);
+    log(`       Report: ${rel(reportPath)} — edit, then: strata verify`);
     for (const p of plan.problems) log(`[fail] ${p}`);
     return plan.problems.length > 0 ? 1 : 0;
   }
 
   if (command === 'verify') {
-    const planPath = join(work, 'plan.json');
     if (!existsSync(planPath)) {
       log(`[fail] no plan at ${rel(planPath)} — run: strata upgrade`);
       return 1;
@@ -188,7 +210,9 @@ export const runSourceUpgrade = async (options: SourceUpgradeOptions, argv: read
     for (const misfit of misfits) log(`[fail] ${misfit}`);
     if (!result.ok || misfits.length > 0) return 1;
     writeLock(plan.to);
-    rmSync(join(options.root, options.workDir ?? '.strata'), { recursive: true, force: true });
+    removeWork();
+    removeIfEmpty(work);
+    if (options.workDir === undefined) removeIfEmpty(join(options.root, '.strata'));
     log(`[pass] the source is now written at ${stampText(plan.to)} — ${rel(lockPath)} updated. Commit it with the edits.`);
     return 0;
   }

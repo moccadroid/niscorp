@@ -239,14 +239,14 @@ the rest are recorded as untouched. `verify` passes only when every planned
 artifact equals its expected JSON (key order aside) and passes its kind's
 current schema in `schemas`, every untouched one is
 still one no migration would change, and nothing was added or removed since
-the plan — then the lock moves and the work files go. A migration whose result
+the plan — then the lock moves and the files the plan wrote go. A migration whose result
 fails the current schema stops the plan: no edit could pass. `init` records a
 lock for a source that has never had one.
 
 | | |
 |---|---|
 | `@niscorp/strata/upgrade` | Pure: `planSourceUpgrade`, `verifySourceUpgrade`, `renderReport`, `changedStrings`. `verifySourceUpgrade` compares JSON only; `runSourceUpgrade` checks the schemas as well. `planSourceUpgrade`'s `describe(ref)` returns the description of the migration `ref` names, for the report; it is asked for every migration between the source's stamp and the upgrader's. |
-| `@niscorp/strata/node` | `runSourceUpgrade(options, argv)` — the lock, the work directory, the report, "look in" hints from the source. `sources` is the directory under `root` that is searched for the files an artifact is written in (default `src`). |
+| `@niscorp/strata/node` | `runSourceUpgrade(options, argv)` — the lock, the work directory, the report, "look in" hints from the source. `sources` is the directory under `root` that is searched for the files an artifact is written in (default `src`). `workDir` (default `.strata/upgrade`) is where `upgrade` writes `plan.json`, `REPORT.md` and `expected/`; `upgrade` and `verify` remove only those files, and a directory only once it is empty, so nothing else in it is touched. |
 
 See [DESIGN.md](./DESIGN.md) and [the plan](../../docs/plans/versioning.md).
 
