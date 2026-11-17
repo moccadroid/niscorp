@@ -183,6 +183,35 @@ describe('$localeDate with a zone and a locale read from the source', () => {
   });
 });
 
+describe('a locale tag Intl cannot read', () => {
+  const code = (run: () => unknown): string | undefined => {
+    try {
+      run();
+    } catch (error) {
+      return error instanceof PrismError ? error.code : String(error);
+    }
+    return undefined;
+  };
+
+  it('is refused with E_TYPE by $localeDate and $localeNumber, written or read', () => {
+    expect(code(() => evaluate({ $localeDate: { value: '2026-01-01T10:00:00Z', locale: { $ref: '$.l' } } }, { l: 'not a locale!' }))).toBe('E_TYPE');
+    expect(code(() => evaluate({ $localeDate: { value: '2026-01-01T10:00:00Z', locale: 'en_GB' } }, {}))).toBe('E_TYPE');
+    expect(code(() => evaluate({ $localeNumber: { value: 1, locale: { $ref: '$.l' } } }, { l: 'en_GB' }))).toBe('E_TYPE');
+  });
+
+  it('is looked at where Intl looked at it: a bad date is still E_DATE_INVALID', () => {
+    expect(code(() => evaluate({ $localeDate: { value: 'not a date', locale: 'en_GB' } }, {}))).toBe('E_DATE_INVALID');
+  });
+
+  it('a tag that is well formed is read as Intl reads it, as before', () => {
+    expect(evaluate({ $localeDate: { value: '2026-01-01', locale: { $ref: '$.l' } } }, { l: 'xx-YY' })).toBeTypeOf('string');
+  });
+
+  it('$localeMoney still prints the code beside the amount, as it always did', () => {
+    expect(evaluate({ $localeMoney: { value: 4500, currency: 'EUR', locale: 'en_GB' } }, {})).toBe('EUR 45.00');
+  });
+});
+
 describe('$localeNumber', () => {
   it('uses the locale decimal mark and grouping', () => {
     const number = (locale: string): string => flat(evaluate({ $localeNumber: { value: { $const: 1234.5 }, locale, minDigits: 1 } }, source));
