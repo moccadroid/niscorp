@@ -131,9 +131,12 @@ jobs:
       # this: there is no base to compare against. So does the release workflow's
       # Version Packages PR (branch changeset-release/*): it is what CONSUMES the
       # changesets, so it changes packages and carries none, by design.
+      # check:changesets compares with a local `main` (.changeset/config.json's
+      # baseBranch), which a pull request's checkout does not have.
       - name: Changesets
         if: github.event_name == 'pull_request' && !startsWith(github.head_ref, 'changeset-release/')
         run: |
+          git branch --force main origin/main
           pnpm changeset status --since=origin/${{ github.base_ref }}
           pnpm check:changesets
 
