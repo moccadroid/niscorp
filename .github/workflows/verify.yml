@@ -150,3 +150,14 @@ jobs:
       # not running them.
       - name: Test
         run: pnpm test
+
+      # Haptic renders a page only on a Node that closes the network to the
+      # page's scripts (25 and later); on 24, above, its tests check only that
+      # rendering is refused. This runs them where rendering itself runs. Last,
+      # because it switches the Node every later step would get.
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 26
+
+      - name: Test Haptic on Node 26
+        run: pnpm --filter @niscorp/haptic test
