@@ -41,7 +41,8 @@ export const IntlDateOptionsSchema = z
       .refine(isZoneNode, { error: 'A time zone is text ("Europe/Vienna") or an op that reads one ({ "$ref": "$.zone" }).' })
       .optional()
       .describe(
-        'IANA zone ("Europe/Vienna"), written or read like any value ({ "$ref": "$.zone" }). Omit and a DATE-only value ("2026-03-14") is read as UTC, which is what stops it rendering as the 13th west of Greenwich.',
+        'IANA zone ("Europe/Vienna"), written or read like any value ({ "$ref": "$.zone" }). ' +
+          'Omit and a DATE-only value ("2026-03-14") is read as UTC, which is what stops it rendering as the 13th west of Greenwich.',
       ),
   })
   .strict();

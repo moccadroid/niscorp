@@ -960,7 +960,8 @@ export const OPERATORS: readonly PrismExample[] = [
     group: 'locale',
     title: '$localeDate',
     description:
-      'A date for a reader in a given locale. `locale` is required. A date without a time is read as UTC, so it does not slip a day west of Greenwich. `locale` and `options.timeZone` may be read from the source, so one mapping words a date where each reader is.',
+      'A date for a reader in a given locale. `locale` is required. A date without a time is read as UTC, so it does not slip a day west of Greenwich. ' +
+      '`locale` and `options.timeZone` may be read from the source, so one mapping words a date where each reader is.',
     op: '$localeDate',
     source: { starts_on: '2026-03-14' },
     config: { $localeDate: { value: { $ref: '$.starts_on' }, locale: 'en-GB' } },
