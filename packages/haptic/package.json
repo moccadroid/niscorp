@@ -1,6 +1,6 @@
 {
   "name": "@niscorp/haptic",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "description": "Request and URL to reusable JSON artifacts; deterministic HTTP, HTML, JSON and XML execution.",
   "license": "Apache-2.0",
