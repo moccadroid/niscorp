@@ -666,7 +666,10 @@ read, must be one `Intl` knows once it is evaluated — an IANA name such as
 refused with `E_TYPE` at `$localeDate.options.timeZone`, saying what it got. A
 fallback is the author's to write: for a zone that may be `null`,
 `{ "$coalesce": [{ "$ref": "$.zone" }, "UTC"] }` (an empty one is still
-refused). A config with a bound zone compiles once: its fingerprint does not
+refused). A bad date is refused (`E_DATE_INVALID`) before the zone is looked
+at. A locale is not checked the same way yet: one that is not text is refused
+with `E_TYPE`, but text `Intl` cannot read as a locale tag escapes as a bare
+`RangeError` from `Intl`, written or read. A config with a bound zone compiles once: its fingerprint does not
 depend on the zone, and `execute` reads the zone from each source it is run on.
 A written zone is folded at compile time as before.
 

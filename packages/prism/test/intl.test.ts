@@ -110,6 +110,31 @@ describe('$localeDate with a zone and a locale read from the source', () => {
     expect(String(evaluate(day, { zone: 'America/Los_Angeles' }))).toContain('13');
   });
 
+  it('a bad date is refused before the zone is looked at, as it was', () => {
+    const run = (): unknown => evaluate({ $localeDate: { value: 'not a date', locale: 'en-GB', options: { timeZone: 'Mars/Olympus' } } }, {});
+    expect(run).toThrow(PrismError);
+    try {
+      run();
+    } catch (error) {
+      expect(error instanceof PrismError && error.code).toBe('E_DATE_INVALID');
+    }
+  });
+
+  it('a written zone spends no step of the budget', () => {
+    const fewest = (options: object): number | undefined => {
+      for (let steps = 1; steps < 20; steps++) {
+        try {
+          evaluate({ $localeDate: { value: stamp, locale: 'en-GB', options } }, {}, { limits: { maxSteps: steps } });
+          return steps;
+        } catch {
+          // Too few steps: try one more.
+        }
+      }
+      return undefined;
+    };
+    expect(fewest({ hour: '2-digit', timeZone: 'Europe/Vienna' })).toBe(fewest({ hour: '2-digit' }));
+  });
+
   it('refuses a zone Intl does not know, written or read, and a zone that is not text', () => {
     const at = (timeZone: unknown, source: object): unknown => evaluate({ $localeDate: { value: stamp, locale: 'en-GB', options: { timeZone } } }, source);
     for (const run of [() => at({ $ref: '$.zone' }, { zone: 'Mars/Olympus' }), () => at('Mars/Olympus', {}), () => at({ $ref: '$.zone' }, { zone: null })]) {
