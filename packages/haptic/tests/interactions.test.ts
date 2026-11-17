@@ -352,7 +352,7 @@ await input(headed.run({ inputs: { token: 'a\r\nb' } }, { signal, web: formWeb.w
 // A version 0 artifact means the same at version 1.
 assert.deepEqual(
   prepareArtifact({ stamp: { 'nisc.haptic': 0, 'nisc.prism': 3 }, policy: policy(), stages: [items], mapping: titles, outputSchema: list }).artifact.stamp,
-  { 'nisc.haptic': 1, 'nisc.prism': 3 },
+  { 'nisc.haptic': 1, 'nisc.prism': 4 },
 );
 
 // The three examples in ARTIFACTS.md prepare and run as it says, on pages shaped like the sites'.

@@ -24,6 +24,10 @@ export const PRISM_SEQUENCE: Sequence = {
         'a $ref path is keys and indexes only: any other JSONPath form is refused, where it was read as "$"',
       steps: [],
     },
+    {
+      description: '$localeDate options.timeZone may be any node, evaluated like value and locale, where it was literal text only',
+      steps: [],
+    },
   ],
 };
 

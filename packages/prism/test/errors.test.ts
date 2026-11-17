@@ -79,6 +79,8 @@ const CASES: Case[] = [
   { name: '$dateDiff.to', config: { s: { $dateDiff: { from: '2026-01-01', to: TEXT, unit: 'day' } } }, code: 'E_DATE_INVALID', op: '$dateDiff.to', at: 's.$dateDiff.to' },
   { name: '$localeDate.locale', config: { s: { $localeDate: { value: '2026-01-01', locale: NUM } } }, code: 'E_TYPE', op: '$localeDate', at: 's.$localeDate.locale', got: 'the number 5' },
   { name: '$localeDate.value', config: { s: { $localeDate: { value: TEXT, locale: 'de-AT' } } }, code: 'E_DATE_INVALID', op: '$localeDate', at: 's.$localeDate.value' },
+  { name: '$localeDate.options.timeZone', config: { s: { $localeDate: { value: '2026-01-01', locale: 'de-AT', options: { timeZone: TEXT } } } }, code: 'E_TYPE', op: '$localeDate', at: 's.$localeDate.options.timeZone', got: 'text "x"' },
+  { name: '$localeDate.options.timeZone not text', config: { s: { $localeDate: { value: '2026-01-01', locale: 'de-AT', options: { timeZone: NUM } } } }, code: 'E_TYPE', op: '$localeDate', at: 's.$localeDate.options.timeZone', got: 'the number 5' },
   { name: '$localeMoney.locale', config: { s: { $localeMoney: { value: 1, currency: 'EUR', locale: NUM } } }, code: 'E_TYPE', op: '$localeMoney', at: 's.$localeMoney.locale', got: 'the number 5' },
   { name: '$localeMoney.currency', config: { s: { $localeMoney: { value: 1, currency: NUM, locale: 'de-AT' } } }, code: 'E_TYPE', op: '$localeMoney', at: 's.$localeMoney.currency', got: 'the number 5' },
   { name: '$localeMoney.value', config: { s: { $localeMoney: { value: TEXT, currency: 'EUR', locale: 'de-AT' } } }, code: 'E_TYPE', op: '$localeMoney', at: 's.$localeMoney.value', got: 'text "x"' },

@@ -650,10 +650,28 @@ three countries:
 `timeStyle`, `weekday`, `year`, `month`, `day`, `hour`, `minute`, `second`,
 `hour12`, `timeZone`). Defaults to `{ "dateStyle": "medium" }`.
 
+**The zone and the locale may be read, not only written.** `locale` and
+`options.timeZone` are nodes like `value`: a mapping words a date where its
+reader is, from whatever the source carries.
+
+```json
+{ "$localeDate": { "value": { "$ref": "$.at" }, "locale": { "$ref": "$.locale" }, "options": { "timeStyle": "short", "timeZone": { "$ref": "$.zone" } } } }
+```
+
+The zone, written or read, must be one `Intl` knows once it is evaluated — an
+IANA name such as `"Europe/Vienna"`. Anything else — an unknown name, `null`,
+a number — is refused with `E_TYPE` at `$localeDate.options.timeZone`, saying
+what it got. A fallback is the author's to write: for a zone that may be
+`null`, `{ "$coalesce": [{ "$ref": "$.zone" }, "UTC"] }`. A config with a
+bound zone compiles once: its fingerprint does not depend on the zone, and
+`execute` reads the zone from each source it is run on. A written zone is
+folded at compile time as before.
+
 **DATE-only values are read as UTC.** `"2026-03-14"` is UTC midnight, and
 formatting UTC midnight in any zone west of Greenwich prints the 13th. Every
 date column in a schema has this shape, so the trap is handled once here rather
-than rediscovered at each call site. An explicit `timeZone` still wins.
+than rediscovered at each call site. An explicit `timeZone`, written or read,
+still wins.
 
 ### `$localeNumber` — a number
 ```json

@@ -30,9 +30,11 @@ export const IntlDateOptionsSchema = z
     second: z.enum(['numeric', '2-digit']).optional(),
     hour12: z.boolean().optional().describe('Force 12/24-hour. Omit to take the locale\'s own convention — which is the point of asking for a locale.'),
     timeZone: z
-      .string()
+      .lazy(node)
       .optional()
-      .describe('IANA zone. Omit and a DATE-only value ("2026-03-14") is read as UTC, which is what stops it rendering as the 13th west of Greenwich.'),
+      .describe(
+        'IANA zone ("Europe/Vienna"), written or read like any value ({ "$ref": "$.zone" }). Omit and a DATE-only value ("2026-03-14") is read as UTC, which is what stops it rendering as the 13th west of Greenwich.',
+      ),
   })
   .strict();
 
