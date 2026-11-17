@@ -658,14 +658,17 @@ reader is, from whatever the source carries.
 { "$localeDate": { "value": { "$ref": "$.at" }, "locale": { "$ref": "$.locale" }, "options": { "timeStyle": "short", "timeZone": { "$ref": "$.zone" } } } }
 ```
 
-The zone, written or read, must be one `Intl` knows once it is evaluated — an
-IANA name such as `"Europe/Vienna"`. Anything else — an unknown name, `null`,
-a number — is refused with `E_TYPE` at `$localeDate.options.timeZone`, saying
-what it got. A fallback is the author's to write: for a zone that may be
-`null`, `{ "$coalesce": [{ "$ref": "$.zone" }, "UTC"] }`. A config with a
-bound zone compiles once: its fingerprint does not depend on the zone, and
-`execute` reads the zone from each source it is run on. A written zone is
-folded at compile time as before.
+A zone written in the program is text, or an op that reads one: anything else
+there (a number, `null`, an object without a `$` key) is refused as the config
+is read, as it always was. Where there is a date to word, the zone, written or
+read, must be one `Intl` knows once it is evaluated — an IANA name such as
+`"Europe/Vienna"`. Anything else — an unknown name, `""`, `null`, a number — is
+refused with `E_TYPE` at `$localeDate.options.timeZone`, saying what it got. A
+fallback is the author's to write: for a zone that may be `null`,
+`{ "$coalesce": [{ "$ref": "$.zone" }, "UTC"] }` (an empty one is still
+refused). A config with a bound zone compiles once: its fingerprint does not
+depend on the zone, and `execute` reads the zone from each source it is run on.
+A written zone is folded at compile time as before.
 
 **DATE-only values are read as UTC.** `"2026-03-14"` is UTC midnight, and
 formatting UTC midnight in any zone west of Greenwich prints the 13th. Every

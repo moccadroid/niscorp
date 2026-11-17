@@ -25,7 +25,7 @@ export const PRISM_SEQUENCE: Sequence = {
       steps: [],
     },
     {
-      description: '$localeDate options.timeZone may be any node, evaluated like value and locale, where it was literal text only',
+      description: '$localeDate options.timeZone may be an op that reads the zone, evaluated like value and locale, where it was literal text only',
       steps: [],
     },
   ],

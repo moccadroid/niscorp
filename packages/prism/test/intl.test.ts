@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { evaluate, compile, execute, PrismError } from '../src';
+import { evaluate, compile, execute, validate, ConfigSchema, PrismError } from '../src';
 
 // Intl emits non-breaking and narrow non-breaking spaces between a number and its unit.
 const flat = (value: unknown): string => String(value).replace(/[  ]/g, ' ');
@@ -122,7 +122,21 @@ describe('$localeDate with a zone and a locale read from the source', () => {
     }
   });
 
-  it('compiles to one fingerprint whatever the zone, and runs from a stored IR', async () => {
+  it('a config with a written zone parses and compiles to what it did', async () => {
+    const written = { when: { $localeDate: { value: { $ref: '$.stamp' }, locale: 'en-GB', options: { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Vienna' } } } };
+    expect(ConfigSchema.parse(written)).toEqual(written);
+    // The core is the config as written, so its fingerprint is the one it had.
+    expect((await compile(written)).core).toEqual(written);
+  });
+
+  it('a written zone that is neither text nor an op is refused as the config is read, as before', () => {
+    for (const timeZone of [5, null, true, { zone: 'Europe/Vienna' }]) {
+      const result = validate({ $localeDate: { value: stamp, locale: 'en-GB', options: { timeZone } } });
+      expect(result.ok).toBe(false);
+    }
+  });
+
+  it('a config with a bound zone compiles the same each time, and runs from a stored IR in each zone', async () => {
     const first = await compile(config);
     const again = await compile(structuredClone(config));
     expect(again.meta.fingerprint).toBe(first.meta.fingerprint);
@@ -136,8 +150,11 @@ describe('$localeDate with a zone and a locale read from the source', () => {
   it('folds a written zone as before, and keeps a bound one for the run', async () => {
     const written = await compile({ when: { $localeDate: { value: stamp, locale: 'en-GB', options: { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Vienna' } } } });
     expect(written.core).toEqual({ when: { $const: '23:30' } });
-    const bound = await compile(config);
+    // Value and locale written, so only the bound zone keeps it from folding.
+    const bound = await compile({ when: { $localeDate: { value: stamp, locale: 'en-GB', options: { hour: '2-digit', minute: '2-digit', timeZone: { $ref: '$.zone' } } } } });
     expect(bound.meta.stats.optimizations.constantsFolded).toBe(0);
+    expect(bound.core).toEqual({ when: { $localeDate: { value: stamp, locale: 'en-GB', options: { hour: '2-digit', minute: '2-digit', timeZone: { $ref: '$.zone' } } } } });
+    expect(execute(bound, { zone: 'Asia/Tokyo' })).toEqual({ when: '07:30' });
   });
 });
 

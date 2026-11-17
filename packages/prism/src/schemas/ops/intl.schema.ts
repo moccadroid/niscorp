@@ -17,6 +17,13 @@ const fallbackField = z
 
 const DateStyle = z.enum(['full', 'long', 'medium', 'short']);
 
+// A refinement beside the published JSON Schema, which says only "a node": a
+// zone written in the program is text, as it was before a zone could be read,
+// and anything else there is an op that reads one.
+const isZoneNode = (value: unknown): boolean =>
+  typeof value === 'string' ||
+  (typeof value === 'object' && value !== null && !Array.isArray(value) && Object.keys(value).some((key) => key.startsWith('$')));
+
 export const IntlDateOptionsSchema = z
   .object({
     dateStyle: DateStyle.optional().describe('Whole-date preset. Mutually exclusive with the field-by-field options below.'),
@@ -31,6 +38,7 @@ export const IntlDateOptionsSchema = z
     hour12: z.boolean().optional().describe('Force 12/24-hour. Omit to take the locale\'s own convention — which is the point of asking for a locale.'),
     timeZone: z
       .lazy(node)
+      .refine(isZoneNode, { error: 'A time zone is text ("Europe/Vienna") or an op that reads one ({ "$ref": "$.zone" }).' })
       .optional()
       .describe(
         'IANA zone ("Europe/Vienna"), written or read like any value ({ "$ref": "$.zone" }). Omit and a DATE-only value ("2026-03-14") is read as UTC, which is what stops it rendering as the 13th west of Greenwich.',
