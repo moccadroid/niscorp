@@ -32,6 +32,8 @@ export { seedCache } from './cache/seed.js';
 export type { SeedEntry, SeedMutation } from './cache/seed.js';
 export { REFRESH_MODES, isRefresh } from './cache/cache.types.js';
 export type { Refresh } from './cache/cache.types.js';
+export { UNREADABLE_MODES, UpgradedColumnsSchema } from './engine/upgraded-columns.js';
+export type { ColumnUpgrader, UpgradedColumn, UpgradedColumns } from './engine/upgraded-columns.js';
 export type { LiveRowsConfig, LiveRowsStats } from './engine/live.js';
 
 export { MutationSchema, MutationDefinitionSchema, executeMutation, executeWrites, mutationMisfits, collectMutationContext, collectQueryContext, mutationEffect, requiredContextKeys, lintMutation } from './mutations/index.js';

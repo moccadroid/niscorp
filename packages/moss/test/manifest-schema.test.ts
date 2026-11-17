@@ -34,6 +34,7 @@ const whole = (): NiscApp => ({
   },
   pages: { about: { path: '/about/:slug', params: 'main', canvases: [{ id: 'main', initial: 'home' }] } },
   grammars: [{ id: 'app.kit', documents: {}, migrations: [] }],
+  upgradedColumns: { deals: { terms: { stamp: 'grammar', kind: 'app.deals/terms', unreadable: 'omit' }, body: { stamp: 'grammar', kind: { grammar: 'app.deals', column: 'kind' } } } },
   scope: () => ({}),
   identity: { as: 'identity', resolve: async () => ({ roles: ['member'], scope: {} }) },
   phrases: () => undefined,
@@ -86,6 +87,19 @@ describe('the manifest’s schema', () => {
       "entries.1.mutation.op: Invalid discriminator value. Expected 'insert' | 'insertEach' | 'update' | 'delete' | 'upsert'",
       'entries.2.refresh: Invalid option: expected one of "snapshot"|"reactive"',
       'entries.3: Unrecognized key: "mutation"',
+    ]);
+  });
+
+  it('holds an upgraded column to a stamp and a kind, fixed or read from a column', () => {
+    const misfits = manifestMisfits({
+      ...whole(),
+      upgradedColumns: { deals: { terms: { kind: 'app.deals/terms' }, body: { stamp: 'grammar', kind: { grammar: 'app.deals' } }, notes: { stamp: 'grammar', kind: 'app.deals/notes', at: 1 }, page: { stamp: 'grammar', kind: 'app.deals/page', unreadable: 'skip' } } },
+    });
+    expect(misfits).toEqual([
+      'upgradedColumns.deals.terms.stamp: Invalid input: expected string, received undefined',
+      'upgradedColumns.deals.body.kind.column: Invalid input: expected string, received undefined',
+      'upgradedColumns.deals.notes: Unrecognized key: "at"',
+      'upgradedColumns.deals.page.unreadable: Invalid option: expected one of "refuse"|"omit"|"null"',
     ]);
   });
 

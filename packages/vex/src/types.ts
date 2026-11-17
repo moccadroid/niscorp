@@ -9,6 +9,7 @@ import type { VexEventHandler } from './events.js';
 import type { CompiledIr, JsonValue } from '@niscorp/prism';
 import type { LiveRowsConfig, LiveRowsStats } from './engine/live.js';
 import type { ScopeBehaviors } from './scope/grants.js';
+import type { ColumnUpgrader, UpgradedColumns } from './engine/upgraded-columns.js';
 
 export type GenerationCaller = {
   read: (dsl: Query) => Promise<{ rows: Row[]; sql: string; warnings: string[] }>;
@@ -40,6 +41,8 @@ export type QueryEngineConfig = {
    */
   behaviors?: ScopeBehaviors;
   mapToShape?: MapToShape;
+  upgradedColumns?: UpgradedColumns;
+  upgrader?: ColumnUpgrader;
   rows?: LiveRowsConfig;
   config?: {
     maxNestingDepth?: number;

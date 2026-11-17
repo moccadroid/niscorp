@@ -56,6 +56,7 @@ const buildData = (app: NiscApp, runtime: NiscRuntime): Promise<Data> =>
     featureTables: featureTablesOf(app),
     tables: runtime.tables,
     grammars: app.grammars,
+    upgradedColumns: app.upgradedColumns,
     charter: app.charter,
     behaviors: app.behaviors,
     rowRules: rowRulesBeside(app.behaviors),
@@ -187,6 +188,9 @@ export const buildRunningManifest = async (
     pointer: { read: data.pointer.read, move: data.pointer.move, ...(runtime.sessionRevalidateMs !== undefined ? { everyMs: runtime.sessionRevalidateMs } : {}) },
     shells: [...(app.shell !== undefined ? [app.shell] : []), ...Object.values(app.pages ?? {})],
     ...(saved !== undefined ? { published: saved.published().inForce, reads: { written: data.vexEntry, compile: data.compileQuery, savedOf: saved.of } } : {}),
+    // Only where the app names upgradedColumns: vex refuses some reads of those when it compiles a read, and a seeded
+    // read is otherwise first compiled at its first replay. An app that names none boots as before.
+    ...(app.upgradedColumns !== undefined ? { compileSeeded: data.compileQuery } : {}),
   });
   data.dropOnChange(running.onChange);
   data.entriesHeldBy({ get: running.cacheEntry, entries: running.cacheEntries });

@@ -73,6 +73,8 @@ export type IntentAnswersDeps = {
   cache: CacheBackend;
   behaviors?: ScopeBehaviors;
   vexConfig?: QueryEngineConfig['config'];
+  upgradedColumns?: QueryEngineConfig['upgradedColumns'];
+  upgrader?: QueryEngineConfig['upgrader'];
 };
 
 export type AnswerIntent = (writers: QueryWriters, asked: Intent | ExistingQuery, caller: { policy: ScopePolicy; scope: Record<string, unknown> }) => Promise<QueryResponse>;
@@ -91,6 +93,7 @@ export const createIntentAnswers = (deps: IntentAnswersDeps): AnswerIntent => {
         mapToShape: writers.mapToShape,
         ...(deps.behaviors !== undefined ? { behaviors: deps.behaviors } : {}),
         ...(deps.vexConfig !== undefined ? { config: deps.vexConfig } : {}),
+        ...(deps.upgradedColumns !== undefined && deps.upgrader !== undefined ? { upgradedColumns: deps.upgradedColumns, upgrader: deps.upgrader } : {}),
       });
       await engine.introspect();
       return engine;

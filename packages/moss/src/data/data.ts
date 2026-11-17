@@ -34,6 +34,7 @@ export type DataConfig = {
   featureTables?: readonly FeatureTables[];
   tables?: readonly Sequence[];
   grammars?: readonly Sequence[];
+  upgradedColumns?: NiscApp['upgradedColumns'];
   charter: NiscApp['charter'];
   behaviors?: NiscApp['behaviors'];
   // Row rules of moss's own, for tables whose rows are somebody's. They are part
@@ -98,7 +99,7 @@ const prepareEngine = async (config: DataConfig): Promise<PreparedEngine> => {
     );
   });
   const grammars = await createGrammarUpgrader({ grammars: config.grammars });
-  const layer = await createDataLayer(config);
+  const layer = await createDataLayer({ ...config, upgrader: grammars });
   return {
     grammars,
     engine: layer.engine,
@@ -111,7 +112,7 @@ const prepareEngine = async (config: DataConfig): Promise<PreparedEngine> => {
   };
 };
 
-const lazyIntentAnswers = (prepared: PreparedEngine, config: Pick<DataConfig, 'behaviors' | 'vexConfig'>): (() => AnswerIntent) => {
+const lazyIntentAnswers = (prepared: PreparedEngine, config: Pick<DataConfig, 'behaviors' | 'vexConfig' | 'upgradedColumns'>): (() => AnswerIntent) => {
   const { engine } = prepared;
   let answers: AnswerIntent | undefined;
   const answering = (): AnswerIntent => {
@@ -124,6 +125,7 @@ const lazyIntentAnswers = (prepared: PreparedEngine, config: Pick<DataConfig, 'b
       cache: engine.cache,
       ...(config.behaviors !== undefined ? { behaviors: config.behaviors } : {}),
       ...(config.vexConfig !== undefined ? { vexConfig: config.vexConfig } : {}),
+      ...(config.upgradedColumns !== undefined ? { upgradedColumns: config.upgradedColumns, upgrader: prepared.grammars } : {}),
     });
     return answers;
   };
@@ -137,6 +139,22 @@ const tablesByFeature =
     if (kept === undefined) throw new Error(`moss: the data module was asked for the tables of a feature it was never told of ("${feature}").`);
     return kept.names;
   };
+
+// A feature's tables, the artifactory's and the pointer's are read by their owner's own entries, on an engine of their own that upgrades nothing.
+const refuseUpgradedOwnedTables = (config: Pick<DataConfig, 'featureTables' | 'upgradedColumns'>): void => {
+  const owners = new Map<string, string>([
+    ...(config.featureTables ?? []).flatMap((tables) => tables.names.map((name): [string, string] => [name, `the feature "${tables.feature}"`])),
+    ...ARTIFACT_TABLES.map((name): [string, string] => [name, 'the artifactory']),
+    ...POINTER.tables.map((name): [string, string] => [name, POINTER.owner]),
+  ]);
+  const owned = Object.keys(config.upgradedColumns ?? {}).flatMap((table) => {
+    const owner = owners.get(table);
+    return owner === undefined ? [] : [`"${table}" is ${owner}'s`];
+  });
+  if (owned.length > 0) {
+    throw new Error(`moss: the app's \`upgradedColumns\` name tables it does not own (${owned.join('; ')}). Their owner reads them as stored: name only the app's own tables.`);
+  }
+};
 
 const createUpgradeStore =
   (prepared: PreparedEngine, tablesOf: (feature: string) => readonly string[]): Data['upgradeStore'] =>
@@ -155,8 +173,9 @@ const createUpgradeStore =
 
 export const createDataWith = (
   prepared: PreparedEngine,
-  config: Pick<DataConfig, 'db' | 'charter' | 'behaviors' | 'rowRules' | 'telemetry' | 'vexConfig' | 'featureTables'>,
+  config: Pick<DataConfig, 'db' | 'charter' | 'behaviors' | 'rowRules' | 'telemetry' | 'vexConfig' | 'featureTables' | 'upgradedColumns'>,
 ): Data => {
+  refuseUpgradedOwnedTables(config);
   const { grammars, engine, grants } = prepared;
   const governed = { charter: config.charter, behaviors: { ...config.behaviors, ...config.rowRules } };
   const policies = createPolicies({ ...governed, grants });

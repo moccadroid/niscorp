@@ -75,6 +75,28 @@ describe('the running manifest, as the server stands it up', () => {
     await expect(buildRunningManifest(appWith({ entries: [open, unbounded] }), {}, data)).rejects.toThrow(/Mutation seed "deals\/clear" fails the authoring lint/);
   });
 
+  it('compiles every seeded read at boot and on a refresh where the app names upgradedColumns, and none where it names none', async () => {
+    const { data } = dataDouble();
+    const compiled: unknown[] = [];
+    const compileQuery: Data['compileQuery'] = (dsl) => {
+      compiled.push(dsl);
+      if (dsl.fields?.includes('deals.body') === true) throw new Error('This read returns deals.body, which is upgraded where it is read, without deals.grammar.');
+    };
+    const body: SeedEntry = { fingerprint: 'deals/body', dsl: { from: ['deals'], fields: ['deals.body'] } };
+    const upgradedColumns = { deals: { body: { stamp: 'grammar', kind: 'acme.deals/body' } } };
+
+    await buildRunningManifest(appWith({ entries: [open, close, body] }), {}, { ...data, compileQuery });
+    expect(compiled).toEqual([]);
+
+    await expect(buildRunningManifest(appWith({ entries: [open, close, body], upgradedColumns }), {}, { ...data, compileQuery })).rejects.toThrow(
+      'Seeded reads that do not run — refusing to serve:\n  "deals/body": This read returns deals.body',
+    );
+    expect(compiled).toEqual([open.dsl, body.dsl]);
+
+    const running = await buildRunningManifest(appWith({ upgradedColumns }), {}, { ...data, compileQuery });
+    await expect(running.replaceEntries('bundles', [body])).rejects.toThrow('Refresh refused — seeded reads that do not run:\n  "deals/body"');
+  });
+
   it('a manifest that is refused is asked nothing', async () => {
     const { data, asked } = dataDouble();
     const incoherent = appWith({ actions: { home: { id: 'home' }, 'home.sub': { id: 'home.sub' } } });

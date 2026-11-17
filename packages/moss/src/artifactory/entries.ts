@@ -1,7 +1,23 @@
 import { createMemoryCache, seedCache } from '@niscorp/vex';
-import type { CacheEntry, SeedEntry, SeedMutation } from '@niscorp/vex';
+import type { CacheEntry, Query, SeedEntry, SeedMutation } from '@niscorp/vex';
 
 type Entry = SeedEntry | SeedMutation;
+
+export type CompileRead = (dsl: Query) => void;
+
+const refuseUnrunnable = (entries: readonly Entry[], compile: CompileRead | undefined, heading: string): void => {
+  if (compile === undefined) return;
+  const unrunnable = entries.flatMap((entry) => {
+    if (!('dsl' in entry)) return [];
+    try {
+      compile(entry.dsl);
+      return [];
+    } catch (error) {
+      return [`  "${entry.fingerprint}": ${error instanceof Error ? error.message : String(error)}`];
+    }
+  });
+  if (unrunnable.length > 0) throw new Error([heading, ...unrunnable].join('\n'));
+};
 
 type CompiledEntries = ReadonlyMap<string, CacheEntry>;
 
@@ -26,7 +42,9 @@ type EntriesInForce = {
   compiled: () => Promise<CompiledEntries>;
 };
 
-export const createEntriesInForce = (own: readonly Entry[]): EntriesInForce => {
+// `compileRead`, given: every seeded read is compiled against the database when it is taken, at boot and on a refresh.
+export const createEntriesInForce = (own: readonly Entry[], compileRead?: CompileRead): EntriesInForce => {
+  refuseUnrunnable(own, compileRead, 'Seeded reads that do not run — refusing to serve:');
   let sets: ReadonlyMap<string, readonly Entry[]> = new Map();
   let list = mergedEntries(own, sets);
   let byFingerprint: ReadonlyMap<string, Entry> = new Map(list.map((entry) => [entry.fingerprint, entry]));
@@ -40,7 +58,8 @@ export const createEntriesInForce = (own: readonly Entry[]): EntriesInForce => {
     holdsSet: (source) => sets.has(source),
     withSet: (source, handed) => mergedEntries(own, new Map([...sets, [source, handed]])),
     takeSet: (source, handed, taken) => {
-      sets = new Map([...sets, [source, handed]]);
+      refuseUnrunnable(handed, compileRead, 'Refresh refused — seeded reads that do not run:');
+      sets =new Map([...sets, [source, handed]]);
       list = mergedEntries(own, sets);
       byFingerprint = new Map(list.map((entry) => [entry.fingerprint, entry]));
       setsCompiled = new Map([...setsCompiled, [source, taken]]);

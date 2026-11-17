@@ -96,6 +96,7 @@ engine.rows;                      // the reactive rows cache: stats(), stop()
 | Writes | Mutation entries in the same cache — a closed grammar, replay-only by fingerprint, never generated; `lintMutation` checks a statement at seed |
 | Seeding and freshness | `seedCache` turns authored `SeedEntry` / `SeedMutation` rows into protected cache entries; an entry's `refresh` is `'snapshot'` or `'reactive'` |
 | Safety | Server-side scope policies, query analyzer (cartesian/nesting/index checks), parameterized SQL only |
+| Upgraded columns | `upgradedColumns` + `upgrader` on the engine: a JSON column stamped in another column is returned upgraded by every read, before the mapping |
 | Stored entries | `@niscorp/vex/migrations`: `VEX_SEQUENCE`, the strata sequence an entry is stamped with as a stored document |
 | Its own table | The Postgres cache's table is a [strata](../strata/README.md) sequence (`cache.sequence`, `nisc.vex.cache`): `cache.init()` applies it through the ledger once, instead of `IF NOT EXISTS` on every boot. Requires a pool with `transaction` (the PGlite pool and `createPgPool`'s have one; a bare `pg.Pool` does not). |
 
