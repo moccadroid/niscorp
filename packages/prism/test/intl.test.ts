@@ -90,6 +90,10 @@ describe('$localeDate', () => {
   });
 });
 
+// The fingerprint prism 0.3.3 (origin/main before a zone could be read) gives the
+// written-zone config below.
+const FINGERPRINT_ON_MAIN = 'd03c0f2ff80247b442e44bc9955057a1453ec5eec874f73685b533649b25ddb2';
+
 describe('$localeDate with a zone and a locale read from the source', () => {
   const stamp = '2026-11-17T22:30:00Z';
   const options = { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: { $ref: '$.zone' } };
@@ -132,7 +136,9 @@ describe('$localeDate with a zone and a locale read from the source', () => {
       }
       return undefined;
     };
-    expect(fewest({ hour: '2-digit', timeZone: 'Europe/Vienna' })).toBe(fewest({ hour: '2-digit' }));
+    const without = fewest({ hour: '2-digit' });
+    expect(without).toBeDefined();
+    expect(fewest({ hour: '2-digit', timeZone: 'Europe/Vienna' })).toBe(without);
   });
 
   it('refuses a zone Intl does not know, written or read, and a zone that is not text', () => {
@@ -149,9 +155,12 @@ describe('$localeDate with a zone and a locale read from the source', () => {
 
   it('a config with a written zone parses and compiles to what it did', async () => {
     const written = { when: { $localeDate: { value: { $ref: '$.stamp' }, locale: 'en-GB', options: { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Vienna' } } } };
-    expect(ConfigSchema.parse(written)).toEqual(written);
-    // The core is the config as written, so its fingerprint is the one it had.
-    expect((await compile(written)).core).toEqual(written);
+    // Compared as JSON text, keys in order: the fingerprint is the hash of exactly this text.
+    expect(JSON.stringify(ConfigSchema.parse(written))).toBe(JSON.stringify(written));
+    const compiled = await compile(written);
+    expect(JSON.stringify(compiled.core)).toBe(JSON.stringify(written));
+    // As main computes it for this config.
+    expect(compiled.meta.fingerprint).toBe(FINGERPRINT_ON_MAIN);
   });
 
   it('a written zone that is neither text nor an op is refused as the config is read, as before', () => {

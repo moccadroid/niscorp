@@ -638,8 +638,10 @@ three countries:
 - `digits` overrides the currency's own fraction digits.
 - `fallback` (default `""`) is rendered for a null/absent amount, so an empty
   SUM shows a dash rather than a confident `€0.00`.
-- An ISO code `Intl` does not know prints beside the number instead of throwing,
-  and so does a locale tag `Intl` cannot read (`"en_GB"` gives `EUR 45.00`).
+- An ISO code `Intl` does not know prints beside the number instead of throwing.
+  So does a locale tag `Intl` cannot read (`"en_GB"`), and then the divisor is
+  100 whatever the currency, as `Intl` was not asked for its exponent: 4500 JPY
+  prints `JPY 45.00`, the hundredfold error above. Give it a locale `Intl` reads.
 
 ### `$localeDate` — a date for a human
 ```json
@@ -661,7 +663,9 @@ reader is, from whatever the source carries.
 
 A zone written in the program is text, or an op that reads one: anything else
 there (a number, `null`, an object without a `$` key) is refused as the config
-is read, as it always was. Where there is a date to word, the zone, written or
+is read, as it always was. The JSON Schema (`getConfigJsonSchema`, a profile's)
+says only "a node" there and does not carry this rule, as it does not carry a
+`$ref` path's; `validate` and `compile` do. Where there is a date to word, the zone, written or
 read, must be one `Intl` knows once it is evaluated — an IANA name such as
 `"Europe/Vienna"`. Anything else — an unknown name, `""`, `null`, a number — is
 refused with `E_TYPE` at `$localeDate.options.timeZone`, saying what it got. A
@@ -678,7 +682,8 @@ refused with `E_TYPE` at `locale` by `$localeDate` and `$localeNumber`, saying
 what it got. A well-formed tag `Intl` has no data for (`"xx-YY"`) is read as
 `Intl` reads it, falling back to a locale it has. `$localeMoney` refuses a
 locale that is not text and prints the code beside the amount for one `Intl`
-cannot read, as it does for a currency.
+cannot read, as it always did (see its caveat above). Where both the zone and
+the locale are bad, the zone is refused first.
 
 **DATE-only values are read as UTC.** `"2026-03-14"` is UTC midnight, and
 formatting UTC midnight in any zone west of Greenwich prints the 13th. Every

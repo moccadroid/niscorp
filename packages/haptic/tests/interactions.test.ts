@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
+import { PRISM_SEQUENCE } from '@niscorp/prism/migrations';
 import { prepareArtifact, WalkError } from '../src/artifact/index.js';
 import type { PageRequest } from '../src/artifact/request.js';
 import { captureBody, type HttpSource } from '../src/web/source.js';
@@ -352,7 +353,7 @@ await input(headed.run({ inputs: { token: 'a\r\nb' } }, { signal, web: formWeb.w
 // A version 0 artifact means the same at version 1.
 assert.deepEqual(
   prepareArtifact({ stamp: { 'nisc.haptic': 0, 'nisc.prism': 3 }, policy: policy(), stages: [items], mapping: titles, outputSchema: list }).artifact.stamp,
-  { 'nisc.haptic': 1, 'nisc.prism': 4 },
+  { 'nisc.haptic': 1, 'nisc.prism': PRISM_SEQUENCE.migrations.length },
 );
 
 // The three examples in ARTIFACTS.md prepare and run as it says, on pages shaped like the sites'.

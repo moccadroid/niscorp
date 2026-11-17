@@ -67,12 +67,12 @@ Every throw in `packages/prism/src`: 52 `throw new PrismError` statements, reach
 | `ops/object.ops.ts:27` | `$fromEntries` item | E_TYPE | `Expected [key, value] pairs for $fromEntries` | which item, the value | No |
 | `ops/time.ops.ts:18` (one helper, four uses) | `$date.value`, `$dateAdd.date`, `$dateDiff.from`, `$dateDiff.to` | E_TYPE | `Expected string or number for $date` | what it got, where | No |
 | `ops/time.ops.ts:21` | same four | E_DATE_INVALID | `Invalid date for $date: <value>` | where; the value is not clipped | Partly |
-| `ops/intl.ops.ts:14` (three uses) | `$localeDate.locale`, `$localeMoney.locale`, `$localeNumber.locale` | E_TYPE | `$localeDate needs a locale tag (e.g. "de-AT")` | what it got, where | Partly |
-| `ops/intl.ops.ts:28` (two uses) | `$localeMoney.value`, `$localeNumber.value` | E_TYPE | `$localeMoney expected a number, got "abc"` | where | Partly |
+| `ops/intl.ops.ts:15` (three uses) | `$localeDate.locale`, `$localeMoney.locale`, `$localeNumber.locale` | E_TYPE | `$localeDate needs a locale tag (e.g. "de-AT")` | what it got, where | Partly |
+| `ops/intl.ops.ts:65` (two uses) | `$localeMoney.value`, `$localeNumber.value` | E_TYPE | `$localeMoney expected a number, got "abc"` | where | Partly |
 | `ops/intl.ops.ts:50` (two uses) | `$localeDate.locale`, `$localeNumber.locale` | E_TYPE | `$localeDate.locale needs a locale tag Intl can read, such as "de-AT"` | what it got, where (added for text Intl cannot read as a tag; it was a bare `RangeError` from `Intl`. `$localeMoney` prints the code beside the amount instead) | Yes |
 | `ops/intl.ops.ts:40` | `$localeDate.options.timeZone` | E_TYPE | `$localeDate.options.timeZone needs an IANA time zone that Intl knows, such as "Europe/Vienna"` | what it got, where (added with the bound zone; it was a bare `RangeError` from `Intl`) | Yes |
-| `ops/intl.ops.ts:48` | `$localeDate.value` | E_DATE_INVALID | `Invalid date for $localeDate: <value>` | where | Partly |
-| `ops/intl.ops.ts:85` | `$localeMoney.currency` | E_TYPE | `$localeMoney needs an ISO-4217 currency code` | what it got, where | Partly |
+| `ops/intl.ops.ts:80` | `$localeDate.value` | E_DATE_INVALID | `Invalid date for $localeDate: <value>` | where | Partly |
+| `ops/intl.ops.ts:125` | `$localeMoney.currency` | E_TYPE | `$localeMoney needs an ISO-4217 currency code` | what it got, where | Partly |
 | `ops/transform.ops.ts:27` | `$renameKeys.from` | E_TYPE | `Expected object for $renameKeys` | what it got, where | No |
 | `ops/transform.ops.ts:53` | `$update.path` | E_MISSING_PATH | `No array item at 3` | the list's length, where | Partly |
 | `ops/transform.ops.ts:69` | `$assert` | E_ASSERT | the program's own `message` | — | Enough |
