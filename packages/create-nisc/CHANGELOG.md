@@ -1,5 +1,9 @@
 # create-nisc
 
+## 0.9.5
+
+No changes in this release.
+
 ## 0.9.4
 
 ### Patch Changes
