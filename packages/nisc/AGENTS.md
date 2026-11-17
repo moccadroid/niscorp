@@ -71,6 +71,7 @@ Pick per need; every piece works standalone. Nova is the only mandatory one for 
 | `signal` | LLM calls | — |
 | `cortex` | agents, tools, orchestration | — |
 | `solid` | streaming structured LLM output into UI | — |
+| `haptic` | reading data from web pages: `discover({ url, instruction })` (`/discovery`, a model run) writes a JSON artifact once, and `prepareArtifact(artifact).run({ url })` reads the page's current values from it later with no model. `/search` finds the pages first when there is only an instruction. An artifact can also be written by hand and checked with `prepared.inspect()` (its `ARTIFACTS.md`). Stored artifacts are upgraded through the `nisc.haptic` grammar (`/migrations`) | scheduling the runs, storing the data, or deciding what happens with it — those are the caller's |
 | `cli` | the `nisc` command: `dev`, `build` (bundle, then say how each path is served — a file, or a server, and why), `export` (the site as a folder; only ever the page as nobody sees it), `start` (the built terminal, pages drawn), `check`, `migrate` (the tables' pending migrations, applied only if the app's entries fit the result). One file, `nisc.config.ts`, says how the app boots and how a screen is drawn | configuration of anything derivable — which paths exist and what each needs is read off the app |
 | `strata` | versions: an app's tables as ledgered sequences; stored and submitted documents stamped and upgraded through grammar sequences; `strata upgrade` for artifacts in source (see Versions) | editing a migration that has run — append one |
 

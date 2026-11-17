@@ -7,7 +7,7 @@ discover({ url, instruction })  →  artifact (data)  →  prepareArtifact(artif
 search({ instruction })         →  one artifact per useful source
 ```
 
-Scheduling, storage and what happens with the data belong to the caller. The package is private until its first release.
+Scheduling, storage and what happens with the data belong to the caller.
 
 ## Run an artifact (no model)
 

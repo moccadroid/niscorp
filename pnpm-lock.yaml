@@ -1035,6 +1035,9 @@ importers:
       '@niscorp/cortex':
         specifier: workspace:*
         version: link:../cortex
+      '@niscorp/haptic':
+        specifier: workspace:*
+        version: link:../haptic
       '@niscorp/loom':
         specifier: workspace:*
         version: link:../loom
