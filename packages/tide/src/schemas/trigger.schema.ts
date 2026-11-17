@@ -6,7 +6,7 @@ const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
 const MMDD = /^(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
 const LOCAL_DATETIME = /^\d{4}-\d{2}-\d{2}T([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/;
 
-const knownZone = (tz: string): boolean => {
+const isKnownZone = (tz: string): boolean => {
   try {
     return new Intl.DateTimeFormat('en-US', { timeZone: tz }).resolvedOptions().timeZone !== '';
   } catch {
@@ -14,7 +14,7 @@ const knownZone = (tz: string): boolean => {
   }
 };
 
-export const TimeZoneSchema = z.string().refine(knownZone, { message: 'not a time zone Intl knows' }).describe('IANA timezone name.');
+export const TimeZoneSchema = z.string().refine(isKnownZone, { message: 'not a time zone Intl knows' }).describe('IANA timezone name.');
 
 export const ClockUnitSchema = z.enum(['day', 'week', 'month', 'year']);
 

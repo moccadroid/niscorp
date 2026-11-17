@@ -91,7 +91,7 @@ export const createTide = (config: TideConfig): Tide => {
   };
 
   const load = async (input: readonly ReflexInput[], options?: { at?: number; isolate?: boolean }): Promise<LoadReport> => {
-    const { reflexes: parsed, graph, refused } = admitReflexes(input, mergedEffects, options?.isolate === true);
+    const { reflexes: parsed, graph, refused } = admitReflexes({ input, effectsOf: mergedEffects, isolate: options?.isolate === true });
 
     const previously = new Set(loaded.keys());
 

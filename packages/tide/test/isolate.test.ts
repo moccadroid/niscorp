@@ -6,7 +6,6 @@ import { testTransform, utc } from './support';
 const vienna = 'Europe/Vienna';
 const T0 = utc('2026-03-01T00:00:00Z');
 
-// One person's reflexes among everybody's: every effect writes `answers`, as a host's card effect does.
 const effects: EffectRegistry = { show: { writes: ['answers'], run: () => ({ ok: true }) }, note: { writes: [], run: () => ({ ok: true }) } };
 
 const once = (id: string, at: string, tz = vienna): ReflexInput => ({ id, intent: 'Show a card once.', on: { clock: { at, tz } }, effect: { name: 'show' } });
