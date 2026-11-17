@@ -1,5 +1,13 @@
 # @niscorp/nisc
 
+## 0.9.6
+
+### Patch Changes
+
+- Updated dependencies [686e9c7]
+  - @niscorp/prism@0.3.4
+  - @niscorp/haptic@0.1.1
+
 ## 0.9.5
 
 ### Patch Changes
