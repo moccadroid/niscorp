@@ -112,7 +112,7 @@ A **record stage** (`"kind": "records", "format": "html"`):
 
 | Key         | Meaning                                                                                                                                                          |
 | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `render`    | `true` runs the page's own inline scripts before reading it (no network; for addresses or content that a script writes).                                         |
+| `render`    | `true` runs the page's own inline scripts before reading it, for addresses or content that a script writes (Node 25 or later, with no network; an earlier Node reads the page as fetched).                                      |
 | `selector`  | CSS for one record.                                                                                                                                              |
 | `fields`    | Field name to a field rule (below).                                                                                                                              |
 | `required`  | Field names; a record without a non-empty value for one of them is left out.                                                                                     |

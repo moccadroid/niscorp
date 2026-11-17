@@ -1,6 +1,9 @@
 // Runs in its own process under Node's permission model, with an empty environment. jsdom is imported by the absolute
 // address the parent passes, so no package lookup outside the allowed folders happens. Reads { html, url, waitMs } on
 // stdin, runs the page's inline scripts (jsdom loads no external files), waits for timers, writes the page on stdout.
+// The page's scripts reach this process; the permission model still lets it signal any process of the same user and
+// open another Node process's inspector, so those calls are gone before the page runs.
+for (const name of ['kill', '_kill', '_debugProcess']) Reflect.deleteProperty(process, name);
 type Dom = { serialize(): string };
 type Jsdom = {
   JSDOM: new (html: string, options: object) => Dom;

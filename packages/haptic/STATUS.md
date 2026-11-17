@@ -31,6 +31,7 @@ Before this round of work (2026-11-14): held-out 18, 20, 19 of 33; tuned 48, 46,
 - **Valid but wrong answers** pass every check: a reader that reads "modules" literally. When a field cites a link's address and no field cites that line's text, strict discovery asks Read once which it meant.
 - **Bot checks** other than DuckDuckGo's image challenge are not detected; PyPI's "Client Challenge" page is why that case left the held-out set.
 - **Fields across levels** cannot be combined: the program sees only the last level's records.
+- **Rendering needs Node 25 or later**: an earlier Node cannot close the network to a page's scripts, so there the page is read as fetched, and a page whose links a script writes gives its placeholder links.
 - **Rendering costs about 1.4 s per rendered page** (0.85 s of it starting the process and loading jsdom), twice per discovery: once in the attempt, once in the trial.
 
 ## Not built yet
@@ -42,7 +43,7 @@ Before this round of work (2026-11-14): held-out 18, 20, 19 of 33; tuned 48, 46,
 
 ## Checking a change
 
-- `pnpm check`: build and the offline tests (no model, no network): the runtime, the four saved discovery runs replayed through `discover` with their recorded model answers, search rounds, the image challenge, readers and transport.
+- `pnpm check`: build and the offline tests (no model, no network): the runtime, the four saved discovery runs replayed through `discover` with their recorded model answers, search rounds, the image challenge, readers and transport. Rendering itself is checked only on Node 25 or later; an earlier Node checks that it is refused.
 - `pnpm check:package`: the packed package in a fresh consumer runs generated artifacts with every model import refused, and its entry points typecheck with and without the optional peers.
 - `pnpm check:grammars` (repository root): the `nisc.haptic` grammar against its snapshot, and the captured artifacts upgraded and parsed.
 - `pnpm bench --set=<set> --round=<name>`, three rounds, then `pnpm grade --set=<set> --round=<a>,<b>,<c>`: each set live (needs `GROQ_API_KEY` and `TYPESAFE_API_KEY` in `.env`; about 0.8M input tokens per tuned round, 1.2M per held-out round), graded with the spread across rounds. A second bench refuses to start while one runs. A change counts when it moves the result beyond that spread.

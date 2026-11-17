@@ -65,7 +65,9 @@ Every model call goes through one module (`calls.ts`): it counts tokens, stops n
 
 ## Rendering
 
-jsdom runs the page's own inline scripts with no network and no external files, 600 ms for timers. It runs in a child process under Node's permission model (it reads only its own folder and jsdom's, writes nothing, starts no process), with an empty environment, killed after each page or at 15 s. A page that cannot be rendered is read as fetched. Node's permission model does not close the network; a host that needs that wraps the process in an OS sandbox.
+jsdom runs the page's own inline scripts and loads no external files, 600 ms for timers. jsdom is not a sandbox: a page's script reaches Node itself in the process it runs in, so that process's limits are what hold it. It runs in a child process under Node's permission model: it reads only its own folder and jsdom's, writes nothing, starts no process and opens no connection. `process.kill` and `process._debugProcess` are removed before the page runs, because the permission model would let the script signal any process of the same user, or open another Node process's inspector and run code there. Its environment is empty (on Windows, Node passes on the variables Windows requires: `PATH`, `TEMP`, `USERNAME` and the like). It is killed after each page or at 15 s.
+
+Node's permission model closes the network from Node 25. On an earlier Node nothing is rendered, because the script could reach any address, private ones included, past the host's transport. A page that is not rendered is read as fetched.
 
 ## Modules
 

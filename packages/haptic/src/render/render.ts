@@ -40,14 +40,24 @@ const jsdomFiles = (): { entry: string; folder: string } => {
   };
 };
 
+// A page's scripts reach Node itself in the child (jsdom is not a sandbox), so the child's limits are all that hold
+// them. Node closes the network to a process run with --permission from version 25, the first to know --allow-net.
+const closesNetwork = process.allowedNodeEnvironmentFlags.has('--allow-net');
+
 // The page as its own inline scripts leave it. Runs in a child process: Node's permission model (it reads only its
-// own folder and jsdom's, so not the package folder with its .env; no writes, no child processes), an empty
-// environment, no external files, killed at the cap.
+// own folder and jsdom's, so not the package folder with its .env; no writes, no child processes, no network), an
+// empty environment, no external files, killed at the cap. Refused on a Node that cannot close the network.
 export const renderHtml = (
   html: string,
   url: string,
   options: RenderOptions = {},
 ): Promise<string> => {
+  if (!closesNetwork)
+    return Promise.reject(
+      new Error(
+        "rendering needs Node 25 or later: earlier versions cannot close the network to a page's scripts",
+      ),
+    );
   const script = childScript();
   const jsdom = jsdomFiles();
   const waitMs = options.waitMs ?? WAIT_MS;
