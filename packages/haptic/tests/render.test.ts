@@ -1,9 +1,12 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { renderHtml, showsDecoyLinks } from '../src/render/index.js';
+
+const closesNetwork = process.allowedNodeEnvironmentFlags.has('--allow-net');
 
 // SQLite's download page points every link at a decoy (hp1.html) until a timer in its own script sets the address.
 const sqlite = readFileSync(
@@ -12,14 +15,45 @@ const sqlite = readFileSync(
 );
 assert.equal(showsDecoyLinks(sqlite), true);
 assert.match(sqlite, /id='a7' href='hp1.html'/);
-const rendered = await renderHtml(sqlite, 'https://www.sqlite.org/download.html');
-assert.match(rendered, /id="a7" href="2026\/sqlite-tools-linux-x64-3540100.zip"/);
 
 // Ordinary repeated links (one address, one text) are not a decoy; inline scripts still run when asked to render.
 const plain =
   '<html><body><a href="/a">Home</a><a href="/a">Home</a><a id="x" href="/b">B</a><script>document.getElementById("x").href="/c"</script></body></html>';
 assert.equal(showsDecoyLinks(plain), false);
-assert.match(await renderHtml(plain, 'https://example.com/'), /id="x" href="\/c"/);
+
+if (closesNetwork) {
+  const rendered = await renderHtml(sqlite, 'https://www.sqlite.org/download.html');
+  assert.match(rendered, /id="a7" href="2026\/sqlite-tools-linux-x64-3540100.zip"/);
+  assert.match(await renderHtml(plain, 'https://example.com/'), /id="x" href="\/c"/);
+}
+
+// A page's script reaches Node itself (jsdom is not a sandbox) and tries every way out: jsdom's XHR, Node's fetch, a
+// bare connection, killing a process, another process's inspector. None of them may leave the render process.
+const connections: string[] = [];
+const listener = createServer((socket) => {
+  connections.push('connection');
+  socket.destroy();
+});
+await new Promise<void>((resolve) => listener.listen(0, '127.0.0.1', resolve));
+const address = listener.address();
+assert(address !== null && typeof address === 'object');
+const escaping = `<html><body><p id="out"></p><script>
+const at = 'http://127.0.0.1:${address.port}/';
+const node = window.constructor.constructor('return process')();
+document.getElementById('out').textContent = [typeof node.kill, typeof node._kill, typeof node._debugProcess].join(',');
+try { const xhr = new XMLHttpRequest(); xhr.open('GET', at + 'xhr'); xhr.send(); } catch {}
+try { window.constructor.constructor('return fetch')()(at + 'fetch').catch(() => {}); } catch {}
+try { node.getBuiltinModule('node:net').connect(${address.port}, '127.0.0.1').on('error', () => {}); } catch {}
+</script></body></html>`;
+if (closesNetwork) {
+  const rendered = await renderHtml(escaping, 'https://example.com/');
+  assert.match(rendered, /<p id="out">undefined,undefined,undefined<\/p>/);
+} else {
+  await assert.rejects(renderHtml(escaping, 'https://example.com/'), /Node 25 or later/);
+}
+await new Promise((resolve) => setTimeout(resolve, 200));
+listener.close();
+assert.deepEqual(connections, []);
 
 // The flags the child runs with: reads only its allowed folder, writes nothing, starts no process.
 const secretFolder = mkdtempSync(join(tmpdir(), 'haptic-render-'));
@@ -42,4 +76,8 @@ const result = spawnSync(process.execPath, ['--permission', `--allow-fs-read=${a
 });
 assert.equal(result.stdout, 'no-read,no-write,no-spawn');
 
-console.log('render: decoy signal, inline scripts, permission flags');
+console.log(
+  closesNetwork
+    ? 'render: decoy signal, inline scripts, a page that reaches Node stays inside, permission flags'
+    : 'render: decoy signal, refused on a Node that cannot close the network, permission flags',
+);
