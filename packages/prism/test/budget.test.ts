@@ -65,7 +65,7 @@ describe('a source nested deeper than the stack reaches', () => {
     const config = { $toString: { $ref: '$.deep' } };
     const result = evaluateSafe(config, source);
     if (!result.ok) expect(result.error).toMatchObject({ code: ErrorCode.BUDGET });
-    else expect(result.value).toBeTypeOf('string');
+    else expect(result.data).toBeTypeOf('string');
     const ir = await compile(config);
     try {
       expect(execute(ir, source)).toBeTypeOf('string');
