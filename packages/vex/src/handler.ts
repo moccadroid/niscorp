@@ -33,6 +33,7 @@ export type VexHandlerConfig = {
     client: MutationClient;
     policy: ScopePolicy;
     onWrite?: (event: WriteEvent) => void;
+    checkMovedRows?: boolean;
   };
   onExecute?: (record: ExecuteRecord) => void;
 };
@@ -397,6 +398,7 @@ const runQuery = async (
           scope,
           policy: writePolicy,
           schema,
+          ...(config.mutations.checkMovedRows !== undefined ? { checkMovedRows: config.mutations.checkMovedRows } : {}),
         });
         const rows = writes.flatMap((w) => w.rows);
         engine.invalidate(tablesChangedBy(writes, schema));

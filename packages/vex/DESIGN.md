@@ -422,6 +422,15 @@ values bind as SQL parameters exactly like reads) → execute. Batches run in
 one transaction; the client is structural (`MutationClient` — PGlite, a pg
 wrapper, a test double), so the core imports no driver.
 
+A `match` rule pins the rows a write leaves behind as well as the rows it
+touches: an update that writes a pinned column must leave a value the rule
+allows, or it is refused (`checkMovedRows`, on unless the host turns it off).
+A query run before the UPDATE finds a row that would move and names the
+rule, so a refused move writes nothing; the UPDATE carries the same check
+in its WHERE for a row that changes in between. The new value is cast to
+its column's type there, because a parameter the check shares with the SET
+is otherwise read as text.
+
 **A batch that uses what it wrote (`$returned`).** `{ $returned: 'table.column' }`
 in a later statement reads the one row an earlier statement of the same batch
 wrote — the create-a-parent-then-its-children case, where the parent's id is

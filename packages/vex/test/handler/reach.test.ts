@@ -137,7 +137,14 @@ const WRITE_NARROW: ScopePolicy = {
 describe('a mutation that declares its reach', () => {
   let engine: QueryEngine;
   let writeSql = '';
-  const client = { query: async (sql: string) => { writeSql = sql; return { rows: [{ id: 'b1' }] }; } };
+  const client = {
+    query: async (sql: string) => {
+      // The SELECT checks that no row moves out of its update rule; none does here.
+      if (sql.startsWith('SELECT')) return { rows: [] };
+      writeSql = sql;
+      return { rows: [{ id: 'b1' }] };
+    },
+  };
 
   beforeAll(async () => {
     engine = createQueryEngine({ adapter: adapter(), cache: createMemoryCache() });

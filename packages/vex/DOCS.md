@@ -1202,6 +1202,20 @@ handleQuery({ engine, locked: true, mutations: { client: db, policy } }, body, s
 double). `locked` does not affect writes: they are replay-only under every
 posture. Direct library use: `executeMutation(client, def, { context, scope, policy, schema })`.
 
+**A write keeps its rows inside the caller's update rules.** When an
+`update`, the update half of an `upsert`, or an insert's `onConflict … set`
+writes a column one of the caller's update `match` rules names, the new value
+must match that rule too. An update that would move a row out is refused before
+anything is written: 400 `scope_denied`, naming the rule and the column (`the
+new "tasks.project_id" is not one of the scope's "projectIds"`); in a batch,
+the whole batch is refused. An `onConflict` update leaves such a row as it is
+and answers no row for it, as for a conflicting row outside the rules. A column
+a `set` rule stamps is the policy's own value and is not checked. To let a write
+move a row out of its own rules — handing a task over by setting `owner_id`
+under an `owner_id = me` rule — set `mutations: { …, checkMovedRows: false }`
+(`executeWrites(client, def, { …, checkMovedRows: false })` at the library
+level).
+
 A host that resolves a policy **per principal** (e.g. compiled from an ACL
 layer) passes it per request: `VexHandlerConfig.scopePolicy` overrides the
 engine's configured read policy for that request (`ExecuteOptions.scopePolicy`
@@ -1652,7 +1666,7 @@ The rest of `VexHonoConfig`, all optional:
 | `locked` | Replay-only endpoint: no generation, no fingerprint management |
 | `getPolicy(c)` | Per-request `ScopePolicy`; governs reads, mutation replay and discovery on this endpoint. Returning `undefined` leaves the engine's policy and `mutations.policy` in force |
 | `getPolicyForReach(c, reach)` | The same principal's policy at a reach an entry demands |
-| `mutations` | `{ client, policy?, onWrite? }` — enables mutation replay; `policy` is the fallback when `getPolicy` is absent. A request that gets a policy from neither replays no write: a mutation fingerprint answers 500 |
+| `mutations` | `{ client, policy?, onWrite?, checkMovedRows? }` — enables mutation replay; `policy` is the fallback when `getPolicy` is absent. A request that gets a policy from neither replays no write: a mutation fingerprint answers 500 |
 | `onExecute` | The execution observer (see [Events](#events)) |
 
 `vex` and `VexHonoConfig` are generic over the hono `Env`: `vex<AppEnv>({ … })`
@@ -1675,7 +1689,7 @@ app.all('/api/orders/vex', vex({
 }));
 ```
 
-`VexExpressConfig` also takes `locked`, `mutations` (`{ client, policy, onWrite? }`),
+`VexExpressConfig` also takes `locked`, `mutations` (`{ client, policy, onWrite?, checkMovedRows? }`),
 `getPolicy(req)`, `getPolicyForReach(req, reach)` and `onExecute`. These mean
 what they mean for Hono: `getPolicy` governs reads, mutation replay and
 discovery, and when it returns `undefined` the engine's policy and
