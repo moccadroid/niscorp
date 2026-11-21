@@ -2807,8 +2807,13 @@ bundle whole: the last good import keeps serving.
   answers `404` for any other path.
 - *A webhook* (`POST /integrations/:id/hook/*`) takes no session and no
   assertion is minted for it: the body goes on to the integration's service
-  byte for byte, with the vendor's headers but `authorization` and `host`,
-  and the integration checks the vendor's signature itself. The headers that
+  byte for byte, and the integration checks the vendor's signature itself.
+  The vendor's headers go with it, signature headers and `content-type`
+  among them, but not the credentials a browser or a proxy adds:
+  `authorization`, `cookie`, `proxy-authorization` and moss's
+  `x-operator-key` stay behind, and so does `host`. Any web page can send a
+  signed-in visitor's browser to the hook, so what it carries of the app's
+  session must not leave. The headers that
   frame one connection (`transfer-encoding`, `keep-alive`, `expect`,
   `upgrade`) stay behind too: the request to the service is framed anew from
   the body that arrived. A request that asks to upgrade its connection
@@ -2825,6 +2830,17 @@ bundle whole: the last good import keeps serving.
   a process that restarts counts from nothing. It is not a ceiling for the
   deployment, and neither number is a setting: a deployment that needs one
   ceiling across its processes sets it where they meet, at its proxy.
+- *How an answer is served.* What the integration's service answers, through
+  the proxy or a webhook, goes back with its status, its body and its
+  `content-type`, plus `x-content-type-options: nosniff` and
+  `content-security-policy: sandbox allow-scripts allow-forms allow-popups
+  allow-popups-to-escape-sandbox allow-modals allow-downloads
+  allow-top-navigation`. A page a browser lands on (an OAuth `form_post`
+  callback, a SAML POST) still runs its script, submits its forms and moves
+  the window on, but as a page with no origin, never the app's own: it cannot
+  read the app's cookies or browser storage, a socket it opens is refused,
+  and a form it posts into the app carries no session cookie. A `fetch` that
+  reads the answer is not affected by either header.
 
 **A vendor's own page inside the app** is the app's to mount. Moss frames
 none: an app that wants one serves a route of its own (`routes(server)` in

@@ -157,6 +157,14 @@ describe('the proxy — a declared path is for whoever is granted the action tha
     expect(asked.map((call) => call.url)).toEqual(['https://belts.example/roster']);
   });
 
+  it('the answer is served in a sandbox, and its type is not sniffed', async () => {
+    const { server } = door(['ext.member.belts.card']);
+    const answered = await server.request('/integrations/belts/roster');
+    expect(await answered.json()).toEqual({ rows: [] });
+    expect(answered.headers.get('content-security-policy')).toMatch(/^sandbox /);
+    expect(answered.headers.get('x-content-type-options')).toBe('nosniff');
+  });
+
   it('a HEAD reaches the endpoint as a HEAD, with no body', async () => {
     const { server, asked } = door(['ext.member.belts.card']);
     expect((await server.request('/integrations/belts/roster', { method: 'HEAD' })).status).toBe(200);

@@ -74,8 +74,20 @@ export const createForwarder = (deps: ForwardDeps): Forwarder => {
   };
 };
 
+// The vendor's page runs with no origin: its script and forms work, and it
+// cannot read the app's cookies or storage, or open the socket as the visitor.
+const SANDBOX = 'sandbox allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals allow-downloads allow-top-navigation';
+
 export const relayed = (response: Response, otherwise: string, more: Record<string, string> = {}): Response =>
-  new Response(response.body, { status: response.status, headers: { 'content-type': response.headers.get('content-type') ?? otherwise, ...more } });
+  new Response(response.body, {
+    status: response.status,
+    headers: {
+      'content-type': response.headers.get('content-type') ?? otherwise,
+      'content-security-policy': SANDBOX,
+      'x-content-type-options': 'nosniff',
+      ...more,
+    },
+  });
 
 const HOOK_LIMIT = 240;
 const HOOK_WINDOW_MS = 60_000;
@@ -105,8 +117,10 @@ const webhook = (deps: ProxyDeps, routes: Hono<FeatureEnv>): void => {
     // Read from the url: c.req.path drops the query.
     const here = new URL(c.req.url);
     const headers = new Headers(c.req.raw.headers);
-    // A bearer arriving here must not read as an identity on the other side.
-    headers.delete('authorization');
+    // A credential arriving here must not reach the vendor: a bearer would read
+    // as an identity there, and the hook asks for no session, so any page can
+    // send a signed-in visitor here with their cookie.
+    for (const name of ['authorization', 'cookie', 'proxy-authorization', 'x-operator-key']) headers.delete(name);
     headers.delete('host');
     // Node's fetch refuses to send these; it frames the body it sends from the bytes that arrived.
     for (const name of ['transfer-encoding', 'keep-alive', 'expect', 'upgrade']) headers.delete(name);
