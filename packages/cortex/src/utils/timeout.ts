@@ -10,14 +10,16 @@ export const withTimeout = async <T>(
   if (limit.run.aborted) abort();
   else limit.run.addEventListener('abort', abort, { once: true });
   let timer: ReturnType<typeof setTimeout> | undefined;
-  const timedOut = new Promise<never>((_resolve, reject) => {
-    timer = setTimeout(() => {
-      reject(new Error(`${limit.label} timed out after ${limit.timeoutMs}ms`));
-      abort();
-    }, limit.timeoutMs);
-  });
   try {
-    return await Promise.race([execute(call.signal), timedOut]);
+    const pending = execute(call.signal);
+    if (limit.timeoutMs <= 0) return await pending;
+    const timedOut = new Promise<never>((_resolve, reject) => {
+      timer = setTimeout(() => {
+        reject(new Error(`${limit.label} timed out after ${limit.timeoutMs}ms`));
+        abort();
+      }, limit.timeoutMs);
+    });
+    return await Promise.race([pending, timedOut]);
   } finally {
     clearTimeout(timer);
     limit.run.removeEventListener('abort', abort);

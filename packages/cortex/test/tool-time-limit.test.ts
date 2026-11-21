@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { z } from 'zod';
-import { defineAgent, defineTool, asTool, stepCount } from '../src';
+import { defineAgent, defineTool, asTool, stepCount, type ToolDefinition } from '../src';
 import { stubSignal } from './helpers/stub-signal';
 
 const respond = (id: string) => ({ toolCalls: [{ id, name: 'respond', args: { response: 'done' } }] });
@@ -144,5 +144,29 @@ describe('a tool call within its time limit', () => {
     expect(result.ok).toBe(true);
     expect(llm.requests[1]?.messages.find((m) => m.role === 'tool')?.content).toBe('{"answer":42}');
     expect(signal?.aborted).toBe(false);
+  });
+
+  it('is on time when it finishes in the same moment as its limit', async () => {
+    const onTheDot = defineTool({
+      id: 'dot',
+      name: 'dot',
+      description: 'Answers at 50 ms.',
+      timeoutMs: 50,
+      input: z.object({}),
+      execute: () => new Promise((resolve) => setTimeout(() => resolve('on time'), 50)),
+    });
+    const llm = stubSignal([call('d1', 'dot'), respond('r')]);
+    await defineAgent({ id: 'timer', instructions: 'Ask.', tools: [onTheDot] }).run('go', { llm }).result;
+
+    expect(llm.requests[1]?.messages.find((m) => m.role === 'tool')?.content).toBe('on time');
+  });
+
+  it('has no limit when a hand-built definition sets timeoutMs to 0', async () => {
+    const built = defineTool({ id: 'slow', name: 'slow', description: 'Answers.', input: z.object({}), execute: async () => { await settle(5); return 'done'; } });
+    const unlimited: ToolDefinition = { toolId: built.toolId, config: { ...built.config, timeoutMs: 0 } };
+    const llm = stubSignal([call('s1', 'slow'), respond('r')]);
+    await defineAgent({ id: 'patient', instructions: 'Ask.', tools: [unlimited] }).run('go', { llm }).result;
+
+    expect(llm.requests[1]?.messages.find((m) => m.role === 'tool')?.content).toBe('done');
   });
 });
