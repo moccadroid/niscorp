@@ -52,13 +52,26 @@ describe('a source nested deeper than the stack reaches', () => {
 
   it.each([
     ['$ref', { $ref: '$.deep' }],
-    ['$toString', { $toString: { $ref: '$.deep' } }],
     ['$unique', { $unique: { $ref: '$.deep' } }],
   ])('is stopped by the budget in %s', async (_op, config) => {
     const result = evaluateSafe(config, source);
     expect(result.ok ? undefined : result.error).toMatchObject({ code: ErrorCode.BUDGET });
     const ir = await compile(config);
     expect(() => execute(ir, source)).toThrow(expect.objectContaining({ code: ErrorCode.BUDGET }));
+  });
+
+  // Whether JSON.stringify runs out of stack at this depth depends on the engine and platform.
+  it('gives $toString a string or the budget error, never a raw RangeError', async () => {
+    const config = { $toString: { $ref: '$.deep' } };
+    const result = evaluateSafe(config, source);
+    if (!result.ok) expect(result.error).toMatchObject({ code: ErrorCode.BUDGET });
+    else expect(result.value).toBeTypeOf('string');
+    const ir = await compile(config);
+    try {
+      expect(execute(ir, source)).toBeTypeOf('string');
+    } catch (error) {
+      expect(error).toMatchObject({ code: ErrorCode.BUDGET });
+    }
   });
 
   it('is stopped by the budget when the source is checked', () => {
