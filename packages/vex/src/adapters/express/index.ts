@@ -1,7 +1,7 @@
 import type { QueryEngine } from '../../types.js';
 import type { ScopePolicy, ScopeValues } from '../../scope/scope.types.js';
 import type { VexHandlerConfig, ExecuteRecord } from '../../handler.js';
-import { handleDiscovery, handleQuery, handleFingerprintPatch, handleFingerprintDelete } from '../../handler.js';
+import { handleDiscovery, handleQuery, handleFingerprintPatch, handleFingerprintDelete, warnOfOpenManagement } from '../../handler.js';
 
 export type VexExpressRequest = {
   method: string;
@@ -18,6 +18,7 @@ export type VexExpressConfig<TReq extends VexExpressRequest = VexExpressRequest>
   engine: QueryEngine;
   entities?: string[];
   locked?: boolean;
+  manageFingerprints?: boolean;
   getScope?: (req: TReq) => Promise<ScopeValues> | ScopeValues;
   getPolicy?: (req: TReq) => Promise<ScopePolicy | undefined> | ScopePolicy | undefined;
   getPolicyForReach?: (req: TReq, reach: string) => Promise<ScopePolicy | undefined> | ScopePolicy | undefined;
@@ -36,10 +37,12 @@ const fingerprintFromBody = (body: unknown): string | undefined => {
 export const vex = <TReq extends VexExpressRequest = VexExpressRequest>(
   config: VexExpressConfig<TReq>,
 ): ((req: TReq, res: VexExpressResponse) => Promise<void>) => {
+  warnOfOpenManagement(config);
   const handlerConfig = {
     engine: config.engine,
     entities: config.entities,
     ...(config.locked === true ? { locked: true } : {}),
+    ...(config.manageFingerprints === false ? { manageFingerprints: false } : {}),
     ...(config.mutations !== undefined ? { mutations: config.mutations } : {}),
   };
 

@@ -364,8 +364,10 @@ identity stays global.
 - `PATCH /…/vex` with `{ fingerprint, protected }` — flip the bit. `DELETE`
   with `{ fingerprint }` — evict (unprotected only). Fingerprints ride the
   body, not the path — names contain `/`. A locked endpoint refuses both with
-  403 `locked`; an unlocked one checks nobody, so whoever reaches it can
-  unprotect any entry, a seeded one included, and delete it.
+  403 `locked`, and so does one with `manageFingerprints: false`. Otherwise
+  they check nobody, so whoever reaches it can unprotect any entry, a seeded
+  one included, and delete it; an adapter that mounts such an endpoint says so
+  once, as it is made.
 
 **What dies with v1:**
 

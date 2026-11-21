@@ -23,6 +23,7 @@ export type VexHandlerConfig = {
   engine: QueryEngine;
   entities?: string[];
   locked?: boolean;
+  manageFingerprints?: boolean;
   // Reads and discovery, over the engine's default. Writes are enforced under `mutations.policy`.
   scopePolicy?: ScopePolicy;
   // The same principal's policy compiled at a named reach, for entries that
@@ -471,14 +472,32 @@ const runQuery = async (
   }
 };
 
+const managementRefusal = (config: VexHandlerConfig): QueryResult | undefined => {
+  if (config.locked === true) {
+    return { status: 403, body: { error: 'locked', message: 'This endpoint is locked — fingerprints cannot be managed here.' } };
+  }
+  if (config.manageFingerprints === false) {
+    return { status: 403, body: { error: 'locked', message: 'Fingerprint management is off on this endpoint.' } };
+  }
+  return undefined;
+};
+
+// Said once, as an adapter mounts the endpoint.
+export const warnOfOpenManagement = (config: { locked?: boolean; manageFingerprints?: boolean }): void => {
+  if (config.locked === true || config.manageFingerprints === false) return;
+  console.warn(
+    '[vex] This endpoint is unlocked and manages fingerprints: whoever reaches it can unprotect, delete or regenerate any entry, a seeded one included. ' +
+      'Set manageFingerprints: false unless everybody who reaches it may do that.',
+  );
+};
+
 export const handleFingerprintPatch = async (
   config: VexHandlerConfig,
   fingerprint: string,
   patch: { protected?: boolean },
 ): Promise<QueryResult> => {
-  if (config.locked === true) {
-    return { status: 403, body: { error: 'locked', message: 'This endpoint is locked — fingerprints cannot be managed here.' } };
-  }
+  const refused = managementRefusal(config);
+  if (refused !== undefined) return refused;
   const entry = await config.engine.cache.get(fingerprint);
   if (entry === undefined || (entry.kind !== 'ok' && entry.kind !== 'mutation')) {
     return { status: 404, body: { error: 'cache_miss', message: `Unknown fingerprint "${fingerprint}"` } };
@@ -494,9 +513,8 @@ export const handleFingerprintDelete = async (
   config: VexHandlerConfig,
   fingerprint: string,
 ): Promise<QueryResult> => {
-  if (config.locked === true) {
-    return { status: 403, body: { error: 'locked', message: 'This endpoint is locked — fingerprints cannot be managed here.' } };
-  }
+  const refused = managementRefusal(config);
+  if (refused !== undefined) return refused;
   const entry = await config.engine.cache.get(fingerprint);
   if (entry === undefined) {
     return { status: 404, body: { error: 'cache_miss', message: `Unknown fingerprint "${fingerprint}"` } };

@@ -3,7 +3,7 @@ import type { Context, Env } from 'hono';
 import type { QueryEngine } from '../../types.js';
 import type { ScopePolicy, ScopeValues } from '../../scope/scope.types.js';
 import type { MutationClient } from '../../mutations/engine.js';
-import { handleDiscovery, handleQuery, handleFingerprintPatch, handleFingerprintDelete } from '../../handler.js';
+import { handleDiscovery, handleQuery, handleFingerprintPatch, handleFingerprintDelete, warnOfOpenManagement } from '../../handler.js';
 import type { WriteEvent, ExecuteRecord, VexLive } from '../../handler.js';
 import type { QueryResponse } from '../../schemas/request.schema.js';
 
@@ -25,6 +25,7 @@ export type VexHonoConfig<E extends Env = Env> = {
   engine: QueryEngine;
   entities?: string[];
   locked?: boolean;
+  manageFingerprints?: boolean;
   getScope?: (c: Context<E>) => Promise<ScopeValues> | ScopeValues;
   getPolicy?: (c: Context<E>) => Promise<ScopePolicy | undefined> | ScopePolicy | undefined;
   getPolicyForReach?: (c: Context<E>, reach: string) => Promise<ScopePolicy | undefined> | ScopePolicy | undefined;
@@ -50,6 +51,7 @@ const NOT_JSON = { error: 'invalid_request', message: 'Body must be JSON' };
 
 export const vex = <E extends Env = Env>(config: VexHonoConfig<E>): Hono<E> => {
   const app = new Hono<E>();
+  warnOfOpenManagement(config);
   // Read through hono's own `c.req.json()`, which shares hono's body cache with
   // a host middleware that read the body first.
   const jsonBodyOf = async (c: Context<E>): Promise<{ parsed: true; body: unknown } | { parsed: false }> => {
@@ -92,6 +94,7 @@ export const vex = <E extends Env = Env>(config: VexHonoConfig<E>): Hono<E> => {
     engine: config.engine,
     entities: config.entities,
     ...(config.locked === true ? { locked: true } : {}),
+    ...(config.manageFingerprints === false ? { manageFingerprints: false } : {}),
   };
 
   app.get('/', async (c) => c.json(await handleDiscovery(await requestConfig(c))));

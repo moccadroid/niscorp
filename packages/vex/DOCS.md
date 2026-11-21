@@ -1679,6 +1679,7 @@ The rest of `VexHonoConfig`, all optional:
 | Option | Purpose |
 |--------|---------|
 | `locked` | Replay-only endpoint: no generation, no fingerprint management |
+| `manageFingerprints` | `false` refuses `PATCH` and `DELETE` with 403 `locked` on an unlocked endpoint, which still generates. Default on: an unlocked endpoint with it on logs one warning as it is mounted |
 | `getPolicy(c)` | Per-request `ScopePolicy`; governs reads, mutation replay and discovery on this endpoint. Returning `undefined` leaves the engine's policy and `mutations.policy` in force |
 | `getPolicyForReach(c, reach)` | The same principal's policy at a reach an entry demands |
 | `mutations` | `{ client, policy?, onWrite?, checkMovedRows?, answerReadableRows? }` — enables mutation replay; `policy` is the fallback when `getPolicy` is absent. A request that gets a policy from neither replays no write: a mutation fingerprint answers 500 |
@@ -1704,7 +1705,7 @@ app.all('/api/orders/vex', vex({
 }));
 ```
 
-`VexExpressConfig` also takes `locked`, `mutations` (`{ client, policy, onWrite?, checkMovedRows?, answerReadableRows? }`),
+`VexExpressConfig` also takes `locked`, `manageFingerprints`, `mutations` (`{ client, policy, onWrite?, checkMovedRows?, answerReadableRows? }`),
 `getPolicy(req)`, `getPolicyForReach(req, reach)` and `onExecute`. These mean
 what they mean for Hono: `getPolicy` governs reads, mutation replay and
 discovery, and when it returns `undefined` the engine's policy and
@@ -1744,9 +1745,12 @@ policy. Any method other than `GET`/`POST`/`PATCH`/`DELETE` answers 405.
 - **`PATCH`** with `{ fingerprint, protected }` → flip the protection bit.
   **`DELETE`** with `{ fingerprint }` → evict (a protected entry, read or mutation,
   is refused with 409 `fingerprint_protected`). Both are refused with 403 `locked` on a
-  locked endpoint and answer 404 `cache_miss` for an unknown fingerprint.
-  On an unlocked endpoint they check nobody: no policy, no scope. Whoever
-  reaches it can unprotect any entry, a seeded one included, and delete it.
+  locked endpoint, or one with `manageFingerprints: false`, and answer 404
+  `cache_miss` for an unknown fingerprint. Otherwise they check nobody: no
+  policy, no scope. Whoever reaches the endpoint can unprotect any entry, a
+  seeded one included, and delete it; the adapter logs one warning saying so
+  when it mounts such an endpoint. An agent's endpoint that generates but
+  should manage nothing sets `manageFingerprints: false`.
   Fingerprints ride the body — names contain `/` — and a body that is not
   JSON, or carries no fingerprint, is a 400 `invalid_request` before anything
   else is checked.

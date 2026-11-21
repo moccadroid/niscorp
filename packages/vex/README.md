@@ -67,8 +67,19 @@ surfaces are locked; exploration is open and scoped.
 An unlocked endpoint also answers `PATCH` and `DELETE`, and they check nobody:
 whoever reaches it can unprotect any entry, a seeded one included, and then
 delete it or generate over it. Fingerprints are global, so that changes what
-the locked endpoints replay. Mount it only where everybody who reaches it may
-do that.
+the locked endpoints replay. An endpoint for an agent turns that off:
+
+```typescript
+app.route('/api/agent/vex', vex({
+  engine,                      // wired with generateDsl
+  getScope: async (c) => ({ accountId: await resolveAccount(c) }),
+  getPolicy: (c) => agentPolicy(c),
+  manageFingerprints: false,   // PATCH and DELETE answer 403 `locked`
+}));
+```
+
+Left on, the adapter logs one warning as it mounts the endpoint; keep it on
+only where everybody who reaches the endpoint may manage every entry.
 
 ## Documentation
 
