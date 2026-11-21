@@ -5,7 +5,7 @@ import type { ExecuteRecord, ScopePolicy, WriteEvent } from '@niscorp/vex';
 import { createVexRoutes } from '../src/data/routes';
 import { createWriteNotifier } from '../src/data/writes';
 import type { WriteRequest } from '../src/data/writes';
-import { engineDouble } from './data-double';
+import { engineDouble, entriesDouble } from './data-double';
 
 type Env = { Variables: { role: string } };
 
@@ -141,5 +141,37 @@ describe('the vex surfaces', () => {
     await post('/api/vex', 'writer', { fingerprint: 'notes/add', context: { body: 'hello' } }, { authorization: 'Bearer the-session', cookie: 'nisc.token=the-session' });
     for (const name of ['authorization', 'Authorization', 'AUTHORIZATION', 'cookie', 'Cookie']) expect([name, heard[0]?.request.header(name)]).toEqual([name, undefined]);
     expect(heard[0]?.event.scope).toEqual({ userId: 'usr_writer' });
+  });
+});
+
+describe('what a write on the vex surfaces answers', () => {
+  const STUDIO: ScopePolicy = { default: 'deny', entities: { notes: { read: [{ match: 'studio_id', to: 'userId' }], delete: [] } } };
+
+  const dropNote = async (answerReadableRows: boolean | undefined) => {
+    const double = await engineDouble();
+    double.askFirst(await entriesDouble([{ fingerprint: 'notes/drop', mutation: { op: 'delete', table: 'notes', where: { eq: ['notes.id', { $context: 'id' }] } } }]));
+    const server = createVexRoutes({
+      engine: double.engine,
+      db: double.db,
+      scope: () => ({ userId: 'usr_writer' }),
+      policy: () => STUDIO,
+      policyAtReach: () => STUDIO,
+      writes: createWriteNotifier(),
+      ...(answerReadableRows !== undefined ? { answerReadableRows } : {}),
+    });
+    const response = await server.request('/api/vex', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ fingerprint: 'notes/drop', context: { id: 7 } }) });
+    return { body: await response.json(), sql: double.written.map((write) => write.sql) };
+  };
+
+  it('is every row it wrote, as before, unless the app asks otherwise', async () => {
+    const { body, sql } = await dropNote(undefined);
+    expect(body).toEqual({ result: { id: 7, body: 'written' } });
+    expect(sql).toEqual(['DELETE FROM notes WHERE notes.id = $1 RETURNING *']);
+  });
+
+  it('is only the rows the read rules show, with answerReadableRows', async () => {
+    const { body, sql } = await dropNote(true);
+    expect(sql).toEqual(['DELETE FROM notes WHERE notes.id = $1 RETURNING *, (studio_id = $2) AS "vex:readable"']);
+    expect(body).toEqual({ result: [] });
   });
 });

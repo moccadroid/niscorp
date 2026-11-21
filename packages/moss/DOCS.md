@@ -807,6 +807,7 @@ type NiscRuntime = {
   db: MutationClient;              // writes
   cache?: CacheBackend;            // defaults to vex's postgres cache on `pool`
   vexConfig?: QueryEngineConfig['config'];  // the query engine's settings (limits, read timeout); default vex's own
+  answerReadableRows?: boolean;    // a write on the vex surfaces answers only the rows the caller may read; default false
   session: SessionVerifier | 'sessions' | 'dev-open';  // REQUIRED — no default
   origins?: readonly string[];     // origins that are the app's own page, beside the host a request names (a proxy that rewrites `Host`)
   migrations?: 'apply' | 'verify'; // the boot's ledgered run; default 'verify'
@@ -844,6 +845,13 @@ the `data` universe its charter is resolved over. It says nothing about moss's
 own reads and writes. The generation counter and a feature's own entries (the
 integrations' registry) read the tables that are theirs off the database
 whatever the list names, and know no other table.
+
+`answerReadableRows` is vex's option of that name on the `/api/vex` surfaces
+(vex DOCS, "Replay"). Without it a write answers every row it wrote, whole,
+whatever the caller's read rules say. With it, a write answers only the rows
+the caller's charter lets them read, and an entry whose role cannot read the
+table it writes answers no row: a sign-in entry that deletes a one-time link
+and reads who signs in from the deleted row stops working.
 
 `session` is required, deliberately — authentication is the one door that must
 not default open, and it used to. Three answers: `'sessions'` uses moss's own

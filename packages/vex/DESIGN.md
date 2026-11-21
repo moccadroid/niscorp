@@ -431,6 +431,14 @@ in its WHERE for a row that changes in between. The new value is cast to
 its column's type there, because a parameter the check shares with the SET
 is otherwise read as text.
 
+What a write answers is every row it wrote, unless the host asks for the
+rows the caller's read rules show (`answerReadableRows`). It is off by
+default because an entry may be built on the whole answer: a sign-in that
+deletes a one-time link and reads who signs in from it, run by a role with
+no read grant on the link. With it on, the read rules are compiled into one
+extra returned column that vex strips; `rows` keeps every written row for
+the write observer, `$returned` and invalidation.
+
 **A batch that uses what it wrote (`$returned`).** `{ $returned: 'table.column' }`
 in a later statement reads the one row an earlier statement of the same batch
 wrote — the create-a-parent-then-its-children case, where the parent's id is

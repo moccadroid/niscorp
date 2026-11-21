@@ -42,6 +42,7 @@ export type DataConfig = {
   // intent: its tables may be a list these are not in.
   rowRules?: NiscApp['behaviors'];
   telemetry?: Telemetry;
+  answerReadableRows?: boolean;
 };
 
 type Caller = Pick<ResolvedIdentity, 'memoKey' | 'roles'>;
@@ -173,7 +174,7 @@ const createUpgradeStore =
 
 export const createDataWith = (
   prepared: PreparedEngine,
-  config: Pick<DataConfig, 'db' | 'charter' | 'behaviors' | 'rowRules' | 'telemetry' | 'vexConfig' | 'featureTables' | 'upgradedColumns'>,
+  config: Pick<DataConfig, 'db' | 'charter' | 'behaviors' | 'rowRules' | 'telemetry' | 'vexConfig' | 'featureTables' | 'upgradedColumns' | 'answerReadableRows'>,
 ): Data => {
   refuseUpgradedOwnedTables(config);
   const { grammars, engine, grants } = prepared;
@@ -233,6 +234,7 @@ export const createDataWith = (
         policyAtReach: (c, reach) => policies.atReach(routing.caller(c), reach),
         ...(onExecute !== undefined ? { onExecute } : {}),
         writes,
+        ...(config.answerReadableRows === true ? { answerReadableRows: true } : {}),
       }),
     upgradeStore: createUpgradeStore(prepared, tablesOf),
     onWrite: writes.subscribe,

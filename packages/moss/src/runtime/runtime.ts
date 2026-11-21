@@ -10,6 +10,7 @@ export type NiscRuntime = {
   db: MutationClient;
   cache?: CacheBackend;
   vexConfig?: QueryEngineConfig['config'];
+  answerReadableRows?: boolean;
   session: SessionVerifier | 'sessions' | 'dev-open';
   origins?: readonly string[];
   migrations?: 'apply' | 'verify';

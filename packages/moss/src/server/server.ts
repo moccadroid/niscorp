@@ -61,6 +61,7 @@ const buildData = (app: NiscApp, runtime: NiscRuntime): Promise<Data> =>
     behaviors: app.behaviors,
     rowRules: rowRulesBeside(app.behaviors),
     telemetry: runtime.telemetry,
+    answerReadableRows: runtime.answerReadableRows,
   });
 
 export type ServerDeps = {

@@ -34,6 +34,7 @@ export type VexHandlerConfig = {
     policy: ScopePolicy;
     onWrite?: (event: WriteEvent) => void;
     checkMovedRows?: boolean;
+    answerReadableRows?: boolean;
   };
   onExecute?: (record: ExecuteRecord) => void;
 };
@@ -399,8 +400,9 @@ const runQuery = async (
           policy: writePolicy,
           schema,
           ...(config.mutations.checkMovedRows !== undefined ? { checkMovedRows: config.mutations.checkMovedRows } : {}),
+          ...(config.mutations.answerReadableRows === true ? { answerReadableRows: true } : {}),
         });
-        const rows = writes.flatMap((w) => w.rows);
+        const rows = writes.flatMap((w) => w.readable ?? w.rows);
         engine.invalidate(tablesChangedBy(writes, schema));
         // The write is committed: a throwing observer must not fail the response.
         if (config.mutations.onWrite !== undefined) {

@@ -1216,6 +1216,18 @@ under an `owner_id = me` rule — set `mutations: { …, checkMovedRows: false }
 (`executeWrites(client, def, { …, checkMovedRows: false })` at the library
 level).
 
+**What a write answers.** By default a write answers every row it wrote,
+whole (`RETURNING *`), whatever the caller's read rules say: renaming a task
+the update rules reach answers the whole row, columns and all, even when the
+read rules would not show it. `mutations: { …, answerReadableRows: true }`
+answers only the rows the caller's read rules show; the write itself is
+unchanged. An `update`, a `delete`, and an insert with `onConflict … set` are
+filtered; a plain insert answers the row it created. A read rule whose scope
+value the host left out hides the row; it does not refuse the write. Off by
+default, because some setups depend on the whole answer: a sign-in entry that
+deletes a one-time link and reads who signs in from the deleted row, run by a
+role that has no read grant on the link table, would answer `[]` with it on.
+
 A host that resolves a policy **per principal** (e.g. compiled from an ACL
 layer) passes it per request: `VexHandlerConfig.scopePolicy` overrides the
 engine's configured read policy for that request (`ExecuteOptions.scopePolicy`
@@ -1268,9 +1280,10 @@ successful mutation replay, AFTER the commit:
 mutations: {
   client, policy,
   onWrite: ({ fingerprint, writes, scope }) => { … },
-  // writes: [{ table, op, rows }] — per statement, resolved post-desugar
+  // writes: [{ table, op, rows, readable? }] — per statement, resolved post-desugar
   // (an upsert reports the branch it took; insertEach reports 'insert'),
-  // rows as the database returned them. scope: what the request could
+  // rows as the database returned them; readable, under answerReadableRows,
+  // the ones the caller's read rules show. scope: what the request could
   // not forge.
 }
 ```
@@ -1666,7 +1679,7 @@ The rest of `VexHonoConfig`, all optional:
 | `locked` | Replay-only endpoint: no generation, no fingerprint management |
 | `getPolicy(c)` | Per-request `ScopePolicy`; governs reads, mutation replay and discovery on this endpoint. Returning `undefined` leaves the engine's policy and `mutations.policy` in force |
 | `getPolicyForReach(c, reach)` | The same principal's policy at a reach an entry demands |
-| `mutations` | `{ client, policy?, onWrite?, checkMovedRows? }` — enables mutation replay; `policy` is the fallback when `getPolicy` is absent. A request that gets a policy from neither replays no write: a mutation fingerprint answers 500 |
+| `mutations` | `{ client, policy?, onWrite?, checkMovedRows?, answerReadableRows? }` — enables mutation replay; `policy` is the fallback when `getPolicy` is absent. A request that gets a policy from neither replays no write: a mutation fingerprint answers 500 |
 | `onExecute` | The execution observer (see [Events](#events)) |
 
 `vex` and `VexHonoConfig` are generic over the hono `Env`: `vex<AppEnv>({ … })`
@@ -1689,7 +1702,7 @@ app.all('/api/orders/vex', vex({
 }));
 ```
 
-`VexExpressConfig` also takes `locked`, `mutations` (`{ client, policy, onWrite?, checkMovedRows? }`),
+`VexExpressConfig` also takes `locked`, `mutations` (`{ client, policy, onWrite?, checkMovedRows?, answerReadableRows? }`),
 `getPolicy(req)`, `getPolicyForReach(req, reach)` and `onExecute`. These mean
 what they mean for Hono: `getPolicy` governs reads, mutation replay and
 discovery, and when it returns `undefined` the engine's policy and

@@ -392,13 +392,32 @@ const movedRefusal = (table: string, rule: ScopeMatch): VexScopeError =>
       `the new "${table}.${rule.match}" ${isSetMatch(rule) ? `is not one of the scope's "${rule.in}"` : `is not the scope's "${rule.to}"`}. Nothing was written.`,
   );
 
-const compileMutation = (m: ResolvedMutation, schema: DatabaseSchema, pinned: readonly ScopeMatch[]): Compiled => {
+const READABLE = 'vex:readable';
+
+type Readable = ScopeMatch[] | 'all' | 'none';
+
+const returning = (readable: Readable, ctx: WriteContext): string => {
+  if (readable === 'all') return ' RETURNING *';
+  if (readable === 'none') return ` RETURNING *, FALSE AS "${READABLE}"`;
+  return ` RETURNING *, (${readable.map((r) => `${sqlName(r.match)} ${scopeSlot(r, ctx)}`).join(' AND ')}) AS "${READABLE}"`;
+};
+
+// The read rules' scope slots come after the statement's own: `ownSlots` is
+// what requireScope looks at, so a missing read value hides the row instead of
+// refusing the write.
+type Statement = Compiled & { ownSlots: number; marked: boolean };
+
+const compileMutation = (m: ResolvedMutation, schema: DatabaseSchema, pinned: readonly ScopeMatch[], readable: Readable): Statement => {
   const ctx = newCtx(schema.namespace);
+  const finish = (head: string): Statement => {
+    const ownSlots = ctx.paramSlots.length;
+    return { sql: `${head}${returning(readable, ctx)}`, slots: ctx.paramSlots, returned: ctx.returned, ownSlots, marked: readable !== 'all' };
+  };
   if (m.op === 'insert') {
     const entries = Object.entries(m.values);
     const cols = entries.map(([c]) => sqlName(c));
     const vals = entries.map(([c, v]) => compileColumnValue(m.table, c, v, ctx, schema));
-    return { sql: `INSERT INTO ${tableSql(m.table, schema.namespace)} (${cols.join(', ')}) VALUES (${vals.join(', ')})${compileConflict(m, ctx, schema, pinned)} RETURNING *`, slots: ctx.paramSlots, returned: ctx.returned };
+    return finish(`INSERT INTO ${tableSql(m.table, schema.namespace)} (${cols.join(', ')}) VALUES (${vals.join(', ')})${compileConflict(m, ctx, schema, pinned)}`);
   }
   if (m.op === 'insertEach') {
     const types = new Map(findEntity(m.table, schema)?.fields.map((f) => [f.name, f.type]));
@@ -418,23 +437,18 @@ const compileMutation = (m: ResolvedMutation, schema: DatabaseSchema, pinned: re
     ctx.paramSlots.push({ key: m.items.$context, kind: 'context', type: 'json' });
     const items = `$${ctx.paramCounter.value}::jsonb`;
     const source = itemColumns.length === 0 ? `jsonb_array_elements(${items}) AS item` : `jsonb_to_recordset(${items}) AS item(${itemColumns.join(', ')})`;
-    return {
-      sql: `INSERT INTO ${tableSql(m.table, schema.namespace)} (${cols.join(', ')}) SELECT ${exprs.join(', ')} FROM ${source}${compileConflict(m, ctx, schema, pinned)} RETURNING *`,
-      slots: ctx.paramSlots,
-      returned: ctx.returned,
-      itemKeys,
-    };
+    return { ...finish(`INSERT INTO ${tableSql(m.table, schema.namespace)} (${cols.join(', ')}) SELECT ${exprs.join(', ')} FROM ${source}${compileConflict(m, ctx, schema, pinned)}`), itemKeys };
   }
   if (m.op === 'update') {
     const written = new Map(Object.entries(m.set).map(([c, v]) => [c, compileColumnValue(m.table, c, v, ctx, schema)]));
     const sets = [...written].map(([c, sql]) => `${sqlName(c)} = ${sql}`);
     indexFilterFields(m.where, ctx.aliasMap);
     const where = [compileFilter(m.where, ctx), ...keptChecks(m.table, written, pinned, ctx, schema).map((k) => k.sql)].join(' AND ');
-    return { sql: `UPDATE ${tableSql(m.table, schema.namespace)} SET ${sets.join(', ')} WHERE ${where} RETURNING *`, slots: ctx.paramSlots, returned: ctx.returned };
+    return finish(`UPDATE ${tableSql(m.table, schema.namespace)} SET ${sets.join(', ')} WHERE ${where}`);
   }
   indexFilterFields(m.where, ctx.aliasMap);
   const where = compileFilter(m.where, ctx);
-  return { sql: `DELETE FROM ${tableSql(m.table, schema.namespace)} WHERE ${where} RETURNING *`, slots: ctx.paramSlots, returned: ctx.returned };
+  return finish(`DELETE FROM ${tableSql(m.table, schema.namespace)} WHERE ${where}`);
 };
 
 const SUGAR: { [K in Mutation['op']]?: (m: Extract<Mutation, { op: K }>, context: Record<string, unknown>) => CoreMutation } = {
@@ -477,6 +491,7 @@ export type MutationContext = {
   policy: ScopePolicy;
   schema: DatabaseSchema;
   checkMovedRows?: boolean;
+  answerReadableRows?: boolean;
 };
 
 // A column a `set` rule stamps is the policy's own value, not one the caller moves.
@@ -488,7 +503,14 @@ const pinnedRules = (m: ResolvedMutation, policy: ScopePolicy): ScopeMatch[] => 
   return gate.rules.flatMap((r) => ('match' in r && !stamped.has(r.match) ? [r] : []));
 };
 
-export type WriteResult = { table: string; op: 'insert' | 'update' | 'delete'; rows: Row[] };
+export type WriteResult = { table: string; op: 'insert' | 'update' | 'delete'; rows: Row[]; readable?: Row[] };
+
+// A plain insert answers the row it created: nothing in it is anybody else's.
+const readableRules = (m: ResolvedMutation, policy: ScopePolicy): Readable => {
+  if ((m.op === 'insert' || m.op === 'insertEach') && m.onConflict?.set === undefined) return 'all';
+  const rules = readRulesOf(policy, m.table);
+  return typeof rules === 'string' ? 'none' : rules.length === 0 ? 'all' : rules;
+};
 
 export const executeWrites = async (client: MutationClient, def: MutationDefinition, mctx: MutationContext): Promise<WriteResult[]> => {
   const parsed = MutationDefinitionSchema.parse(def);
@@ -509,9 +531,9 @@ export const executeWrites = async (client: MutationClient, def: MutationDefinit
     assertWritableColumns(m, mctx.schema);
     assertReturnedColumns(returned.refs, mctx.schema);
     const pinned = mctx.checkMovedRows === false ? [] : pinnedRules(m, mctx.policy);
-    const statement = compileMutation(m, mctx.schema, pinned);
+    const statement = compileMutation(m, mctx.schema, pinned, mctx.answerReadableRows === true ? readableRules(m, mctx.policy) : 'all');
     // A `set` rule with no scope value would stamp NULL: a row owned by nobody.
-    requireScope({ paramSlots: statement.slots }, mctx.scope);
+    requireScope({ paramSlots: statement.slots.slice(0, statement.ownSlots) }, mctx.scope);
     const readsOf = (of: Compiled): Bound['reads'] =>
       [...of.returned].map(([slot, ref]) => {
         const source = returned.refs.get(ref);
@@ -569,7 +591,17 @@ export const executeWrites = async (client: MutationClient, def: MutationDefinit
         if (broken !== undefined) throw movedRefusal(c.table, broken);
       }
       const res = await q.query(c.sql, await bindParams(c, results));
-      results.push({ table: c.table, op: c.op, rows: res.rows as Row[] });
+      if (!c.marked) {
+        results.push({ table: c.table, op: c.op, rows: res.rows as Row[] });
+        continue;
+      }
+      const rows: Row[] = [];
+      const readable: Row[] = [];
+      for (const { [READABLE]: seen, ...row } of res.rows as Row[]) {
+        rows.push(row);
+        if (seen === true) readable.push(row);
+      }
+      results.push({ table: c.table, op: c.op, rows, readable });
     }
     return results;
   };

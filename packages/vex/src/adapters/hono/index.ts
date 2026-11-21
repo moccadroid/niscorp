@@ -33,6 +33,7 @@ export type VexHonoConfig<E extends Env = Env> = {
     policy?: ScopePolicy;
     onWrite?: (event: WriteEvent) => void;
     checkMovedRows?: boolean;
+    answerReadableRows?: boolean;
   };
   onExecute?: (record: ExecuteRecord) => void;
 };
@@ -79,6 +80,7 @@ export const vex = <E extends Env = Env>(config: VexHonoConfig<E>): Hono<E> => {
               policy: mutationPolicy,
               ...(config.mutations.onWrite !== undefined ? { onWrite: config.mutations.onWrite } : {}),
               ...(config.mutations.checkMovedRows !== undefined ? { checkMovedRows: config.mutations.checkMovedRows } : {}),
+              ...(config.mutations.answerReadableRows === true ? { answerReadableRows: true } : {}),
             },
           }
         : {}),
