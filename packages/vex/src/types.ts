@@ -80,6 +80,7 @@ export type ExecuteOptions = {
   entities?: string[];
   locked?: boolean;
   scopePolicy?: ScopePolicy;
+  policyForReach?: (reach: string) => Promise<ScopePolicy | undefined> | ScopePolicy | undefined;
   /** `signal` and `onChange` go together; both are ignored for a snapshot read. */
   signal?: AbortSignal;
   onChange?: (response: QueryResponse) => void;

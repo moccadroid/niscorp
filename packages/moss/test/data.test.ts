@@ -207,6 +207,22 @@ describe('the data module, over an engine', () => {
     expect(shown[2]).toEqual([]);
   });
 
+  it('answers a replay of an entry that declares a reach at that reach, as its routes do', async () => {
+    const { data, post } = await world();
+    const writers = {
+      generateDsl: async () => {
+        throw new Error('a replay writes no query');
+      },
+      mapToShape: async () => {
+        throw new Error('a replay maps no rows');
+      },
+    };
+    const routed = await post('reader', { fingerprint: 'notes/mine', context: {} });
+    expect(routed).toMatchObject({ error: 'scope_denied' });
+    await expect(data.answerIntent(writers, { fingerprint: 'notes/mine' }, who('reader'), { userId: 'reader' })).rejects.toMatchObject({ code: 'scope_denied' });
+    expect((await data.answerIntent(writers, { fingerprint: 'notes/all' }, who('reader'), { userId: 'reader' })).result).toEqual([{ id: 1, body: 'first' }]);
+  });
+
   it('answers a replay by its fingerprint, with what vex knows of it, under the policy of whoever it is asked for', async () => {
     const { data } = await world();
     const writers = {

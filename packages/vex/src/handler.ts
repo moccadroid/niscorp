@@ -431,6 +431,7 @@ const runQuery = async (
       entities: config.entities,
       ...(config.locked === true ? { locked: true } : {}),
       ...(readPolicy !== undefined ? { scopePolicy: readPolicy } : {}),
+      ...(entryReach !== undefined ? { policyForReach: () => readPolicy } : {}),
       ...(live !== undefined ? { signal: live.signal, onChange: live.onChange } : {}),
     });
     if (probe !== undefined) {

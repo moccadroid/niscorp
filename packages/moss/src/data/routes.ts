@@ -78,7 +78,11 @@ export type IntentAnswersDeps = {
   upgrader?: QueryEngineConfig['upgrader'];
 };
 
-export type AnswerIntent = (writers: QueryWriters, asked: Intent | ExistingQuery, caller: { policy: ScopePolicy; scope: Record<string, unknown> }) => Promise<QueryResponse>;
+export type AnswerIntent = (
+  writers: QueryWriters,
+  asked: Intent | ExistingQuery,
+  caller: { policy: ScopePolicy; policyAtReach?: (reach: string) => ScopePolicy; scope: Record<string, unknown> },
+) => Promise<QueryResponse>;
 
 export const createIntentAnswers = (deps: IntentAnswersDeps): AnswerIntent => {
   const engines = new WeakMap<QueryWriters, Promise<QueryEngine>>();
@@ -106,6 +110,6 @@ export const createIntentAnswers = (deps: IntentAnswersDeps): AnswerIntent => {
   return async (writers, asked, caller) =>
     (await engineFor(writers)).execute(
       'fingerprint' in asked ? { fingerprint: asked.fingerprint, context: asked.context ?? {} } : { intent: asked.intent, shape: asked.shape, context: asked.context ?? {} },
-      { scope: caller.scope, scopePolicy: caller.policy },
+      { scope: caller.scope, scopePolicy: caller.policy, ...(caller.policyAtReach !== undefined ? { policyForReach: caller.policyAtReach } : {}) },
     );
 };

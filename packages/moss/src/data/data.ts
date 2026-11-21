@@ -221,7 +221,8 @@ export const createDataWith = (
       policyAtReach: (roles, reach) => policies.atReach(callerOfRoles(roles), reach),
       ...(onExecute !== undefined ? { onExecute } : {}),
     }),
-    answerIntent: async (writers, asked, who, scope) => answering()(writers, asked, { policy: policies.of(who), scope }),
+    answerIntent: async (writers, asked, who, scope) =>
+      answering()(writers, asked, { policy: policies.of(who), policyAtReach: (reach) => policies.atReach(who, reach), scope }),
     ownEntries: async (feature, entries) => ownEntries({ owner: `the feature "${feature}"`, entries, tables: tablesOf(feature) }, onExecute),
     artifactEntries: (entries, rules) => ownEntries({ owner: 'the artifactory', entries, tables: ARTIFACT_TABLES, rules }, onExecute),
     routes: <E extends Env>(routing: DataRoutesConfig<E>): Hono<E> =>

@@ -66,3 +66,18 @@ describe('an intent, answered by a query written for it', () => {
     expect(written).toHaveLength(2);
   });
 });
+
+describe('a replay of an entry that declares a reach', () => {
+  it("is served under the policy at that reach, not the caller's widest", async () => {
+    const { answer, writers } = await world();
+    const reaches: string[] = [];
+    const atReach = (reach: string) => {
+      reaches.push(reach);
+      return READER;
+    };
+    const answered = await answer(writers, { fingerprint: 'notes/mine' }, { policy: READER, policyAtReach: atReach, scope: {} });
+    expect(reaches).toEqual(['personal']);
+    expect(answered.result).toEqual([{ id: 1, body: 'first' }]);
+    await expect(answer(writers, { fingerprint: 'notes/mine' }, { policy: READER, policyAtReach: () => NOTHING, scope: {} })).rejects.toMatchObject({ code: 'scope_denied' });
+  });
+});

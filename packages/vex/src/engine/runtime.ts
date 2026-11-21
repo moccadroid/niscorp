@@ -205,6 +205,23 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
 
   const cutSaid = new Set<string>();
 
+  // A caller that cannot compile a reach keeps the policy it handed over, and
+  // is told once per entry.
+  const reachUnasked = new Set<string>();
+  const policyAtReach = async (fingerprint: string, reach: string, current: ScopePolicy | undefined, options: ExecuteOptions | undefined): Promise<ScopePolicy | undefined> => {
+    if (options?.policyForReach === undefined) {
+      if (!reachUnasked.has(fingerprint)) {
+        reachUnasked.add(fingerprint);
+        forgetOldest(reachUnasked);
+        console.warn(`[vex] "${fingerprint}" declares reach "${reach}" and was replayed without policyForReach, so it ran under the caller's own policy. Pass policyForReach to serve it at its reach.`);
+      }
+      return current;
+    }
+    const narrowed = await options.policyForReach(reach);
+    if (narrowed === undefined) throw new VexError('scope_denied', `Reach "${reach}" is not available to this principal.`);
+    return narrowed;
+  };
+
   const cutNote = (engineLimit: number | undefined, stated: number | undefined, rowCount: number, shape: unknown, fingerprint: string | undefined): string | undefined => {
     if (engineLimit === undefined || rowCount !== engineLimit) return undefined;
     if (shape !== undefined && !Array.isArray(shape)) return undefined;
@@ -250,6 +267,7 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
     intent?: string;
     shape?: unknown;
     refresh?: Refresh;
+    reach?: string;
     // Put there by the host: protected, and with no request hash. No request
     // can produce that: a generated entry always carries its request's hash,
     // and the one field a wire call can change on a stored entry is `protected`.
@@ -297,6 +315,7 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
           ...(entry.intent !== undefined ? { intent: entry.intent } : {}),
           ...(entry.shape !== undefined ? { shape: entry.shape } : {}),
           ...(entry.refresh !== undefined ? { refresh: entry.refresh } : {}),
+          ...(entry.reach !== undefined ? { reach: entry.reach } : {}),
           seeded: entry.protected === true && entry.requestHash === undefined,
           hit: true,
           replaced: false,
@@ -459,7 +478,7 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
 
     const validRequest = parsed.data;
     const scope: ScopeValues = options?.scope ?? {};
-    const activePolicy = options?.scopePolicy ?? scopePolicy;
+    let activePolicy = options?.scopePolicy ?? scopePolicy;
     const t0 = Date.now();
 
     const hasRequest = validRequest.shape !== undefined && validRequest.shape !== null;
@@ -479,6 +498,7 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
 
     const cached = await resolveFingerprint(validRequest, hasRequest, requestHash, scope);
     emit({ type: 'query.cache', hit: cached.hit, fingerprint: cached.fingerprint, replaced: cached.replaced });
+    if (cached.reach !== undefined) activePolicy = await policyAtReach(cached.fingerprint, cached.reach, activePolicy, options);
 
     let dsl = cached.dsl;
     let agentMs: number | undefined;

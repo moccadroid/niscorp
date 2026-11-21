@@ -391,7 +391,8 @@ needs of either has a call:
   intent and the shape. The query is written, compiled and run under the
   policy and the scope values the routes serve this principal under, resolved
   when it is asked: the writer is shown only the tables they may read, and a
-  query that reaches past their policy is refused. It is kept in the cache the
+  query that reaches past their policy is refused. A replay of an entry that
+  declares a `reach` is served at that reach, as the routes serve it. It is kept in the cache the
   routes replay from, so `answer.meta.cache.fingerprint` replays over
   `session.wire` afterwards, for whoever the policy lets. Moss keeps one
   engine for each `writers` object: hand over the same object each time. It

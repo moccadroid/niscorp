@@ -240,6 +240,7 @@ type ExecuteOptions = {
   entities?: string[];        // restrict generation to this entity subset for this call
   locked?: boolean;           // replay-only: unknown/changed fingerprints throw `locked` instead of generating
   scopePolicy?: ScopePolicy;  // per-request policy; overrides the engine's configured one for this call
+  policyForReach?: (reach: string) => ScopePolicy | undefined | Promise<ScopePolicy | undefined>;  // the same principal's policy at a reach a replayed entry declares
   signal?: AbortSignal;       // with onChange: follow a `refresh: 'reactive'` entry until it aborts
   onChange?: (response: QueryResponse) => void;  // every later answer that differs from the last
 };
@@ -898,11 +899,12 @@ ways:** an entry declaring a reach no host can resolve is a 500, and a host
 returning `undefined` is a 403. Falling back to the caller's own reach would be
 silent, and silence is the whole risk — the read would answer, with too much.
 
-That is `handleQuery` and the hono and express adapters. `engine.execute` does
-not read an entry's `reach`: a replay through it runs under the policy it is
-handed (`scopePolicy`, else the engine's own), whatever reach the entry
-declares. Code that replays an entry with a reach in-process hands it the policy
-at that reach itself.
+That is `handleQuery` and the hono and express adapters. `engine.execute`
+serves a replayed entry's `reach` through `ExecuteOptions.policyForReach`: the
+run uses the policy it returns, and `undefined` throws `scope_denied`. Without
+`policyForReach` it runs under the policy it is handed (`scopePolicy`, else the
+engine's own), whatever reach the entry declares, and logs one warning per
+fingerprint saying so.
 
 ## Upgraded columns
 
