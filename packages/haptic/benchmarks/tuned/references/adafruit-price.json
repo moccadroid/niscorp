@@ -1,0 +1,7 @@
+{
+  "key": "text",
+  "items": [
+    { "key": "$120.00", "label": "$120.00 (#prod-price span[itemprop=price], desktop purchase panel)" }
+  ],
+  "notes": "There is one item: the price span in the desktop purchase panel on the right (div#prod-price > span[itemprop=price]) under the 'Raspberry Pi 4 Model B - 4 GB RAM' heading. It shows $120.00. Excluded: the duplicate $120.00 in the mobile product header, the variant chooser prices (1GB $38.50, 2GB out of stock, 4GB $120.00, 8GB $190.00), the accessory add-on prices, the recommended-product prices, and the meta and JSON-LD prices. The capture has no quantity-discount table. Ambiguous for grading: the key '$120.00' also appears in the mobile header and in the 4GB variant option, so matching on text cannot tell the desktop span apart from those duplicates."
+}

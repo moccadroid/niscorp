@@ -11,7 +11,10 @@ const root = resolve(import.meta.dirname, '..');
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
-const npmVersion = spawnSync('npm', ['--version'], { encoding: 'utf8' }).stdout.trim();
+// On Windows npm is a .cmd file, which Node starts only through a shell.
+const shell = process.platform === 'win32';
+
+const npmVersion = spawnSync('npm', ['--version'], { encoding: 'utf8', shell }).stdout.trim();
 const [major = 0, minor = 0] = npmVersion.split('.').map(Number);
 if (major < 11 || (major === 11 && minor < 15)) {
   console.log(`[fail] npm ${npmVersion} has no \`npm trust\` — it needs 11.15.0 or later: npm install --global npm@11`);
@@ -35,7 +38,7 @@ if (strangers.length > 0) {
 const published = asked.length > 0 ? asked : everyPackage;
 
 const trusts = (name: string): string => {
-  const listed = spawnSync('npm', ['trust', 'list', name, '--json'], { encoding: 'utf8' });
+  const listed = spawnSync('npm', ['trust', 'list', name, '--json'], { encoding: 'utf8', shell });
   return listed.status === 0 ? listed.stdout : '';
 };
 
@@ -48,6 +51,7 @@ for (const name of published) {
   }
   const result = spawnSync('npm', ['trust', 'github', name, '--file', WORKFLOW, '--repo', REPOSITORY, '--env', ENVIRONMENT, '--allow-publish', '--yes'], {
     stdio: 'inherit',
+    shell,
   });
   if (result.status === 0) {
     console.log(`[pass] ${name} trusts ${REPOSITORY} · ${WORKFLOW} · environment ${ENVIRONMENT}`);

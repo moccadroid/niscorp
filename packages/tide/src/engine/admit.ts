@@ -5,12 +5,20 @@ import type { EffectRegistry, LoadRefusal } from '../types';
 import { buildGraph } from './graph';
 import type { GraphReport } from './graph';
 
-export type Admitted = { reflexes: readonly Reflex[]; graph: GraphReport; refused: readonly LoadRefusal[] };
+type Admitted = { reflexes: readonly Reflex[]; graph: GraphReport; refused: readonly LoadRefusal[] };
 
 const idOf = (candidate: unknown): string | undefined =>
   typeof candidate === 'object' && candidate !== null && 'id' in candidate && typeof candidate.id === 'string' ? candidate.id : undefined;
 
-export const admitReflexes = (input: readonly ReflexInput[], effectsOf: (reflexes: readonly Reflex[]) => EffectRegistry, isolate: boolean): Admitted => {
+export const admitReflexes = ({
+  input,
+  effectsOf,
+  isolate,
+}: {
+  input: readonly ReflexInput[];
+  effectsOf: (reflexes: readonly Reflex[]) => EffectRegistry;
+  isolate: boolean;
+}): Admitted => {
   const parsed: Reflex[] = [];
   const refused: LoadRefusal[] = [];
   const seen = new Set<string>();
@@ -33,7 +41,6 @@ export const admitReflexes = (input: readonly ReflexInput[], effectsOf: (reflexe
     parsed.push(result.data);
   }
 
-  // Leaving one out can strand another (a reflex that watches its run), so the graph is checked again until it holds.
   // Every round removes at least one reflex: each refusal names the reflexes it is about.
   let kept: readonly Reflex[] = parsed;
   let graph = buildGraph(kept, effectsOf(kept));

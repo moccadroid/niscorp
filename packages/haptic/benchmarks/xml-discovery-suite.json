@@ -1,0 +1,229 @@
+{
+  "concurrency": 1,
+  "repetitions": 1,
+  "cases": [
+    {
+      "id": "xml-rss",
+      "url": "https://www.ruby-lang.org/en/feeds/news.rss",
+      "instruction": "Return every news item in feed order. For each return heading (the item title), address (its link), and published (its publication timestamp as supplied). Use the current values each time.",
+      "outputSchema": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "heading": {
+              "type": "string"
+            },
+            "address": {
+              "type": "string"
+            },
+            "published": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "heading",
+            "address",
+            "published"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "expectedFormat": "xml",
+      "expectedMetadata": {
+        "visited": [
+          "https://www.ruby-lang.org/en/feeds/news.rss"
+        ],
+        "limited": false
+      },
+      "expectedRule": {
+        "selector": "/rss/channel/item",
+        "namespaces": {},
+        "fields": {
+          "heading": "string(title)",
+          "address": "string(link)",
+          "published": "string(pubDate)"
+        }
+      },
+      "expectedMapping": {
+        "$ref": "$.input.items"
+      },
+      "variants": [
+        {
+          "id": "changed-values",
+          "xml": {
+            "changes": [
+              {
+                "select": "/rss/channel/item/title",
+                "text": "Changed headline"
+              },
+              {
+                "select": "/rss/channel/item/link",
+                "text": "https://fixture.invalid/changed"
+              },
+              {
+                "select": "/rss/channel/item/pubDate",
+                "text": "Thu, 29 Oct 2026 08:00:00 +0000"
+              }
+            ]
+          }
+        },
+        {
+          "id": "added-records",
+          "xml": {
+            "append": [
+              {
+                "select": "/rss/channel",
+                "xml": "<item><title>Added headline</title><link>https://fixture.invalid/added</link><pubDate>Thu, 29 Oct 2026 09:00:00 +0000</pubDate></item>"
+              },
+              {
+                "select": "/rss/channel",
+                "xml": "<other:item xmlns:other=\"urn:unrelated\"><title>Excluded namespace</title><link>https://fixture.invalid/excluded</link><pubDate>irrelevant</pubDate></other:item>"
+              }
+            ]
+          }
+        },
+        {
+          "id": "empty-results",
+          "xml": {
+            "remove": [
+              "/rss/channel/item"
+            ]
+          }
+        },
+        {
+          "id": "namespace-uri-changed",
+          "xml": {
+            "namespace": {
+              "from": "",
+              "to": "urn:changed",
+              "prefix": "changed"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "xml-atom",
+      "url": "https://xkcd.com/atom.xml",
+      "instruction": "Return every comic entry in feed order. For each return headline (the entry title), address (the alternate web page link, not another link relation), and updated (the entry update timestamp as supplied). Use the current values each time.",
+      "outputSchema": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "headline": {
+              "type": "string"
+            },
+            "address": {
+              "type": "string"
+            },
+            "updated": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "headline",
+            "address",
+            "updated"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "expectedFormat": "xml",
+      "expectedMetadata": {
+        "visited": [
+          "https://xkcd.com/atom.xml"
+        ],
+        "limited": false
+      },
+      "expectedRule": {
+        "selector": "/a:feed/a:entry",
+        "namespaces": {
+          "a": "http://www.w3.org/2005/Atom"
+        },
+        "fields": {
+          "headline": "string(a:title)",
+          "address": "string(a:link[@rel=\"alternate\"]/@href)",
+          "updated": "string(a:updated)"
+        }
+      },
+      "expectedMapping": {
+        "$ref": "$.input.items"
+      },
+      "variants": [
+        {
+          "id": "changed-values",
+          "xml": {
+            "namespaces": {
+              "a": "http://www.w3.org/2005/Atom"
+            },
+            "changes": [
+              {
+                "select": "/a:feed/a:entry/a:title",
+                "text": "Changed title"
+              },
+              {
+                "select": "/a:feed/a:entry/a:link[@rel=\"alternate\"]/@href",
+                "text": "https://fixture.invalid/changed"
+              },
+              {
+                "select": "/a:feed/a:entry/a:updated",
+                "text": "2026-10-29T08:00:00Z"
+              }
+            ]
+          }
+        },
+        {
+          "id": "added-records",
+          "xml": {
+            "namespaces": {
+              "a": "http://www.w3.org/2005/Atom"
+            },
+            "append": [
+              {
+                "select": "/a:feed",
+                "xml": "<entry xmlns=\"http://www.w3.org/2005/Atom\"><title>Added entry</title><link href=\"https://fixture.invalid/added\" rel=\"alternate\"/><link href=\"https://fixture.invalid/self\" rel=\"self\"/><updated>2026-10-29T09:00:00Z</updated><id>urn:added</id></entry>"
+              },
+              {
+                "select": "/a:feed",
+                "xml": "<other:entry xmlns:other=\"urn:unrelated\" xmlns=\"http://www.w3.org/2005/Atom\"><title>Excluded namespace</title><link href=\"https://fixture.invalid/excluded\" rel=\"alternate\"/><updated>2026-10-29T09:00:00Z</updated></other:entry>"
+              }
+            ]
+          }
+        },
+        {
+          "id": "empty-results",
+          "xml": {
+            "namespaces": {
+              "a": "http://www.w3.org/2005/Atom"
+            },
+            "remove": [
+              "/a:feed/a:entry"
+            ]
+          }
+        },
+        {
+          "id": "namespace-prefix-changed",
+          "xml": {
+            "namespace": {
+              "from": "http://www.w3.org/2005/Atom",
+              "to": "http://www.w3.org/2005/Atom",
+              "prefix": "renamed"
+            }
+          }
+        },
+        {
+          "id": "namespace-uri-changed",
+          "xml": {
+            "namespace": {
+              "from": "http://www.w3.org/2005/Atom",
+              "to": "urn:changed",
+              "prefix": "changed"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "key": "text",
+  "items": [
+    {
+      "key": "$2.19",
+      "label": "$2.19/month"
+    }
+  ],
+  "notes": "Main pricing table under \"Everything we bill for\": row \"Started Machine, shared-cpu-1x with 256MB RAM\" has Price \"$2.19/month\". Key is \"$2.19\" (the page shows \"$2.19/month\") so a result giving either \"$2.19\" or \"$2.19/month\" matches. Excluded other Machine sizes ($3.69, $6.70, ...), RAM/volume rows, the Notes column (\"Smallest Machine size. Billed by the second while running\"), the example-cost tables further down (one of which repeats $2.19 for a 256MB Machine) and the per-region prices. Changed since 2026-11-07: a \"Free Waiver\" link was added to the side navigation, the free-tier answer now says bills under $5 for a personal organization are waived, and the invisible zero-width characters before headings are gone. The pricing table is unchanged, so the answer is still $2.19/month."
+}

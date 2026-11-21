@@ -1,0 +1,57 @@
+{
+  "key": "text",
+  "items": [
+    {
+      "key": "Brixton",
+      "label": "Brixton Underground Station"
+    },
+    {
+      "key": "Stockwell"
+    },
+    {
+      "key": "Vauxhall"
+    },
+    {
+      "key": "Pimlico"
+    },
+    {
+      "key": "Victoria",
+      "label": "Victoria Underground Station"
+    },
+    {
+      "key": "Green Park"
+    },
+    {
+      "key": "Oxford Circus"
+    },
+    {
+      "key": "Warren Street"
+    },
+    {
+      "key": "Euston"
+    },
+    {
+      "key": "King's Cross",
+      "label": "King's Cross St. Pancras Underground Station"
+    },
+    {
+      "key": "Highbury & Islington"
+    },
+    {
+      "key": "Finsbury Park"
+    },
+    {
+      "key": "Seven Sisters"
+    },
+    {
+      "key": "Tottenham Hale"
+    },
+    {
+      "key": "Blackhorse Road"
+    },
+    {
+      "key": "Walthamstow Central"
+    }
+  ],
+  "notes": "16 stations in the Brixton to Walthamstow Central order shown. Each name is written on the page as \"<name> Underground Station\"; keys are the name alone so a result with or without the suffix matches. \"Victoria\" is a short key: it also matches anything mentioning the Victoria line, but no other station name contains it. King's Cross is keyed as \"King's Cross\" (page text: King's Cross St. Pancras, straight apostrophe) to allow \"St Pancras\" without the dot."
+}

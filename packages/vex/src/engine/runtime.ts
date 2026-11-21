@@ -22,6 +22,8 @@ import { isEntryFresh, isTouchDue, fireAndForget } from '../cache/util.js';
 import { buildValidationContext, resolveParams } from '../utils/context.js';
 import { canonicalHash } from '../utils/canonical.js';
 import { createLiveRows } from './live.js';
+import { UpgradedColumnsSchema, columnUpgrades, mistypedColumns, unknownKinds, upgradeRows } from './upgraded-columns.js';
+import type { ColumnUpgrade, UpgradedRows } from './upgraded-columns.js';
 import type { RowsSource } from './live.js';
 import type { Refresh } from '../cache/cache.types.js';
 import type { Row } from '../adapters/adapter.types.js';
@@ -46,6 +48,7 @@ export const applySortContext = (dsl: Query, context: Record<string, unknown>): 
 type PipelineResult = {
   compiled: CompiledQuery;
   warnings: string[];
+  upgrades: ColumnUpgrade[];
   engineLimit?: number;
 };
 
@@ -67,7 +70,19 @@ const forgetOldest = (noted: Map<string, unknown> | Set<string>): void => {
 };
 
 export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine => {
-  const { adapter, scope: scopePolicy, generateDsl, mapToShape, embed, behaviors } = engineConfig;
+  const { adapter, scope: scopePolicy, generateDsl, mapToShape, embed, behaviors, upgrader } = engineConfig;
+  const parsedColumns = UpgradedColumnsSchema.safeParse(engineConfig.upgradedColumns ?? {});
+  if (!parsedColumns.success) throw new VexError('invalid_request', `The engine's upgradedColumns do not parse: ${parsedColumns.error.message}`);
+  const upgradedColumns = parsedColumns.data;
+  if (engineConfig.upgradedColumns !== undefined && upgrader === undefined) {
+    throw new VexError('invalid_request', "The engine was given `upgradedColumns` and no `upgrader`: hand it strata's `createUpgrader(grammars, { transform: evaluate })`.");
+  }
+  const unknown = upgrader === undefined ? [] : unknownKinds(upgradedColumns, upgrader);
+  if (unknown.length > 0) {
+    throw new VexError('invalid_request', `The upgradedColumns name what the upgrader's grammars do not declare: ${unknown.join('; ')}. Fix the name, or give the upgrader that grammar.`);
+  }
+  const upgradeOf = (stored: Row[], upgrades: readonly ColumnUpgrade[]): UpgradedRows =>
+    upgrader === undefined ? { rows: stored, warnings: [] } : upgradeRows(stored, upgrades, upgrader.upgrade);
   const emit = engineConfig.onEvent ?? (() => {});
   const maxNestingDepth = engineConfig.config?.maxNestingDepth ?? DEFAULT_MAX_NESTING_DEPTH;
   const defaultLimit = engineConfig.config?.defaultLimit ?? DEFAULT_LIMIT;
@@ -128,6 +143,10 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
         throw new VexError('execution_error', `The behaviors name columns the database does not have: ${missing.map((m) => `${m.entity}.${m.field}`).join(', ')}.`);
       }
     }
+    const mistyped = mistypedColumns(upgradedColumns, schema);
+    if (mistyped.length > 0) {
+      throw new VexError('execution_error', `The upgradedColumns do not fit the database: ${mistyped.join('; ')}. Fix the name, or add the column in a migration.`);
+    }
     cachedSchema = schema;
     cachedFingerprint = computeSchemaFingerprint(schema);
     return schema;
@@ -181,7 +200,7 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
 
     const compiled = adapter.compile(resolved);
 
-    return { compiled, warnings: analysis.warnings, ...(engineLimit !== undefined ? { engineLimit } : {}) };
+    return { compiled, warnings: analysis.warnings, upgrades: columnUpgrades(processedDsl, upgradedColumns), ...(engineLimit !== undefined ? { engineLimit } : {}) };
   };
 
   const cutSaid = new Set<string>();
@@ -207,7 +226,7 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
   const test = async (dsl: Query, scopeValues?: ScopeValues): Promise<TestResult> => {
     try {
       const testDsl: Query = { ...pruneOptional(dsl, 'all'), limit: 5 };
-      const { compiled, warnings } = runPipeline(testDsl);
+      const { compiled, warnings, upgrades } = runPipeline(testDsl);
 
       const syntheticContext = buildValidationContext(compiled.contextContract);
 
@@ -215,9 +234,9 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
       const scope: ScopeValues = scopeValues ?? {};
       requireScope(compiled, scope);
 
-      const rows = await executeQuery(compiled, syntheticContext, scope, adapter, embed);
+      const { rows, warnings: upgradeWarnings } = upgradeOf(await executeQuery(compiled, syntheticContext, scope, adapter, embed), upgrades);
 
-      return { rows, warnings, errors: [] };
+      return { rows, warnings: [...warnings, ...upgradeWarnings], errors: [] };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return { rows: [], warnings: [], errors: [message] };
@@ -301,7 +320,8 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
   const callerOf = (policy: ScopePolicy | undefined, scope: ScopeValues, tables: readonly string[]): GenerationCaller => ({
     bindings: scopeBindings(behaviors ?? {}, tables, scope),
     read: async (dsl) => {
-      const { compiled, warnings } = runPipeline(pruneOptional(dsl, 'all'), policy);
+      const pruned = pruneOptional(dsl, 'all');
+      const { compiled, warnings, upgrades } = runPipeline(pruned, policy);
       requireScope(compiled, scope);
       if (compiled.paramSlots.some((slot) => slot.kind === 'semantic' || slot.embed === true)) {
         return { rows: [], sql: compiled.sql, warnings: [...warnings, 'Semantic params present — execution skipped, SQL structure validated only'] };
@@ -310,7 +330,8 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
       // compares against a column of any type, where a typed guess ('' against
       // a date column) is a cast error.
       const params = compiled.paramSlots.map((slot) => (slot.kind === 'scope' ? scope[slot.key] : null));
-      return { rows: await adapter.execute(compiled, params), sql: compiled.sql, warnings };
+      const { rows, warnings: upgradeWarnings } = upgradeOf(await adapter.execute(compiled, params), upgrades);
+      return { rows, sql: compiled.sql, warnings: [...warnings, ...upgradeWarnings] };
     },
   });
 
@@ -368,7 +389,7 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
     }
   };
 
-  type MapResult = { result: JsonValue; rowCount: number; executionMs: number; mappingMs?: number; mappedIr?: CompiledIr; mappedConfig?: unknown };
+  type MapResult = { result: JsonValue; storedRowCount: number; upgradeWarnings: string[]; executionMs: number; mappingMs?: number; mappedIr?: CompiledIr; mappedConfig?: unknown };
 
   // A mapping reads `$.context` and `$.scope` beside `$.result`, so a reactive
   // read shares rows between callers and maps them per caller.
@@ -394,9 +415,11 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
     cachedIr: CompiledIr | undefined,
     context: Record<string, unknown>,
     scope: Record<string, unknown>,
+    upgrades: readonly ColumnUpgrade[],
   ): Promise<MapResult> => {
     const execStart = Date.now();
-    const rows = await executeQuery(compiled, context, scope, adapter, embed);
+    const stored = await executeQuery(compiled, context, scope, adapter, embed);
+    const { rows, warnings: upgradeWarnings } = upgradeOf(stored, upgrades);
     const executionMs = Date.now() - execStart;
     emit({ type: 'query.rows', count: rows.length, executionMs });
 
@@ -421,7 +444,7 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
       if (mappingMs !== undefined) emit({ type: 'query.mapped', mappingMs });
     }
 
-    return { result, rowCount: rows.length, executionMs, mappingMs, mappedIr, ...(mappedConfig !== undefined ? { mappedConfig } : {}) };
+    return { result, storedRowCount: stored.length, upgradeWarnings, executionMs, mappingMs, mappedIr, ...(mappedConfig !== undefined ? { mappedConfig } : {}) };
   };
 
   const execute = async (
@@ -479,7 +502,7 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
 
     const presence = presenceOf(validRequest.context);
     const shaped = pruneOptional(applySortContext(dsl, validRequest.context), presence);
-    const { compiled, warnings, engineLimit } = runPipeline(shaped, activePolicy, cached.seeded === true);
+    const { compiled, warnings, upgrades, engineLimit } = runPipeline(shaped, activePolicy, cached.seeded === true);
     noteVariant(cached.fingerprint, presenceSignature(dsl, presence), warnings);
     emit({ type: 'query.sql', sql: compiled.sql, warnings });
 
@@ -511,8 +534,11 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
     const reactiveIr = cached.cachedIr;
     if (cached.hit && cached.refresh === 'reactive' && (effectiveRequest.shape === undefined || reactiveIr !== undefined)) {
       const shape = effectiveRequest.shape;
-      const shapeRows = (rows: Row[]): JsonValue =>
-        shape === undefined || reactiveIr === undefined ? (rows as unknown as JsonValue) : mapRows(rows, shape, reactiveIr, context, scope);
+      const shapeRows = (stored: Row[]): { result: JsonValue; upgradeWarnings: string[] } => {
+        const { rows, warnings: upgradeWarnings } = upgradeOf(stored, upgrades);
+        const result = shape === undefined || reactiveIr === undefined ? (rows as unknown as JsonValue) : mapRows(rows, shape, reactiveIr, context, scope);
+        return { result, upgradeWarnings };
+      };
       const params = await resolveParams(compiled.paramSlots, context, scope, embed);
       // The compiled SQL and its bound values: scope is inside both, so two
       // callers share rows exactly when they would get the same rows.
@@ -522,10 +548,10 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
       const rows = await live.read(key, source);
       const executionMs = Date.now() - execStart;
       emit({ type: 'query.rows', count: rows.length, executionMs });
-      const result = shapeRows(rows);
-      const metaOf = (rowCount: number): Omit<QueryResponse['meta'], 'timing'> => {
+      const { result, upgradeWarnings } = shapeRows(rows);
+      const metaOf = (rowCount: number, upgraded: string[]): Omit<QueryResponse['meta'], 'timing'> => {
         const cut = cutNote(engineLimit, shaped.limit, rowCount, shape, validRequest.fingerprint);
-        const said = cut === undefined ? warnings : [...warnings, cut];
+        const said = [...warnings, ...upgraded, ...(cut === undefined ? [] : [cut])];
         return {
           cache: {
             hit: cached.hit,
@@ -538,25 +564,25 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
       };
       const { signal, onChange } = options ?? {};
       if (signal !== undefined && onChange !== undefined) {
-        let lastHash = canonicalHash(result);
+        let lastHash = canonicalHash([result, upgradeWarnings]);
         live.follow(key, source, rows, {
           deliver: (next) => {
-            const nextResult = shapeRows(next);
-            const nextHash = canonicalHash(nextResult);
+            const { result: nextResult, upgradeWarnings: nextUpgradeWarnings } = shapeRows(next);
+            const nextHash = canonicalHash([nextResult, nextUpgradeWarnings]);
             if (nextHash === lastHash) return;
             lastHash = nextHash;
-            onChange({ result: nextResult, meta: metaOf(next.length) });
+            onChange({ result: nextResult, meta: metaOf(next.length, nextUpgradeWarnings) });
           },
         }, signal);
       }
       emit({ type: 'query.done', totalMs: Date.now() - t0 });
-      return { result, meta: { ...metaOf(rows.length), timing: { executionMs } } };
+      return { result, meta: { ...metaOf(rows.length, upgradeWarnings), timing: { executionMs } } };
     }
-    const { result, rowCount, executionMs, mappingMs, mappedIr, mappedConfig } = await executeAndMap(
-      compiled, effectiveRequest, cached.cachedIr, context, scope,
+    const { result, storedRowCount, upgradeWarnings, executionMs, mappingMs, mappedIr, mappedConfig } = await executeAndMap(
+      compiled, effectiveRequest, cached.cachedIr, context, scope, upgrades,
     );
-    const cut = cutNote(engineLimit, shaped.limit, rowCount, effectiveRequest.shape, validRequest.fingerprint);
-    const said = cut === undefined ? warnings : [...warnings, cut];
+    const cut = cutNote(engineLimit, shaped.limit, storedRowCount, effectiveRequest.shape, validRequest.fingerprint);
+    const said = [...warnings, ...upgradeWarnings, ...(cut === undefined ? [] : [cut])];
 
     if (!cached.hit) {
       const now = Date.now();

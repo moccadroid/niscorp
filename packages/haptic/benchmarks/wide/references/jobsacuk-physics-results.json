@@ -1,0 +1,106 @@
+{
+  "key": "url",
+  "items": [
+    {
+      "key": "https://www.jobs.ac.uk/job/DTM067/lecturer-physics",
+      "label": "Lecturer - Physics"
+    },
+    {
+      "key": "https://www.jobs.ac.uk/job/DTF982/physics-phd",
+      "label": "Physics PhD"
+    },
+    {
+      "key": "https://www.jobs.ac.uk/job/DTI944/research-fellow-in-particle-physics",
+      "label": "Research Fellow in Particle Physics"
+    },
+    {
+      "key": "https://www.jobs.ac.uk/job/DTN327/research-officer-in-antihydrogen-physics",
+      "label": "Research Officer in Antihydrogen Physics"
+    },
+    {
+      "key": "https://www.jobs.ac.uk/job/DTN980/research-officer-in-antihydrogen-physics",
+      "label": "Research Officer in Antihydrogen Physics"
+    },
+    {
+      "key": "https://www.jobs.ac.uk/job/DTL108/stipendiary-lecturership-in-physical-chemistry",
+      "label": "Stipendiary Lecturership in Physical Chemistry"
+    },
+    {
+      "key": "https://www.jobs.ac.uk/job/DTM128/research-associate-in-particle-physics-on-atlas",
+      "label": "Research Associate in Particle Physics on ATLAS"
+    },
+    {
+      "key": "https://www.jobs.ac.uk/job/DTH016/assistant-associate-professor-in-particle-physics",
+      "label": "Assistant / Associate Professor in Particle Physics"
+    },
+    {
+      "key": "https://www.jobs.ac.uk/job/DTN549/administrative-assistant-sport-and-physical-activity",
+      "label": "Administrative Assistant (Sport & Physical Activity)"
+    },
+    {
+      "key": "https://www.jobs.ac.uk/job/DTN595/professor-of-cyber-physical-systems-engineering",
+      "label": "Professor of Cyber Physical Systems Engineering"
+    },
+    {
+      "key": "https://www.jobs.ac.uk/job/DTQ493/research-associate-in-black-hole-physics",
+      "label": "Research Associate in Black Hole Physics"
+    },
+    {
+      "key": "https://www.jobs.ac.uk/job/DTN864/postdoctoral-research-associate-in-mathematical-physics",
+      "label": "Postdoctoral Research Associate in Mathematical Physics"
+    },
+    {
+      "key": "https://www.jobs.ac.uk/job/DTJ942/distiguised-scientist-ai-for-physical-systems",
+      "label": "Distiguised Scientist, AI for Physical Systems"
+    },
+    {
+      "key": "https://www.jobs.ac.uk/job/DTK480/research-fellow-in-physical-layer-radio",
+      "label": "Research Fellow in Physical Layer Radio"
+    },
+    {
+      "key": "https://www.jobs.ac.uk/job/DTO327/partner-scientist-ai-for-physical-systems",
+      "label": "Partner Scientist, AI for Physical Systems"
+    },
+    {
+      "key": "https://www.jobs.ac.uk/job/DTK830/lecturer-in-physical-education-eands",
+      "label": "Lecturer in Physical Education (E&S)"
+    },
+    {
+      "key": "https://www.jobs.ac.uk/job/DSX890/faculty-position-in-medical-physics-open-rank",
+      "label": "Faculty Position in Medical Physics (Open Rank)"
+    },
+    {
+      "key": "https://www.jobs.ac.uk/job/DTL644/phd-opportunities-in-health-and-physical-education",
+      "label": "PhD Opportunities in Health and Physical Education"
+    },
+    {
+      "key": "https://www.jobs.ac.uk/job/DTL317/phd-studentship-in-physical-layer-network-security",
+      "label": "PhD Studentship in Physical-Layer Network Security"
+    },
+    {
+      "key": "https://www.jobs.ac.uk/job/DTQ091/research-officer-theoretical-particle-physics-1-year",
+      "label": "Research Officer - Theoretical Particle Physics - 1 year"
+    },
+    {
+      "key": "https://www.jobs.ac.uk/job/DTN496/ai-and-cyber-physical-systems-engineer-grade-7",
+      "label": "AI & Cyber Physical Systems Engineer - Grade 7"
+    },
+    {
+      "key": "https://www.jobs.ac.uk/job/DTQ588/pro-vice-chancellor-faculty-of-engineering-and-physical-sciences",
+      "label": "Pro-Vice-Chancellor – Faculty of Engineering & Physical Sciences"
+    },
+    {
+      "key": "https://www.jobs.ac.uk/job/DTN744/phd-studentship-the-physics-of-learning-in-robotic-metamaterials",
+      "label": "PhD Studentship: The Physics of Learning in Robotic Metamaterials"
+    },
+    {
+      "key": "https://www.jobs.ac.uk/job/DTP059/senior-lecturer-in-nuclear-reactor-physics-and-engineering-tandr",
+      "label": "Senior Lecturer in Nuclear Reactor Physics and Engineering (T&R)"
+    },
+    {
+      "key": "https://www.jobs.ac.uk/job/DTP801/research-associate-in-physics-informed-machine-learning-for-polymer-science",
+      "label": "Research Associate in Physics-Informed Machine Learning for Polymer Science"
+    }
+  ],
+  "notes": "Page 1 of 19 of the results (25 of 462 jobs); later pages are pagination and excluded. Keyed by the job link (absolute). Two different jobs share the title \"Research Officer in Antihydrogen Physics\" (DTN327 and DTN980), which is why links are used. Matches on the literal word \"physics\" in the search (e.g. Physical Chemistry, Physical Education, Cyber Physical Systems) are still results in the list and are included."
+}

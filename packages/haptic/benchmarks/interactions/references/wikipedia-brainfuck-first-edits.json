@@ -1,0 +1,405 @@
+{
+  "key": "url",
+  "items": [
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=2073914",
+      "label": "07:17, 2 January 2004 by 130.94.161.238: \"no change\" restored and clarified. See Talk page for comments."
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=2068757",
+      "label": "06:51, 25 December 2003 by 212.229.115.84: No edit summary"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=2041423",
+      "label": "06:49, 25 December 2003 by 212.229.115.84: Added section on copying bytes."
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=2041417",
+      "label": "18:01, 24 December 2003 by Nikai: +ko"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=2038211",
+      "label": "05:07, 20 December 2003 by Timwi: full stop."
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=2004385",
+      "label": "05:07, 20 December 2003 by Timwi: I can't think of an easy way to do \"no change\", but this one doesn't do it."
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=2004383",
+      "label": "05:03, 20 December 2003 by Timwi: ?"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=2004371",
+      "label": "03:36, 20 December 2003 by 212.229.115.84: linking \"-1\" in the === Simple loop === section to end-of-file"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=2003928",
+      "label": "22:04, 30 November 2003 by 212.229.115.84: Minor formatting change to \"See also\"."
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=1847738",
+      "label": "14:26, 14 November 2003 by 130.94.161.238: If that link's good enough, mine sure is. Also, Catseye is dead."
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=1734989",
+      "label": "10:16, 11 November 2003 by 212.87.150.120: link added"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=1712096",
+      "label": "06:29, 4 November 2003 by Xyb: added zh"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=1670485",
+      "label": "01:08, 28 September 2003 by Tannin: Reverted to last edit by General Wesc"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=1492081",
+      "label": "22:25, 27 September 2003 by 128.210.12.72: No edit summary"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=1491224",
+      "label": "14:22, 24 August 2003 by General Wesc: I'm not aware of any case where BF drove a programmer 'insane'."
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=1339008",
+      "label": "14:30, 13 August 2003 by 206.167.194.174: No edit summary"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=1284335",
+      "label": "20:22, 28 July 2003 by Notheruser: Reverted to last edit by 130.94.161.238"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=1209427",
+      "label": "20:20, 28 July 2003 by 80.131.213.76: No edit summary"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=1209425",
+      "label": "09:14, 21 June 2003 by 130.94.161.238: uncapitalized \"brainfuck\" in accordance with original documents. Left capitalized at beginnings of sentences."
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=1066252",
+      "label": "14:45, 17 June 2003 by Timwi: No edit summary"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=1048045",
+      "label": "22:38, 2 June 2003 by Kricxjo: eo:"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=991078",
+      "label": "16:10, 2 June 2003 by 217.230.22.86: de"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=989965",
+      "label": "00:59, 15 April 2003 by Cprompt: No edit summary"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=831337",
+      "label": "11:20, 12 April 2003 by 130.94.161.238: \"[the archive] has many brainfuck programs...\" and replaced Intercal link with the general page on esoteric languages."
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=822347",
+      "label": "08:44, 9 April 2003 by 217.24.129.50: which site includes a BF quine."
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=813796",
+      "label": "22:14, 11 March 2003 by 81.57.175.171: fr:"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=739836",
+      "label": "07:41, 11 March 2003 by 130.94.161.238: Tiny tweaks to latest addition."
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=738906",
+      "label": "23:28, 10 March 2003 by SGBailey: A couple more simple examples. Some of the examples here are over complex"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=737949",
+      "label": "08:16, 9 March 2003 by 130.94.161.238: Tweaking some details: see the \"Talk\" page."
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=733924",
+      "label": "14:10, 8 March 2003 by Kricxjo: Not \"Hello, world\" but \"Hello World!\""
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=731767",
+      "label": "12:54, 8 March 2003 by Cferrero: typo"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=731643",
+      "label": "11:09, 8 March 2003 by Patrick: No edit summary"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=731460",
+      "label": "10:02, 8 March 2003 by Kricxjo: Moved examples from the subpage, there should be no subpage just like for the other computer languages"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=731377",
+      "label": "17:16, 6 March 2003 by 130.94.161.238: No edit summary"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=726000",
+      "label": "17:04, 6 March 2003 by 130.94.161.238: No edit summary"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=725983",
+      "label": "16:22, 5 March 2003 by 195.58.97.100: No edit summary"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=723348",
+      "label": "14:44, 19 February 2003 by 80.89.232.240: No edit summary"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=681848",
+      "label": "22:22, 24 January 2003 by FvdP: one more black pixel on your screen"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=616879",
+      "label": "22:19, 24 January 2003 by FvdP: clarified (hopefully) points as per talk"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=616870",
+      "label": "21:51, 24 January 2003 by Alfio: Added INTERCAL link"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=616777",
+      "label": "21:48, 24 January 2003 by FvdP: HTMLized BF->C translation table. + other wikif."
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=616761",
+      "label": "17:45, 17 January 2003 by Frecklefoot: links"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=594196",
+      "label": "22:21, 16 November 2002 by V~enwiki: Links were including ')' on the end, removed smily :P"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=428835",
+      "label": "22:03, 16 November 2002 by 203.97.2.243: No edit summary"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=428815",
+      "label": "15:33, 21 May 2002 by 130.94.161.238: No edit summary"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=74726",
+      "label": "11:50, 21 May 2002 by AxelBoldt: No edit summary"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=74604",
+      "label": "02:34, 20 May 2002 by 130.94.161.238: No edit summary"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=73459",
+      "label": "10:37, 23 April 2002 by Bryan Derksen: -/Talk"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=66312",
+      "label": "15:51, 25 February 2002 by Conversion script: Automated conversion"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=239085",
+      "label": "14:45, 12 November 2001 by Gareth Owen: <pre>formatting sucks on long lines"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=5840925",
+      "label": "17:24, 12 September 2004 by Guanabot: Guanaco - robot: fixing <p> and emphasis tags on pages containing <p> tags"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=5833499",
+      "label": "14:12, 7 September 2004 by Ævar Arnfjörð Bjarmason: is:Heilariðlun"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=5718446",
+      "label": "03:28, 7 September 2004 by Guanabot: Guanaco - robot: changing unnecessary HTML entities to ISO-8859-1 characters - see Wikipedia:Special characters"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=5709037",
+      "label": "07:52, 3 September 2004 by Crimmer: Reverted edits by 213.169.62.104 to last version by 68.7.242.6"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=5624537",
+      "label": "07:49, 3 September 2004 by 213.169.62.104: →Overview"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=5624509",
+      "label": "07:41, 3 September 2004 by 68.7.242.6: →External links"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=5624436",
+      "label": "16:19, 31 August 2004 by ZeroOne: Template:esolangs"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=5567273",
+      "label": "19:17, 30 August 2004 by 80.126.9.240: nl:"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=5547114",
+      "label": "12:55, 28 August 2004 by Pt: et:"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=5499092",
+      "label": "00:05, 26 August 2004 by 212.31.160.205: →External links"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=5445080",
+      "label": "22:09, 20 August 2004 by 68.160.188.192: →Overview"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=5335381",
+      "label": "15:22, 15 August 2004 by Danakil: added cat"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=5221293",
+      "label": "13:02, 15 August 2004 by Iainscott: rv to 193.178.208.6"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=5220084",
+      "label": "12:55, 15 August 2004 by 195.131.86.100: →Hello World!"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=5220035",
+      "label": "09:09, 13 August 2004 by 193.178.208.6: →External links"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=5179771",
+      "label": "01:38, 12 August 2004 by Neilc: →See also"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=5153919",
+      "label": "04:27, 5 August 2004 by 130.94.161.238: fix broken link"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=5009676",
+      "label": "22:24, 28 July 2004 by Bunny Angel13: No edit summary"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=4893472",
+      "label": "05:20, 16 July 2004 by Wile E. Heresiarch: +FuckFuck link (FuckFuck redirected to Brainfuck per vfd discussion, see Wikipedia:Votes for deletion/FuckFuck)"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=4666134",
+      "label": "22:28, 9 July 2004 by Maximus Rex: Reverted edits by 217.129.115.112 to last version by Ben-Arba"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=4535483",
+      "label": "22:27, 9 July 2004 by 217.129.115.112: →Overview"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=4535468",
+      "label": "04:35, 7 July 2004 by Ben-Arba: see also - added doublefuck"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=4484465",
+      "label": "15:57, 26 June 2004 by 81.27.192.16: No edit summary"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=4294693",
+      "label": "15:56, 26 June 2004 by 81.27.192.16: No edit summary"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=4294688",
+      "label": "09:55, 15 June 2004 by Bug~enwiki: →External links"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=4100734",
+      "label": "09:36, 15 June 2004 by 130.94.161.238: Clarification? See \"Talk\"."
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=4100553",
+      "label": "03:56, 14 June 2004 by 216.127.194.241: →Conditional statements"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=4080261",
+      "label": "12:35, 12 June 2004 by Bug~enwiki: →Overview"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=4051851",
+      "label": "12:34, 12 June 2004 by Bug~enwiki: →Overview"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=4051846",
+      "label": "04:25, 12 June 2004 by 130.94.165.122: restore \"both modifications\". See Talk:Brainfuck"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=4047316",
+      "label": "22:38, 11 June 2004 by 216.231.56.102: →Commentary"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=4042735",
+      "label": "12:51, 9 June 2004 by Wikiborg: No edit summary"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=3999613",
+      "label": "19:10, 8 June 2004 by 206.169.234.162: →See also"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=3985751",
+      "label": "07:11, 1 June 2004 by Fredrik: Category:Esoteric programming languages"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=3819039",
+      "label": "06:17, 1 June 2004 by Tietew: +ja"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=3818317",
+      "label": "15:13, 31 May 2004 by 217.239.19.149: Deleted <p> that was shown in clear-text."
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=3802974",
+      "label": "18:28, 30 May 2004 by Szajd: +hu:"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=3786322",
+      "label": "13:36, 15 March 2004 by Tsca: +pl:"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=2776203",
+      "label": "16:41, 13 March 2004 by Fredrik: add müller's source of inspiration for creating the thing"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=2748383",
+      "label": "21:50, 12 March 2004 by Fredrik: changed C to C"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=2739114",
+      "label": "17:32, 9 March 2004 by Arvindn: +section title"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=2694877",
+      "label": "00:28, 27 February 2004 by 213.113.90.143: No edit summary"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=2543760",
+      "label": "00:27, 27 February 2004 by 213.113.90.143: No edit summary"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=2543751",
+      "label": "00:26, 27 February 2004 by 213.113.90.143: No edit summary"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=2543743",
+      "label": "02:47, 26 February 2004 by 68.84.226.92: No edit summary"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=2533187",
+      "label": "20:22, 24 February 2004 by 81.227.202.197: added an external link"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=2515007",
+      "label": "10:31, 17 February 2004 by E23~enwiki: +sv"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=2422104",
+      "label": "02:33, 16 February 2004 by 130.94.161.238: EOF handling clarified a bit."
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=2408037",
+      "label": "23:53, 8 January 2004 by Spikey: No edit summary"
+    },
+    {
+      "key": "https://en.wikipedia.org/w/index.php?title=Brainfuck&oldid=2115078",
+      "label": "06:36, 3 January 2004 by 62.206.8.161: Brainfuck.Net"
+    }
+  ]
+}

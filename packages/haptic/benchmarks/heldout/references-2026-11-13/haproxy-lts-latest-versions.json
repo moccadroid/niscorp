@@ -1,0 +1,18 @@
+{
+  "key": "text",
+  "items": [
+    {
+      "key": "3.4.7",
+      "label": "Branch 3.4, End of life 2031-Q2 (LTS)"
+    },
+    {
+      "key": "3.2.26",
+      "label": "Branch 3.2, End of life 2030-Q2 (LTS)"
+    },
+    {
+      "key": "3.0.30",
+      "label": "Branch 3.0, End of life 2029-Q2 (LTS)"
+    }
+  ],
+  "notes": "From the Latest versions table on https://www.haproxy.org/, the branch status is the parenthesised word in the End of life column. Included the Latest version cell of the three rows marked (LTS): 3.4 -> 3.4.7, 3.2 -> 3.2.26, 3.0 -> 3.0.30, in table order. Excluded 3.5-dev (dev » stable, development branch, now 3.5-dev12), 3.3 (stable, 3.3.17), 2.8 and 2.6 (critical fixes only, 2.8.31 and 2.6.35), and every (unmaintained) branch (3.1, 2.9, 2.7, 2.5, 2.4 and older). Release dates, end-of-life dates, changelog dates and the git/web/dir/announce/bugs links are excluded. Keys are the version strings exactly as shown; the branch name alone (e.g. '3.4') is not an item. Changed since 2026-11-07: only the development branch moved (3.5-dev11 of 2026-11-04 -> 3.5-dev12 of 2026-11-12). The LTS rows are unchanged, so the items are the same."
+}

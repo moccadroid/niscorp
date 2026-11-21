@@ -1,0 +1,16 @@
+{
+  "key": "text",
+  "items": [
+    {
+      "key": "1888",
+      "label": "one record; every detail must be in it",
+      "include": [
+        "Oil on canvas",
+        "92.1 × 73 cm",
+        "Bought, Courtauld Fund, 1924",
+        "NG3863"
+      ]
+    }
+  ],
+  "notes": "Five fields from the Details list, in page order. Full title, artist, artist dates, inscription summary, location, collection and frame are in the same list but not asked for (frame is explicitly excluded). The dimensions use the multiplication sign ×, not the letter x. '1888' also appears in the overview essay; the match should come from the Date made field. The instruction asks for one record with several details, so the reference is one item: its key plus every other detail as include texts (restructured 2026-11-15 from five separate items, which a single correct record could never match)."
+}

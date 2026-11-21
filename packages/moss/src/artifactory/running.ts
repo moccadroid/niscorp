@@ -23,6 +23,7 @@ import { draftSaving, laidOver } from './draft';
 import { answeredRead, compiledRead, readsInForce, seedOf } from './reads';
 import type { ReadChecks, ReadSources, SavedRead } from './reads';
 import { compileEntries, createEntriesInForce } from './entries';
+import type { CompileRead } from './entries';
 import { createGeneration } from './generation';
 import type { Generation, Pointer } from './generation';
 import { catalogOfGenerated, generatedInForce } from './generated';
@@ -57,6 +58,8 @@ export type RunningManifestConfig = {
   reads?: ReadSources & { savedOf: (scope: Record<string, unknown>) => SavedRows };
   // How often at most a person's artifact is stamped as used; default an hour.
   touchEveryMs?: number;
+  // Given: every seeded read is compiled against the database when it is taken.
+  compileSeeded?: CompileRead;
 };
 
 // `replayable`: the fingerprints their policy may replay. Absent: none.
@@ -132,7 +135,7 @@ const tell = <Told extends unknown[]>(listener: (...told: Told) => void, ...told
 
 export const createRunningManifest = (config: RunningManifestConfig): RunningManifest => {
   const { shipped } = config;
-  const entries = createEntriesInForce(entriesOf(shipped));
+  const entries = createEntriesInForce(entriesOf(shipped), config.compileSeeded);
   let defaults: Defaults = NO_DEFAULTS;
   const usage = createUsage(config.touchEveryMs ?? TOUCH_EVERY_MS);
   let functionIds: ReadonlySet<string> | undefined;

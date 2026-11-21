@@ -164,6 +164,8 @@ Then open `PLAN.md`, and hand the folder to your agent.
 
 ## Packages
 
+[Haptic](packages/haptic) is integrated as a private package pending its first npm release: request + URL → reusable JSON artifact → mechanical web data.
+
 Eleven libraries, a command, a release that pins them together, and the thing that makes a new app. All on npm. Each library stands alone; they also compose.
 
 | | Package | What it is |

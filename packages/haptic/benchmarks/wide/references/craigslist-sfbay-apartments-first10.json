@@ -1,0 +1,46 @@
+{
+  "key": "text",
+  "items": [
+    {
+      "key": "Log Cabin",
+      "label": "$1,600 / Williams"
+    },
+    {
+      "key": "Move In Today! Exceptional 1 BR by Resort Pools & Car Wash",
+      "label": "$3,214 / santa clara"
+    },
+    {
+      "key": "3/BD 2/BA, Clubhouse, Bike Racks",
+      "label": "$4,275 / milpitas"
+    },
+    {
+      "key": "TMLP 11-mo. | Courtyard with Zen Fountains, Outdoor Fireplaces",
+      "label": "$2,821 / walnut creek"
+    },
+    {
+      "key": "TMLP 12-mo. | Greenspace Abound! Welcoming Garden Courtyards",
+      "label": "$2,934 / daly city"
+    },
+    {
+      "key": "Minutes to Travis Air Force Base & Westfield Mall",
+      "label": "$1,629 / fairfield / vacaville"
+    },
+    {
+      "key": "Cozy 1 bed, 1 bath: the perfect spot to enjoy the season.",
+      "label": "$2,230 / walnut creek"
+    },
+    {
+      "key": "TMLP 12-mo. | Luxury Apartments with Balcony & Bay Views-Now Leasing!",
+      "label": "$3,621 / oakland west"
+    },
+    {
+      "key": "Newly Renovated, Great Fitness Center, Vinyl Wood Flooring",
+      "label": "$2,073 / concord / pleasant hill / martinez"
+    },
+    {
+      "key": "TMLP 14-mo. | The True Meaning of Luxury and Convenience",
+      "label": "$3,054 / rohnert pk / cotati"
+    }
+  ],
+  "notes": "sfbay.craigslist.org/search/apa redirected (301) to www.craigslist.org/search/area/sfbay?cat=apa; the reference uses that page. First ten of 357 listings in the saved HTML, in its order; keyed by title, price and location in the label. The 7th title is wrapped in scarf emoji; the key drops them. Judgement call: the order is the no-JavaScript listing order of the saved HTML; a browser render could reorder or insert listings."
+}

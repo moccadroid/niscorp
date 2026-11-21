@@ -30,8 +30,8 @@ const ESM_ONLY: Readonly<Record<string, readonly string[]>> = {
   '@niscorp/moss': ['./terminal/ink'],
 };
 
-// create-nisc runs as `npm create nisc`: nothing requires it.
-const ESM_ONLY_PACKAGES: ReadonlySet<string> = new Set(['create-nisc']);
+// create-nisc runs as npm create; Haptic preserves its existing ESM-only contract.
+const ESM_ONLY_PACKAGES: ReadonlySet<string> = new Set(['create-nisc', '@niscorp/haptic']);
 
 type Manifest = {
   name: string;

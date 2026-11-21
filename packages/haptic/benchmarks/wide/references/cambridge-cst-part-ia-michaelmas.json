@@ -1,0 +1,42 @@
+{
+  "key": "text",
+  "items": [
+    {
+      "key": "Databases",
+      "label": "Dr David Greaves; 12 h"
+    },
+    {
+      "key": "Digital Electronics",
+      "label": "Dr Ian Wassell; 12 h"
+    },
+    {
+      "key": "Discrete Mathematics",
+      "label": "Prof Marcelo Fiore, Dr Jon Sterling; 24 h"
+    },
+    {
+      "key": "Foundations of Computer Science",
+      "label": "Dr Jon Ludlam; 12 h"
+    },
+    {
+      "key": "Hardware Practical Classes",
+      "label": "Dr Ian Wassell; no hours given"
+    },
+    {
+      "key": "Introduction to Graphics",
+      "label": "Dr Rafal Mantiuk; 8 h"
+    },
+    {
+      "key": "OCaml Practical Classes",
+      "label": "Dr Jon Ludlam; no hours given"
+    },
+    {
+      "key": "Object-Oriented Programming",
+      "label": "Dr Robert Harle; 10 h"
+    },
+    {
+      "key": "Registration",
+      "label": "Prof Alastair Beresford, Dr Robert Harle; no hours given"
+    }
+  ],
+  "notes": "Nine courses under the Michaelmas term heading. Three (Hardware Practical Classes, OCaml Practical Classes, Registration) show no hours; they are still courses listed under Michaelmas, so they are included. \"Preparation for Computer Science\" sits under Pre-arrival, above the Michaelmas heading, and is excluded. Discrete Mathematics and Hardware Practical Classes appear again under Lent as \"(continuing)\"; those rows are excluded and would count as extras. Keys are course names; lecturers and hours are in the label."
+}

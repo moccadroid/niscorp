@@ -1,0 +1,106 @@
+{
+  "key": "url",
+  "items": [
+    {
+      "key": "https://www.gutenberg.org/ebooks/1342",
+      "label": "Pride and Prejudice — Jane Austen"
+    },
+    {
+      "key": "https://www.gutenberg.org/ebooks/84",
+      "label": "Frankenstein; or, The modern Prometheus — Mary Wollstonecraft Shelley"
+    },
+    {
+      "key": "https://www.gutenberg.org/ebooks/2701",
+      "label": "Moby Dick; Or, The Whale — Herman Melville"
+    },
+    {
+      "key": "https://www.gutenberg.org/ebooks/11",
+      "label": "Alice's Adventures in Wonderland — Lewis Carroll"
+    },
+    {
+      "key": "https://www.gutenberg.org/ebooks/1661",
+      "label": "The Adventures of Sherlock Holmes — Arthur Conan Doyle"
+    },
+    {
+      "key": "https://www.gutenberg.org/ebooks/345",
+      "label": "Dracula — Bram Stoker"
+    },
+    {
+      "key": "https://www.gutenberg.org/ebooks/100",
+      "label": "The Complete Works of William Shakespeare — William Shakespeare"
+    },
+    {
+      "key": "https://www.gutenberg.org/ebooks/98",
+      "label": "A Tale of Two Cities — Charles Dickens"
+    },
+    {
+      "key": "https://www.gutenberg.org/ebooks/1513",
+      "label": "Romeo and Juliet — William Shakespeare"
+    },
+    {
+      "key": "https://www.gutenberg.org/ebooks/37683",
+      "label": "Chambers's Twentieth Century Dictionary (part 1 of 4: A-D)"
+    },
+    {
+      "key": "https://www.gutenberg.org/ebooks/145",
+      "label": "Middlemarch — George Eliot"
+    },
+    {
+      "key": "https://www.gutenberg.org/ebooks/174",
+      "label": "The Picture of Dorian Gray — Oscar Wilde"
+    },
+    {
+      "key": "https://www.gutenberg.org/ebooks/43",
+      "label": "The strange case of Dr. Jekyll and Mr. Hyde — Robert Louis Stevenson"
+    },
+    {
+      "key": "https://www.gutenberg.org/ebooks/1260",
+      "label": "Jane Eyre: An Autobiography — Charlotte Brontë"
+    },
+    {
+      "key": "https://www.gutenberg.org/ebooks/64317",
+      "label": "The Great Gatsby — F. Scott Fitzgerald"
+    },
+    {
+      "key": "https://www.gutenberg.org/ebooks/1232",
+      "label": "The Prince — Niccolò Machiavelli"
+    },
+    {
+      "key": "https://www.gutenberg.org/ebooks/2554",
+      "label": "Crime and Punishment — Fyodor Dostoyevsky"
+    },
+    {
+      "key": "https://www.gutenberg.org/ebooks/5200",
+      "label": "Metamorphosis — Franz Kafka"
+    },
+    {
+      "key": "https://www.gutenberg.org/ebooks/41",
+      "label": "The Legend of Sleepy Hollow — Washington Irving"
+    },
+    {
+      "key": "https://www.gutenberg.org/ebooks/205",
+      "label": "Walden, and On The Duty Of Civil Disobedience — Henry David Thoreau"
+    },
+    {
+      "key": "https://www.gutenberg.org/ebooks/1400",
+      "label": "Great Expectations — Charles Dickens"
+    },
+    {
+      "key": "https://www.gutenberg.org/ebooks/2680",
+      "label": "Meditations — Emperor of Rome Marcus Aurelius"
+    },
+    {
+      "key": "https://www.gutenberg.org/ebooks/1952",
+      "label": "The Yellow Wallpaper — Charlotte Perkins Gilman"
+    },
+    {
+      "key": "https://www.gutenberg.org/ebooks/1184",
+      "label": "The Count of Monte Cristo — Alexandre Dumas and Auguste Maquet"
+    },
+    {
+      "key": "https://www.gutenberg.org/ebooks/2641",
+      "label": "A Room with a View — E. M. Forster"
+    }
+  ],
+  "notes": "The main results list (ul.results) holds 25 li.booklink entries; each has exactly one link, to the book's /ebooks/<number> detail page, and that link is the item. Author names, cover images and download counts sit inside that same single link, so there are no separate author links to exclude. Excluded: the sort-order links (Release Date, Title, Random), the two 'Next' pagination links, and the header/footer navigation. The page lists results 1-25 of the downloads-sorted search. Grading caveat: 'https://www.gutenberg.org/ebooks/11' (Alice's Adventures in Wonderland) is a prefix of 'https://www.gutenberg.org/ebooks/1184' (The Count of Monte Cristo), so under contains-matching the Alice item also matches a Monte Cristo result."
+}

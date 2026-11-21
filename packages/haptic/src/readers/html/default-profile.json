@@ -1,0 +1,14 @@
+{
+  "charset": { "prescanBytes": 1024, "fallbackEncoding": "utf-8", "errors": "fatal" },
+  "base": { "urlEncoding": "utf-8" },
+  "text": "native-text",
+  "limits": {
+    "maxInputBytes": 2097152,
+    "maxElements": 20000,
+    "maxNodes": 40000,
+    "maxFieldValues": 40000,
+    "maxFieldBytes": 4194304,
+    "maxDepth": 128,
+    "maxIndexBytes": 8388608
+  }
+}

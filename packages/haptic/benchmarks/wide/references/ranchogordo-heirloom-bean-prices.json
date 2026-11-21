@@ -1,0 +1,146 @@
+{
+  "key": "text",
+  "items": [
+    {
+      "key": "Alubia Blanca Bean",
+      "label": "price $ 6.50"
+    },
+    {
+      "key": "Ayocote Blanco Bean",
+      "label": "price $ 7.50"
+    },
+    {
+      "key": "Ayocote Morado Bean",
+      "label": "price $ 7.50"
+    },
+    {
+      "key": "Black Calypso Bean",
+      "label": "price $ 7.95"
+    },
+    {
+      "key": "Black Caviar Lentil",
+      "label": "price $ 6.50"
+    },
+    {
+      "key": "Black Garbanzo Bean",
+      "label": "price $ 7.50"
+    },
+    {
+      "key": "Buckeye Bean",
+      "label": "price $ 6.50"
+    },
+    {
+      "key": "Caballero Bean",
+      "label": "price $ 7.50"
+    },
+    {
+      "key": "Cassoulet (Tarbais) Bean",
+      "label": "price $ 7.50"
+    },
+    {
+      "key": "Ceci Piccoli (Small Chickpea)",
+      "label": "price $ 7.50"
+    },
+    {
+      "key": "Chiapas Black Bean (Frijol Negro de Vara)",
+      "label": "price $ 7.50"
+    },
+    {
+      "key": "Christmas Lima Bean",
+      "label": "price $ 7.50"
+    },
+    {
+      "key": "Cranberry Bean",
+      "label": "price $ 6.50"
+    },
+    {
+      "key": "Dirty Cassoulet Bean",
+      "label": "price $ 5.50"
+    },
+    {
+      "key": "Domingo Rojo Bean",
+      "label": "price $ 6.50"
+    },
+    {
+      "key": "Flor de Junio Bean",
+      "label": "price $ 7.50"
+    },
+    {
+      "key": "Garbanzo Bean (Chickpea)",
+      "label": "price $ 6.50"
+    },
+    {
+      "key": "Green Baby Lima Bean",
+      "label": "price $ 6.50"
+    },
+    {
+      "key": "Green Split Pea",
+      "label": "price $ 6.50"
+    },
+    {
+      "key": "Hidatsa Red Bean",
+      "label": "price $ 7.50"
+    },
+    {
+      "key": "King City Pink Bean",
+      "label": "price $ 7.50"
+    },
+    {
+      "key": "Large White Lima",
+      "label": "price $ 6.50"
+    },
+    {
+      "key": "Marcella Bean",
+      "label": "price $ 7.50"
+    },
+    {
+      "key": "Masoor Dal (Split Red Lentils)",
+      "label": "price $ 6.50"
+    },
+    {
+      "key": "Mayocoba Bean",
+      "label": "price $ 6.50"
+    },
+    {
+      "key": "Midnight Black Bean",
+      "label": "price $ 6.50"
+    },
+    {
+      "key": "Moro Bean",
+      "label": "price $ 7.50"
+    },
+    {
+      "key": "Negro de Suelo Bean",
+      "label": "price $ 7.50"
+    },
+    {
+      "key": "Occhio della Capra (Eye of the Goat Italiano)",
+      "label": "price $ 7.50"
+    },
+    {
+      "key": "Pinto Bean",
+      "label": "price $ 6.50"
+    },
+    {
+      "key": "Rebosero Bean",
+      "label": "price $ 7.50"
+    },
+    {
+      "key": "Rio Zape Bean",
+      "label": "price $ 7.50"
+    },
+    {
+      "key": "Royal Corona Bean",
+      "label": "price $ 7.95"
+    },
+    {
+      "key": "Santa Maria Pinquito Bean",
+      "label": "price $ 7.50"
+    },
+    {
+      "key": "Santanero Negro Delgado Bean",
+      "label": "price $ 7.50"
+    }
+  ],
+  "notes": "35 products on page 1 of 2 of the grid (pagination excluded, so page 2 is not wanted). Keyed by product name; price is in the label. Names were checked so no key is contained in another (e.g. \"Cassoulet (Tarbais) Bean\" vs \"Dirty Cassoulet Bean\", \"Garbanzo Bean (Chickpea)\" vs \"Black Garbanzo Bean\"). Lentils, split pea and chickpeas sit in the heirloom beans grid and are included."
+}

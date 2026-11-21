@@ -1,0 +1,7 @@
+{
+  "key": "url",
+  "items": [
+    { "key": "https://www.lua.org/ftp/lua-5.5.1.tar.gz", "label": "lua-5.5.1.tar.gz" }
+  ],
+  "notes": "The page offers one source archive, lua-5.5.1.tar.gz. Several anchors in the main content point to the same URL: the 'Lua 5.5.1' link in the sentence, the download-arrow image, and the 'lua-5.5.1.tar.gz' filename link; the 'source' entry in the top menubar also points to it but is navigation. They are one item. An extractor that returns the same URL two or three times is returning duplicates of this one item, which the grader may count as extras. Excluded: 'source code'/'download' links to the ftp/ directory listing (a page, not an archive), versions/license/manual/FAQ/demo/donation pages, LuaRocks/LuaBinaries/lua-users links, and the sha256 text (no checksum or signature links exist). The URL inside the curl command in the <pre> block is plain text, not a link."
+}

@@ -1,0 +1,54 @@
+{
+  "key": "text",
+  "items": [
+    {
+      "key": "Soldiers of Misfortune",
+      "label": "https://publicdomainreview.org/essay/soldiers-of-misfortune/ ; Soldiers of Misfortune: The Drawings of Urs Graf the Elder; Miya Tokumitsu; November 11, 2026",
+      "include": [
+        "Soldiers of Misfortune",
+        "The Drawings of Urs Graf the Elder",
+        "By Miya Tokumitsu",
+        "November 11, 2026"
+      ],
+      "exclude": [
+        "18 new prints just added to our online shop",
+        "Many artists draw ably; a rarefied few draw with an animating touch",
+        "Urs Graf the Elder, Prostitute Inviting Love, 1514",
+        "Get Our Newsletter"
+      ]
+    },
+    {
+      "key": "Wonderful Weather",
+      "label": "https://publicdomainreview.org/essay/wonderful-weather/ ; Wonderful Weather: Floods and Foreboding in 17th-Century Britain; Erik Crnkovich; October 28, 2026",
+      "include": [
+        "Wonderful Weather",
+        "Floods and Foreboding in 17th-Century Britain",
+        "By Erik Crnkovich",
+        "October 28, 2026"
+      ],
+      "exclude": [
+        "18 new prints just added to our online shop",
+        "When the Bristol Channel flooded on January 30, 1607",
+        "Title-page woodcut from 1607",
+        "Get Our Newsletter"
+      ]
+    },
+    {
+      "key": "The Jumping Frenchmen of Maine",
+      "label": "https://publicdomainreview.org/essay/the-jumping-frenchmen-of-maine/ ; “Men with Queer Nerves”: The Jumping Frenchmen of Maine; Ross Bullen; October 14, 2026",
+      "include": [
+        "Men with Queer Nerves",
+        "The Jumping Frenchmen of Maine",
+        "By Ross Bullen",
+        "October 14, 2026"
+      ],
+      "exclude": [
+        "18 new prints just added to our online shop",
+        "Moosehead Lake in Northwest Maine is lumberjack country.",
+        "Paul Gagnon's lumberjack crew in Maine, 1908",
+        "Get Our Newsletter"
+      ]
+    }
+  ],
+  "notes": "Most recent three on the index: Soldiers of Misfortune (11 Nov 2026, the featured essay at the top), Wonderful Weather (28 Oct 2026), “Men with Queer Nerves”: The Jumping Frenchmen of Maine (14 Oct 2026); all three pages are in the saved copy. Each page shows the title and subtitle as two parts (index joins them with a colon), so keys are the title part only; the third key is the subtitle part to avoid the curly quotes. Dates as written on the essay pages (index writes '11 Nov 2026'). The standfirst between byline and date is neither asked for nor explicitly excluded, so it is in neither list."
+}

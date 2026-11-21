@@ -1,0 +1,4 @@
+tests/fixtures/reuse/7zip.html -text whitespace=-trailing-space
+tests/fixtures/reuse/procedures/*.html -text whitespace=-trailing-space
+# Recorded SSE streams retain their exact bytes and required event delimiters.
+*.sse -text whitespace=-blank-at-eof

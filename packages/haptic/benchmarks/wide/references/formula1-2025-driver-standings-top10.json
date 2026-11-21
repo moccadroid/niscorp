@@ -1,0 +1,46 @@
+{
+  "key": "text",
+  "items": [
+    {
+      "key": "Norris",
+      "label": "1 Lando Norris, McLaren, 423"
+    },
+    {
+      "key": "Verstappen",
+      "label": "2 Max Verstappen, Red Bull Racing, 421"
+    },
+    {
+      "key": "Piastri",
+      "label": "3 Oscar Piastri, McLaren, 410"
+    },
+    {
+      "key": "Russell",
+      "label": "4 George Russell, Mercedes, 319"
+    },
+    {
+      "key": "Leclerc",
+      "label": "5 Charles Leclerc, Ferrari, 242"
+    },
+    {
+      "key": "Hamilton",
+      "label": "6 Lewis Hamilton, Ferrari, 156"
+    },
+    {
+      "key": "Antonelli",
+      "label": "7 Kimi Antonelli, Mercedes, 150"
+    },
+    {
+      "key": "Albon",
+      "label": "8 Alexander Albon, Williams, 73"
+    },
+    {
+      "key": "Sainz",
+      "label": "9 Carlos Sainz, Williams, 64"
+    },
+    {
+      "key": "Alonso",
+      "label": "10 Fernando Alonso, Aston Martin, 56"
+    }
+  ],
+  "notes": "First ten rows of the 21-row table. Keys are surnames because the name cell is first name, surname and a three-letter code in separate spans (\"Lando Norris NOR\" or \"Lando NorrisNOR\" depending on how text is joined); the driver picker above the table also lists every driver as \"Norris, Lando\" and is excluded. Team and points are in the label. Hulkenberg (11th) onward excluded."
+}

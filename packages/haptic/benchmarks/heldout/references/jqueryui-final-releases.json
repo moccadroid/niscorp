@@ -1,0 +1,15 @@
+{
+  "key": "url",
+  "items": [
+    { "key": "https://jqueryui.com/changelog/1.14.2/", "label": "1.14.2 Changelog" },
+    { "key": "https://jqueryui.com/changelog/1.14.1/", "label": "1.14.1 Changelog" },
+    { "key": "https://jqueryui.com/changelog/1.14.0/", "label": "1.14.0 Changelog" },
+    { "key": "https://jqueryui.com/changelog/1.13.3/", "label": "1.13.3 Changelog" },
+    { "key": "https://jqueryui.com/changelog/1.13.2/", "label": "1.13.2 Changelog" },
+    { "key": "https://jqueryui.com/changelog/1.13.1/", "label": "1.13.1 Changelog" },
+    { "key": "https://jqueryui.com/changelog/1.13.0/", "label": "1.13.0 Changelog" },
+    { "key": "https://jqueryui.com/changelog/1.12.1/", "label": "1.12.1 Changelog" },
+    { "key": "https://jqueryui.com/changelog/1.12.0/", "label": "1.12.0 Changelog" }
+  ],
+  "notes": "The changelog list in #content is a series of h2 links '<version> Changelog' each followed by a 'Released on ...' paragraph. Included the final-release links from 1.14.2 down to 1.12.0 inclusive, in page order; hrefs are relative (/changelog/x.y.z/) and there is no <base>, so keys are resolved against https://jqueryui.com/. Excluded 1.14.0-beta.2, 1.14.0-beta.1, 1.13.0-rc.3, 1.13.0-rc.2, 1.12.0-rc.2, 1.12.0-rc.1, 1.12.0-beta.1 (pre-releases), everything from 1.11.4 down to 1.5 (older than 1.12.0), the 'Released on' dates, the sidebar lists and site navigation. Note 1.13.0 has no beta in this list; 1.12.0 itself is included because the instruction says 'from 1.12.0 onward'."
+}

@@ -19,8 +19,6 @@ export const anchorDraft = (draft: ReflexDraft, anchor: { at: number; tz: string
   return ReflexSchema.parse({ ...draft, on: { clock: clockAt(fires, anchor.tz) } });
 };
 
-// The host's zone, where its wall clock names the instant; in the hour a clock turned back repeats, the local time names
-// the first pass, an hour early, so the timer is kept in UTC, which names every instant once.
 const clockAt = (fires: number, tz: string): { at: string; tz: string } => {
   const local = { at: localDateTime(fires, tz), tz };
   return occurrencesBetween(local, fires - 1000, fires, 1)[0]?.at === fires ? local : { at: localDateTime(fires, 'UTC'), tz: 'UTC' };

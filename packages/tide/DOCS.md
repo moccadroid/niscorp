@@ -138,7 +138,8 @@ loaded, and an **unguarded cycle** — a loop on which no reflex has a `select`
 or a `when`. By default one such reflex refuses the whole load. With
 `load(reflexes, { isolate: true })` each is left out alone — with every reflex on
 an unguarded cycle, and any reflex left watching the run of one left out — and
-the rest load; the report's `refused` says which, and why (`LoadRefusal`). That
+the rest load; the report's `refused` gives one entry for each reason a reflex
+was left out (`LoadRefusal`), so a reflex with two faults is in it twice. That
 is for a host whose reflexes are its people's rows. It keeps one person's bad
 reflex from stopping another's only where the host owns the ids (a duplicate
 leaves out every reflex after the first) and one person's triggers never wake on
@@ -394,8 +395,9 @@ cycles are legal and reported; effects with no `writes` are reported as
 blind edges; `warnings` names a reflex that subscribes to its own run, a
 reflex whose `timeoutMs` is not shorter than `leaseMs`, and a one-shot clock
 whose date does not exist (`2026-02-30`), with the day it fires on (2 March);
-`refused` is each reflex `isolate` left out, as
-`{ reflexId, code, message }` (`reflexId` is undefined for one that had none),
+`refused` has one entry for each reason `isolate` left a reflex out, as
+`{ reflexId, code, message }` (`reflexId` is undefined for one with no string
+`id`),
 and is empty without it. Calling it again is how a host changes what is running,
 including turning one off. The tasks of a reflex left out are not claimed until
 a load brings it back, so they spend no attempt while it is away.

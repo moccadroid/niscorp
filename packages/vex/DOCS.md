@@ -15,6 +15,7 @@ In-depth usage guide for `@niscorp/vex`. For the high-level pitch see
 - [The DSL](#the-dsl)
 - [Scope policies](#scope-policies)
 - [Grants and behaviors](#grants-and-behaviors)
+- [Upgraded columns](#upgraded-columns)
 - [Mutations](#mutations)
 - [Caching](#caching)
 - [Wiring the LLM agents](#wiring-the-llm-agents)
@@ -161,6 +162,8 @@ type QueryEngineConfig = {
   mapToShape?: (rows, shape, intent?) => Promise<{ ir: CompiledIr; config: unknown; transformed: JsonValue }>;
   embed?: (text, dimensions?) => Promise<number[]>;  // text→vector for semantic filters
   behaviors?: ScopeBehaviors;               // which columns a scope key is bound to (see below)
+  upgradedColumns?: UpgradedColumns;        // JSON columns a read returns upgraded (see below)
+  upgrader?: ColumnUpgrader;                // strata's Upgrader; required with upgradedColumns
   rows?: LiveRowsConfig;                    // the rows cache behind `refresh: 'reactive'`
   config?: {
     maxNestingDepth?: number;               // default: 2
@@ -216,6 +219,7 @@ type QueryEngineConfig = {
   `scopeBindings(behaviors, tables, scope)` returns that list for the given
   tables: one entry per table, column and key, sorted, and only for keys
   `scope` holds a value for.
+- **`upgradedColumns`** and **`upgrader`**: see [Upgraded columns](#upgraded-columns).
 - **`rows`** sizes the reactive rows cache — see
   [Reactive reads](#reactive-reads-refresh).
 - `defaultLimit` is applied when a DSL omits `limit`. `maxLimit` clamps a larger
@@ -899,6 +903,91 @@ not read an entry's `reach`: a replay through it runs under the policy it is
 handed (`scopePolicy`, else the engine's own), whatever reach the entry
 declares. Code that replays an entry with a reach in-process hands it the policy
 at that reach itself.
+
+## Upgraded columns
+
+A JSON column may hold values written at an older grammar, with the stamp each
+was written at in another JSON column of the same row: a strata document (rule
+19 of the nisc rulebook). `upgradedColumns` names those columns, keyed by
+table and column, and every read that returns one hands it to the mapping, and
+to the caller, upgraded to the grammars of the engine's `upgrader`:
+
+```typescript
+import { createUpgrader } from '@niscorp/strata';
+import { evaluate } from '@niscorp/prism';
+
+const engine = createQueryEngine({
+  adapter,
+  upgrader: await createUpgrader(grammars, { transform: evaluate }),
+  upgradedColumns: {
+    // The kind is fixed for the column.
+    answers: { plan: { stamp: 'grammar', kind: 'acme.answers/plan', unreadable: 'omit' } },
+    // The kind is `<grammar>/<the row's value of column>`: `acme.notes/list` for a row whose `kind` is `list`.
+    notes: { body: { stamp: 'grammar', kind: { grammar: 'acme.notes', column: 'kind' } } },
+  },
+});
+```
+
+`stamp` and `kind.column` name columns of the same table. `UpgradedColumnsSchema`
+is the setting's schema, and `ColumnUpgrader` the part of strata's `Upgrader`
+the engine uses (`upgrade`, `locate`, `stamp`).
+
+**Checked at start.** `createQueryEngine` throws `invalid_request` when
+`upgradedColumns` do not parse, when there is no `upgrader`, or when a fixed
+`kind` (or the `grammar` of a kind read from the row) is not one the
+upgrader's grammars declare. `introspect()` throws `execution_error` when a
+column, its stamp or its kind column is not in the database, or when the
+column or its stamp is not `json`/`jsonb`.
+
+**What a read must say.** Every query is checked as it is compiled: a replay,
+`engine.compile`, `engine.test` and the generator's own test runs. A seeded
+entry is therefore checked when it is first replayed, unless its app compiles
+it before (moss does, at boot).
+
+- A read that returns an upgraded column returns its stamp column too, and for
+  a kind read from the row, that column. Otherwise: `invalid_dsl`, naming the
+  field to add.
+- An upgraded column is returned only as one of the read's own fields
+  (`table.column` or `{ field, as }`). Named anywhere else (a subquery's fields
+  or computes, a `compute`, an `aggregate`, a `groupBy`), the read is refused,
+  because the value would arrive un-upgraded. A filter or a sort on it, a
+  subquery's included, is allowed and compares the stored value.
+- Two values returned under one key (two fields, or a field and a compute or
+  aggregate of that name) are refused when the key is an upgraded column, its
+  stamp or its kind: give each its own key with `as`.
+
+**What a read does.** After the rows come back and before the mapping, each
+row's value is upgraded from the stamp in that row, and every key the stamp was
+returned under is set to the stamp the upgrade gives back, so a caller that
+upgrades the value again changes nothing. A null value is left as it is. This
+holds for a replay, a generated read, every answer a reactive read delivers,
+`engine.test` and the generator's test runs. The rows a reactive read shares
+between callers are not changed. A write's returned rows are as stored.
+
+**A row that does not upgrade.** A value does not upgrade when its stamp is
+ahead of the upgrader's grammars (strata's `TOO_NEW`), a migration step fails
+on it (`STEP_FAILED`), its kind is one no grammar declares (`UNKNOWN_KIND`),
+its stamp is neither null nor an object of grammar names to whole numbers, or
+its kind column is not text. The column's `unreadable` says what the read does
+then (`UNREADABLE_MODES`):
+
+- `'refuse'` (the default): the whole read fails. Strata's errors are answered
+  by `handleQuery` as a 500 with strata's code; a stamp or kind column that is
+  not one is vex's `execution_error`, a 400. A reactive read's refetch that
+  fails reports `rows.error`, and its followers keep their last answer.
+- `'omit'`: the row is left out, and `meta.warnings` says which of the
+  database's rows (counting from 0) and why. A list can come back shorter than
+  its `limit`; the "may have been cut" warning counts the rows the database
+  returned. A read whose shape is an object answers the first row left, so a
+  row left out makes `$.result` the next one: use `'null'` or `'refuse'` where
+  that would mislead.
+- `'null'`: the row stays with that value null, and `meta.warnings` says so.
+  This column does not change the stamp; another upgraded column of the row
+  that shares it may.
+
+A reactive read delivers again when only its warnings change.
+
+An engine given no `upgradedColumns` returns every column as stored.
 
 ## Mutations
 

@@ -8,6 +8,12 @@ import ts from 'typescript';
 const packages = resolve(import.meta.dirname, '..', 'packages');
 
 const ENTRIES: Readonly<Record<string, Readonly<Record<string, string>>>> = {
+  haptic: {
+    '.': 'src/index.ts',
+    './discovery': 'src/discovery/index.ts',
+    './search': 'src/search/index.ts',
+    './migrations': 'src/migrations/index.ts',
+  },
   moss: {
     '.': 'src/index.ts',
     './node': 'src/node/index.ts',

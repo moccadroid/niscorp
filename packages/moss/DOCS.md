@@ -59,6 +59,7 @@ type NiscApp = {
   shell?: ShellManifest;                              // the server shell, as data — THE APP
   pages?: Record<string, PageManifest>;               // what is drawn at a path and kept by nothing
   grammars?: readonly Sequence[];                     // the app's own strata grammar sequences
+  upgradedColumns?: UpgradedColumns;                  // JSON columns every vex read returns upgraded
   // the code seams
   scope?: (principal: string | null, identity?: IdentityRecord) => Record<string, unknown>;
   identity?: { as?: string; resolve: (principal, read) => Promise<IdentityRecord> };
@@ -190,8 +191,26 @@ reaction's `run` — and `features`. Absent `shell`, the app serves data only
   app does not hand over: ``shell.canvases.1.reconcile: "keyed" is not a
   reconciler the app hands over in `reconcilers` ``.
 - `grammars` — strata sequences for documents only this app defines the shape
-  of (its kit's component props). See "Documents are read in this code's
-  grammars" below.
+  of (its kit's component props, and the values of its `upgradedColumns`). See
+  "Documents are read in this code's grammars" below.
+- `upgradedColumns` — the app's JSON columns whose values are stamped in
+  another column of the row, keyed by table and column:
+  `{ answers: { plan: { stamp: 'grammar', kind: 'acme.answers/plan' } } }`, or
+  with the kind read from the row, `kind: { grammar: 'acme.notes', column: 'kind' }`,
+  and what a read does with a row that does not upgrade, `unreadable: 'refuse' | 'omit' | 'null'`.
+  Moss hands them to the app's engine, and to the one that answers intents,
+  with the upgrader it builds from nova's, Prism's and vex's grammars and the
+  app's `grammars`: every read through either returns those columns upgraded,
+  before its mapping. What a read must select and what a row that does not
+  upgrade does are vex's ([Upgraded columns](../vex/DOCS.md#upgraded-columns)).
+  Only the app's own tables can be named: a feature's tables, the
+  artifactory's and the generation pointer's are read by their owner's own
+  entries, which read them as stored. **The boot is refused** where a table
+  named is one of those, where a kind, or the grammar of a kind read from the
+  row, is in none of the upgrader's grammars, where a column or its stamp is not a json
+  column of the database, and where a seeded read in `entries` does not compile
+  (moss compiles each one at boot, and each one a refresh hands over, only for
+  an app that names `upgradedColumns`).
 
 A `LayoutVariant` is `{ action: string; layout: LayoutNode }` — ring 2: the
 charter's `layouts` section selects who is granted which variant id, and moss

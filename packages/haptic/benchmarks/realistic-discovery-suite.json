@@ -1,0 +1,233 @@
+{
+  "concurrency": 1,
+  "repetitions": 1,
+  "cases": [
+    {
+      "id": "steam-price",
+      "url": "https://store.steampowered.com/app/381210/Dead_by_Daylight/",
+      "instruction": "Retrieve the current price of the base game Dead by Daylight in EUR. Exclude DLC, bundles and other editions.",
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "amount": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Current base-game price in major currency units, not the undiscounted price."
+          },
+          "currency": {
+            "const": "EUR",
+            "description": "Observed currency must be EUR; incompatible or missing data is an error."
+          }
+        },
+        "required": [
+          "amount",
+          "currency"
+        ],
+        "additionalProperties": false
+      },
+      "expectedSelector": "#tabletGrid .page_content_ctn > [itemprop=offers] > meta[itemprop=price], #tabletGrid .page_content_ctn > [itemprop=offers] > meta[itemprop=priceCurrency]",
+      "checkContent": true,
+      "expectedMetadata": {
+        "visited": [
+          "https://store.steampowered.com/app/381210/Dead_by_Daylight/"
+        ],
+        "limited": false
+      },
+      "expectedMapping": {
+        "amount": {
+          "$toNumber": {
+            "value": {
+              "$join": {
+                "parts": {
+                  "$split": {
+                    "value": {
+                      "$get": {
+                        "from": {
+                          "$filter": {
+                            "over": {
+                              "$ref": "$.input.pages[0].items"
+                            },
+                            "as": "item",
+                            "when": {
+                              "$eq": [
+                                {
+                                  "$get": {
+                                    "from": {
+                                      "$var": "item"
+                                    },
+                                    "path": [
+                                      "attributes",
+                                      "itemprop"
+                                    ]
+                                  }
+                                },
+                                "price"
+                              ]
+                            }
+                          }
+                        },
+                        "path": [
+                          0,
+                          "attributes",
+                          "content"
+                        ]
+                      }
+                    },
+                    "sep": ","
+                  }
+                },
+                "sep": "."
+              }
+            }
+          }
+        },
+        "currency": {
+          "$get": {
+            "from": {
+              "$filter": {
+                "over": {
+                  "$ref": "$.input.pages[0].items"
+                },
+                "as": "item",
+                "when": {
+                  "$eq": [
+                    {
+                      "$get": {
+                        "from": {
+                          "$var": "item"
+                        },
+                        "path": [
+                          "attributes",
+                          "itemprop"
+                        ]
+                      }
+                    },
+                    "priceCurrency"
+                  ]
+                }
+              }
+            },
+            "path": [
+              0,
+              "attributes",
+              "content"
+            ]
+          }
+        }
+      },
+      "variants": [
+        {
+          "id": "exactly-eight",
+          "html": {
+            "changes": [
+              {
+                "selector": "#tabletGrid .page_content_ctn > [itemprop=offers] > [itemprop=price]",
+                "attribute": "content",
+                "value": "8,00"
+              },
+              {
+                "selector": "#game_area_purchase_section_add_to_cart_71374 .discount_final_price",
+                "value": "8,00€"
+              }
+            ]
+          }
+        },
+        {
+          "id": "above-eight",
+          "html": {
+            "changes": [
+              {
+                "selector": "#tabletGrid .page_content_ctn > [itemprop=offers] > [itemprop=price]",
+                "attribute": "content",
+                "value": "12,49"
+              },
+              {
+                "selector": "#game_area_purchase_section_add_to_cart_71374 .discount_final_price",
+                "value": "12,49€"
+              }
+            ]
+          }
+        },
+        {
+          "id": "sale-ended",
+          "html": {
+            "changes": [
+              {
+                "selector": "#tabletGrid .page_content_ctn > [itemprop=offers] > [itemprop=price]",
+                "attribute": "content",
+                "value": "19,99"
+              }
+            ],
+            "replace": [
+              {
+                "selector": "#game_area_purchase_section_add_to_cart_71374 .discount_block",
+                "html": "<div class=\"game_purchase_price price\" data-price-final=\"1999\">19,99€</div>"
+              }
+            ]
+          }
+        },
+        {
+          "id": "unrelated-offer",
+          "html": {
+            "prepend": [
+              {
+                "selector": "#tabletGrid .page_content_ctn",
+                "html": "<aside class=\"game_area_dlc_row\" itemscope itemtype=\"http://schema.org/Product\"><span itemprop=\"name\">Unrelated downloadable content</span><div itemprop=\"offers\" itemscope itemtype=\"http://schema.org/Offer\"><meta itemprop=\"priceCurrency\" content=\"EUR\"><meta itemprop=\"price\" content=\"0,99\"></div></aside>"
+              }
+            ]
+          }
+        },
+        {
+          "id": "missing-price",
+          "expectedErrorCodes": [
+            "CHECK_FAILED",
+            "INVALID_VALUE",
+            "E_MISSING_PATH",
+            "E_TYPE"
+          ],
+          "html": {
+            "remove": [
+              "#tabletGrid .page_content_ctn > [itemprop=offers] > [itemprop=price]",
+              "#game_area_purchase_section_add_to_cart_71374 .discount_block"
+            ]
+          }
+        },
+        {
+          "id": "wrong-currency",
+          "expectedErrorCodes": [
+            "CHECK_FAILED",
+            "INVALID_VALUE",
+            "E_MISSING_PATH",
+            "E_TYPE"
+          ],
+          "html": {
+            "changes": [
+              {
+                "selector": "#tabletGrid .page_content_ctn > [itemprop=offers] > [itemprop=priceCurrency]",
+                "attribute": "content",
+                "value": "USD"
+              },
+              {
+                "selector": "#game_area_purchase_section_add_to_cart_71374 .discount_final_price",
+                "value": "$7.99"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "fandom-shovel",
+      "url": "https://nuclear-throne.fandom.com/wiki/Weapons",
+      "instruction": "How much damage does the shovel do?",
+      "allowLinkFollowing": true,
+      "linkDepth": 1,
+      "maxPages": 4,
+      "outputSchema": {
+        "type": "string",
+        "description": "The Shovel damage stated in the source, including qualifiers if multiple cases are distinguished. An unavailable source must not yield an invented answer."
+      },
+      "referenceUnavailable": "The exact supplied Fandom URL returned HTTP 403 and a challenge page during preflight. No source content is available for an independent damage oracle."
+    }
+  ]
+}

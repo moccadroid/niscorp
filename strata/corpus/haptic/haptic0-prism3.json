@@ -1,0 +1,850 @@
+{
+  "app": "haptic",
+  "stamp": {
+    "nisc.haptic": 0,
+    "nisc.prism": 3
+  },
+  "documents": [
+    {
+      "kind": "nisc.haptic/artifact",
+      "id": "discovery-lua",
+      "document": {
+        "stamp": {
+          "nisc.haptic": 0,
+          "nisc.prism": 3
+        },
+        "policy": {
+          "maxPages": 21,
+          "maxRedirects": 3,
+          "stripFragments": true,
+          "accept": {
+            "statuses": [
+              200
+            ]
+          }
+        },
+        "stages": [
+          {
+            "kind": "records",
+            "format": "html",
+            "render": true,
+            "selector": "a",
+            "fields": {
+              "url": {
+                "selector": ":scope",
+                "attribute": "href"
+              }
+            },
+            "required": [
+              "url"
+            ],
+            "where": null,
+            "limit": null
+          }
+        ],
+        "mapping": {
+          "$map": {
+            "over": {
+              "$filter": {
+                "over": {
+                  "$ref": "$.records"
+                },
+                "as": "r",
+                "when": {
+                  "$contains": {
+                    "value": {
+                      "$get": {
+                        "from": {
+                          "$var": "r"
+                        },
+                        "path": [
+                          "fields",
+                          "url"
+                        ]
+                      }
+                    },
+                    "search": ".tar.gz"
+                  }
+                }
+              }
+            },
+            "as": "rec",
+            "body": {
+              "url": {
+                "$get": {
+                  "from": {
+                    "$var": "rec"
+                  },
+                  "path": [
+                    "fields",
+                    "url"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "outputSchema": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "url": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "kind": "nisc.haptic/artifact",
+      "id": "discovery-nginx-legacy-source-archives",
+      "document": {
+        "stamp": {
+          "nisc.haptic": 0,
+          "nisc.prism": 3
+        },
+        "policy": {
+          "maxPages": 21,
+          "maxRedirects": 3,
+          "stripFragments": true,
+          "accept": {
+            "statuses": [
+              200
+            ]
+          }
+        },
+        "stages": [
+          {
+            "kind": "records",
+            "format": "html",
+            "render": false,
+            "selector": "tr",
+            "fields": {
+              "url": {
+                "selector": "td:nth-child(2) a:nth-child(1)",
+                "attribute": "href"
+              }
+            },
+            "required": [
+              "url"
+            ],
+            "where": null,
+            "limit": null
+          }
+        ],
+        "mapping": {
+          "$map": {
+            "over": {
+              "$ref": "$.records"
+            },
+            "as": "record",
+            "body": {
+              "url": {
+                "$get": {
+                  "from": {
+                    "$var": "record"
+                  },
+                  "path": [
+                    "fields",
+                    "url"
+                  ],
+                  "fallback": {
+                    "$const": null
+                  }
+                }
+              }
+            }
+          }
+        },
+        "outputSchema": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "url": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "kind": "nisc.haptic/artifact",
+      "id": "discovery-perl",
+      "document": {
+        "stamp": {
+          "nisc.haptic": 0,
+          "nisc.prism": 3
+        },
+        "policy": {
+          "maxPages": 21,
+          "maxRedirects": 3,
+          "stripFragments": true,
+          "accept": {
+            "statuses": [
+              200
+            ]
+          }
+        },
+        "stages": [
+          {
+            "kind": "records",
+            "format": "html",
+            "render": false,
+            "selector": "div.col-12",
+            "fields": {
+              "title": {
+                "selector": "h3",
+                "attribute": null
+              },
+              "link": {
+                "selector": "p.description a",
+                "attribute": "href"
+              }
+            },
+            "required": [
+              "title",
+              "link"
+            ],
+            "where": {
+              "in": "text",
+              "contains": "the entire book free online"
+            },
+            "limit": null
+          }
+        ],
+        "mapping": {
+          "$map": {
+            "over": {
+              "$ref": "$.records"
+            },
+            "as": "r",
+            "body": {
+              "title": {
+                "$get": {
+                  "from": {
+                    "$var": "r"
+                  },
+                  "path": [
+                    "fields",
+                    "title"
+                  ]
+                }
+              },
+              "link": {
+                "$get": {
+                  "from": {
+                    "$var": "r"
+                  },
+                  "path": [
+                    "fields",
+                    "link"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "outputSchema": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "title": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "link": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "kind": "nisc.haptic/artifact",
+      "id": "discovery-sqlite-release-notes",
+      "document": {
+        "stamp": {
+          "nisc.haptic": 0,
+          "nisc.prism": 3
+        },
+        "policy": {
+          "maxPages": 21,
+          "maxRedirects": 3,
+          "stripFragments": true,
+          "accept": {
+            "statuses": [
+              200
+            ]
+          }
+        },
+        "stages": [
+          {
+            "kind": "links",
+            "format": "html",
+            "render": false,
+            "selector": "tr",
+            "link": {
+              "selector": "td:nth-child(2) a",
+              "attribute": "href"
+            },
+            "limit": 3
+          },
+          {
+            "kind": "records",
+            "format": "html",
+            "render": false,
+            "selector": "body",
+            "fields": {
+              "h": {
+                "selector": "h2",
+                "attribute": null
+              },
+              "c": {
+                "selector": "ol li, :scope > p",
+                "attribute": null,
+                "list": true
+              }
+            },
+            "required": [
+              "h",
+              "c"
+            ],
+            "where": null,
+            "limit": null
+          }
+        ],
+        "mapping": {
+          "$map": {
+            "over": {
+              "$ref": "$.records"
+            },
+            "as": "r",
+            "body": {
+              "h": {
+                "$get": {
+                  "from": {
+                    "$var": "r"
+                  },
+                  "path": [
+                    "fields",
+                    "h"
+                  ]
+                }
+              },
+              "c": {
+                "$get": {
+                  "from": {
+                    "$var": "r"
+                  },
+                  "path": [
+                    "fields",
+                    "c"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "outputSchema": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "h": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "c": {
+                "type": [
+                  "array",
+                  "null"
+                ],
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "kind": "nisc.haptic/artifact",
+      "id": "search-aieventlist.ai/cities/vienna",
+      "document": {
+        "stamp": {
+          "nisc.haptic": 0,
+          "nisc.prism": 3
+        },
+        "policy": {
+          "maxPages": 21,
+          "maxRedirects": 3,
+          "stripFragments": true,
+          "accept": {
+            "statuses": [
+              200
+            ]
+          }
+        },
+        "stages": [
+          {
+            "kind": "records",
+            "format": "html",
+            "render": true,
+            "selector": "article.past",
+            "fields": {
+              "title": {
+                "selector": "h3 a",
+                "attribute": null
+              },
+              "date": {
+                "selector": "span.date-badge",
+                "attribute": null
+              },
+              "venue": {
+                "selector": "p.loc",
+                "attribute": null
+              }
+            },
+            "required": [
+              "title",
+              "date",
+              "venue"
+            ],
+            "where": {
+              "in": "title",
+              "contains": "der"
+            },
+            "limit": null
+          }
+        ],
+        "mapping": {
+          "$map": {
+            "over": {
+              "$ref": "$.records"
+            },
+            "as": "r",
+            "body": {
+              "title": {
+                "$get": {
+                  "from": {
+                    "$var": "r"
+                  },
+                  "path": [
+                    "fields",
+                    "title"
+                  ]
+                }
+              },
+              "date": {
+                "$get": {
+                  "from": {
+                    "$var": "r"
+                  },
+                  "path": [
+                    "fields",
+                    "date"
+                  ]
+                }
+              },
+              "venue": {
+                "$get": {
+                  "from": {
+                    "$var": "r"
+                  },
+                  "path": [
+                    "fields",
+                    "venue"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "outputSchema": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "title": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "date": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "venue": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "kind": "nisc.haptic/artifact",
+      "id": "search-aieventlist.ai/en/cities/vienna",
+      "document": {
+        "stamp": {
+          "nisc.haptic": 0,
+          "nisc.prism": 3
+        },
+        "policy": {
+          "maxPages": 21,
+          "maxRedirects": 3,
+          "stripFragments": true,
+          "accept": {
+            "statuses": [
+              200
+            ]
+          }
+        },
+        "stages": [
+          {
+            "kind": "records",
+            "format": "html",
+            "render": true,
+            "selector": "article.past",
+            "fields": {
+              "name": {
+                "selector": "h3 a",
+                "attribute": null
+              },
+              "date": {
+                "selector": "time",
+                "attribute": null
+              },
+              "link": {
+                "selector": "a",
+                "attribute": "href"
+              }
+            },
+            "required": [
+              "name",
+              "date",
+              "link"
+            ],
+            "where": {
+              "in": "name",
+              "contains": "der"
+            },
+            "limit": null
+          }
+        ],
+        "mapping": {
+          "$map": {
+            "over": {
+              "$ref": "$.records"
+            },
+            "as": "r",
+            "body": {
+              "name": {
+                "$get": {
+                  "from": {
+                    "$var": "r"
+                  },
+                  "path": [
+                    "fields",
+                    "name"
+                  ]
+                }
+              },
+              "date": {
+                "$get": {
+                  "from": {
+                    "$var": "r"
+                  },
+                  "path": [
+                    "fields",
+                    "date"
+                  ]
+                }
+              },
+              "link": {
+                "$get": {
+                  "from": {
+                    "$var": "r"
+                  },
+                  "path": [
+                    "fields",
+                    "link"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "outputSchema": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "date": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "link": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "kind": "nisc.haptic/artifact",
+      "id": "search-vienna.aitinkerers.org",
+      "document": {
+        "stamp": {
+          "nisc.haptic": 0,
+          "nisc.prism": 3
+        },
+        "policy": {
+          "maxPages": 21,
+          "maxRedirects": 3,
+          "stripFragments": true,
+          "accept": {
+            "statuses": [
+              200
+            ]
+          }
+        },
+        "stages": [
+          {
+            "kind": "records",
+            "format": "html",
+            "render": true,
+            "selector": "div.p-6",
+            "fields": {
+              "title": {
+                "selector": "h3 a",
+                "attribute": null
+              },
+              "date": {
+                "selector": "span.gap-2",
+                "attribute": null
+              },
+              "link": {
+                "selector": "a",
+                "attribute": "href"
+              }
+            },
+            "required": [
+              "title",
+              "date",
+              "link"
+            ],
+            "where": {
+              "in": "text",
+              "contains": "meetup"
+            },
+            "limit": null
+          }
+        ],
+        "mapping": {
+          "$map": {
+            "over": {
+              "$ref": "$.records"
+            },
+            "as": "r",
+            "body": {
+              "title": {
+                "$get": {
+                  "from": {
+                    "$var": "r"
+                  },
+                  "path": [
+                    "fields",
+                    "title"
+                  ]
+                }
+              },
+              "date": {
+                "$get": {
+                  "from": {
+                    "$var": "r"
+                  },
+                  "path": [
+                    "fields",
+                    "date"
+                  ]
+                }
+              },
+              "link": {
+                "$get": {
+                  "from": {
+                    "$var": "r"
+                  },
+                  "path": [
+                    "fields",
+                    "link"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "outputSchema": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "title": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "date": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "link": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "kind": "nisc.haptic/artifact",
+      "id": "search-www.meetup.com/vienna-ai",
+      "document": {
+        "stamp": {
+          "nisc.haptic": 0,
+          "nisc.prism": 3
+        },
+        "policy": {
+          "maxPages": 21,
+          "maxRedirects": 3,
+          "stripFragments": true,
+          "accept": {
+            "statuses": [
+              200
+            ]
+          }
+        },
+        "stages": [
+          {
+            "kind": "records",
+            "format": "html",
+            "render": true,
+            "selector": "a",
+            "fields": {
+              "title": {
+                "selector": "h3",
+                "attribute": null
+              },
+              "date": {
+                "selector": "time",
+                "attribute": null
+              }
+            },
+            "required": [
+              "title",
+              "date"
+            ],
+            "where": null,
+            "limit": null
+          }
+        ],
+        "mapping": {
+          "$map": {
+            "over": {
+              "$ref": "$.records"
+            },
+            "as": "r",
+            "body": {
+              "title": {
+                "$get": {
+                  "from": {
+                    "$var": "r"
+                  },
+                  "path": [
+                    "fields",
+                    "title"
+                  ]
+                }
+              },
+              "date": {
+                "$get": {
+                  "from": {
+                    "$var": "r"
+                  },
+                  "path": [
+                    "fields",
+                    "date"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "outputSchema": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "title": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "date": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

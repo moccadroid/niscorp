@@ -1,0 +1,261 @@
+{
+  "key": "text",
+  "items": [
+    {
+      "key": "0.3.7",
+      "label": "tokio 0.3.7, published 2021-01-28"
+    },
+    {
+      "key": "0.3.6",
+      "label": "tokio 0.3.6, published 2020-12-14"
+    },
+    {
+      "key": "0.3.5",
+      "label": "tokio 0.3.5, published 2020-11-30"
+    },
+    {
+      "key": "0.3.4",
+      "label": "tokio 0.3.4, published 2020-11-18"
+    },
+    {
+      "key": "0.3.3",
+      "label": "tokio 0.3.3, published 2020-11-02"
+    },
+    {
+      "key": "0.3.2",
+      "label": "tokio 0.3.2, published 2020-10-27"
+    },
+    {
+      "key": "0.3.1",
+      "label": "tokio 0.3.1, published 2020-10-21"
+    },
+    {
+      "key": "0.3.0",
+      "label": "tokio 0.3.0, published 2020-10-15"
+    },
+    {
+      "key": "0.2.25",
+      "label": "tokio 0.2.25, published 2021-01-28"
+    },
+    {
+      "key": "0.2.24",
+      "label": "tokio 0.2.24, published 2020-12-09"
+    },
+    {
+      "key": "0.2.23",
+      "label": "tokio 0.2.23, published 2020-11-12"
+    },
+    {
+      "key": "0.2.22",
+      "label": "tokio 0.2.22, published 2020-07-22"
+    },
+    {
+      "key": "0.2.21",
+      "label": "tokio 0.2.21, published 2020-05-13"
+    },
+    {
+      "key": "0.2.20",
+      "label": "tokio 0.2.20, published 2020-04-28"
+    },
+    {
+      "key": "0.2.19",
+      "label": "tokio 0.2.19, published 2020-04-24"
+    },
+    {
+      "key": "0.2.18",
+      "label": "tokio 0.2.18, published 2020-04-13"
+    },
+    {
+      "key": "0.2.17",
+      "label": "tokio 0.2.17, published 2020-04-09"
+    },
+    {
+      "key": "0.2.16",
+      "label": "tokio 0.2.16, published 2020-04-04"
+    },
+    {
+      "key": "0.2.15",
+      "label": "tokio 0.2.15, published 2020-04-02"
+    },
+    {
+      "key": "0.2.14",
+      "label": "tokio 0.2.14, published 2020-04-01"
+    },
+    {
+      "key": "0.2.13",
+      "label": "tokio 0.2.13, published 2020-02-28"
+    },
+    {
+      "key": "0.2.12",
+      "label": "tokio 0.2.12, published 2020-02-27"
+    },
+    {
+      "key": "0.2.11",
+      "label": "tokio 0.2.11, published 2020-01-27"
+    },
+    {
+      "key": "0.2.10",
+      "label": "tokio 0.2.10, published 2020-01-21"
+    },
+    {
+      "key": "0.2.9",
+      "label": "tokio 0.2.9, published 2020-01-09"
+    },
+    {
+      "key": "0.2.8",
+      "label": "tokio 0.2.8, published 2020-01-07"
+    },
+    {
+      "key": "0.2.7",
+      "label": "tokio 0.2.7, published 2020-01-07"
+    },
+    {
+      "key": "0.2.6",
+      "label": "tokio 0.2.6, published 2019-12-19"
+    },
+    {
+      "key": "0.2.5",
+      "label": "tokio 0.2.5, published 2019-12-18"
+    },
+    {
+      "key": "0.2.4",
+      "label": "tokio 0.2.4, published 2019-12-07"
+    },
+    {
+      "key": "0.2.3",
+      "label": "tokio 0.2.3, published 2019-12-06"
+    },
+    {
+      "key": "2019-11-29T19:10:39",
+      "label": "tokio 0.2.2, published 2019-11-29"
+    },
+    {
+      "key": "2019-11-27T05:46:23",
+      "label": "tokio 0.2.1, published 2019-11-27"
+    },
+    {
+      "key": "2019-11-26T17:21:53",
+      "label": "tokio 0.2.0, published 2019-11-26"
+    },
+    {
+      "key": "0.2.0-alpha.6",
+      "label": "tokio 0.2.0-alpha.6, published 2019-10-01"
+    },
+    {
+      "key": "0.2.0-alpha.5",
+      "label": "tokio 0.2.0-alpha.5, published 2019-09-19"
+    },
+    {
+      "key": "0.2.0-alpha.4",
+      "label": "tokio 0.2.0-alpha.4, published 2019-08-29"
+    },
+    {
+      "key": "0.2.0-alpha.3",
+      "label": "tokio 0.2.0-alpha.3, published 2019-08-28"
+    },
+    {
+      "key": "0.2.0-alpha.2",
+      "label": "tokio 0.2.0-alpha.2, published 2019-08-18"
+    },
+    {
+      "key": "0.2.0-alpha.1",
+      "label": "tokio 0.2.0-alpha.1, published 2019-08-08"
+    },
+    {
+      "key": "0.1.22",
+      "label": "tokio 0.1.22, published 2019-07-03"
+    },
+    {
+      "key": "0.1.21",
+      "label": "tokio 0.1.21, published 2019-05-30"
+    },
+    {
+      "key": "0.1.20",
+      "label": "tokio 0.1.20, published 2019-05-14"
+    },
+    {
+      "key": "0.1.19",
+      "label": "tokio 0.1.19, published 2019-04-22"
+    },
+    {
+      "key": "0.1.18",
+      "label": "tokio 0.1.18, published 2019-03-22"
+    },
+    {
+      "key": "0.1.17",
+      "label": "tokio 0.1.17, published 2019-03-13"
+    },
+    {
+      "key": "0.1.16",
+      "label": "tokio 0.1.16, published 2019-03-02"
+    },
+    {
+      "key": "0.1.15",
+      "label": "tokio 0.1.15, published 2019-01-25"
+    },
+    {
+      "key": "0.1.14",
+      "label": "tokio 0.1.14, published 2019-01-07"
+    },
+    {
+      "key": "0.1.13",
+      "label": "tokio 0.1.13, published 2018-11-22"
+    },
+    {
+      "key": "0.1.12",
+      "label": "tokio 0.1.12, published 2018-10-24 (yanked)"
+    },
+    {
+      "key": "0.1.11",
+      "label": "tokio 0.1.11, published 2018-09-28"
+    },
+    {
+      "key": "0.1.10",
+      "label": "tokio 0.1.10, published 2018-09-27"
+    },
+    {
+      "key": "0.1.9",
+      "label": "tokio 0.1.9, published 2018-09-27"
+    },
+    {
+      "key": "0.1.8",
+      "label": "tokio 0.1.8, published 2018-08-24"
+    },
+    {
+      "key": "0.1.7",
+      "label": "tokio 0.1.7, published 2018-06-07"
+    },
+    {
+      "key": "0.1.6",
+      "label": "tokio 0.1.6, published 2018-05-02"
+    },
+    {
+      "key": "0.1.5",
+      "label": "tokio 0.1.5, published 2018-03-30"
+    },
+    {
+      "key": "0.1.4",
+      "label": "tokio 0.1.4, published 2018-03-23"
+    },
+    {
+      "key": "0.1.3",
+      "label": "tokio 0.1.3, published 2018-03-09"
+    },
+    {
+      "key": "2018-03-09T04:23:23",
+      "label": "tokio 0.1.2, published 2018-03-09"
+    },
+    {
+      "key": "2018-02-09T22:32:23",
+      "label": "tokio 0.1.1, published 2018-02-09"
+    },
+    {
+      "key": "0.1.0",
+      "label": "tokio 0.1.0, published 2018-02-07"
+    },
+    {
+      "key": "0.0.0",
+      "label": "tokio 0.0.0, published 2016-07-01"
+    }
+  ]
+}

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { evaluate, evaluateSafe, compile, execute, ErrorCode, PrismError } from '../src';
+import { evaluate, evaluateSafe, compile, execute, validate, ConfigSchema, ErrorCode, PrismError } from '../src';
 import { DATE_FORMATTERS, NUMBER_FORMATTERS } from '../src/ops/intl.ops';
 
 // Intl emits non-breaking and narrow non-breaking spaces between a number and its unit.
@@ -97,6 +97,137 @@ describe('$localeDate', () => {
   it('refuses a locale Intl does not read with a type error', () => {
     const result = evaluateSafe({ $localeDate: { value: { $ref: '$.day' }, locale: { $ref: '$.locale' } } }, { ...source, locale: 'de_AT' });
     expect(result.ok ? undefined : result.error).toMatchObject({ code: ErrorCode.TYPE, message: expect.stringContaining('"de_AT"') });
+  });
+});
+
+// The fingerprint prism 0.3.3 (origin/main before a zone could be read) gives the
+// written-zone config below.
+const FINGERPRINT_ON_MAIN = 'd03c0f2ff80247b442e44bc9955057a1453ec5eec874f73685b533649b25ddb2';
+
+describe('$localeDate with a zone and a locale read from the source', () => {
+  const stamp = '2026-11-17T22:30:00Z';
+  const options = { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: { $ref: '$.zone' } };
+  const config = { when: { $localeDate: { value: { $ref: '$.stamp' }, locale: { $ref: '$.locale' }, options } } };
+
+  it('words the same instant in the zone and the locale each reader has', () => {
+    const vienna = evaluate(config, { stamp, zone: 'Europe/Vienna', locale: 'de-AT' }) as { when: string };
+    const angeles = evaluate(config, { stamp, zone: 'America/Los_Angeles', locale: 'en-GB' }) as { when: string };
+    expect(flat(vienna.when)).toBe(flat(evaluate({ $localeDate: { value: stamp, locale: 'de-AT', options: { ...options, timeZone: 'Europe/Vienna' } } }, {})));
+    expect(vienna.when).toContain('23:30');
+    expect(vienna.when).toContain('Di');
+    expect(angeles.when).toContain('14:30');
+    expect(angeles.when).toContain('Tue');
+  });
+
+  it('a bound zone wins over the DATE-only rule, as a written one does', () => {
+    const day = { $localeDate: { value: '2026-03-14', locale: 'en-GB', options: { day: 'numeric', month: 'numeric', year: 'numeric', timeZone: { $ref: '$.zone' } } } };
+    expect(String(evaluate(day, { zone: 'America/Los_Angeles' }))).toContain('13');
+  });
+
+  it('a bad date is refused before the zone is looked at, as it was', () => {
+    const run = (): unknown => evaluate({ $localeDate: { value: 'not a date', locale: 'en-GB', options: { timeZone: 'Mars/Olympus' } } }, {});
+    expect(run).toThrow(PrismError);
+    try {
+      run();
+    } catch (error) {
+      expect(error instanceof PrismError && error.code).toBe('E_DATE_INVALID');
+    }
+  });
+
+  it('a written zone spends no step of the budget', () => {
+    const fewest = (options: object): number | undefined => {
+      for (let steps = 1; steps < 20; steps++) {
+        try {
+          evaluate({ $localeDate: { value: stamp, locale: 'en-GB', options } }, {}, { limits: { maxSteps: steps } });
+          return steps;
+        } catch {
+          // Too few steps: try one more.
+        }
+      }
+      return undefined;
+    };
+    const without = fewest({ hour: '2-digit' });
+    expect(without).toBeDefined();
+    expect(fewest({ hour: '2-digit', timeZone: 'Europe/Vienna' })).toBe(without);
+  });
+
+  it('refuses a zone Intl does not know, written or read, and a zone that is not text', () => {
+    const at = (timeZone: unknown, source: object): unknown => evaluate({ $localeDate: { value: stamp, locale: 'en-GB', options: { timeZone } } }, source);
+    for (const run of [() => at({ $ref: '$.zone' }, { zone: 'Mars/Olympus' }), () => at('Mars/Olympus', {}), () => at({ $ref: '$.zone' }, { zone: null })]) {
+      expect(run).toThrow(PrismError);
+      try {
+        run();
+      } catch (error) {
+        expect(error instanceof PrismError && error.code).toBe('E_TYPE');
+      }
+    }
+  });
+
+  it('a config with a written zone parses and compiles to what it did', async () => {
+    const written = { when: { $localeDate: { value: { $ref: '$.stamp' }, locale: 'en-GB', options: { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Vienna' } } } };
+    // Compared as JSON text, keys in order: the fingerprint is the hash of exactly this text.
+    expect(JSON.stringify(ConfigSchema.parse(written))).toBe(JSON.stringify(written));
+    const compiled = await compile(written);
+    expect(JSON.stringify(compiled.core)).toBe(JSON.stringify(written));
+    // As main computes it for this config.
+    expect(compiled.meta.fingerprint).toBe(FINGERPRINT_ON_MAIN);
+  });
+
+  it('a written zone that is neither text nor an op is refused as the config is read, as before', () => {
+    for (const timeZone of [5, null, true, { zone: 'Europe/Vienna' }]) {
+      const result = validate({ $localeDate: { value: stamp, locale: 'en-GB', options: { timeZone } } });
+      expect(result.ok).toBe(false);
+    }
+  });
+
+  it('a config with a bound zone compiles the same each time, and runs from a stored IR in each zone', async () => {
+    const first = await compile(config);
+    const again = await compile(structuredClone(config));
+    expect(again.meta.fingerprint).toBe(first.meta.fingerprint);
+    const stored = JSON.parse(JSON.stringify(first)) as typeof first;
+    const out = execute(stored, { stamp, zone: 'Asia/Tokyo', locale: 'en-GB' }) as { when: string };
+    expect(out.when).toContain('07:30');
+    expect(out.when).toContain('Wed');
+    expect(() => execute(stored, { stamp, zone: 'Mars/Olympus', locale: 'en-GB' })).toThrow(PrismError);
+  });
+
+  it('folds a written zone as before, and keeps a bound one for the run', async () => {
+    const written = await compile({ when: { $localeDate: { value: stamp, locale: 'en-GB', options: { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Vienna' } } } });
+    expect(written.core).toEqual({ when: { $const: '23:30' } });
+    // Value and locale written, so only the bound zone keeps it from folding.
+    const bound = await compile({ when: { $localeDate: { value: stamp, locale: 'en-GB', options: { hour: '2-digit', minute: '2-digit', timeZone: { $ref: '$.zone' } } } } });
+    expect(bound.meta.stats.optimizations.constantsFolded).toBe(0);
+    expect(bound.core).toEqual({ when: { $localeDate: { value: stamp, locale: 'en-GB', options: { hour: '2-digit', minute: '2-digit', timeZone: { $ref: '$.zone' } } } } });
+    expect(execute(bound, { zone: 'Asia/Tokyo' })).toEqual({ when: '07:30' });
+  });
+});
+
+describe('a locale tag Intl cannot read', () => {
+  const code = (run: () => unknown): string | undefined => {
+    try {
+      run();
+    } catch (error) {
+      return error instanceof PrismError ? error.code : String(error);
+    }
+    return undefined;
+  };
+
+  it('is refused with E_TYPE by $localeDate and $localeNumber, written or read', () => {
+    expect(code(() => evaluate({ $localeDate: { value: '2026-01-01T10:00:00Z', locale: { $ref: '$.l' } } }, { l: 'not a locale!' }))).toBe('E_TYPE');
+    expect(code(() => evaluate({ $localeDate: { value: '2026-01-01T10:00:00Z', locale: 'en_GB' } }, {}))).toBe('E_TYPE');
+    expect(code(() => evaluate({ $localeNumber: { value: 1, locale: { $ref: '$.l' } } }, { l: 'en_GB' }))).toBe('E_TYPE');
+  });
+
+  it('is looked at where Intl looked at it: a bad date is still E_DATE_INVALID', () => {
+    expect(code(() => evaluate({ $localeDate: { value: 'not a date', locale: 'en_GB' } }, {}))).toBe('E_DATE_INVALID');
+  });
+
+  it('a tag that is well formed is read as Intl reads it, as before', () => {
+    expect(evaluate({ $localeDate: { value: '2026-01-01', locale: { $ref: '$.l' } } }, { l: 'xx-YY' })).toBeTypeOf('string');
+  });
+
+  it('$localeMoney still prints the code beside the amount, as it always did', () => {
+    expect(evaluate({ $localeMoney: { value: 4500, currency: 'EUR', locale: 'en_GB' } }, {})).toBe('EUR 45.00');
   });
 });
 

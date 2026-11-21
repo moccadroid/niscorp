@@ -1,0 +1,206 @@
+{
+  "key": "url",
+  "items": [
+    {
+      "key": "https://www.bart.gov/stations/12th",
+      "label": "12th St./Oakland City Center"
+    },
+    {
+      "key": "https://www.bart.gov/stations/16th",
+      "label": "16th St./Mission"
+    },
+    {
+      "key": "https://www.bart.gov/stations/19th",
+      "label": "19th St./Oakland"
+    },
+    {
+      "key": "https://www.bart.gov/stations/24th",
+      "label": "24th St./Mission"
+    },
+    {
+      "key": "https://www.bart.gov/stations/antc",
+      "label": "Antioch"
+    },
+    {
+      "key": "https://www.bart.gov/stations/ashb",
+      "label": "Ashby"
+    },
+    {
+      "key": "https://www.bart.gov/stations/balb",
+      "label": "Balboa Park"
+    },
+    {
+      "key": "https://www.bart.gov/stations/bayf",
+      "label": "Bay Fair"
+    },
+    {
+      "key": "https://www.bart.gov/stations/bery",
+      "label": "Berryessa/North San Jose"
+    },
+    {
+      "key": "https://www.bart.gov/stations/cast",
+      "label": "Castro Valley"
+    },
+    {
+      "key": "https://www.bart.gov/stations/civc",
+      "label": "Civic Center/UN Plaza"
+    },
+    {
+      "key": "https://www.bart.gov/stations/cols",
+      "label": "Coliseum"
+    },
+    {
+      "key": "https://www.bart.gov/stations/colm",
+      "label": "Colma"
+    },
+    {
+      "key": "https://www.bart.gov/stations/conc",
+      "label": "Concord"
+    },
+    {
+      "key": "https://www.bart.gov/stations/daly",
+      "label": "Daly City"
+    },
+    {
+      "key": "https://www.bart.gov/stations/dbrk",
+      "label": "Downtown Berkeley"
+    },
+    {
+      "key": "https://www.bart.gov/stations/dubl",
+      "label": "Dublin/Pleasanton"
+    },
+    {
+      "key": "https://www.bart.gov/stations/deln",
+      "label": "El Cerrito del Norte"
+    },
+    {
+      "key": "https://www.bart.gov/stations/plza",
+      "label": "El Cerrito Plaza"
+    },
+    {
+      "key": "https://www.bart.gov/stations/embr",
+      "label": "Embarcadero"
+    },
+    {
+      "key": "https://www.bart.gov/stations/frmt",
+      "label": "Fremont"
+    },
+    {
+      "key": "https://www.bart.gov/stations/ftvl",
+      "label": "Fruitvale"
+    },
+    {
+      "key": "https://www.bart.gov/stations/glen",
+      "label": "Glen Park"
+    },
+    {
+      "key": "https://www.bart.gov/stations/hayw",
+      "label": "Hayward"
+    },
+    {
+      "key": "https://www.bart.gov/stations/lafy",
+      "label": "Lafayette"
+    },
+    {
+      "key": "https://www.bart.gov/stations/lake",
+      "label": "Lake Merritt"
+    },
+    {
+      "key": "https://www.bart.gov/stations/mcar",
+      "label": "MacArthur"
+    },
+    {
+      "key": "https://www.bart.gov/stations/mlbr",
+      "label": "Millbrae"
+    },
+    {
+      "key": "https://www.bart.gov/stations/mlpt",
+      "label": "Milpitas"
+    },
+    {
+      "key": "https://www.bart.gov/stations/mont",
+      "label": "Montgomery St."
+    },
+    {
+      "key": "https://www.bart.gov/stations/nbrk",
+      "label": "North Berkeley"
+    },
+    {
+      "key": "https://www.bart.gov/stations/ncon",
+      "label": "North Concord/Martinez"
+    },
+    {
+      "key": "https://www.bart.gov/stations/oakl",
+      "label": "Oakland International Airport (OAK)"
+    },
+    {
+      "key": "https://www.bart.gov/stations/orin",
+      "label": "Orinda"
+    },
+    {
+      "key": "https://www.bart.gov/stations/pctr",
+      "label": "Pittsburg Center"
+    },
+    {
+      "key": "https://www.bart.gov/stations/pitt",
+      "label": "Pittsburg/Bay Point"
+    },
+    {
+      "key": "https://www.bart.gov/stations/phil",
+      "label": "Pleasant Hill/Contra Costa Centre"
+    },
+    {
+      "key": "https://www.bart.gov/stations/powl",
+      "label": "Powell St."
+    },
+    {
+      "key": "https://www.bart.gov/stations/rich",
+      "label": "Richmond"
+    },
+    {
+      "key": "https://www.bart.gov/stations/rock",
+      "label": "Rockridge"
+    },
+    {
+      "key": "https://www.bart.gov/stations/sbrn",
+      "label": "San Bruno"
+    },
+    {
+      "key": "https://www.bart.gov/stations/sfia",
+      "label": "San Francisco International Airport (SFO)"
+    },
+    {
+      "key": "https://www.bart.gov/stations/sanl",
+      "label": "San Leandro"
+    },
+    {
+      "key": "https://www.bart.gov/stations/shay",
+      "label": "South Hayward"
+    },
+    {
+      "key": "https://www.bart.gov/stations/ssan",
+      "label": "South San Francisco"
+    },
+    {
+      "key": "https://www.bart.gov/stations/ucty",
+      "label": "Union City"
+    },
+    {
+      "key": "https://www.bart.gov/stations/wcrk",
+      "label": "Walnut Creek"
+    },
+    {
+      "key": "https://www.bart.gov/stations/warm",
+      "label": "Warm Springs/South Fremont"
+    },
+    {
+      "key": "https://www.bart.gov/stations/wdub",
+      "label": "West Dublin/Pleasanton"
+    },
+    {
+      "key": "https://www.bart.gov/stations/woak",
+      "label": "West Oakland"
+    }
+  ],
+  "notes": "All 50 stations in the station list, alphabetical as on the page. Keys are the station page addresses resolved against https://www.bart.gov/stations; names are in the label. The Stations menu, system map and elevator/escalator links are excluded."
+}

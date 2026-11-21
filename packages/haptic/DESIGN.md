@@ -1,0 +1,81 @@
+# Haptic design
+
+Discovery asks a model small questions that code can check, and writes what it learned as data. The artifact holds only that data (selectors, Prism programs, an output schema, crawl limits); Haptic's runtime executes it, the way Prism executes a config. Model calls go through signal, every checked model question is a cortex agent, Prism shapes the data, Strata versions the grammar.
+
+## The artifact (`nisc.haptic` grammar, version 0)
+
+Perl's free online books, as discovery wrote it (`tests/fixtures/discovery/perl.json`):
+
+```json
+{
+  "stamp": { "nisc.haptic": 0, "nisc.prism": 3 },
+  "policy": {
+    "maxPages": 21,
+    "maxRedirects": 3,
+    "stripFragments": true,
+    "accept": { "statuses": [200] }
+  },
+  "stages": [
+    {
+      "kind": "records",
+      "format": "html",
+      "render": false,
+      "selector": "div.col-12",
+      "fields": {
+        "title": { "selector": "h3", "attribute": null },
+        "link": { "selector": "p.description a", "attribute": "href" }
+      },
+      "required": ["title", "link"],
+      "where": { "in": "text", "contains": "the entire book free online" },
+      "limit": null
+    }
+  ],
+  "mapping": { "$map": { "over": { "$ref": "$.records" }, "as": "r", "body": { "…": "…" } } },
+  "outputSchema": { "type": "array", "items": { "…": "…" } }
+}
+```
+
+- **Stages** run in order, one per level of pages: link or reference stages first, one record stage last. A run starts from the address it is given, or from the artifact's request filled with its inputs; the first stage reads that page and the pages that continue it (a next link, or the next request's values). The program sees `{ records }`, the last level's records from all pages in page order. [ARTIFACTS.md](ARTIFACTS.md) has every key, what a record holds, what a run returns, the check errors and `inspect`.
+- **Versions**: `prepareArtifact` upgrades an older stamp through Strata (`HAPTIC_SEQUENCE` with Prism's sequence) before checking it. A change to the artifact schema appends a migration; `pnpm check:grammars` at the repository root holds the grammar to its snapshot and upgrades the captured artifacts in `strata/corpus/haptic`.
+
+## Discovery
+
+One entry point, `discover`, one module per step (`src/discovery/`):
+
+| Step                                                                                                                                                                                                                              | Module                 | Model                                                                      |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- | -------------------------------------------------------------------------- |
+| The page as numbered text lines; each line knows its element                                                                                                                                                                      | `view.ts`              | —                                                                          |
+| A text view over 64 KB: Jev picks the section to read                                                                                                                                                                             | `sections.ts`          | Jev, one choice                                                            |
+| **Read**: cite up to 5 example items by line, count them, the limit asked for, or the links to follow and what to take from each linked page                                                                                      | `read.ts`              | 120b, cortex agent; code checks every citation and sends the problems back |
+| The link rule for the cited links; the next level's task without line numbers                                                                                                                                                     | `links.ts`             | —                                                                          |
+| Record and field rules that give every cited example; the list nearest Read's count                                                                                                                                               | `rules.ts`, `lists.ts` | field rules from 120b only when code finds none                            |
+| Which uncited records answer the instruction                                                                                                                                                                                      | `members.ts`           | Jev, one yes/no per record, 25 per call                                    |
+| One phrase that keeps those and drops the rest: the stage's `where`                                                                                                                                                               | `phrase.ts`            | —                                                                          |
+| The program: a copy of the fields when nothing is left to filter, else Prism's mapping agent, checked against the examples and asked once to match the labels                                                                     | `program.ts`           | 120b, Prism's published agent                                              |
+| Findings: cited examples missing or lost, label mismatches, "N items, the reader counted M"                                                                                                                                       | `findings.ts`          | —                                                                          |
+| Rendering: when a level has 3+ links sharing one address with different texts (a script sets the real addresses), every page of the level is rendered                                                                             | `../render/`           | —                                                                          |
+| One attempt through the levels                                                                                                                                                                                                    | `attempt.ts`           | —                                                                          |
+| The ladder: an attempt at low effort; a stop or a finding other than the count runs it again at high; the first stands unless the second is strictly better. Then the artifact runs once on fresh pages with no model (the trial) | `discover.ts`          | —                                                                          |
+
+Every model call goes through one module (`calls.ts`): it counts tokens, stops new calls at the input-token cap (400k per discovery), allows 250 Jev questions per attempt (one per record labelled or section chosen; up to 25 records go in one call), treats an empty provider reply as no answer, and reports a provider rate-limit block as `blocked`. Every text a model reads is in `prompts.ts`, word for word as approved.
+
+## Search
+
+`search` (`src/search/`): the provider page for the query; its image challenge when one appears (`image-challenge.ts`: fetch the tiles, one Jev question per tile, post the chosen tiles and the success form, follow the redirects within the allowed origins); the results unwrapped and de-duplicated; a cortex agent ranks them; `discover` runs on each in order, each spending one follow slot. When the queue is spent, follow slots and rewrites remain and too few sources are usable, a cortex agent rewrites the query. A failure in a later round becomes `continuationError` when a source is already usable. A provider is data (`SearchProviderSchema`); `duckduckgo` is the shipped one.
+
+## Rendering
+
+jsdom runs the page's own inline scripts and loads no external files, 600 ms for timers. jsdom is not a sandbox: a page's script reaches Node itself in the process it runs in, so that process's limits are what hold it. It runs in a child process under Node's permission model: it reads only its own folder and jsdom's, writes nothing, starts no process and opens no connection. `process.kill` and `process._debugProcess` are removed before the page runs, because the permission model would let the script signal any process of the same user, or open another Node process's inspector and run code there. Its environment is empty (on Windows, Node passes on the variables Windows requires: `PATH`, `TEMP`, `USERNAME` and the like). It is killed after each page or at 15 s.
+
+Node's permission model closes the network from Node 25. On an earlier Node nothing is rendered, because the script could reach any address, private ones included, past the host's transport. A page that is not rendered is read as fetched.
+
+## Modules
+
+| Module                        | Question it answers                                                              |
+| ----------------------------- | -------------------------------------------------------------------------------- |
+| `artifact`                    | What is an artifact, and how does one run with no model?                         |
+| `web`, `connector`, `readers` | How are pages fetched and their bytes read (bounded HTTP, HTML and XML readers)? |
+| `render`                      | When and how does a page run its own scripts?                                    |
+| `discovery`                   | How does an instruction and an address become an artifact?                       |
+| `search`                      | How does an instruction alone become artifacts for several sources?              |
+| `migrations`                  | Which grammar and schemas describe a stored artifact?                            |

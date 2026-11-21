@@ -1,0 +1,592 @@
+{
+  "kinds": {
+    "nisc.haptic/artifact": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "mapping": {
+          "description": "A Prism program over { records }."
+        },
+        "outputSchema": {
+          "additionalProperties": {},
+          "description": "JSON Schema of the program's result.",
+          "propertyNames": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "policy": {
+          "additionalProperties": false,
+          "properties": {
+            "accept": {
+              "additionalProperties": false,
+              "properties": {
+                "mediaTypes": {
+                  "anyOf": [
+                    {
+                      "items": {
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "Accepted content types; absent or null accepts any."
+                },
+                "statuses": {
+                  "items": {
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  },
+                  "minItems": 1,
+                  "type": "array"
+                }
+              },
+              "required": [
+                "statuses"
+              ],
+              "type": "object"
+            },
+            "maxPages": {
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991,
+              "type": "integer"
+            },
+            "maxRedirects": {
+              "maximum": 9007199254740991,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "maxResources": {
+              "description": "Files a run may download; absent means none.",
+              "maximum": 9007199254740991,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "stripFragments": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "maxPages",
+            "maxRedirects",
+            "stripFragments",
+            "accept"
+          ],
+          "type": "object"
+        },
+        "stages": {
+          "items": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "fields": {
+                    "additionalProperties": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "attribute": {
+                          "anyOf": [
+                            {
+                              "minLength": 1,
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "description": "null reads the text; a name reads that attribute (\"href\" values are resolved to absolute addresses)."
+                        },
+                        "closest": {
+                          "description": "CSS for the nearest element at or above the record that the selector runs in instead of the record.",
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        "list": {
+                          "const": true,
+                          "description": "The field collects every match; without it the field is the first match.",
+                          "type": "boolean"
+                        },
+                        "selector": {
+                          "description": "CSS within the record; \":scope\" is the record itself; a selector list (\"p, li\") is allowed.",
+                          "minLength": 1,
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "selector",
+                        "attribute"
+                      ],
+                      "type": "object"
+                    },
+                    "propertyNames": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "type": "object"
+                  },
+                  "format": {
+                    "const": "html",
+                    "type": "string"
+                  },
+                  "kind": {
+                    "const": "records",
+                    "type": "string"
+                  },
+                  "limit": {
+                    "anyOf": [
+                      {
+                        "exclusiveMinimum": 0,
+                        "maximum": 9007199254740991,
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "The first N records of each page, after required and where."
+                  },
+                  "render": {
+                    "description": "Run the pages' own inline scripts before selecting.",
+                    "type": "boolean"
+                  },
+                  "required": {
+                    "description": "A record without a non-empty value for one of these fields is not an item.",
+                    "items": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "resources": {
+                    "additionalProperties": false,
+                    "description": "Files this level's pages lead to; downloaded up to the policy's maxResources.",
+                    "properties": {
+                      "attribute": {
+                        "description": "The attribute holding the file address, e.g. \"href\" or \"src\".",
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "selector": {
+                        "description": "CSS over the whole page for the elements naming files to download.",
+                        "minLength": 1,
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "selector",
+                      "attribute"
+                    ],
+                    "type": "object"
+                  },
+                  "selector": {
+                    "description": "CSS for one record.",
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "where": {
+                    "anyOf": [
+                      {
+                        "additionalProperties": false,
+                        "properties": {
+                          "contains": {
+                            "description": "Kept when that value contains this phrase, both folded (case, whitespace, dashes, quotes).",
+                            "minLength": 1,
+                            "type": "string"
+                          },
+                          "in": {
+                            "description": "A field name, or \"text\" for the record's whole text.",
+                            "minLength": 1,
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "in",
+                          "contains"
+                        ],
+                        "type": "object"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "kind",
+                  "format",
+                  "render",
+                  "selector",
+                  "fields",
+                  "required",
+                  "where",
+                  "limit"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "format": {
+                    "const": "html",
+                    "type": "string"
+                  },
+                  "kind": {
+                    "const": "links",
+                    "type": "string"
+                  },
+                  "limit": {
+                    "anyOf": [
+                      {
+                        "exclusiveMinimum": 0,
+                        "maximum": 9007199254740991,
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "How many distinct, not yet visited addresses to follow."
+                  },
+                  "link": {
+                    "additionalProperties": false,
+                    "description": "The rule reading the link address within the record.",
+                    "properties": {
+                      "attribute": {
+                        "anyOf": [
+                          {
+                            "minLength": 1,
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "description": "null reads the text; a name reads that attribute (\"href\" values are resolved to absolute addresses)."
+                      },
+                      "closest": {
+                        "description": "CSS for the nearest element at or above the record that the selector runs in instead of the record.",
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "list": {
+                        "const": true,
+                        "description": "The field collects every match; without it the field is the first match.",
+                        "type": "boolean"
+                      },
+                      "selector": {
+                        "description": "CSS within the record; \":scope\" is the record itself; a selector list (\"p, li\") is allowed.",
+                        "minLength": 1,
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "selector",
+                      "attribute"
+                    ],
+                    "type": "object"
+                  },
+                  "render": {
+                    "type": "boolean"
+                  },
+                  "resources": {
+                    "additionalProperties": false,
+                    "description": "Files this level's pages lead to; downloaded up to the policy's maxResources.",
+                    "properties": {
+                      "attribute": {
+                        "description": "The attribute holding the file address, e.g. \"href\" or \"src\".",
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "selector": {
+                        "description": "CSS over the whole page for the elements naming files to download.",
+                        "minLength": 1,
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "selector",
+                      "attribute"
+                    ],
+                    "type": "object"
+                  },
+                  "selector": {
+                    "description": "CSS for one link record.",
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "format",
+                  "render",
+                  "selector",
+                  "link",
+                  "limit"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "fields": {
+                    "additionalProperties": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "description": "Field name to an XPath 1.0 expression relative to the record element.",
+                    "propertyNames": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "type": "object"
+                  },
+                  "format": {
+                    "const": "xml",
+                    "type": "string"
+                  },
+                  "kind": {
+                    "const": "records",
+                    "type": "string"
+                  },
+                  "limit": {
+                    "anyOf": [
+                      {
+                        "exclusiveMinimum": 0,
+                        "maximum": 9007199254740991,
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "namespaces": {
+                    "additionalProperties": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "description": "XPath prefix to namespace URI; {} for XML without namespaces.",
+                    "propertyNames": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "type": "object"
+                  },
+                  "required": {
+                    "description": "A record without a non-empty value for one of these fields is not an item.",
+                    "items": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "selector": {
+                    "description": "XPath 1.0 selecting the record elements in document order.",
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "where": {
+                    "anyOf": [
+                      {
+                        "additionalProperties": false,
+                        "properties": {
+                          "contains": {
+                            "description": "Kept when that value contains this phrase, both folded (case, whitespace, dashes, quotes).",
+                            "minLength": 1,
+                            "type": "string"
+                          },
+                          "in": {
+                            "description": "A field name, or \"text\" for the record's whole text.",
+                            "minLength": 1,
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "in",
+                          "contains"
+                        ],
+                        "type": "object"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "kind",
+                  "format",
+                  "selector",
+                  "namespaces",
+                  "fields",
+                  "required",
+                  "where",
+                  "limit"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "description": "Each page's whole JSON document is one record: { sourceUrl, document }.",
+                "properties": {
+                  "format": {
+                    "const": "json",
+                    "type": "string"
+                  },
+                  "kind": {
+                    "const": "records",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "format"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "fields": {
+                    "additionalProperties": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "description": "Field name to an XPath 1.0 expression relative to the record element.",
+                    "propertyNames": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "type": "object"
+                  },
+                  "format": {
+                    "const": "xml",
+                    "type": "string"
+                  },
+                  "kind": {
+                    "const": "references",
+                    "type": "string"
+                  },
+                  "limit": {
+                    "anyOf": [
+                      {
+                        "exclusiveMinimum": 0,
+                        "maximum": 9007199254740991,
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "How many distinct, not yet visited addresses to follow."
+                  },
+                  "namespaces": {
+                    "additionalProperties": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "description": "XPath prefix to namespace URI; {} for XML without namespaces.",
+                    "propertyNames": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "type": "object"
+                  },
+                  "references": {
+                    "description": "A Prism program over { records } returning { links?, resources? }."
+                  },
+                  "selector": {
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "format",
+                  "selector",
+                  "namespaces",
+                  "fields",
+                  "references",
+                  "limit"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "format": {
+                    "const": "json",
+                    "type": "string"
+                  },
+                  "kind": {
+                    "const": "references",
+                    "type": "string"
+                  },
+                  "limit": {
+                    "anyOf": [
+                      {
+                        "exclusiveMinimum": 0,
+                        "maximum": 9007199254740991,
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "How many distinct, not yet visited addresses to follow."
+                  },
+                  "references": {
+                    "description": "A Prism program over { document } returning { links?, resources? }."
+                  }
+                },
+                "required": [
+                  "kind",
+                  "format",
+                  "references",
+                  "limit"
+                ],
+                "type": "object"
+              }
+            ]
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "stamp": {
+          "additionalProperties": false,
+          "properties": {
+            "nisc.haptic": {
+              "const": 0,
+              "type": "number"
+            },
+            "nisc.prism": {
+              "maximum": 9007199254740991,
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "nisc.haptic",
+            "nisc.prism"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "stamp",
+        "policy",
+        "stages",
+        "mapping",
+        "outputSchema"
+      ],
+      "type": "object"
+    }
+  },
+  "sequence": "nisc.haptic",
+  "version": 0
+}

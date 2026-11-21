@@ -1,6 +1,6 @@
 {
   "name": "@niscorp/nisc",
-  "version": "0.9.4",
+  "version": "0.10.0",
   "description": "The nisc platform as one known-compatible set: every @niscorp package, each pinned to the exact version it was released with.",
   "license": "Apache-2.0",
   "repository": {
@@ -22,6 +22,7 @@
     "@niscorp/charter": "workspace:*",
     "@niscorp/cli": "workspace:*",
     "@niscorp/cortex": "workspace:*",
+    "@niscorp/haptic": "workspace:*",
     "@niscorp/loom": "workspace:*",
     "@niscorp/moss": "workspace:*",
     "@niscorp/nova": "workspace:*",

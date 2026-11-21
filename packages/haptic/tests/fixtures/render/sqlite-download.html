@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html><head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="content-type" content="text/html; charset=UTF-8">
+<link href="sqlite.css" rel="stylesheet">
+<title>SQLite Download Page</title>
+<!-- path= -->
+</head>
+<body>
+<div class=nosearch>
+<a href="index.html">
+<img class="logo" src="images/sqlite370_banner.svg" alt="SQLite" border="0">
+</a>
+<div><!-- IE hack to prevent disappearing logo --></div>
+<div class="tagline desktoponly">
+Small. Fast. Reliable.<br>Choose any three.
+</div>
+<div class="menu mainmenu">
+<ul>
+<li><a href="index.html">Home</a>
+<li class='mobileonly'><a href="javascript:void(0)" onclick='toggle_div("submenu")'>Menu</a>
+<li class='wideonly'><a href='about.html'>About</a>
+<li class='desktoponly'><a href="docs.html">Documentation</a>
+<li class='desktoponly'><a href="download.html">Download</a>
+<li class='wideonly'><a href='copyright.html'>License</a>
+<li class='desktoponly'><a href="support.html">Support</a>
+<li class='desktoponly'><a href="prosupport.html">Purchase</a>
+<li class='search' id='search_menubutton'>
+<a href="javascript:void(0)" onclick='toggle_search()'>Search</a>
+</ul>
+</div>
+<div class="menu submenu" id="submenu">
+<ul>
+<li><a href='about.html'>About</a>
+<li><a href='docs.html'>Documentation</a>
+<li><a href='download.html'>Download</a>
+<li><a href='support.html'>Support</a>
+<li><a href='prosupport.html'>Purchase</a>
+</ul>
+</div>
+<div class="searchmenu" id="searchmenu">
+<form method="GET" action="search">
+<select name="s" id="searchtype">
+<option value="d">Search Documentation</option>
+<option value="c">Search Changelog</option>
+</select>
+<input type="text" name="q" id="searchbox" value="">
+<input type="submit" value="Go">
+</form>
+</div>
+</div>
+<script>
+function toggle_div(nm) {
+var w = document.getElementById(nm);
+if( w.style.display=="block" ){
+w.style.display = "none";
+}else{
+w.style.display = "block";
+}
+}
+function toggle_search() {
+var w = document.getElementById("searchmenu");
+if( w.style.display=="block" ){
+w.style.display = "none";
+} else {
+w.style.display = "block";
+setTimeout(function(){
+document.getElementById("searchbox").focus()
+}, 30);
+}
+}
+function div_off(nm){document.getElementById(nm).style.display="none";}
+window.onbeforeunload = function(e){div_off("submenu");}
+/* Disable the Search feature if we are not operating from CGI, since */
+/* Search is accomplished using CGI and will not work without it. */
+if( !location.origin || !location.origin.match || !location.origin.match(/http/) ){
+document.getElementById("search_menubutton").style.display = "none";
+}
+/* Used by the Hide/Show button beside syntax diagrams, to toggle the */
+function hideorshow(btn,obj){
+var x = document.getElementById(obj);
+var b = document.getElementById(btn);
+if( x.style.display!='none' ){
+x.style.display = 'none';
+b.innerHTML='show';
+}else{
+x.style.display = '';
+b.innerHTML='hide';
+}
+return false;
+}
+var antiRobot = 0;
+function antiRobotGo(){
+if( antiRobot!=3 ) return;
+antiRobot = 7;
+var j = document.getElementById("mtimelink");
+if(j && j.hasAttribute("data-href")) j.href=j.getAttribute("data-href");
+}
+function antiRobotDefense(){
+document.body.onmousedown=function(){
+antiRobot |= 2;
+antiRobotGo();
+document.body.onmousedown=null;
+}
+document.body.onmousemove=function(){
+antiRobot |= 2;
+antiRobotGo();
+document.body.onmousemove=null;
+}
+setTimeout(function(){
+antiRobot |= 1;
+antiRobotGo();
+}, 100)
+antiRobotGo();
+}
+antiRobotDefense();
+</script>
+
+
+<h2>SQLite Download Page</h2>
+<table width="100%" cellpadding="5" cellspacing="0">
+
+<tr><td colspan="4"><b>Source Code</b></td></tr>
+<tr><td width="10"></td><td valign="top" align="right"><nobr><a id='a1' href='hp1.html'>sqlite-src-3540100.zip</a></nobr><br>(14.21 MiB)</td>
+<td width="5"></td>
+<td valign="top">Complete canonical source tree for SQLite version 3.54.1, include test cases and
+  extensions.  This is a snapshot of all code under version control at the time
+  of release.  This is the urtext.  All of the other source code bundles shown
+  below are derived from this one.<br><small style='color: #999;'>(SHA3-256: 877c6f4996ce7adb368686bce21638de9e3d91534832ad3d9d119037d1bc22ad)</small></td></tr>
+<tr><td width="10"></td><td valign="top" align="right"><nobr><a id='a2' href='hp1.html'>sqlite-amalgamation-3540100.zip</a></nobr><br>(2.85 MiB)</td>
+<td width="5"></td>
+<td valign="top">C source code as an <a href="amalgamation.html">amalgamation</a>, version 3.54.1.<br><small style='color: #999;'>(SHA3-256: 92281c86e2957f9b9305890f9ac04204caa7b677cc868dc326d942689df28e30)</small></td></tr>
+<tr><td width="10"></td><td valign="top" align="right"><a name="amalgtarball"></a>
+<nobr><a id='a3' href='hp1.html'>sqlite-autoconf-3540100.tar.gz</a></nobr><br>(3.18 MiB)</td>
+<td width="5"></td>
+<td valign="top">C source code as an <a href="amalgamation.html">amalgamation</a>.  Also includes a "configure" script.<br><small style='color: #999;'>(SHA3-256: b6ced585c750916b1052667239a12c25a7ff34e7f06e1e6e01ecb0427657d9c4)</small></td></tr>
+<tr><td width="10"></td><td valign="top" align="right"><nobr><a id='a4' href='hp1.html'>sqlite-preprocessed-3540100.zip</a></nobr><br>(2.99 MiB)</td>
+<td width="5"></td>
+<td valign="top">Preprocessed C sources for SQLite version 3.54.1.  This is a legacy
+  build product that is untested and unsupported.<br><small style='color: #999;'>(SHA3-256: 77320e1ed40b7e655f27b97bff9010b3f159800eddfc4f28b9d96254d8a5bd17)</small></td></tr>
+<tr><td colspan="4"><a name="docco"></a><b>Documentation</b></td></tr>
+<tr><td width="10"></td><td valign="top" align="right"><nobr><a id='a5' href='hp1.html'>sqlite-doc-3540100.zip</a></nobr><br>(11.41 MiB)</td>
+<td width="5"></td>
+<td valign="top">Documentation as a bundle of static HTML files.<br><small style='color: #999;'>(SHA3-256: 6ea5c0eff56c7fb305ca85e820070eacd96da44ae9edfb04d4c82d909540297b)</small></td></tr>
+<tr><td colspan="4"><a name="android"></a><b>Precompiled Binaries for Android</b></td></tr>
+<tr><td width="10"></td><td valign="top" align="right"><nobr><a id='a6' href='hp1.html'>sqlite-android-3540100.aar</a></nobr><br>(3.52 MiB)</td>
+<td width="5"></td>
+<td valign="top">A precompiled Android library <a href="https://sqlite.org/android">containing
+  the core SQLite together with appropriate Java bindings</a>, ready to drop
+  into any Android Studio project.<br><small style='color: #999;'>(SHA3-256: 3afb0568a107d753b640e4d65cdb1d9a2247e9833c25e72ca7d1086b78365de1)</small></td></tr>
+<tr><td colspan="4"><a name="linux"></a><b>Precompiled Binaries for Linux</b></td></tr>
+<tr><td width="10"></td><td valign="top" align="right"><nobr><a id='a7' href='hp1.html'>sqlite-tools-linux-x64-3540100.zip</a></nobr><br>(4.12 MiB)</td>
+<td width="5"></td>
+<td valign="top">Command-line tools for Linux on x64,
+  including (1) the <a href="cli.html">command-line shell</a>, (2) <a href="sqldiff.html">sqldiff</a>,
+  (3) <a href="sqlanalyze.html">sqlite3_analyzer</a>, and (4) <a href="rsync.html">sqlite3_rsync</a>.<br><small style='color: #999;'>(SHA3-256: 555635de98534d87a67ee2e6e1b0d79f494b1b33b223477d3e7a8ea0c66e416f)</small></td></tr>
+<tr><td colspan="4"><a name="mac"></a><b>Precompiled Binaries for Mac OS X</b></td></tr>
+<tr><td width="10"></td><td valign="top" align="right"><nobr><a id='a8' href='hp1.html'>sqlite-tools-osx-arm64-3540100.zip</a></nobr><br>(4.33 MiB)</td>
+<td width="5"></td>
+<td valign="top">Command-line tools for Mac OS-X on ARM,
+  including (1) the <a href="cli.html">command-line shell</a>, (2) <a href="sqldiff.html">sqldiff</a>,
+  (3) <a href="sqlanalyze.html">sqlite3_analyzer</a>, and (4) <a href="rsync.html">sqlite3_rsync</a>.
+  Note: These binaries are unsigned.  After installing
+  them on your $PATH, you will need to run a command
+  like the following to get them to work:<br>
+  <nobr>&emsp;&emsp;<b>xattr -d com.apple.quarantine</b> <i>&lt;prog&gt;</i></nobr><br><small style='color: #999;'>(SHA3-256: a3106c6db3b50ec9ef4fde4edfafe7504179e9bfd7e0816a280b29c4d56a2e7b)</small></td></tr>
+<tr><td width="10"></td><td valign="top" align="right"><nobr><a id='a9' href='hp1.html'>sqlite-tools-osx-x64-3540100.zip</a></nobr><br>(4.35 MiB)</td>
+<td width="5"></td>
+<td valign="top">Command-line tools for Mac OS-X on x64,
+  including (1) the <a href="cli.html">command-line shell</a>, (2) <a href="sqldiff.html">sqldiff</a>,
+  (3) <a href="sqlanalyze.html">sqlite3_analyzer</a>, and (4) <a href="rsync.html">sqlite3_rsync</a>.
+  Note: These binaries are unsigned.  After installing
+  them on your $PATH, you will need to run a command
+  like the following to get them to work:<br>
+  <nobr>&emsp;&emsp;<b>xattr -d com.apple.quarantine</b> <i>&lt;prog&gt;</i></nobr><br><small style='color: #999;'>(SHA3-256: 6a65ac5bff00b0b5251239462dffc70e704bcf1a49e603d5af9fb2812556d113)</small></td></tr>
+<tr><td colspan="4"><a name="win32"></a><b>Precompiled Binaries for Windows</b></td></tr>
+<tr><td width="10"></td><td valign="top" align="right"><nobr><a id='a10' href='hp1.html'>sqlite-dll-win-arm64-3540100.zip</a></nobr><br>(1.04 MiB)</td>
+<td width="5"></td>
+<td valign="top">DLL for Windows ARM64, SQLite version 3.54.1.<br><small style='color: #999;'>(SHA3-256: 58a563f64ba4c5df34c3ce667175678e2c1df503b264cd600200eb37aa334201)</small></td></tr>
+<tr><td width="10"></td><td valign="top" align="right"><nobr><a id='a11' href='hp1.html'>sqlite-dll-win-x64-3540100.zip</a></nobr><br>(1.38 MiB)</td>
+<td width="5"></td>
+<td valign="top">DLL for Windows x64, SQLite version 3.54.1.<br><small style='color: #999;'>(SHA3-256: c2d09c8babb9399277055c057c97a53f1ffd7c5f11d0c1f2118ffdfa39f2daa4)</small></td></tr>
+<tr><td width="10"></td><td valign="top" align="right"><nobr><a id='a12' href='hp1.html'>sqlite-dll-win-x86-3540100.zip</a></nobr><br>(1.08 MiB)</td>
+<td width="5"></td>
+<td valign="top">DLL for Windows x86 (32-bit), SQLite version 3.54.1.<br><small style='color: #999;'>(SHA3-256: 97cd8f207ec121e13d3af459e82834a214700659f307603d80814c6bdb19e2d2)</small></td></tr>
+<tr><td width="10"></td><td valign="top" align="right"><nobr><a id='a13' href='hp1.html'>sqlite-tools-win-arm64-3540100.zip</a></nobr><br>(5.36 MiB)</td>
+<td width="5"></td>
+<td valign="top">Command-line tools for Windows ARM64,
+  including (1) the <a href="cli.html">command-line shell</a>, (2) <a href="sqldiff.html">sqldiff.exe</a>,
+  (3) <a href="sqlanalyze.html">sqlite3_analyzer.exe</a>, and (4) <a href="rsync.html">sqlite3_rsync.exe</a>.<br><small style='color: #999;'>(SHA3-256: d58e230f16d9590c1c61bb19cf128f540a2818381d5bf3afcfd7b9d1ea6a0b2e)</small></td></tr>
+<tr><td width="10"></td><td valign="top" align="right"><nobr><a id='a14' href='hp1.html'>sqlite-tools-win-x64-3540100.zip</a></nobr><br>(6.66 MiB)</td>
+<td width="5"></td>
+<td valign="top">Command-line tools for Windows x64,
+  including (1) the <a href="cli.html">command-line shell</a>, (2) <a href="sqldiff.html">sqldiff.exe</a>,
+  (3) <a href="sqlanalyze.html">sqlite3_analyzer.exe</a>, and (4) <a href="rsync.html">sqlite3_rsync.exe</a>.<br><small style='color: #999;'>(SHA3-256: e171f3993a992edf076746926dd52b5e2ebfabaee38818e74987e1d8112ab987)</small></td></tr>
+<tr><td colspan="4"><a name="wasm"></a><b>WebAssembly & JavaScript</b></td></tr>
+<tr><td width="10"></td><td valign="top" align="right"><nobr><a id='a15' href='hp1.html'>sqlite-wasm-3540100.zip</a></nobr><br>(711.81 KiB)</td>
+<td width="5"></td>
+<td valign="top">A precompiled bundle of <code>sqlite3.wasm</code> and its
+  JavaScript APIs, ready for use in web applications.<br><small style='color: #999;'>(SHA3-256: 87e24f6a4588692310b7942dc2fa7c7275bb9ba2e01d553e4115aa4a904a0050)</small></td></tr>
+<tr><td colspan="4"><b>Precompiled Binaries for .NET</b></td></tr><tr><td width="10"></td><td valign="top" align="right">&rarr;</td><td width="5"></td><td valign="top">See the <a href="https://system.data.sqlite.org/">System.Data.SQLite.org</a> website
+</table>
+<hr>
+
+<!-- Download product data for scripts to read
+PRODUCT,VERSION,RELATIVE-URL,SIZE-IN-BYTES,SHA3-HASH
+PRODUCT,3.54.1,2026/sqlite-src-3540100.zip,14899528,877c6f4996ce7adb368686bce21638de9e3d91534832ad3d9d119037d1bc22ad
+PRODUCT,3.54.1,2026/sqlite-amalgamation-3540100.zip,2990966,92281c86e2957f9b9305890f9ac04204caa7b677cc868dc326d942689df28e30
+PRODUCT,3.54.1,2026/sqlite-autoconf-3540100.tar.gz,3332984,b6ced585c750916b1052667239a12c25a7ff34e7f06e1e6e01ecb0427657d9c4
+PRODUCT,3.54.1,2026/sqlite-preprocessed-3540100.zip,3139216,77320e1ed40b7e655f27b97bff9010b3f159800eddfc4f28b9d96254d8a5bd17
+PRODUCT,3.54.1,2026/sqlite-doc-3540100.zip,11961740,6ea5c0eff56c7fb305ca85e820070eacd96da44ae9edfb04d4c82d909540297b
+PRODUCT,3.54.1,2026/sqlite-android-3540100.aar,3688530,3afb0568a107d753b640e4d65cdb1d9a2247e9833c25e72ca7d1086b78365de1
+PRODUCT,3.54.1,2026/sqlite-tools-linux-x64-3540100.zip,4324601,555635de98534d87a67ee2e6e1b0d79f494b1b33b223477d3e7a8ea0c66e416f
+PRODUCT,3.54.1,2026/sqlite-tools-osx-arm64-3540100.zip,4538997,a3106c6db3b50ec9ef4fde4edfafe7504179e9bfd7e0816a280b29c4d56a2e7b
+PRODUCT,3.54.1,2026/sqlite-tools-osx-x64-3540100.zip,4563670,6a65ac5bff00b0b5251239462dffc70e704bcf1a49e603d5af9fb2812556d113
+PRODUCT,3.54.1,2026/sqlite-dll-win-arm64-3540100.zip,1095550,58a563f64ba4c5df34c3ce667175678e2c1df503b264cd600200eb37aa334201
+PRODUCT,3.54.1,2026/sqlite-dll-win-x64-3540100.zip,1450919,c2d09c8babb9399277055c057c97a53f1ffd7c5f11d0c1f2118ffdfa39f2daa4
+PRODUCT,3.54.1,2026/sqlite-dll-win-x86-3540100.zip,1132252,97cd8f207ec121e13d3af459e82834a214700659f307603d80814c6bdb19e2d2
+PRODUCT,3.54.1,2026/sqlite-tools-win-arm64-3540100.zip,5622381,d58e230f16d9590c1c61bb19cf128f540a2818381d5bf3afcfd7b9d1ea6a0b2e
+PRODUCT,3.54.1,2026/sqlite-tools-win-x64-3540100.zip,6984432,e171f3993a992edf076746926dd52b5e2ebfabaee38818e74987e1d8112ab987
+PRODUCT,3.54.1,2026/sqlite-wasm-3540100.zip,728897,87e24f6a4588692310b7942dc2fa7c7275bb9ba2e01d553e4115aa4a904a0050
+ -->
+
+
+<a name="encoding"></a>
+
+<h3>Build Product Names and Info</h3>
+
+<p>
+Build products are named using one of the following templates:
+
+<ol>
+<li> <b>sqlite-</b>product<b>-</b>version<b>.zip</b>
+<li> <b>sqlite-</b>product<b>-</b>version<b>.tar.gz</b>
+<li> <b>sqlite-</b>product<b>-</b>os<b>-</b>cpu<b>-</b>version<b>.zip</b>
+<li> <b>sqlite-</b>product<b>-</b>date<b>.zip</b>
+</ol>
+
+<p>Templates (1) and (2) are used for source-code products.  Template (1) is
+used for generic source-code products and template (2) is used for source-code
+products that are generally only useful on unix-like platforms.  Template (3)
+is used for precompiled binaries products.  Template (4) is used for
+unofficial pre-release "snapshots" of source code.
+
+<p>The <i>version</i> is encoded so that filenames sort in order of
+increasing version number when viewed using "ls".  For version 3.X.Y the
+filename encoding is 3XXYY00.  For branch version 3.X.Y.Z, the encoding is
+3XXYYZZ.
+
+<p>The <i>date</i> in template (4) is of the form: YYYYMMDDHHMM
+
+<p>For convenient, script-driven extraction of the downloadable
+file URLs and associated information, an HTML comment is embedded
+in this page's source. Its first line (sans leading tag) reads:
+<blockquote><b>Download product data for scripts to read</b></blockquote>
+Its subsequent lines comprise a CSV table with this column header:
+<blockquote><b>PRODUCT,VERSION,RELATIVE-URL,SIZE-IN-BYTES,SHA3-HASH</b></blockquote>
+The column header and following data lines have no leading space.
+The PRODUCT column is a constant value ("PRODUCT") for convenient
+regular expression matching. Other columns are self-explanatory.
+This format will remain stable except for possible new columns
+appended to the right of older columns.
+
+<a name="cvs"></a>
+<a name="fossil"></a>
+<a name="srctree"></a>
+
+<h3>Source Code Repositories</h3>
+
+<p>
+The SQLite source code is maintained in three geographically-dispersed
+self-synchronizing
+<a href="https://www.fossil-scm.org/">Fossil</a> repositories that are
+available for anonymous read-only access.  Anyone can
+view the repository contents and download historical versions
+of individual files or ZIP archives of historical check-ins.
+You can also <a href="getthecode.html#clone">clone the entire repository</a>.</p>
+
+<p>See the <a href="howtocompile.html">How To Compile SQLite</a> page for additional information
+on how to use the raw SQLite source code.
+Note that a recent version of <a href="https://www.tcl-lang.org/">Tcl</a>
+is required in order to build from the repository sources.
+The <a href="amalgamation.html">amalgamation</a> source code files
+(the "sqlite3.c" and "sqlite3.h" files) build products and are
+not contained in raw source code tree.</p>
+
+<blockquote>
+<a href="https://sqlite.org/src">https://sqlite.org/src</a> (Atlanta)<br>
+<a href="https://www2.sqlite.org/src">https://www2.sqlite.org/src</a> (Newark)<br>
+<a href="https://www3.sqlite.org/src">https://www3.sqlite.org/src</a> (San Francisco)<br>
+</blockquote>
+
+<p>There is a GitHub mirror at
+
+<blockquote>
+<a href="https://github.com/sqlite/sqlite">https://github.com/sqlite/sqlite/</a>
+</blockquote>
+
+<p>The documentation is maintained in separate
+<a href="https://fossil-scm.org/">Fossil</a> repositories located
+at:</p>
+
+<blockquote>
+<a href="https://sqlite.org/docsrc">https://sqlite.org/docsrc</a> (Atlanta)<br>
+<a href="https://www2.sqlite.org/docsrc">https://www2.sqlite.org/docsrc</a> (Newark)<br>
+<a href="https://www3.sqlite.org/docsrc">https://www3.sqlite.org/docsrc</a> (San Francisco)<br>
+</blockquote>
+<script type='text/JavaScript'>
+/* <![CDATA[ */
+setTimeout(function(){
+function d391(a,b){document.getElementById(a).href=b;};
+d391('a7','2026/sqlite-tools-linux-x64-3540100.zip');
+d391('a8','2026/sqlite-tools-osx-arm64-3540100.zip');
+d391('a9','2026/sqlite-tools-osx-x64-3540100.zip');
+d391('a1','2026/sqlite-src-3540100.zip');
+d391('a10','2026/sqlite-dll-win-arm64-3540100.zip');
+d391('a2','2026/sqlite-amalgamation-3540100.zip');
+d391('a11','2026/sqlite-dll-win-x64-3540100.zip');
+d391('a3','2026/sqlite-autoconf-3540100.tar.gz');
+d391('a12','2026/sqlite-dll-win-x86-3540100.zip');
+d391('a13','2026/sqlite-tools-win-arm64-3540100.zip');
+d391('a4','2026/sqlite-preprocessed-3540100.zip');
+d391('a14','2026/sqlite-tools-win-x64-3540100.zip');
+d391('a5','2026/sqlite-doc-3540100.zip');
+d391('a15','2026/sqlite-wasm-3540100.zip');
+d391('a6','2026/sqlite-android-3540100.aar');
+}, 10);
+/* ]]> */
+</script>
+
+
+

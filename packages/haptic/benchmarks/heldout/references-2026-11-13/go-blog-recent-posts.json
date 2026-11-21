@@ -1,0 +1,59 @@
+{
+  "key": "text",
+  "items": [
+    {
+      "key": "Go Turns 17",
+      "label": "https://go.dev/blog/17years (10 November 2026)",
+      "include": [
+        "Core language and library improvements",
+        "Making the most of modern hardware",
+        "Secure software and ecosystem defense",
+        "Looking ahead",
+        "we celebrate the 17th anniversary of Go’s open source",
+        "we wish you all the best in the year ahead!"
+      ],
+      "exclude": [
+        "Austin Clements, for the Go team",
+        "10 November 2026",
+        "A new Go API for JSON",
+        "Blog Index"
+      ]
+    },
+    {
+      "key": "A new Go API for JSON",
+      "label": "https://go.dev/blog/jsonv2 (4 November 2026)",
+      "include": [
+        "Trying to fix encoding/json directly",
+        "Caller-specified customization",
+        "Performance limitations",
+        "A long time coming",
+        "a simple data interchange format, the most popular data format",
+        "Thank you to everyone that contributed!"
+      ],
+      "exclude": [
+        "Michael Pratt, Joe Tsai, Daniel Martí",
+        "4 November 2026",
+        "Go Turns 17",
+        "Our Response To The eMudhra Key Disclosure Incident"
+      ]
+    },
+    {
+      "key": "Our Response To The eMudhra Key Disclosure Incident",
+      "label": "https://go.dev/blog/emudhra-incident (26 October 2026)",
+      "include": [
+        "Incident Timeline",
+        "Lessons Learned and Future Improvements",
+        "Securing Go Deployments Everywhere",
+        "the Go team initiated an expedited security release",
+        "the Mozilla security team for this rapid notification"
+      ],
+      "exclude": [
+        "Roland Shoemaker, on behalf of the Go Security team",
+        "26 October 2026",
+        "A new Go API for JSON",
+        "Help set Go's priorities for next year"
+      ]
+    }
+  ],
+  "notes": "The blog index at https://go.dev/blog/ lists posts newest first: 'Go Turns 17' (10 November 2026), 'A new Go API for JSON' (4 November 2026), 'Our Response To The eMudhra Key Disclosure Incident' (26 October 2026); the next one, 'Help set Go's priorities for next year' (21 October 2026), is the fourth and not visited. One item per visited post, keyed by its h1 title exactly as shown. Each post's extracted content should be the full article body: 17years has sections Core language and library improvements, Making the most of modern hardware, Secure software and ecosystem defense, Advancing the broader Go platform and tooling, Looking ahead; jsonv2 has Introduction, Problems with encoding/json (Behavior flaws, API deficiencies, Performance limitations), Trying to fix encoding/json directly, Building on encoding/json/jsontext, Introducing encoding/json/v2 (Type-specified customization, Caller-specified customization, Behavior differences, Performance optimizations), Compatibility, Migration, More information, A long time coming; emudhra-incident has eMudhra Incident, Incident Timeline, Lessons Learned and Future Improvements, Upgrading and Verifying Your Deployments, Securing Go Deployments Everywhere. include gives section headings plus text from the first and last body paragraphs; exclude gives the author line, the date line and the next/previous article link titles (none of which occur in the article body; jsonv2's body does name Michael Pratt and Austin Clements in its acknowledgements, so its author exclude is the longer byline prefix). Excluded overall: author lines, dates, next/previous article links, the 'The Go Blog' index link/heading, 'Blog Index', site navigation, footer. Changed since 2026-11-07: a new post 'Go Turns 17' (10 November 2026) now heads the index, so the three visited posts are 17years, jsonv2 and emudhra-incident; 'Help set Go's priorities for next year' dropped out, and 'Generic Methods' fell off the bottom of the index. jsonv2 now has a 'Next article: Go Turns 17' link. Grader weakness: each post title also appears as a next/previous link on a neighbouring post (e.g. 'A new Go API for JSON' on the 17years and emudhra pages), so the title keys alone can match a result that kept those links; the exclude lists catch that."
+}

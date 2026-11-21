@@ -1,0 +1,157 @@
+{
+  "key": "url",
+  "items": [
+    {
+      "key": "https://security.googleblog.com/2015/12/an-update-on-sha-1-certificates-in.html",
+      "label": "An update on SHA-1 certificates in Chrome (December 18, 2015)"
+    },
+    {
+      "key": "https://security.googleblog.com/2015/12/indexing-https-pages-by-default.html",
+      "label": "Indexing HTTPS pages by default (December 17, 2015)"
+    },
+    {
+      "key": "https://security.googleblog.com/2015/12/proactive-measures-in-digital.html",
+      "label": "Proactive measures in digital certificate security (December 11, 2015)"
+    },
+    {
+      "key": "https://security.googleblog.com/2015/12/year-one-progress-in-fight-against.html",
+      "label": "Year one: progress in the fight against Unwanted Software (December 9, 2015)"
+    },
+    {
+      "key": "https://security.googleblog.com/2015/12/a-new-version-of-authenticator-for.html",
+      "label": "A new version of Authenticator for Android (December 7, 2015)"
+    },
+    {
+      "key": "https://security.googleblog.com/2015/12/protecting-hundreds-of-millions-more.html",
+      "label": "Protecting hundreds of millions more mobile users (December 7, 2015)"
+    },
+    {
+      "key": "https://security.googleblog.com/2015/11/safe-browsing-protection-from-even-more.html",
+      "label": "Safe Browsing protection from even more deceptive attacks (November 13, 2015)"
+    },
+    {
+      "key": "https://security.googleblog.com/2015/11/new-research-encouraging-trends-and.html",
+      "label": "New Research: Encouraging trends and emerging threats in email security (November 12, 2015)"
+    },
+    {
+      "key": "https://security.googleblog.com/2015/10/sustaining-digital-certificate-security.html",
+      "label": "Sustaining Digital Certificate Security (October 28, 2015)"
+    },
+    {
+      "key": "https://security.googleblog.com/2015/10/behind-red-warning-more-info-about.html",
+      "label": "Behind the red warning: more info about online site safety (October 20, 2015)"
+    },
+    {
+      "key": "https://security.googleblog.com/2015/10/simplifying-page-security-icon-in-chrome.html",
+      "label": "Simplifying the Page Security Icon in Chrome (October 13, 2015)"
+    },
+    {
+      "key": "https://security.googleblog.com/2015/09/https-support-coming-to-blogspot.html",
+      "label": "HTTPS support coming to Blogspot (September 30, 2015)"
+    },
+    {
+      "key": "https://security.googleblog.com/2015/09/new-research-underground-market-fueling.html",
+      "label": "New research: The underground market fueling for-profit abuse (September 24, 2015)"
+    },
+    {
+      "key": "https://security.googleblog.com/2015/09/improved-digital-certificate-security.html",
+      "label": "Improved Digital Certificate Security (September 18, 2015)"
+    },
+    {
+      "key": "https://security.googleblog.com/2015/09/disabling-sslv3-and-rc4.html",
+      "label": "Disabling SSLv3 and RC4 (September 17, 2015)"
+    },
+    {
+      "key": "https://security.googleblog.com/2015/09/cutting-unwanted-ad-injectors-out-of.html",
+      "label": "Cutting unwanted ad injectors out of advertising (September 10, 2015)"
+    },
+    {
+      "key": "https://security.googleblog.com/2015/08/say-hello-to-enigma-conference.html",
+      "label": "Say hello to the Enigma conference (August 18, 2015)"
+    },
+    {
+      "key": "https://security.googleblog.com/2015/07/new-research-comparing-how-security.html",
+      "label": "New research: Comparing how security experts and non-experts stay safe online (July 23, 2015)"
+    },
+    {
+      "key": "https://security.googleblog.com/2015/07/working-together-to-filter-automated.html",
+      "label": "Working Together to Filter Automated Data-Center Traffic (July 21, 2015)"
+    },
+    {
+      "key": "https://security.googleblog.com/2015/07/google-wassenaar-arrangement-and.html",
+      "label": "Google, the Wassenaar Arrangement, and vulnerability research (July 20, 2015)"
+    },
+    {
+      "key": "https://security.googleblog.com/2015/07/more-visible-protection-against.html",
+      "label": "More Visible Protection Against Unwanted Software (July 16, 2015)"
+    },
+    {
+      "key": "https://security.googleblog.com/2015/06/announcing-security-rewards-for-android.html",
+      "label": "Announcing Security Rewards for Android (June 16, 2015)"
+    },
+    {
+      "key": "https://security.googleblog.com/2015/05/new-research-some-tough-questions-for.html",
+      "label": "New Research: Some Tough Questions for 'Security Questions' (May 21, 2015)"
+    },
+    {
+      "key": "https://security.googleblog.com/2015/05/new-research-ad-injection-economy.html",
+      "label": "New Research: The Ad Injection Economy (May 6, 2015)"
+    },
+    {
+      "key": "https://security.googleblog.com/2015/04/protect-your-google-account-with.html",
+      "label": "Protect your Google Account with Password Alert (April 29, 2015)"
+    },
+    {
+      "key": "https://security.googleblog.com/2015/04/a-javascript-based-ddos-attack-as-seen.html",
+      "label": "A Javascript-based DDoS Attack as seen by Safe Browsing (April 24, 2015)"
+    },
+    {
+      "key": "https://security.googleblog.com/2015/04/ads-take-step-towards-https-everywhere.html",
+      "label": "Ads Take a Step Towards \"HTTPS Everywhere\" (April 17, 2015)"
+    },
+    {
+      "key": "https://security.googleblog.com/2015/04/beyond-annoyance-security-risks-of.html",
+      "label": "Beyond annoyance: security risks of unwanted ad injectors (April 16, 2015)"
+    },
+    {
+      "key": "https://security.googleblog.com/2015/04/android-security-state-of-union-2014.html",
+      "label": "Android Security State of the Union 2014 (April 2, 2015)"
+    },
+    {
+      "key": "https://security.googleblog.com/2015/03/out-with-unwanted-ad-injectors.html",
+      "label": "Out with unwanted ad injectors (March 31, 2015)"
+    },
+    {
+      "key": "https://security.googleblog.com/2015/03/even-more-unwanted-software-protection.html",
+      "label": "Even more unwanted software protection via the Safe Browsing API (March 24, 2015)"
+    },
+    {
+      "key": "https://security.googleblog.com/2015/03/maintaining-digital-certificate-security.html",
+      "label": "Maintaining digital certificate security (March 23, 2015)"
+    },
+    {
+      "key": "https://security.googleblog.com/2015/02/safe-browsing-and-google-analytics.html",
+      "label": "Safe Browsing and Google Analytics: Keeping More Users Safe, Together (February 26, 2015)"
+    },
+    {
+      "key": "https://security.googleblog.com/2015/02/pwnium-v-never-ending-pwnium.html",
+      "label": "Pwnium V: the never-ending* Pwnium (February 24, 2015)"
+    },
+    {
+      "key": "https://security.googleblog.com/2015/02/more-protection-from-unwanted-software.html",
+      "label": "More Protection from Unwanted Software (February 23, 2015)"
+    },
+    {
+      "key": "https://security.googleblog.com/2015/02/using-google-cloud-platform-for.html",
+      "label": "Using Google Cloud Platform for Security Scanning (February 19, 2015)"
+    },
+    {
+      "key": "https://security.googleblog.com/2015/02/feedback-and-data-driven-updates-to.html",
+      "label": "Feedback and data-driven updates to Google's disclosure policy (February 13, 2015)"
+    },
+    {
+      "key": "https://security.googleblog.com/2015/01/security-reward-programs-year-in-review.html",
+      "label": "Security Reward Programs: Year in Review, Year in Preview (January 30, 2015)"
+    }
+  ]
+}

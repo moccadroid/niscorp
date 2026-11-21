@@ -1,5 +1,5 @@
 import { createPostgresAdapter, createPostgresCache, createQueryEngine, scopeGrants } from '@niscorp/vex';
-import type { CacheBackend, CacheEntry, DatabaseAdapter, DatabaseSchema, ExecuteRecord, PgPool, QueryEngine, QueryEngineConfig } from '@niscorp/vex';
+import type { CacheBackend, CacheEntry, ColumnUpgrader, DatabaseAdapter, DatabaseSchema, ExecuteRecord, PgPool, QueryEngine, QueryEngineConfig } from '@niscorp/vex';
 import { createUpgrader, type Sequence, type Upgrader } from '@niscorp/strata';
 import { NOVA_SEQUENCE } from '@niscorp/nova/migrations';
 import { evaluate } from '@niscorp/prism';
@@ -69,6 +69,8 @@ export type DataLayerDeps = {
   pool: PgPool;
   cache?: CacheBackend;
   vexConfig?: QueryEngineConfig['config'];
+  upgradedColumns?: QueryEngineConfig['upgradedColumns'];
+  upgrader?: ColumnUpgrader;
 };
 
 export const createDataLayer = async (deps: DataLayerDeps): Promise<DataLayer> => {
@@ -76,7 +78,12 @@ export const createDataLayer = async (deps: DataLayerDeps): Promise<DataLayer> =
   const table = deps.cache ?? createPostgresCache({ pool: deps.pool });
   await table.init?.();
   const { cache, askFirst } = createEntryCache(table);
-  const engine = createQueryEngine({ adapter, cache, ...(deps.vexConfig !== undefined ? { config: deps.vexConfig } : {}) });
+  const engine = createQueryEngine({
+    adapter,
+    cache,
+    ...(deps.vexConfig !== undefined ? { config: deps.vexConfig } : {}),
+    ...(deps.upgradedColumns !== undefined && deps.upgrader !== undefined ? { upgradedColumns: deps.upgradedColumns, upgrader: deps.upgrader } : {}),
+  });
   const schema = await engine.introspect();
 
   return { engine, adapter, schema, grants: scopeGrants(schema.entities.map((e) => e.name)), askFirst };

@@ -1,0 +1,102 @@
+{
+  "key": "text",
+  "items": [
+    {
+      "key": "ego-Facebook",
+      "label": "Undirected; nodes 4,039; edges 88,234"
+    },
+    {
+      "key": "ego-Gplus",
+      "label": "Directed; nodes 107,614; edges 13,673,453"
+    },
+    {
+      "key": "ego-Twitter",
+      "label": "Directed; nodes 81,306; edges 1,768,149"
+    },
+    {
+      "key": "soc-Epinions1",
+      "label": "Directed; nodes 75,879; edges 508,837"
+    },
+    {
+      "key": "soc-LiveJournal1",
+      "label": "Directed; nodes 4,847,571; edges 68,993,773"
+    },
+    {
+      "key": "soc-Pokec",
+      "label": "Directed; nodes 1,632,803; edges 30,622,564"
+    },
+    {
+      "key": "soc-Slashdot0811",
+      "label": "Directed; nodes 77,360; edges 905,468"
+    },
+    {
+      "key": "soc-Slashdot0922",
+      "label": "Directed; nodes 82,168; edges 948,464"
+    },
+    {
+      "key": "wiki-Vote",
+      "label": "Directed; nodes 7,115; edges 103,689"
+    },
+    {
+      "key": "wiki-RfA",
+      "label": "Directed, Signed; nodes 10,835; edges 159,388"
+    },
+    {
+      "key": "gemsec-Deezer",
+      "label": "Undirected; nodes 143,884; edges 846,915"
+    },
+    {
+      "key": "gemsec-Facebook",
+      "label": "Undirected; nodes 134,833; edges 1,380,293"
+    },
+    {
+      "key": "soc-RedditHyperlinks",
+      "label": "Directed, Signed, Temporal, Attributed; nodes 55,863; edges 858,490"
+    },
+    {
+      "key": "soc-sign-bitcoin-otc",
+      "label": "Weighted, Signed, Directed, Temporal; nodes 5,881; edges 35,592"
+    },
+    {
+      "key": "soc-sign-bitcoin-alpha",
+      "label": "Weighted, Signed, Directed, Temporal; nodes 3,783; edges 24,186"
+    },
+    {
+      "key": "comm-f2f-Resistance",
+      "label": "Weighted, Directed, Temporal; nodes 451; edges 3,126,993"
+    },
+    {
+      "key": "musae-twitch",
+      "label": "Undirected; nodes 34,118; edges 429,113"
+    },
+    {
+      "key": "musae-facebook",
+      "label": "Undirected; nodes 22,470; edges 171,002"
+    },
+    {
+      "key": "act-mooc",
+      "label": "Bipartite, Directed, Attributed, Temporal; nodes 7,143; edges 411,749"
+    },
+    {
+      "key": "musae-github",
+      "label": "Undirected; nodes 37,700; edges 289,003"
+    },
+    {
+      "key": "feather-deezer-social",
+      "label": "Undirected; nodes 28,281; edges 92,752"
+    },
+    {
+      "key": "feather-lastfm-social",
+      "label": "Undirected; nodes 7,624; edges 27,806"
+    },
+    {
+      "key": "twitch-gamers",
+      "label": "Undirected; nodes 168,114; edges 6,797,557"
+    },
+    {
+      "key": "congress-Twitter",
+      "label": "Directed; nodes 475; edges 13,289"
+    }
+  ],
+  "notes": "All 24 rows of the \"Social networks\" table, keyed by dataset name; type, nodes and edges in the label. Names checked so none contains another (ego-Facebook vs gemsec-Facebook, ego-Twitter vs congress-Twitter). Rows such as comm-f2f-Resistance and act-mooc sit in the Social networks table on this page and are included."
+}

@@ -1,0 +1,49 @@
+{
+  "key": "text",
+  "items": [
+    {
+      "key": "Easy Homemade Meatballs",
+      "label": "https://www.budgetbytes.com/homemade-meatballs/ ; cook 30 mins, 8 servings (about 4 meatballs each)",
+      "include": [
+        "Easy Homemade Meatballs",
+        "Cook 30",
+        "Servings 8",
+        "about 4 meatballs each"
+      ],
+      "exclude": [
+        "$15.68 recipe / $1.96 serving",
+        "In a small bowl, combine the breadcrumbs, Parmesan, garlic powder",
+        "Preheat the oven to 400ºF"
+      ]
+    },
+    {
+      "key": "Creamy Tomato and Spinach Pasta",
+      "label": "https://www.budgetbytes.com/creamy-tomato-spinach-pasta/ ; cook 20 mins, 4 servings",
+      "include": [
+        "Creamy Tomato and Spinach Pasta",
+        "Cook 20",
+        "Servings 4"
+      ],
+      "exclude": [
+        "$4.80 recipe / $1.20 serving",
+        "Bring a large pot of water to a boil over high heat.",
+        "Gather and prepare all ingredients."
+      ]
+    },
+    {
+      "key": "Easy Taco Soup",
+      "label": "https://www.budgetbytes.com/taco-soup/ ; cook 30 mins, 6 servings (1.5 cups each)",
+      "include": [
+        "Easy Taco Soup",
+        "Cook 30",
+        "Servings 6",
+        "servings (1.5 cups each)"
+      ],
+      "exclude": [
+        "$11.43 recipe / $1.90 serving",
+        "Add the olive oil and ground beef to a large soup pot."
+      ]
+    }
+  ],
+  "notes": "The Recipes for Dinner section lists Easy Homemade Meatballs, Creamy Tomato and Spinach Pasta, Easy Taco Soup, Crockpot Beef Stew, Classic Chili Recipe; the first three pages are in the saved copy. Cook time is the Cook field (the page also shows Prep and Total; Total is not cook time). The time markup is '30' + screen-reader ' minutes' + visible 'mins', so includes use 'Cook 30' to match either reading. Servings include the unit text where the page gives one. Exclude texts are the cost line and the first method steps."
+}

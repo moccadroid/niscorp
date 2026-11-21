@@ -1,0 +1,433 @@
+{
+  "key": "url",
+  "items": [
+    {
+      "key": "https://rickandmortyapi.com/api/character/1",
+      "label": "Rick Sanchez (Human, Alive)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/8",
+      "label": "Adjudicator Rick (Human, Dead)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/15",
+      "label": "Alien Rick (Alien, unknown)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/19",
+      "label": "Antenna Rick (Human, unknown)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/22",
+      "label": "Aqua Rick (Humanoid, unknown)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/48",
+      "label": "Black Rick (Human, Alive)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/56",
+      "label": "Bootleg Portal Chemist Rick (Human, Dead)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/69",
+      "label": "Commander Rick (Human, Dead)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/72",
+      "label": "Cool Rick (Human, Alive)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/74",
+      "label": "Cop Rick (Human, Alive)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/78",
+      "label": "Cowboy Rick (Human, Alive)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/82",
+      "label": "Cronenberg Rick (Cronenberg, unknown)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/86",
+      "label": "Cyclops Rick (Humanoid, Dead)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/103",
+      "label": "Doofus Rick (Human, unknown)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/119",
+      "label": "Evil Rick (Humanoid, Dead)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/135",
+      "label": "Garment District Rick (Human, Dead)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/164",
+      "label": "Insurance Rick (Human, unknown)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/165",
+      "label": "Investigator Rick (Human, Dead)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/187",
+      "label": "Juggling Rick (Human, unknown)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/215",
+      "label": "Maximums Rickimus (Human, Dead)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/218",
+      "label": "Mechanical Rick (Robot, unknown)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/220",
+      "label": "Mega Fruit Farmer Rick (Human, Alive)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/231",
+      "label": "Morty Rick (Human, unknown)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/265",
+      "label": "Pickle Rick (unknown, Alive)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/267",
+      "label": "Plumber Rick (Human, Alive)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/274",
+      "label": "Quantum Rick (Human, unknown)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/278",
+      "label": "Regional Manager Rick (Human, Dead)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/281",
+      "label": "Reverse Rick Outrage (Human, Dead)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/283",
+      "label": "Rick D. Sanchez III (Human, Dead)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/284",
+      "label": "Rick Guilt Rick (Human, unknown)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/285",
+      "label": "Rick Prime (Human, Dead)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/286",
+      "label": "Rick D-99 (Human, Dead)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/287",
+      "label": "Rick D716 (Human, Dead)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/288",
+      "label": "Rick D716-B (Human, Alive)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/289",
+      "label": "Rick D716-C (Human, Alive)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/290",
+      "label": "Rick Sanchez (Human, Dead)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/291",
+      "label": "Rick J-22 (Human, Alive)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/292",
+      "label": "Rick K-22 (Human, Alive)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/293",
+      "label": "Rick Sanchez (Human, Dead)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/294",
+      "label": "Ricktiminus Sancheziminius (Human, Dead)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/299",
+      "label": "Robot Rick (Robot, unknown)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/322",
+      "label": "Simple Rick (Human, Dead)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/328",
+      "label": "Slow Rick (Human, Alive)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/330",
+      "label": "Solicitor Rick (Human, unknown)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/345",
+      "label": "Teacher Rick (Human, Alive)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/349",
+      "label": "The Scientist Formerly Known as Rick (Human, Dead)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/353",
+      "label": "Tiny Rick (Human, Dead)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/361",
+      "label": "Toxic Rick (Humanoid, Dead)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/378",
+      "label": "Wall Crawling Rick (Humanoid, unknown)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/380",
+      "label": "Unknown Rick (Human, unknown)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/381",
+      "label": "Woman Rick (Alien, Alive)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/385",
+      "label": "Yellow Shirt Rick (Human, unknown)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/389",
+      "label": "Zeta Alpha Rick (Human, Dead)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/434",
+      "label": "Super Weird Rick (Human, unknown)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/461",
+      "label": "Communication's Responsible Rick (Human, Dead)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/462",
+      "label": "Teleportation's Responsible Rick (Human, unknown)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/463",
+      "label": "SEAL Team Rick (Human, Dead)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/464",
+      "label": "SEAL Team Rick (Human, Dead)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/465",
+      "label": "SEAL Team Rick (Human, Dead)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/466",
+      "label": "SEAL Team Rick (Human, Dead)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/472",
+      "label": "Baby Rick (Human, Alive)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/477",
+      "label": "Hairdresser Rick (Human, Alive)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/478",
+      "label": "Journalist Rick (Human, Alive)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/479",
+      "label": "Private Sector Rick (Human, Dead)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/481",
+      "label": "Retired General Rick (Human, unknown)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/482",
+      "label": "Secret Service Rick (Human, Alive)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/483",
+      "label": "Steve Jobs Rick (Human, Alive)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/484",
+      "label": "Sheik Rick (Human, Dead)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/485",
+      "label": "Modern Rick (Human, Alive)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/486",
+      "label": "Tan Rick (Human, Dead)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/487",
+      "label": "Visor Rick (Human, Dead)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/488",
+      "label": "Colonial Rick (Human, Dead)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/489",
+      "label": "P-Coat Rick (Human, Dead)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/497",
+      "label": "Hologram Rick (Humanoid, Dead)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/498",
+      "label": "Fascist Rick (Human, Dead)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/501",
+      "label": "Fascist Rick’s Clone (Human, Dead)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/503",
+      "label": "Fascist Shrimp Rick (Animal, Alive)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/504",
+      "label": "Fascist Shrimp Rick’s Clone (Animal, Dead)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/507",
+      "label": "Fascist Teddy Bear Rick (Animal, Alive)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/508",
+      "label": "Fascist Teddy Bear Rick’s Clone (Animal, Dead)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/516",
+      "label": "Wasp Rick (Animal, Alive)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/517",
+      "label": "Wasp Rick’s Clone (Animal, unknown)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/631",
+      "label": "Rick Sanchez (Human, Alive)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/638",
+      "label": "Rick’s Disguise (Human, Alive)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/687",
+      "label": "Scarecrow Rick (Robot, Dead)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/694",
+      "label": "Glockenspiel Rick (Robot, Dead)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/698",
+      "label": "Wicker Rick (Robot, Dead)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/701",
+      "label": "Metal Rick (Robot, Dead)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/702",
+      "label": "Gun Brain Rick (Robot, Dead)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/707",
+      "label": "Squid Costume Rick (Robot, Dead)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/713",
+      "label": "Too Cute to Murder Rick (Robot, Dead)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/760",
+      "label": "Turkey Rick (Animal, Alive)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/769",
+      "label": "Big Fat rick (Human, unknown)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/770",
+      "label": "Hothead Rick (Human, Dead)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/772",
+      "label": "Wrap-it-up Little Rick (Human, Dead)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/773",
+      "label": "Yo-yo Rick (Human, unknown)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/779",
+      "label": "Young Memory Rick (Human, Alive)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/781",
+      "label": "Rick's Garage (Robot, Alive)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/783",
+      "label": "Memory Rick (Human, Dead)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/784",
+      "label": "Memory Rick (Human, Dead)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/810",
+      "label": "Stan Lee Rick (Human, unknown)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/814",
+      "label": "Bald Rick (Human, Dead)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/815",
+      "label": "Punk Rick (Human, Dead)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/816",
+      "label": "Party Rick (Human, Dead)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/817",
+      "label": "Scar Rick (Human, Dead)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/818",
+      "label": "Long Hair Rick (Human, unknown)"
+    },
+    {
+      "key": "https://rickandmortyapi.com/api/character/819",
+      "label": "Redhead Rick (Human, Dead)"
+    }
+  ]
+}

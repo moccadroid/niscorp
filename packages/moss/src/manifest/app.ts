@@ -1,5 +1,5 @@
 import type { Sequence } from '@niscorp/strata';
-import type { GenerateDsl, MapToShape, QueryResponse, ScopeBehaviors, SeedEntry, SeedMutation } from '@niscorp/vex';
+import type { GenerateDsl, MapToShape, QueryResponse, ScopeBehaviors, SeedEntry, SeedMutation, UpgradedColumns } from '@niscorp/vex';
 import type { Charter } from '@niscorp/charter';
 import type { ActionDefinition, ActionFragment, CanvasConfig, FetchFn, FunctionDefinition, FunctionHandler, LayoutNode, Reconciler, Shell } from '@niscorp/nova';
 import type { PhraseKeys, Phrasebook } from '@niscorp/nova/i18n';
@@ -52,6 +52,7 @@ export type NiscApp = {
   shell?: ShellManifest;
   pages?: Record<string, PageManifest>;
   grammars?: readonly Sequence[];
+  upgradedColumns?: UpgradedColumns;
   // A map of handlers is deprecated: return a list of `{ id, description, execute }`.
   functions?: (session: FunctionSession) => WrittenFunctions;
   // Like `functions`, it runs before the shell finishes building: defer

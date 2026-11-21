@@ -1,0 +1,9 @@
+{
+  "key": "text",
+  "items": [
+    { "key": "Git Operations", "label": "Git Operations — Operational" },
+    { "key": "API Requests", "label": "API Requests — Operational" },
+    { "key": "Actions", "label": "Actions — Operational" }
+  ],
+  "notes": "The components list holds twelve component rows (.component-inner-container, each with data-component-status=\"operational\" and a .name child). The instruction names three, so the items are those three rows, keyed by the component name as shown, in page order (Git Operations, then API Requests after Webhooks and a 'Visit www.githubstatus.com' row, then Actions after Issues and Pull Requests). All three were Operational at capture. Ambiguity for grading: the key 'Actions' is a common word; the incident history on the same page mentions 'Actions' many times, so an extra incident item would also contain this key. 'API Requests' is not contained in 'Pull Requests'."
+}

@@ -1,0 +1,54 @@
+{
+  "key": "text",
+  "items": [
+    {
+      "key": "The mixture of gases comprising the earth's atmosphere.",
+      "label": "term: Air"
+    },
+    {
+      "key": "A body of air covering a relatively wide area and exhibiting horizontally uniform properties.",
+      "label": "term: Air Mass"
+    },
+    {
+      "key": "Generally, a thunderstorm not associated with a front or other type of synoptic-scale forcing mechanism.",
+      "label": "term: Air Mass Thunderstorm"
+    },
+    {
+      "key": "Harmful substance or product introduced into the atmosphere.",
+      "label": "term: Air Pollutant"
+    },
+    {
+      "key": "The meteorological potential for air pollution problems",
+      "label": "term: Air Pollution Potential"
+    },
+    {
+      "key": "relay non-routine air quality alert messages issued by state and local agencies",
+      "label": "term: Air Quality Alert"
+    },
+    {
+      "key": "Mathematical or conceptual model used to estimate present or future air quality.",
+      "label": "term: Air Quality Model"
+    },
+    {
+      "key": "A meteorological situation in which there is a major buildup of air pollution in the atmosphere.",
+      "label": "term: Air Stagnation"
+    },
+    {
+      "key": "This National Weather Service product is issued when major buildups of air pollution",
+      "label": "term: Air Stagnation Advisory"
+    },
+    {
+      "key": "Toxic air pollutant.",
+      "label": "term: Air Toxin"
+    },
+    {
+      "key": "A modularized transportable unit containing communications and observational equipment",
+      "label": "term: Air Transportable Mobile Unit"
+    },
+    {
+      "key": "makes airborne snow water equivalent and soil moisture measurements",
+      "label": "term: Airborne Snow Survey Program"
+    }
+  ],
+  "notes": "12 entries whose term starts with 'Air': Air through Airborne Snow Survey Program. Keys are each entry's definition (or a distinctive part of it), because the term names nest inside one another ('Air' is in every term, 'Air Mass' is in 'Air Mass Thunderstorm', 'Air Stagnation' in 'Air Stagnation Advisory'); the term is in each label. Excluded: AIRMET (capitals, an abbreviation), and A-entries whose definition merely contains 'Air' (AFB = Air Force Base, AFWA, AOPA, ARTCC, ASR-9, ATC) because their term does not start with Air. Air Mass Thunderstorm's definition has a second paragraph ('Since all thunderstorms are associated...'); the key is its first sentence."
+}

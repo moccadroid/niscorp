@@ -1,0 +1,16 @@
+{
+  "key": "text",
+  "items": [
+    {
+      "key": "serendipity",
+      "label": "one record; every detail must be in it",
+      "include": [
+        "noun",
+        "ˌser.ənˈdɪp.ə.ti",
+        "ˌser.ənˈdɪp.ə.t̬i",
+        "the fact of finding interesting or valuable things by chance"
+      ]
+    }
+  ],
+  "notes": "One sense in the Cambridge Advanced Learner's Dictionary entry. The UK and US IPA differ only in the last syllable (US has a flapped t̬, written with a combining mark); neither key contains the other. The [U] grammar code and 'formal' register label were not asked for and are not items. The headword key 'serendipity' also appears in the corpus examples, so a match should come from the headword field. The instruction asks for one record with several details, so the reference is one item: its key plus every other detail as include texts (restructured 2026-11-15 from five separate items, which a single correct record could never match)."
+}

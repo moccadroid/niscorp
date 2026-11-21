@@ -1,0 +1,26 @@
+{
+  "key": "text",
+  "items": [
+    {
+      "key": "Chen, Yifan",
+      "label": "MS 7304"
+    },
+    {
+      "key": "Dhillon, Gurbir",
+      "label": "MS 6921"
+    },
+    {
+      "key": "Maldague, Dominique",
+      "label": "MS 6917"
+    },
+    {
+      "key": "Moraga, Joaquin",
+      "label": "MS 6156"
+    },
+    {
+      "key": "Ryu, Ernest",
+      "label": "MS 7619B"
+    }
+  ],
+  "notes": "Five rows whose title is exactly \"Assistant Professor\"; no row has an Assistant Professor title combined with anything else. Associate Professors are excluded. Keys are the names as written (\"Surname, First\"); a result that rewrites them as \"First Surname\" will not match. Office location is in the label."
+}

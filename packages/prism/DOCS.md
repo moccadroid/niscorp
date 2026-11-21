@@ -652,6 +652,9 @@ three countries:
 - `fallback` (default `""`) is rendered for a null/absent amount, so an empty
   SUM shows a dash rather than a confident `€0.00`.
 - An ISO code `Intl` does not know prints beside the number instead of throwing.
+  So does a locale tag `Intl` cannot read (`"en_GB"`), and then the divisor is
+  100 whatever the currency, as `Intl` was not asked for its exponent: 4500 JPY
+  prints `JPY 45.00`, the hundredfold error above. Give it a locale `Intl` reads.
 
 ### `$localeDate` — a date for a human
 ```json
@@ -663,10 +666,43 @@ three countries:
 `timeStyle`, `weekday`, `year`, `month`, `day`, `hour`, `minute`, `second`,
 `hour12`, `timeZone`). Defaults to `{ "dateStyle": "medium" }`.
 
+**The zone and the locale may be read, not only written.** `locale` and
+`options.timeZone` are nodes like `value`: a mapping words a date where its
+reader is, from whatever the source carries.
+
+```json
+{ "$localeDate": { "value": { "$ref": "$.at" }, "locale": { "$ref": "$.locale" }, "options": { "timeStyle": "short", "timeZone": { "$ref": "$.zone" } } } }
+```
+
+A zone written in the program is text, or an op that reads one: anything else
+there (a number, `null`, an object without a `$` key) is refused as the config
+is read, as it always was. The JSON Schema (`getConfigJsonSchema`, a profile's)
+says only "a node" there and does not carry this rule, as it does not carry a
+`$ref` path's; `validate` and `compile` do. Where there is a date to word, the zone, written or
+read, must be one `Intl` knows once it is evaluated — an IANA name such as
+`"Europe/Vienna"`. Anything else — an unknown name, `""`, `null`, a number — is
+refused with `E_TYPE` at `$localeDate.options.timeZone`, saying what it got. A
+fallback is the author's to write: for a zone that may be `null`,
+`{ "$coalesce": [{ "$ref": "$.zone" }, "UTC"] }` (an empty one is still
+refused). A bad date is refused (`E_DATE_INVALID`) before the zone is looked
+at. A config with a bound zone compiles once: its fingerprint does not depend
+on the zone, and `execute` reads the zone from each source it is run on. A
+written zone is folded at compile time as before.
+
+**A locale, written or read, is a tag `Intl` can read.** One that is not text,
+or text `Intl` cannot read as a locale tag (`"en_GB"`, `"not a locale!"`), is
+refused with `E_TYPE` at `locale` by `$localeDate` and `$localeNumber`, saying
+what it got. A well-formed tag `Intl` has no data for (`"xx-YY"`) is read as
+`Intl` reads it, falling back to a locale it has. `$localeMoney` refuses a
+locale that is not text and prints the code beside the amount for one `Intl`
+cannot read, as it always did (see its caveat above). Where both the zone and
+the locale are bad, the zone is refused first.
+
 **DATE-only values are read as UTC.** `"2026-03-14"` is UTC midnight, and
 formatting UTC midnight in any zone west of Greenwich prints the 13th. Every
 date column in a schema has this shape, so the trap is handled once here rather
-than rediscovered at each call site. An explicit `timeZone` still wins.
+than rediscovered at each call site. An explicit `timeZone`, written or read,
+still wins.
 
 ### `$localeNumber` — a number
 ```json

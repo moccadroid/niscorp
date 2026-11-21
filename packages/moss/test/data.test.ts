@@ -66,6 +66,17 @@ describe('the data module, over an engine', () => {
     expect(await post('writer', ADD)).toMatchObject({ result: { id: 7, body: 'written' } });
   });
 
+  it("refuses upgraded columns in a table a feature or the artifactory owns: their own entries read it as stored", async () => {
+    const double = await engineDouble();
+    const prepared = { engine: double.engine, adapter: double.adapter, grants: scopeGrants(['notes', 'tags']), grammars: await createGrammarUpgrader({}), upgradeStore: async () => undefined, askFirst: double.askFirst };
+    const column = { body: { stamp: 'grammar', kind: 'app.notes/body' } };
+    const config = { db: double.db, charter, featureTables: [{ feature: 'tagging', names: ['tags'], sequences: [] }] };
+    expect(() => createDataWith(prepared, { ...config, upgradedColumns: { notes: column, tags: column, artifacts: column } })).toThrow(
+      'moss: the app\'s `upgradedColumns` name tables it does not own ("tags" is the feature "tagging"\'s; "artifacts" is the artifactory\'s).',
+    );
+    expect(() => createDataWith(prepared, { ...config, upgradedColumns: { notes: column } })).not.toThrow();
+  });
+
   it('keeps the policy of a set of roles, and gives the server the one its routes use', async () => {
     const { data } = await world();
     const kept = data.policyOf(who('reader'));

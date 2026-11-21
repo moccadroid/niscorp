@@ -1,0 +1,48 @@
+{
+  "key": "text",
+  "items": [
+    {
+      "key": "UKHSA cold-health alerts winter 2026/27",
+      "label": "https://www.gov.uk/government/news/ukhsa-issues-first-cold-health-alert-of-winter-202627 ; UK Health Security Agency; published 10 November 2026, last updated 14 November 2026",
+      "include": [
+        "UKHSA cold-health alerts winter 2026/27",
+        "UK Health Security Agency",
+        "10 November 2026"
+      ],
+      "exclude": [
+        "UKHSA has issued a yellow cold-health alert (CHA)",
+        "Paul Coleman, Consultant in Public Health at UKHSA, said:",
+        "Climate and health"
+      ]
+    },
+    {
+      "key": "Stronger savings for hundreds of thousands of workers",
+      "label": "https://www.gov.uk/government/news/stronger-savings-for-hundreds-of-thousands-of-workers ; HM Treasury, Prime Minister's Office, 10 Downing Street, DBT, FCA, MaPS (+4 more under 'Show 4 more'); published 14 November 2026",
+      "include": [
+        "Stronger savings for hundreds of thousands of workers",
+        "HM Treasury",
+        "Financial Conduct Authority and Money and Pensions Service",
+        "14 November 2026"
+      ],
+      "exclude": [
+        "Major employers like BT, M&S, Veolia and Home Bargains have joined",
+        "Payroll"
+      ]
+    },
+    {
+      "key": "King's Award for Voluntary Service honour 250 volunteer groups",
+      "label": "https://www.gov.uk/government/news/kings-award-for-voluntary-service-honour-250-volunteer-groups ; DCMS; published 14 November 2026",
+      "include": [
+        "King's Award for Voluntary Service honour 250 volunteer groups",
+        "Department for Digital, Culture, Media and Sport",
+        "14 November 2026"
+      ],
+      "exclude": [
+        "A total of 250 volunteer-led groups, whose work supports communities",
+        "Minister for Civil Society Vicky Foxcroft said:",
+        "Charities, volunteering and honours"
+      ]
+    }
+  ],
+  "notes": "The results list is in 'Updated (newest)' order; its first three are UKHSA cold-health alerts (shown as updated 14 November 2026), Stronger savings, and King's Award; all three pages are in the saved copy. Judgement call: the UKHSA page was first published 10 November 2026 and last updated 14 November 2026; 'published date' is taken as 10 November 2026 (an answer of 14 November 2026 is defensible). Stronger savings has eight organisations, four of them behind 'Show 4 more'; the include checks only the first line. 'Payroll' and 'Climate and health' are Explore-the-topic related links."
+}

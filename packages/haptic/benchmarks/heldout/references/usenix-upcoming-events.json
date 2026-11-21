@@ -1,0 +1,66 @@
+{
+  "key": "text",
+  "items": [
+    {
+      "key": "25th USENIX Conference on File and Storage Technologies",
+      "label": "FAST '27: 25th USENIX Conference on File and Storage Technologies — Feb 23–25, 2027"
+    },
+    {
+      "key": "SREcon27 Americas",
+      "label": "SREcon27 Americas — Apr 12–14, 2027"
+    },
+    {
+      "key": "24th USENIX Symposium on Networked Systems Design and Implementation",
+      "label": "NSDI '27: 24th USENIX Symposium on Networked Systems Design and Implementation — May 11–13, 2027"
+    },
+    {
+      "key": "USENIX Conference on Secure Agentic-AI Systems",
+      "label": "SAIS '27: USENIX Conference on Secure Agentic-AI Systems — Jun 7–8, 2027"
+    },
+    {
+      "key": "2027 USENIX Conference on Privacy Engineering Practice and Respect",
+      "label": "PEPR '27: 2027 USENIX Conference on Privacy Engineering Practice and Respect — Jun 7–8, 2027"
+    },
+    {
+      "key": "21st USENIX Symposium on Operating Systems Design and Implementation",
+      "label": "OSDI '27: 21st USENIX Symposium on Operating Systems Design and Implementation — Jul 7–9, 2027"
+    },
+    {
+      "key": "Twenty-Third Symposium on Usable Privacy and Security",
+      "label": "SOUPS 2027: Twenty-Third Symposium on Usable Privacy and Security — Aug 8–10, 2027"
+    },
+    {
+      "key": "5th USENIX Symposium on Vehicle Security and Privacy",
+      "label": "VehicleSec '27: 5th USENIX Symposium on Vehicle Security and Privacy — Aug 9–10, 2027"
+    },
+    {
+      "key": "21st USENIX WOOT Conference on Offensive Technologies",
+      "label": "WOOT '27: 21st USENIX WOOT Conference on Offensive Technologies — Aug 9–10, 2027"
+    },
+    {
+      "key": "36th USENIX Security Symposium",
+      "label": "USENIX Security '27: 36th USENIX Security Symposium — Aug 11–13, 2027"
+    },
+    {
+      "key": "SREcon27 Europe/Middle East/Africa",
+      "label": "SREcon27 Europe/Middle East/Africa — Oct 5–7, 2027"
+    },
+    {
+      "key": "26th USENIX Conference on File and Storage Technologies",
+      "label": "FAST '28: 26th USENIX Conference on File and Storage Technologies — Feb 28–Mar 1, 2028"
+    },
+    {
+      "key": "SREcon28 Americas West",
+      "label": "SREcon28 Americas West — Mar 20–22, 2028"
+    },
+    {
+      "key": "25th USENIX Symposium on Networked Systems Design and Implementation",
+      "label": "NSDI '28: 25th USENIX Symposium on Networked Systems Design and Implementation — May 9–11, 2028"
+    },
+    {
+      "key": "2028 USENIX Conference on Privacy Engineering Practice and Respect",
+      "label": "PEPR '28: 2028 USENIX Conference on Privacy Engineering Practice and Respect — Jun 5–6, 2028"
+    }
+  ],
+  "notes": "All 15 events on the captured page 1 of the upcoming list, in page order (page 2 is not in the capture and pagination is excluded). Key is the conference-title text (the full name, e.g. \"36th USENIX Security Symposium\"), because the acronym (\"FAST '27:\") sits in a separate element a result may omit, and dates repeat (Jun 7–8, Aug 9–10 twice), so dates cannot be keys. Excluded: locations/venues, submission deadlines and CFP links, co-located notes, tabs, pagination, nav and footer."
+}

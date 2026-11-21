@@ -1,0 +1,46 @@
+{
+  "key": "text",
+  "items": [
+    {
+      "key": "Burj Khalifa",
+      "label": "Burj Khalifa — 828 m"
+    },
+    {
+      "key": "Merdeka Maybank Tower",
+      "label": "Merdeka Maybank Tower — 678.9 m"
+    },
+    {
+      "key": "Shanghai Tower",
+      "label": "Shanghai Tower — 632 m"
+    },
+    {
+      "key": "Mecca Royal Clock Tower",
+      "label": "Mecca Royal Clock Tower — 601 m"
+    },
+    {
+      "key": "Ping An Finance Centre",
+      "label": "Ping An Finance Centre — 599.1 m"
+    },
+    {
+      "key": "Lotte World Tower",
+      "label": "Lotte World Tower — 554.5 m"
+    },
+    {
+      "key": "One World Trade Center",
+      "label": "One World Trade Center — 541.3 m"
+    },
+    {
+      "key": "Guangzhou CTF Finance Centre",
+      "label": "Guangzhou CTF Finance Centre — 530 m"
+    },
+    {
+      "key": "Tianjin CTF Finance Centre",
+      "label": "Tianjin CTF Finance Centre — 530 m"
+    },
+    {
+      "key": "CITIC Tower",
+      "label": "CITIC Tower — 527.7 m"
+    }
+  ],
+  "notes": "First ten buildings of the main ranked table in page order. Rank 8 is shared: Guangzhou CTF Finance Centre and Tianjin CTF Finance Centre are both 530 m (Tianjin row inherits rank and height via rowspan), so the tenth building is CITIC Tower (rank 10, 527.7 m); Taipei 101 (rank 11) excluded. Key is the building name as shown. Excluded: feet, floors, image, city, country, year, comments, ref columns, footnote markers, and the alternative-measurement tables."
+}

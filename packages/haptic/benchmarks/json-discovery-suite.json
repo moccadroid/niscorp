@@ -1,0 +1,319 @@
+{
+  "concurrency": 1,
+  "repetitions": 1,
+  "cases": [
+    {
+      "id": "json-components",
+      "url": "https://www.githubstatus.com/api/v2/components.json",
+      "instruction": "Return all individual service components, excluding groups, in the response order. For each return label (its name) and state (its current status). Read the current values on every execution.",
+      "outputSchema": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "label": {
+              "type": "string",
+              "description": "Component name."
+            },
+            "state": {
+              "type": "string",
+              "description": "Current component status."
+            }
+          },
+          "required": [
+            "label",
+            "state"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "expectedFormat": "json",
+      "expectedMetadata": {
+        "visited": [
+          "https://www.githubstatus.com/api/v2/components.json"
+        ],
+        "limited": false
+      },
+      "expectedMapping": {
+        "$map": {
+          "over": {
+            "$filter": {
+              "over": {
+                "$ref": "$.input.document.components"
+              },
+              "as": "row",
+              "when": {
+                "$eq": [
+                  {
+                    "$get": {
+                      "from": {
+                        "$var": "row"
+                      },
+                      "path": [
+                        "group"
+                      ]
+                    }
+                  },
+                  false
+                ]
+              }
+            }
+          },
+          "as": "row",
+          "body": {
+            "label": {
+              "$get": {
+                "from": {
+                  "$var": "row"
+                },
+                "path": [
+                  "name"
+                ]
+              }
+            },
+            "state": {
+              "$get": {
+                "from": {
+                  "$var": "row"
+                },
+                "path": [
+                  "status"
+                ]
+              }
+            }
+          }
+        }
+      },
+      "variants": [
+        {
+          "id": "changed-values",
+          "document": {
+            "$merge": [
+              {
+                "$ref": "$.input.document"
+              },
+              {
+                "components": {
+                  "$map": {
+                    "over": {
+                      "$ref": "$.input.document.components"
+                    },
+                    "as": "row",
+                    "body": {
+                      "$merge": [
+                        {
+                          "$var": "row"
+                        },
+                        {
+                          "name": {
+                            "$join": {
+                              "parts": [
+                                "Changed ",
+                                {
+                                  "$get": {
+                                    "from": {
+                                      "$var": "row"
+                                    },
+                                    "path": [
+                                      "name"
+                                    ]
+                                  }
+                                }
+                              ],
+                              "sep": ""
+                            }
+                          },
+                          "status": "degraded_performance"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "added-records",
+          "document": {
+            "$merge": [
+              {
+                "$ref": "$.input.document"
+              },
+              {
+                "components": {
+                  "$flatten": [
+                    {
+                      "$ref": "$.input.document.components"
+                    },
+                    [
+                      {
+                        "name": "Added service",
+                        "status": "operational",
+                        "group": false
+                      },
+                      {
+                        "name": "Excluded group",
+                        "status": "operational",
+                        "group": true
+                      }
+                    ]
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "empty-results",
+          "document": {
+            "$merge": [
+              {
+                "$ref": "$.input.document"
+              },
+              {
+                "components": {
+                  "$map": {
+                    "over": {
+                      "$ref": "$.input.document.components"
+                    },
+                    "as": "row",
+                    "body": {
+                      "$merge": [
+                        {
+                          "$var": "row"
+                        },
+                        {
+                          "group": true
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "json-releases",
+      "url": "https://endoflife.date/api/nodejs.json",
+      "instruction": "Return the complete release entries marked for extended support (extendedSupport is true), in their existing response order. Do not reshape the entries. Use the current data each time.",
+      "expectedFormat": "json",
+      "expectedMetadata": {
+        "visited": [
+          "https://endoflife.date/api/nodejs.json"
+        ],
+        "limited": false
+      },
+      "expectedMapping": {
+        "$filter": {
+          "over": {
+            "$ref": "$.input.document"
+          },
+          "as": "row",
+          "when": {
+            "$eq": [
+              {
+                "$get": {
+                  "from": {
+                    "$var": "row"
+                  },
+                  "path": [
+                    "extendedSupport"
+                  ]
+                }
+              },
+              true
+            ]
+          }
+        }
+      },
+      "variants": [
+        {
+          "id": "changed-values",
+          "document": {
+            "$map": {
+              "over": {
+                "$ref": "$.input.document"
+              },
+              "as": "row",
+              "body": {
+                "$merge": [
+                  {
+                    "$var": "row"
+                  },
+                  {
+                    "cycle": {
+                      "$join": {
+                        "parts": [
+                          "changed-",
+                          {
+                            "$get": {
+                              "from": {
+                                "$var": "row"
+                              },
+                              "path": [
+                                "cycle"
+                              ]
+                            }
+                          }
+                        ],
+                        "sep": ""
+                      }
+                    },
+                    "latest": "99.88.77"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "id": "added-records",
+          "document": {
+            "$flatten": [
+              {
+                "$ref": "$.input.document"
+              },
+              [
+                {
+                  "cycle": "new-supported",
+                  "latest": "1.2.3",
+                  "extendedSupport": true
+                },
+                {
+                  "cycle": "new-excluded",
+                  "latest": "4.5.6",
+                  "extendedSupport": false
+                }
+              ]
+            ]
+          }
+        },
+        {
+          "id": "empty-results",
+          "document": {
+            "$map": {
+              "over": {
+                "$ref": "$.input.document"
+              },
+              "as": "row",
+              "body": {
+                "$merge": [
+                  {
+                    "$var": "row"
+                  },
+                  {
+                    "extendedSupport": false
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

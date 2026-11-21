@@ -1,0 +1,38 @@
+{
+  "key": "text",
+  "items": [
+    {
+      "key": "Member Previews: Paul R. Williams",
+      "label": "Sat Nov 14 | 10 am / Resnick Pavilion | LACMA"
+    },
+    {
+      "key": "In Focus Tour: Outdoor Art",
+      "label": "Sat Nov 14 | 10:30 am / David Geffen Galleries, Plaza Level"
+    },
+    {
+      "key": "Gallery Tour: Get to Know the David Geffen Galleries",
+      "label": "Sat Nov 14 | 11 am / David Geffen Galleries"
+    },
+    {
+      "key": "Boone Children's Gallery November 14",
+      "label": "Sat Nov 14 | 11 am / LACMA"
+    },
+    {
+      "key": "Gallery Tour: Collecting Impressionism at LACMA",
+      "label": "Sat Nov 14 | 12 pm / Resnick Pavilion | LACMA"
+    },
+    {
+      "key": "LACMA Family Tour",
+      "label": "Sat Nov 14 | 12 pm / W.M. Keck Plaza | LACMA"
+    },
+    {
+      "key": "In Focus Tour: Coastal Connections, Atlantic Ocean",
+      "label": "Sat Nov 14 | 1 pm / David Geffen Galleries"
+    },
+    {
+      "key": "Gallery Tour: David Geffen Galleries, Pacific Ocean",
+      "label": "Sat Nov 14 | 2:30 pm / David Geffen Galleries"
+    }
+  ],
+  "notes": "The saved copy shows only one date, \"Today, November 14, 2026\", with 8 events; later dates sit behind \"Load More Events\" and are not in the HTML. Keyed by event title; time and location are in the label. Category labels (Tours, Talks, Member Exclusive, Drop-in Workshops) are excluded."
+}

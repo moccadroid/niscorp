@@ -1,0 +1,9 @@
+{
+  "key": "url",
+  "items": [
+    { "key": "https://doc.rust-lang.org/book/", "label": "Read the Book!" },
+    { "key": "https://doc.rust-lang.org/rust-by-example/", "label": "Check out Rust by Example!" },
+    { "key": "https://github.com/rust-lang/rustlings/", "label": "Do the Rustlings course!" }
+  ],
+  "notes": "The getting-started section is section#learn-begin with the heading 'Get started with Rust'; it contains exactly three links, one button per resource: the Book, Rust by Example and Rustlings. Excluded: the top navigation (Install, Learn, Playground, ...), the 'Documentation' section (core documentation: std, Edition Guide, Cargo, rustdoc, rustc, error index; application domains: Command Line Book, Embedded Book), the 'Master Rust' section (reference, nomicon, unstable book), and the footer. Little ambiguity: the section has no other links, and no installation link appears inside it (the Rustlings text mentions setting up the toolchain, but its link is the course itself)."
+}

@@ -1,0 +1,122 @@
+{
+  "name": "@niscorp/haptic",
+  "version": "0.2.0",
+  "type": "module",
+  "description": "Request and URL to reusable JSON artifacts; deterministic HTTP, HTML, JSON and XML execution.",
+  "license": "Apache-2.0",
+  "author": "niscorp",
+  "sideEffects": false,
+  "module": "./dist/index.js",
+  "scripts": {
+    "build": "pnpm clean && tsc -p tsconfig.build.json",
+    "clean": "node scripts/clean.mjs",
+    "typecheck": "tsc --noEmit",
+    "check": "pnpm build && tsx tests/run.ts",
+    "test": "pnpm check",
+    "check:package": "node scripts/check-package.mjs",
+    "bench": "tsx benchmarks/discovery-bench.ts",
+    "grade": "tsx benchmarks/grade.ts"
+  },
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "dependencies": {
+    "@xmldom/xmldom": "0.9.12",
+    "ajv": "8.20.0",
+    "ajv-formats": "3.0.1",
+    "cheerio": "1.2.0",
+    "css-select": "7.0.0",
+    "css-what": "8.0.0",
+    "domhandler": "6.0.1",
+    "domutils": "4.0.2",
+    "encoding-sniffer": "1.0.2",
+    "jsdom": "25.0.1",
+    "saxes": "6.0.0",
+    "xpath": "0.0.36"
+  },
+  "peerDependencies": {
+    "@niscorp/cortex": "workspace:^",
+    "@niscorp/signal": "workspace:^",
+    "imagescript": "^3.14.0",
+    "openai": "^7.51.0",
+    "zod": "^4.2.0",
+    "@niscorp/prism": "workspace:^",
+    "@niscorp/strata": "workspace:^"
+  },
+  "peerDependenciesMeta": {
+    "@niscorp/cortex": {
+      "optional": true
+    },
+    "@niscorp/signal": {
+      "optional": true
+    },
+    "openai": {
+      "optional": true
+    },
+    "imagescript": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@niscorp/cortex": "workspace:*",
+    "@niscorp/signal": "workspace:*",
+    "@types/jsdom": "30.0.0",
+    "@types/node": "26.6.6",
+    "imagescript": "3.14.0",
+    "openai": "7.51.0",
+    "prettier": "3.9.10",
+    "tsx": "4.23.15",
+    "typescript": "^6.0.2",
+    "zod": "^4.6.5",
+    "@niscorp/prism": "workspace:*",
+    "@niscorp/strata": "workspace:*"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "DESIGN.md",
+    "ARTIFACTS.md",
+    "STATUS.md"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./discovery": {
+      "types": "./dist/discovery/index.d.ts",
+      "import": "./dist/discovery/index.js"
+    },
+    "./search": {
+      "types": "./dist/search/index.d.ts",
+      "import": "./dist/search/index.js"
+    },
+    "./migrations": {
+      "types": "./dist/migrations/index.d.ts",
+      "import": "./dist/migrations/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "types": "./dist/index.d.ts",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/moccadroid/niscorp.git",
+    "directory": "packages/haptic"
+  },
+  "homepage": "https://github.com/moccadroid/niscorp/tree/main/packages/haptic",
+  "bugs": {
+    "url": "https://github.com/moccadroid/niscorp/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "nisc",
+    "http",
+    "scraping",
+    "discovery",
+    "json",
+    "artifacts"
+  ]
+}

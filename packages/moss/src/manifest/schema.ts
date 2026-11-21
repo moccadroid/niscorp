@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { ActionDefinitionSchema, ActionFragmentSchema, LayoutNodeSchema } from '@niscorp/nova';
 import { ConfigSchema } from '@niscorp/prism';
 import { SequenceSchema, depthRefusal, exceedsDepth } from '@niscorp/strata';
-import { MutationDefinitionSchema, QuerySchema, REFRESH_MODES } from '@niscorp/vex';
+import { MutationDefinitionSchema, QuerySchema, REFRESH_MODES, UpgradedColumnsSchema } from '@niscorp/vex';
 import { GENERATED_ID_PREFIX, keptLayoutNameRefusal } from './app';
 import type { NiscApp } from './app';
 
@@ -94,6 +94,7 @@ const fields = {
   shell: ShellManifestSchema.optional(),
   pages: z.record(z.string(), PageManifestSchema).optional(),
   grammars: z.array(SequenceSchema).readonly().optional(),
+  upgradedColumns: UpgradedColumnsSchema.optional(),
   functions: seam.optional(),
   onSession: seam.optional(),
   runs: seam.optional(),

@@ -9,8 +9,11 @@ const dry = process.argv.includes('--dry-run');
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
+// On Windows npm and pnpm are .cmd files, which Node starts only through a shell.
+const shell = process.platform === 'win32';
+
 const run = (command: string, args: readonly string[], show = false): { ok: boolean; out: string } => {
-  const result = spawnSync(command, args, { cwd: root, encoding: 'utf8', stdio: show ? 'inherit' : 'pipe' });
+  const result = spawnSync(command, args, { cwd: root, encoding: 'utf8', stdio: show ? 'inherit' : 'pipe', shell });
   return { ok: result.status === 0, out: `${result.stdout ?? ''}${result.stderr ?? ''}`.trim() };
 };
 
