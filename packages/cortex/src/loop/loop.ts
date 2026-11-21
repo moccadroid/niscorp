@@ -153,11 +153,11 @@ export const runLoop = async <TData, TDeps>(
     signal: cfg.abort,
   });
 
-  const toolContext = (): ToolContext => ({
+  const toolContext = (signal: AbortSignal): ToolContext => ({
     runId: cfg.runId,
     agentId: cfg.agentId,
     agentPath: cfg.agentPath,
-    signal: cfg.abort,
+    signal,
     forward: cfg.forwardEvent,
   });
 
@@ -278,11 +278,11 @@ export const runLoop = async <TData, TDeps>(
     const started = Date.now();
     try {
       const timeoutMs = tool.config.timeoutMs ?? DEFAULT_TOOL_TIMEOUT_MS;
-      const value = await withTimeout(
-        Promise.resolve(tool.config.execute(parsedArgs.data, toolContext())),
+      const value = await withTimeout((signal) => tool.config.execute(parsedArgs.data, toolContext(signal)), {
         timeoutMs,
-        `tool ${toolId}`,
-      );
+        label: `tool ${toolId}`,
+        run: cfg.abort,
+      });
       let observation: ToolObservation = {
         kind: 'result',
         callId: call.id,
