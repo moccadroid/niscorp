@@ -17,6 +17,7 @@ export type NiscRuntime = {
   tables?: readonly Sequence[];
   shellIdleMs?: number;
   artifactsUnusedMs?: number;
+  artifactsUnusedSinceStart?: boolean;
   anonymousShellMax?: number;
   endpointTimeoutMs?: number;
   sessionRevalidateMs?: number;

@@ -71,7 +71,7 @@ describe('aging — what a person generated and nobody has used for long enough 
     try {
       let swept = 0;
       const pool: PgPool = { query: async (text: string) => (text.startsWith('DELETE FROM artifacts') && (swept += 1), { rows: [] }) };
-      const stop = startAging(pool, DAY, HOUR);
+      const stop = startAging(pool, DAY, { everyMs: HOUR });
       await vi.advanceTimersByTimeAsync(0);
       expect(swept).toBe(1);
       await vi.advanceTimersByTimeAsync(3 * HOUR);
@@ -79,6 +79,24 @@ describe('aging — what a person generated and nobody has used for long enough 
       stop();
       await vi.advanceTimersByTimeAsync(3 * HOUR);
       expect(swept).toBe(4);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('with sinceStart, it deletes nothing until the server has been up for the limit, and then sweeps as before', async () => {
+    vi.useFakeTimers();
+    try {
+      let swept = 0;
+      const pool: PgPool = { query: async (text: string) => (text.startsWith('DELETE FROM artifacts') && (swept += 1), { rows: [] }) };
+      const stop = startAging(pool, 3 * HOUR, { everyMs: HOUR, sinceStart: true });
+      await vi.advanceTimersByTimeAsync(2 * HOUR);
+      expect(swept).toBe(0);
+      await vi.advanceTimersByTimeAsync(HOUR);
+      expect(swept).toBe(1);
+      await vi.advanceTimersByTimeAsync(HOUR);
+      expect(swept).toBe(2);
+      stop();
     } finally {
       vi.useRealTimers();
     }

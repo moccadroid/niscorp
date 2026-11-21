@@ -18,9 +18,13 @@ export const sweepUnused = async (pool: PgPool, unusedMs: number): Promise<{ ver
 
 export const AGING_EVERY_MS = 3_600_000;
 
-// Sweeps once as the server comes up and then every hour.
-export const startAging = (pool: PgPool, unusedMs: number, everyMs = AGING_EVERY_MS): (() => void) => {
+// Sweeps once as the server comes up and then every hour. With `sinceStart`
+// it sweeps nothing until the server has been up for `unusedMs`: an artifact
+// last used before the start then counts as unused only from the start.
+export const startAging = (pool: PgPool, unusedMs: number, { everyMs = AGING_EVERY_MS, sinceStart = false }: { everyMs?: number; sinceStart?: boolean } = {}): (() => void) => {
+  const startedAt = Date.now();
   const sweep = async (): Promise<void> => {
+    if (sinceStart && Date.now() - startedAt < unusedMs) return;
     try {
       const swept = await sweepUnused(pool, unusedMs);
       if (swept.versions > 0) console.log(`[moss] aging: ${swept.versions} version(s) of what was generated and unused for ${unusedMs} ms deleted, and ${swept.saves} save(s) left empty`);

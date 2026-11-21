@@ -497,6 +497,15 @@ functions: (session) => [
   build ships is not a row. Without the setting nothing is deleted. A limit
   that is not a whole number of milliseconds, or is under two hours
   (7,200,000 ms), refuses the boot.
+
+  **Time the app is down counts as unused.** After a downtime longer than
+  `artifactsUnusedMs`, the sweep as the server comes up deletes everything of
+  everybody's that was not used since. With `runtime.artifactsUnusedSinceStart:
+  true` the time is counted only since this server started: the sweep deletes
+  nothing until the server has been up for `artifactsUnusedMs`, so what was
+  last used before the start is unused from the start on. Running time before
+  the start does not count either, and a server restarted more often than
+  `artifactsUnusedMs` deletes nothing.
 - **It reaches its owner's open shells a moment after the save answers**, as a
   saved layout does, and not before: a function that saves an action and
   opens it in the same call finds it not there yet. One that is to be seen at
@@ -815,6 +824,7 @@ type NiscRuntime = {
   tables?: readonly Sequence[];    // the app's own table sequences, in that same run
   shellIdleMs?: number;            // idle shell eviction; default 30 min, `0` disables
   artifactsUnusedMs?: number;      // delete what a person generated once nobody has loaded it for this long; default never
+  artifactsUnusedSinceStart?: boolean; // count that time only since this server started; default false: time the app was down counts
   anonymousShellMax?: number;      // shells for nobody signed in alive at once; default 1,000, `Infinity` is no limit
   endpointTimeoutMs?: number;      // a server shell's endpoint call, and the build of a shell; default nova's, 30s
   sessionRevalidateMs?: number;    // live-socket re-verify; default 60s, `0` disables

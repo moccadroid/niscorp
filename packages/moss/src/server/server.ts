@@ -94,7 +94,7 @@ const assemble = async ({ app, runtime, session, revokeSessions, data }: ServerD
           `a whole number of milliseconds, at least ${2 * TOUCH_EVERY_MS} (two hours), or left out, and nothing is deleted.`,
       );
     }
-    stops.push(startAging(runtime.pool, runtime.artifactsUnusedMs));
+    stops.push(startAging(runtime.pool, runtime.artifactsUnusedMs, { sinceStart: runtime.artifactsUnusedSinceStart === true }));
   }
 
   const identity = buildIdentity(app, runtime, data);
