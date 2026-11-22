@@ -482,8 +482,10 @@ with the file, the line and the rule for each one the table misses:
 [info] rule 9: src/server/when.ts:1 Intl, the global one — another spelling of what the rule fails on; reported, not failed
 ```
 
-Such a line is left out when the table already fails the same rule for the same
-name in that file, and when `allow` names that file for that rule (an
+A name read only as a type (`import type { wordsOf }`, `typeof wordsOf`,
+`export type { wordsOf }`) reaches nothing, and is not reported. Such a line is
+left out when the table already fails the same rule for the same name in that
+file, and when `allow` names that file for that rule (an
 allowance still has to allow something the table fails, or it fails as
 allowing nothing). It never changes the exit code: an app that passes keeps
 passing. If the second reading cannot run, one `[info]` line says so, and the

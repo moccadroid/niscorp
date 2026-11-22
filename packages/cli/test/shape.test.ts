@@ -175,6 +175,17 @@ describe('runShapeCheck — what the shape of an app’s source says', () => {
       expect(info.some((line) => line.includes('src/server/taken.ts'))).toBe(true);
     });
 
+    it('a type-only reference to a function of src/app is not a reach, and is not reported', () => {
+      const { code, lines } = run({
+        ...SPELLINGS,
+        'src/server/typed.ts': "import type { wordsOf } from '../app/helpers';\nexport type Words = typeof wordsOf;\n",
+        'src/server/typed-one.ts': "import { type wordsOf as w } from '../app/helpers';\nexport type Words = typeof w;\n",
+        'src/server/typed-out.ts': "export type { wordsOf } from '../app/helpers';\n",
+      });
+      expect(infoOf(lines).some((line) => line.includes('src/server/typed'))).toBe(false);
+      expect(code).toBe(0);
+    });
+
     it('a name the rules already fail in that file is not reported again', () => {
       const { failed, lines } = run({
         ...SPELLINGS,

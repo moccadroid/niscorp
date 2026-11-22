@@ -48,6 +48,7 @@ export const referenceFindings = (ts: TypeScript, root: string, program: TS.Prog
     const at = (rule: SourceRule | 'data', node: TS.Node, name: string, what = name): void => {
       found.push({ rule, file, line: source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1, name, what });
     };
+    const isTypeOnly = (node: TS.Node): boolean => (ts.isImportClause(node) || ts.isImportSpecifier(node) || ts.isExportDeclaration(node) || ts.isExportSpecifier(node)) && node.isTypeOnly;
     const visit = (node: TS.Node, isType: boolean): void => {
       const isName = ts.isIdentifier(node) || (ts.isStringLiteral(node) && ts.isElementAccessExpression(node.parent) && node.parent.argumentExpression === node);
       const referred = !isType && isName ? referredOf(node) : undefined;
@@ -67,7 +68,7 @@ export const referenceFindings = (ts: TypeScript, root: string, program: TS.Prog
           if (FIND_ELEMENTS.has(name.text) && typeIs(expression, 'Document')) at('dom', node, name.text, `${name.text} on a Document`);
         }
       }
-      ts.forEachChild(node, (child) => visit(child, isType || ts.isTypeNode(node)));
+      ts.forEachChild(node, (child) => visit(child, isType || ts.isTypeNode(node) || isTypeOnly(node)));
     };
     visit(source, false);
     return found;
