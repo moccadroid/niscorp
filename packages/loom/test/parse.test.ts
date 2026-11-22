@@ -213,3 +213,41 @@ describe('parse — a schema whose own code runs on a missing value', () => {
     ]);
   });
 });
+
+describe('parse — which key tells a union branch apart', () => {
+  it('a key the branch requires, before one it may leave out', () => {
+    const ir = parse(
+      z.union([
+        z.object({ a: z.number(), b: z.number().optional(), n: z.number() }),
+        z.object({ a: z.string(), note: z.string().optional(), t: z.string() }),
+      ]),
+    );
+    expect(ir.kind === 'union' ? ir.variants.map((variant) => variant.pattern) : []).toEqual([
+      { kind: 'key', key: 'n' },
+      { kind: 'key', key: 't' },
+    ]);
+  });
+
+  it('an optional unique key when the branch has no required one, as before', () => {
+    const ir = parse(z.union([z.object({ b: z.number().optional() }), z.object({ c: z.string().optional() })]));
+    expect(ir.kind === 'union' ? ir.variants.map((variant) => variant.pattern) : []).toEqual([
+      { kind: 'key', key: 'b' },
+      { kind: 'key', key: 'c' },
+    ]);
+  });
+
+  it('branches behind z.lazy are read as what they resolve to', () => {
+    const A = z.object({ a: z.string() });
+    const B = z.object({ b: z.number() });
+    const ir = parse(z.union([z.lazy(() => A), z.lazy(() => B)]));
+    expect(ir.kind).toBe('union');
+    expect(ir.kind === 'union' ? ir.variants.map((variant) => variant.pattern) : []).toEqual([
+      { kind: 'key', key: 'a' },
+      { kind: 'key', key: 'b' },
+    ]);
+    const tagged = parse(z.discriminatedUnion('kind', [z.object({ kind: z.literal('a'), x: z.string() }), z.object({ kind: z.literal('b') })]));
+    expect(tagged.kind).toBe('union');
+    const strings = parse(z.union([z.lazy(() => z.string()), z.object({ x: z.number() })]));
+    expect(strings.kind === 'union' ? strings.variants.map((variant) => variant.pattern.kind) : []).toEqual(['type', 'key']);
+  });
+});

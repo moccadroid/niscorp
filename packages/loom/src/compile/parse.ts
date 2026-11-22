@@ -70,11 +70,14 @@ const objectFields = (schema: ZodType, walk: Walk): ObjectField[] =>
     field: parseField(value, walk),
   }));
 
-const branchKeys = (branch: ZodType): string[] => Object.keys(defOf(branch).shape ?? {});
+// A branch is read as what it unwraps to: a `z.lazy` or an optional branch has
+// no shape of its own.
+const shapeOf = (branch: ZodType): Record<string, ZodType> => defOf(unwrap(branch).core).shape ?? {};
+const branchKeys = (branch: ZodType): string[] => Object.keys(shapeOf(branch));
 
 const JSON_TYPES = new Set(['string', 'number', 'boolean', 'object', 'array', 'null']);
 const jsonType = (branch: ZodType): string | undefined => {
-  const type = defOf(branch).type;
+  const type = defOf(unwrap(branch).core).type;
   return JSON_TYPES.has(type) ? type : undefined;
 };
 
@@ -87,11 +90,17 @@ const tagPattern = (key: string, discriminator: ZodType | undefined): Pattern =>
 };
 
 const distinguish = (branch: ZodType, siblings: readonly ZodType[], tag: string | undefined): Pattern | undefined => {
+  const shape = shapeOf(branch);
   if (tag !== undefined) {
-    return tagPattern(tag, (defOf(branch).shape ?? {})[tag]);
+    return tagPattern(tag, shape[tag]);
   }
   const elsewhere = new Set(siblings.flatMap(branchKeys));
-  const key = branchKeys(branch).find((k) => !elsewhere.has(k));
+  const own = Object.keys(shape).filter((k) => !elsewhere.has(k));
+  // A key the branch requires is in every value of it; an optional one may be absent.
+  const key = own.find((k) => {
+    const schema = shape[k];
+    return schema !== undefined && !acceptsAbsence(schema);
+  }) ?? own[0];
   if (key !== undefined) return { kind: 'key', key };
   const type = jsonType(branch);
   if (type !== undefined && siblings.every((s) => jsonType(s) !== type)) return { kind: 'type', type };

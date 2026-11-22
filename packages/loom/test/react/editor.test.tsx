@@ -472,3 +472,25 @@ describe('LoomEditor — an optional field can be removed', () => {
     expect(screen.queryAllByRole('button', { name: 'Remove' })).toHaveLength(0);
   });
 });
+
+describe('LoomEditor — a stored value no union branch recognises', () => {
+  it('is shown as JSON with no branch chosen, and choosing a branch writes its defaults', () => {
+    const shape = z.discriminatedUnion('kind', [z.object({ kind: z.literal('circle'), radius: z.number() }), z.object({ kind: z.literal('square'), side: z.number() })]);
+    const onChange = vi.fn();
+    render(<LoomForm schema={z.object({ shape })} options={{ value: { shape: { kind: 'triangle', a: 1 } } }} onChange={onChange} />);
+    const select = screen.getByRole('combobox');
+    expect(select instanceof HTMLSelectElement ? select.value : undefined).toBe('');
+    expect(screen.queryAllByRole('spinbutton')).toHaveLength(0);
+    expect(screen.getByRole('textbox')).toHaveProperty('value', expect.stringContaining('triangle'));
+    fireEvent.change(select, { target: { value: '1' } });
+    expect(onChange).toHaveBeenLastCalledWith({ shape: { kind: 'square', side: 0 } });
+    expect(screen.getByRole('spinbutton')).toHaveProperty('value', '0');
+  });
+
+  it('a value valid for the second branch, with its optional key absent, shows the second branch', () => {
+    const schema = z.object({ v: z.union([z.object({ a: z.number(), b: z.number().optional() }), z.object({ a: z.string(), note: z.string().optional(), t: z.string() })]) });
+    render(<LoomForm schema={schema} options={{ value: { v: { a: 'x', t: 'y' } } }} />);
+    const select = screen.getByRole('combobox');
+    expect(select instanceof HTMLSelectElement ? select.selectedOptions[0]?.textContent : undefined).toBe('t');
+  });
+});

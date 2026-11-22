@@ -113,15 +113,21 @@ layout. Instead, `parse` records a `Pattern` for each branch — the one fact th
 recognizes it in a value:
 
 - `tag` — a shared field equals a literal (`z.discriminatedUnion`).
-- `key` — a field unique to this branch is present (a structural union).
+- `key` — a field unique to this branch is present (a structural union). A
+  field the branch requires is preferred, since every value of the branch has
+  it; an optional one is used only when the branch requires none.
 - `type` — the value's own JS type is unique to this branch, e.g. a string or
   array among objects (a mixed union).
 - `fallback` — the single catch-all branch, selected only when nothing else
   matches (e.g. an unconstrained object among tagged operations).
 
-At render, the variant widget matches the current value against these patterns
-in plain JS and shows the branch that fits; choosing a different branch writes
-that branch's defaults into the document. Tagged, structural, and mixed unions
+A branch is read as what it unwraps to, so a branch behind `z.lazy`, or an
+optional one, is told apart like any other. At render, the variant widget
+matches the current value against these patterns in plain JS and shows the
+branch that fits; choosing a different branch writes that branch's defaults
+into the document. A value that no branch matches, in a union with no fallback
+branch, chooses none: the chooser shows "—" and the value is shown in the JSON
+editor, so nothing is written into it until a branch is chosen. Tagged, structural, and mixed unions
 are one code path, and no union-specific concept leaks into Nova.
 
 ### Recursion
