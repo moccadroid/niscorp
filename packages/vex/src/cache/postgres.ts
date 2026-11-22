@@ -241,5 +241,9 @@ export const createPostgresCache = (config: PostgresCacheConfig): PostgresCache 
     return out;
   };
 
-  return { init, sequence, get, set, delete: del, clear, keys, entries };
+  const touch = async (key: string, lastUsedAt: number): Promise<void> => {
+    await pool.query(`UPDATE ${qualified} SET last_used_at = $2 WHERE key = $1`, [key, new Date(lastUsedAt)]);
+  };
+
+  return { init, sequence, get, set, delete: del, clear, keys, entries, touch };
 };

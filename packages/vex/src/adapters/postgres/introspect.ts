@@ -96,6 +96,8 @@ const COLUMNS_QUERY = `
     c.udt_name,
     c.is_nullable,
     c.column_default,
+    c.is_identity,
+    c.identity_generation,
     CASE
       WHEN c.data_type = 'USER-DEFINED' THEN c.udt_name
       WHEN c.data_type = 'ARRAY' THEN c.udt_name
@@ -243,7 +245,9 @@ export const introspectPostgres = async (
     const dataType = row['effective_type'] as string;
     const fullType = row['full_type'] as string;
     const isNullable = row['is_nullable'] as string;
-    const colDefault = row['column_default'] as string | null;
+    // An identity column has no column_default, yet the database writes it.
+    const colDefault =
+      (row['column_default'] as string | null) ?? (row['is_identity'] === 'YES' ? `GENERATED ${String(row['identity_generation'])} AS IDENTITY` : null);
     const colDescription = row['description'] as string | null;
 
     const tablePks = pkMap.get(table);

@@ -4,7 +4,7 @@ import type { ScopePolicy, ScopeValues } from './scope/scope.types.js';
 import type { DatabaseSchema, EntitySchema } from './schemas/database.schema.js';
 import { QueryRequestSchema, dropNullIntentAndFingerprint } from './schemas/request.schema.js';
 import { QuerySchema } from './schemas/query.schema.js';
-import { isEntryFresh, isTouchDue, fireAndForget } from './cache/util.js';
+import { isEntryFresh, isTouchDue, fireAndForget, touchEntry } from './cache/util.js';
 import { computeSchemaFingerprint } from './cache/hash.js';
 import { executeWrites, writeGateOf } from './mutations/engine.js';
 import type { MutationClient, WriteResult } from './mutations/engine.js';
@@ -171,20 +171,28 @@ const tablesRead = (dsl: Query): string[] | undefined => {
   }
 };
 
-const entryVisible = (policy: ScopePolicy, entry: CacheEntry): boolean => {
-  if (entry.kind === 'ok') return tablesRead(entry.dsl)?.every((t) => canReadTable(policy, t)) ?? false;
-  if (entry.kind === 'mutation') return mutationEffect(entry.mutation).every((e) => canWriteTable(policy, e.table, e.op));
+type ListingPolicies = { read: ScopePolicy | undefined; write: ScopePolicy | undefined };
+
+const entryVisible = (policies: ListingPolicies, entry: CacheEntry): boolean => {
+  if (entry.kind === 'ok') {
+    const { read } = policies;
+    return read === undefined || (tablesRead(entry.dsl)?.every((t) => canReadTable(read, t)) ?? false);
+  }
+  if (entry.kind === 'mutation') {
+    const { write } = policies;
+    return write === undefined || mutationEffect(entry.mutation).every((e) => canWriteTable(write, e.table, e.op));
+  }
   return false;
 };
 
-const listFingerprints = async (engine: QueryEngine, policy?: ScopePolicy): Promise<DiscoveryFingerprint[]> => {
+const listFingerprints = async (engine: QueryEngine, policies: ListingPolicies): Promise<DiscoveryFingerprint[]> => {
   if (engine.cache.entries === undefined) return [];
   const schema = engine.getSchema();
   const current = schema !== undefined ? computeSchemaFingerprint(schema) : undefined;
   const rows = await engine.cache.entries();
   return rows
     .filter(({ key, entry }) => (entry.kind === 'ok' || entry.kind === 'mutation') && !key.startsWith('neg:'))
-    .filter(({ entry }) => policy === undefined || entryVisible(policy, entry))
+    .filter(({ entry }) => entryVisible(policies, entry))
     .map(({ key, entry }) => ({
       fingerprint: key,
       kind: entry.kind === 'mutation' ? ('mutation' as const) : ('query' as const),
@@ -208,11 +216,13 @@ const listFingerprints = async (engine: QueryEngine, policy?: ScopePolicy): Prom
 };
 
 export const handleDiscovery = async (config: VexHandlerConfig): Promise<DiscoveryResponse> => {
-  const { engine, entities: entityFilter, scopePolicy } = config;
+  const { engine, entities: entityFilter } = config;
+  const scopePolicy = config.scopePolicy ?? engine.scopePolicy;
   const filtered = filterSchema(engine.getSchema(), entityFilter).filter(
     (e) => scopePolicy === undefined || canReadTable(scopePolicy, e.name),
   );
-  const fingerprints = await listFingerprints(engine, scopePolicy);
+  // Each entry is judged by the policy it runs under; a write runs under `mutations.policy`.
+  const fingerprints = await listFingerprints(engine, { read: scopePolicy, write: config.mutations?.policy ?? scopePolicy });
   const protectedCount = fingerprints.filter((f) => f.protected).length;
 
   return {
@@ -414,7 +424,7 @@ const runQuery = async (
           }
         }
         const now = Date.now();
-        if (isTouchDue(entry, now)) fireAndForget(engine.cache.set(parsed.data.fingerprint, { ...entry, lastUsedAt: now }));
+        if (isTouchDue(entry, now)) fireAndForget(touchEntry(engine.cache, parsed.data.fingerprint, entry, now));
         if (probe !== undefined) probe.rows = rows.length;
         return { status: 200, body: { result: rows.length === 1 ? rows[0] : rows } };
       }
@@ -459,12 +469,14 @@ const runQuery = async (
         },
       };
     }
-    console.error('[vex] unhandled error:', err);
     const errObj = err as Record<string, unknown> | null;
     const message = err instanceof Error
       ? err.message
       : (typeof errObj?.message === 'string' ? errObj.message : 'Unknown error');
     const code = typeof errObj?.code === 'string' ? errObj.code : 'execution_error';
+    // Never the error object: a driver's error can carry the statement's bound values, the caller's scope among them.
+    const sql = typeof errObj?.query === 'string' ? ` in: ${errObj.query}` : '';
+    console.error(`[vex] unhandled error ${code}${sql}`, err instanceof Error && err.stack !== undefined ? err.stack : message);
     return {
       status: 500,
       body: { error: code, message },

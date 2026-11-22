@@ -89,5 +89,24 @@ export const createTieredCache = (config: TieredCacheConfig): TieredCache => {
 
   const keys = async (): Promise<string[]> => l1.keys();
 
-  return { init, get, set, delete: del, clear, keys, ...(l2.sequence !== undefined ? { sequence: l2.sequence } : {}) };
+  const { touch: touchL1 } = l1;
+  const { touch: touchL2 } = l2;
+  const touch =
+    touchL1 === undefined || touchL2 === undefined
+      ? undefined
+      : async (key: string, lastUsedAt: number): Promise<void> => {
+          await touchL1(key, lastUsedAt);
+          fireAndForget(touchL2(key, lastUsedAt), onError);
+        };
+
+  return {
+    init,
+    get,
+    set,
+    delete: del,
+    clear,
+    keys,
+    ...(touch !== undefined ? { touch } : {}),
+    ...(l2.sequence !== undefined ? { sequence: l2.sequence } : {}),
+  };
 };

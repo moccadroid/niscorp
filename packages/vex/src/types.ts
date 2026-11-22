@@ -71,6 +71,8 @@ export type QueryEngine = {
   getDslSchema: () => object;
   getSchema: () => DatabaseSchema | undefined;
   cache: CacheBackend;
+  // The policy given to `createQueryEngine`: a call that passes none runs under it.
+  readonly scopePolicy?: ScopePolicy;
   invalidate: (tables: readonly string[]) => void;
   rows: { stats: () => LiveRowsStats; stop: () => void };
 };

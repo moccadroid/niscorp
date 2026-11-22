@@ -24,6 +24,10 @@ const makeWorld = async () => {
       if (counting) stamps.push(key);
       return memory.set(key, entry);
     },
+    touch: async (key: string, at: number) => {
+      if (counting) stamps.push(key);
+      return memory.touch?.(key, at);
+    },
   };
   await seedCache(cache, [
     { fingerprint: 'notes/all', shape: [{ body: '' }], dsl: { from: ['notes'], fields: ['notes.body'] } },
@@ -83,6 +87,45 @@ describe('replays stamp lastUsedAt at most once per interval', () => {
       expect(await world.lastUsedAt('notes/edit')).toBeDefined();
     } finally {
       world.stop();
+    }
+  });
+});
+
+describe('a stamp writes lastUsedAt alone', () => {
+  it.each([
+    ['a read', 'notes/all', {}],
+    ['a write', 'notes/edit', { id: 'n1', body: 'edited' }],
+  ])('%s replay keeps a change another writer made after the replay read the entry', async (_, fingerprint, context) => {
+    const db = new PGlite();
+    await db.exec(`CREATE TABLE notes (id TEXT PRIMARY KEY, body TEXT NOT NULL); INSERT INTO notes VALUES ('n1', 'hello');`);
+    const memory = createMemoryCache();
+    await seedCache(memory, [
+      { fingerprint: 'notes/all', shape: [{ body: '' }], dsl: { from: ['notes'], fields: ['notes.body'] } },
+      { fingerprint: 'notes/edit', mutation: { op: 'update', table: 'notes', set: { body: { $context: 'body' } }, where: { eq: ['notes.id', { $context: 'id' }] } } },
+    ]);
+    let edits = 0;
+    const cache: CacheBackend = {
+      ...memory,
+      get: async (key) => {
+        const entry = await memory.get(key);
+        if (entry !== undefined) {
+          edits += 1;
+          await memory.set(key, { ...entry, intent: `edit ${edits}` });
+        }
+        return entry;
+      },
+    };
+    const engine = createQueryEngine({ adapter: createPostgresAdapter({ pool: createPglitePool(db) }), cache });
+    await engine.introspect();
+    try {
+      const res = await handleQuery({ engine, locked: true, scopePolicy: policy, mutations: { client: db, policy } }, { fingerprint, context }, {});
+      expect(res.status).toBe(200);
+      await settle();
+      const stored = await memory.get(fingerprint);
+      expect(stored?.intent).toBe(`edit ${edits}`);
+      expect(stored?.lastUsedAt).toBeTypeOf('number');
+    } finally {
+      engine.rows.stop();
     }
   });
 });

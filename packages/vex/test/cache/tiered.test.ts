@@ -128,4 +128,23 @@ describe('createTieredCache', () => {
     const cache = createTieredCache({ l1: createMemoryCache(), l2: createMemoryCache() });
     expect(await cache.get('missing')).toBeUndefined();
   });
+
+  it("touch stamps both tiers without writing L1's copy over another process's change in L2", async () => {
+    const l1 = createMemoryCache();
+    const l2 = createMemoryCache();
+    await l1.set('k1', okEntry({ protected: true }));
+    await l2.set('k1', okEntry({ protected: false }));
+    const cache = createTieredCache({ l1, l2 });
+
+    await cache.touch?.('k1', 1_000);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(await l2.get('k1')).toMatchObject({ protected: false, lastUsedAt: 1_000 });
+    expect(await l1.get('k1')).toMatchObject({ protected: true, lastUsedAt: 1_000 });
+  });
+
+  it('has no touch when a tier lacks one', () => {
+    const { touch: _, ...l2 } = createMemoryCache();
+    expect(createTieredCache({ l1: createMemoryCache(), l2 }).touch).toBeUndefined();
+  });
 });

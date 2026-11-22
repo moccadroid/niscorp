@@ -18,7 +18,7 @@ import { executeQuery, buildContextContract, findMissingContext, requireScope } 
 import { pruneOptional, presenceOf, presenceSignature, optionalKeysOf } from './optional.js';
 import { createMemoryCache } from '../cache/memory.js';
 import { computeSchemaFingerprint, computeRequestHash, computePolicyKey, mintFingerprint } from '../cache/hash.js';
-import { isEntryFresh, isTouchDue, fireAndForget } from '../cache/util.js';
+import { isEntryFresh, isTouchDue, fireAndForget, touchEntry } from '../cache/util.js';
 import { buildValidationContext, resolveParams } from '../utils/context.js';
 import { canonicalHash } from '../utils/canonical.js';
 import { createLiveRows } from './live.js';
@@ -284,7 +284,7 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
 
   const touch = (key: string, entry: CacheEntry): void => {
     const now = Date.now();
-    if (isTouchDue(entry, now)) fireAndForget(cache.set(key, { ...entry, lastUsedAt: now }));
+    if (isTouchDue(entry, now)) fireAndForget(touchEntry(cache, key, entry, now));
   };
 
   const resolveFingerprint = async (
@@ -656,6 +656,7 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
     getDslSchema,
     getSchema,
     cache,
+    ...(scopePolicy !== undefined ? { scopePolicy } : {}),
     invalidate: live.invalidate,
     rows: { stats: live.stats, stop: live.stop },
   };

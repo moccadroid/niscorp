@@ -451,18 +451,25 @@ const compileMutation = (m: ResolvedMutation, schema: DatabaseSchema, pinned: re
   return finish(`DELETE FROM ${tableSql(m.table, schema.namespace)} WHERE ${where}`);
 };
 
-const SUGAR: { [K in Mutation['op']]?: (m: Extract<Mutation, { op: K }>, context: Record<string, unknown>) => CoreMutation } = {
-  upsert: (m, context) => {
-    const keyed = context[m.key] !== undefined && context[m.key] !== '';
+const keyMadeByDatabase = (m: Extract<Mutation, { op: 'upsert' }>, schema: DatabaseSchema): boolean =>
+  !(m.key in m.columns) &&
+  !(m.key in (m.insert ?? {})) &&
+  findEntity(m.table, schema)?.fields.find((f) => f.name === m.key)?.defaultValue !== undefined;
+
+const SUGAR: { [K in Mutation['op']]?: (m: Extract<Mutation, { op: K }>, context: Record<string, unknown>, schema: DatabaseSchema) => CoreMutation } = {
+  // Where the database does not make the key, inserting on a null one would break its NOT NULL.
+  upsert: (m, context, schema) => {
+    const value = context[m.key];
+    const keyed = value !== undefined && value !== '' && (value !== null || !keyMadeByDatabase(m, schema));
     return keyed
       ? { op: 'update', table: m.table, set: m.columns, where: { eq: [`${m.table}.${m.key}`, { $context: m.key }] } }
       : { op: 'insert', table: m.table, values: { ...m.columns, ...m.insert } };
   },
 };
 
-const desugarMutation = (m: Mutation, context: Record<string, unknown>): CoreMutation => {
-  const rewrite = SUGAR[m.op] as ((m: Mutation, c: Record<string, unknown>) => CoreMutation) | undefined;
-  return rewrite === undefined ? (m as CoreMutation) : rewrite(m, context);
+const desugarMutation = (m: Mutation, context: Record<string, unknown>, schema: DatabaseSchema): CoreMutation => {
+  const rewrite = SUGAR[m.op] as ((m: Mutation, c: Record<string, unknown>, s: DatabaseSchema) => CoreMutation) | undefined;
+  return rewrite === undefined ? (m as CoreMutation) : rewrite(m, context, schema);
 };
 
 export const mutationMisfits = (def: MutationDefinition, schema: DatabaseSchema): string[] => {
@@ -471,7 +478,7 @@ export const mutationMisfits = (def: MutationDefinition, schema: DatabaseSchema)
   for (const [at, entry] of list.entries()) {
     const asked = [
       // keyed, an upsert is an update; unkeyed, an insert
-      ...(entry.op === 'upsert' ? [{ [entry.key]: 0 }, {}] : [{}]).map((context) => () => assertWritableColumns(desugarMutation(entry, context), schema)),
+      ...(entry.op === 'upsert' ? [{ [entry.key]: 0 }, {}] : [{}]).map((context) => () => assertWritableColumns(desugarMutation(entry, context, schema), schema)),
       () => assertReturnedColumns(returnedIn(list, at).refs, schema),
     ];
     for (const ask of asked) {
@@ -515,7 +522,7 @@ const readableRules = (m: ResolvedMutation, policy: ScopePolicy): Readable => {
 export const executeWrites = async (client: MutationClient, def: MutationDefinition, mctx: MutationContext): Promise<WriteResult[]> => {
   const parsed = MutationDefinitionSchema.parse(def);
   const entries = Array.isArray(parsed) ? parsed : [parsed];
-  const cores = entries.map((entry) => desugarMutation(entry, mctx.context));
+  const cores = entries.map((entry) => desugarMutation(entry, mctx.context, mctx.schema));
   const compiled = cores.map((core, at) => {
     const missing = requiredContextKeys(core).filter((k) => mctx.context[k] === undefined);
     if (missing.length > 0) {

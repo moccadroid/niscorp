@@ -27,5 +27,10 @@ export const createMemoryCache = (): CacheBackend => {
     return [...store.entries()].map(([key, entry]) => ({ key, entry }));
   };
 
-  return { get, set, delete: del, clear, keys, entries };
+  const touch = async (key: string, lastUsedAt: number): Promise<void> => {
+    const entry = store.get(key);
+    if (entry !== undefined) store.set(key, { ...entry, lastUsedAt });
+  };
+
+  return { get, set, delete: del, clear, keys, entries, touch };
 };
