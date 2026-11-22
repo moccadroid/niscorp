@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { createDataStore } from '@shared/data-store';
 import type { DataStore } from '@shared/data-store';
 import { createIdFactory } from '@shared/ids';
-import { DefinitionValidationError, ErrorCodes, NovaError, toHandlerFailed } from '@shared/errors';
+import { DefinitionValidationError, ErrorCodes, NovaError, reportWithoutThrowing, toHandlerFailed } from '@shared/errors';
 import type { RenderNode } from '@layout/types';
 import type { Mutation, Step } from '../schemas';
 import { StepSchema } from '../schemas';
@@ -34,7 +34,7 @@ export const createActionRuntime = (config: ActionRuntimeConfig): ActionRuntime 
   const strict = config.strict ?? false;
   const onError: OnErrorHandler = config.onError ?? noopOnError;
   const onHandlerError = (err: unknown): void => {
-    if (strict) onError(toHandlerFailed(err));
+    if (strict) reportWithoutThrowing(onError, toHandlerFailed(err));
   };
   const dataStore: DataStore = createDataStore(initialData, { onHandlerError });
 

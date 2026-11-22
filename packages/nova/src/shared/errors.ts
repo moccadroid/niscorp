@@ -174,3 +174,10 @@ export class MutationError extends NovaError {
 
 export const toHandlerFailed = (err: unknown): NovaError =>
   new NovaError(ErrorCodes.handlerFailed, err instanceof Error ? err.message : String(err), {}, { cause: err });
+
+// A report never changes what runs: what an `onError` throws goes no further.
+export const reportWithoutThrowing = (onError: (error: NovaError) => void, error: NovaError): void => {
+  try {
+    onError(error);
+  } catch {}
+};

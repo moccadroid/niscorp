@@ -14,6 +14,7 @@ import {
   ShellDisposedError,
   UnknownActionError,
   UnknownFragmentError,
+  reportWithoutThrowing,
   toHandlerFailed,
 } from '../shared/errors';
 import { createIdFactory } from '../shared/ids';
@@ -63,7 +64,7 @@ export const createShell = (config: ShellConfig): Shell => {
   const instanceIdFn = config.instanceIdFn ?? createIdFactory('act');
   const strict = config.strict ?? false;
   const reportTo = config.onError;
-  const handlerErrors = strict && reportTo !== undefined ? { onHandlerError: (err: unknown) => reportTo(toHandlerFailed(err)) } : {};
+  const handlerErrors = strict && reportTo !== undefined ? { onHandlerError: (err: unknown) => reportWithoutThrowing(reportTo, toHandlerFailed(err)) } : {};
   const eventBus = config.eventBus ?? createEventBus(handlerErrors);
   const messageBus = config.messageBus ?? createMessageBus(handlerErrors);
   const registry = createRuntimeRegistry();

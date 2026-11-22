@@ -38,6 +38,18 @@ describe('a subscriber that throws', () => {
     expect(seen).toEqual(['HANDLER_FAILED: x', 'HANDLER_FAILED: x']);
   });
 
+  it('an onError that throws changes nothing: the push completes and the next subscriber runs', async () => {
+    const a2: ActionDefinition = { id: 'a', layout: { component: 'Text', children: 'x' } };
+    const shell = createShell({ strict: true, canvases: [{ id: 'main' }], actions: { a: a2 }, onError: (e) => { throw e; } });
+    const seen: string[] = [];
+    shell.onStateChange(() => { throw new Error('first'); });
+    shell.onStateChange(() => { seen.push('second ran'); });
+    expect(() => shell.push('main', 'a')).not.toThrow();
+    await later();
+    expect(seen).toEqual(['second ran']);
+    expect(shell.getCanvasState('main').stack.map((i) => i.definitionId)).toEqual(['a']);
+  });
+
   it('is not reported outside strict mode, as before', async () => {
     const seen: string[] = [];
     const shell = shellWith(false, seen);

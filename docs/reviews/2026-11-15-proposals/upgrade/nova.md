@@ -79,6 +79,7 @@ Each section is one change an app can see, in `@niscorp/nova`. None of them chan
 - Before: a trigger with `{ call: 'save' }`, where `save` fails, no `onError` steps and no `errorTarget`, went nowhere, even with `strict: true`; `{ call: 'svae' }` (no such endpoint) went nowhere too.
 - Now: with `strict: true`, `onError` receives a `NovaError` with code `ENDPOINT_FAILED`: `endpoint 'save' failed: disk full`, and `unknown endpoint: svae`. Nothing is thrown. Lax mode (the default) is unchanged. The exported `ErrorCodes` gains `endpointFailed`, and the `ErrorCode` type `'ENDPOINT_FAILED'`.
 - Who notices: strict shells whose `onError` logs or shows errors; code that switches exhaustively over `ErrorCode`.
+- An `onError` that throws (`(e) => { throw e }`) changes nothing: the throw goes no further, and the step, the push or the next handler runs as it did before this change.
 - What to do: nothing; handle the new code if `onError` switches over codes.
 - Breaking: yes (strict shells only)
 - Affected apps: none. No `createShell` in the lab apps, the templates, moss, AnimaApp, anima-finance or mira passes `strict: true` (fable `src/shell.ts:16`, mythos `create-shell.ts:35`, relay `src/screen-builder/mount.ts:58`, the classic template's `with/page/src/boot.ts:12`, moss `src/shells/build.ts:187`, anima-finance `src/dev/start-check.ts:174`), and moss has no strict option.
@@ -111,6 +112,7 @@ Each section is one change an app can see, in `@niscorp/nova`. None of them chan
 - Before: `createShell({ strict: true, onError })`, then `shell.onStateChange(() => { throw new Error('x') })` and a push: the error was caught and dropped without a trace. The same for the shell's data and endpoint listeners, handlers on its buses, and a runtime's `onDataChange`/`onStatusChange` handlers.
 - Now: in a strict shell, `onError` receives a `NovaError` with code `HANDLER_FAILED` and message `x`; the push (or write) still completes and the other handlers still run. Lax shells report nothing, as before, and a bus the app hands in (`eventBus`, `messageBus` in the shell config) is left as it is. `createEventBus`, `createMessageBus` and `createDataStore` accept an optional `{ onHandlerError }`. The exported `ErrorCodes` gains `handlerFailed`, and the `ErrorCode` type `'HANDLER_FAILED'`.
 - Who notices: strict shells whose subscribers throw; code that switches exhaustively over `ErrorCode`.
+- An `onError` that throws (`(e) => { throw e }`) changes nothing: the throw goes no further, and the step, the push or the next handler runs as it did before this change.
 - What to do: nothing; handle the new code if `onError` switches over codes.
 - Breaking: yes (strict shells only)
 - Affected apps: none. No shell in the lab apps, the templates, moss, AnimaApp, anima-finance or mira is strict (see the `ENDPOINT_FAILED` section).
@@ -119,6 +121,7 @@ Each section is one change an app can see, in `@niscorp/nova`. None of them chan
 - Before: `{ removeAt: 'rows', index: '{{$.found}}' }` with `found = -1` (a search's "not found") removed the last row without a word.
 - Now: the last row is still removed, exactly as before, and `onError` receives a `NovaError` with code `MUTATION_ERROR`: `removeAt: index {{$.found}} resolved to -1, which counts from the end (-1 removes the last element)`. In strict and lax mode. A literal `index: -1` is not reported.
 - Who notices: apps whose `onError` logs or shows errors, when a `removeAt` template yields a negative index.
+- An `onError` that throws (`(e) => { throw e }`) changes nothing: the throw goes no further, and the step, the push or the next handler runs as it did before this change.
 - What to do: nothing if the index is never negative. If it can be (a "not found"), guard the step (`$if`) so it does not run; if it is meant (count from the end), the report can be ignored.
 - Breaking: yes (a new report; the data is unchanged)
 - Affected apps: six steps use a template index, and each passes an index taken from the clicked row, which is never negative, so none should see a report: `packages/create-nisc/templates/model-first/files/src/app/actions/guide/checklist.action.ts:20,21` (`'{{@event.payload}}'`), AnimaApp `src/app/actions/signup/form.action.ts:192,197` (`'{{@event.payload.at}}'`), AnimaApp `src/app/actions/store/edit-coupon.action.ts:519` and `edit-gift.action.ts:290` (`'{{@event.payload}}'`). Not checked at run time: whether every kit there sends a non-negative payload.

@@ -179,6 +179,8 @@ When `true`, errors throw all the way up through the shell's public methods. Lif
 
 A single function that receives every `NovaError` produced anywhere in the shell. Use it for logging, telemetry, or showing an error UI. It fires for render errors, endpoint failures, lifecycle failures, navigation failures.
 
+A report that comes with work still to do — `ENDPOINT_FAILED`, `HANDLER_FAILED`, a negative `removeAt` index made by a template — never changes what runs: if `onError` throws for it, the throw goes no further, and the push, the step or the next handler goes on.
+
 ---
 
 ## The `Shell` interface

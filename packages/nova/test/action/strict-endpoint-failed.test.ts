@@ -27,6 +27,21 @@ describe('a failed call in a trigger that nothing takes', () => {
     expect((await run(a, true, ['go', 'typo'])).sort()).toEqual(["ENDPOINT_FAILED: endpoint 'save' failed: disk full", 'ENDPOINT_FAILED: unknown endpoint: svae']);
   });
 
+  it('an onError that throws changes nothing: the steps after the call still run', async () => {
+    const after: ActionDefinition = {
+      id: 'a', data: { n: 0 },
+      endpoints: { save: { fn: 'save' } },
+      triggers: [{ event: 'ui:click', ref: 'go', do: [{ call: 'save' }, { call: 'svae' }, { increment: 'n' }] }],
+      layout: { component: 'Button', ref: 'go', children: 'x' },
+    };
+    const shell = createShell({ canvases: [{ id: 'main' }], actions: { a: after }, strict: true, functions: failing, onError: (e) => { throw e; } });
+    const id = shell.push('main', 'a');
+    await later();
+    shell.dispatch({ type: 'ui:click', ref: 'go' });
+    await later();
+    expect(shell.getRuntime(id)?.getData()['n']).toBe(1);
+  });
+
   it('is not reported outside strict mode, as before', async () => {
     expect(await run(a, false, ['go', 'typo'])).toEqual([]);
   });
