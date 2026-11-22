@@ -124,6 +124,7 @@ describe('upgrade — a document catches up to the code', () => {
     const read = (entry: unknown) => upgrader.upgrade(action, { kind: 'nisc.nova/action', stamp: JSON.parse(JSON.stringify({ 'nisc.nova': entry })) });
     expect(() => read('v0')).toThrow(expect.objectContaining({ code: 'INVALID_SEQUENCE', message: expect.stringContaining('nisc.nova is "v0"') }));
     expect(() => upgrader.behind(JSON.parse('{"nisc.nova":{}}'))).toThrow(expect.objectContaining({ code: 'INVALID_SEQUENCE' }));
+    expect(() => upgrader.behind({ 'nisc.nova': Number('v0') })).toThrow(expect.objectContaining({ message: expect.stringContaining('nisc.nova is NaN') }));
     expect(read('1').applied).toEqual([]);
     expect(read('0').applied).toEqual(['nisc.nova/1']);
     expect(read(null).applied).toEqual(['nisc.nova/1']);

@@ -222,8 +222,7 @@ export const upgradeStore = async (pool: StrataPool, store: DocumentStore, upgra
     for (const row of rows) {
       const given = row[store.stamp];
       const where = store.key.map((k) => `${k}=${JSON.stringify(row[k])}`).join(', ');
-      // Null is no stamp. Anything else that is not an object (a text column's string) was read as no stamp,
-      // and every migration ran again over a document already through them.
+      // Null is no stamp. Anything else that is not an object (a text column's string) cannot be read as one.
       if (given !== null && given !== undefined && (typeof given !== 'object' || Array.isArray(given))) {
         unread.push(where);
         continue;

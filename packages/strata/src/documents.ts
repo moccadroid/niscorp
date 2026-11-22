@@ -112,13 +112,16 @@ export const createUpgrader = async (sequences: readonly Sequence[], options: { 
     return found;
   };
 
-  // Read with `Number`, as the comparisons always read it: digits and `null` still read. An entry that is no
-  // number compared as neither behind nor ahead, and the document came back unmigrated and stamped current.
+  // An entry is read with `Number`: digits and `null` read; one that reads as no number is refused rather
+  // than read as current. A number is named as itself: JSON would print `NaN` as `null`.
   const positionOf = (given: Stamp | null | undefined, id: string): number => {
     const entry: unknown = given?.[id];
     if (entry === undefined) return 0;
     const position = Number(entry);
-    if (Number.isNaN(position)) throw new StrataError('INVALID_SEQUENCE', `The stamp's entry for ${id} is ${JSON.stringify(entry)}: not a number of migrations.`);
+    if (Number.isNaN(position)) {
+      const named = typeof entry === 'number' ? String(entry) : JSON.stringify(entry);
+      throw new StrataError('INVALID_SEQUENCE', `The stamp's entry for ${id} is ${named}: not a number of migrations.`);
+    }
     return position;
   };
 
