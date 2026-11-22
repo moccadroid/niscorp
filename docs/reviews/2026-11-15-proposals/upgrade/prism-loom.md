@@ -62,7 +62,13 @@ Checked against the lab apps (`apps/lab/*`) and, read-only, AnimaApp, anima-fina
 - What to do: build the date so it exists — for a 29 February in a common year, pick 28 February or 1 March explicitly — or give the op a value it can read.
 - Breaking: yes
 - Lab apps: encore builds `2000-01-01T<time>:00` from database times, and the others read stored timestamps: unchanged.
-- External: **AnimaApp `src/app/vex/pulse.entries.ts:126-163` (`NEXT_BIRTHDAY`) breaks for anyone born on 29 February**: it joins this year to the stored month and day, which in a common year is `2027-02-29`. That date rolled over to 1 March; it is now refused at `:143` (`$dateAdd`), `:154` (`$dateDiff`) and `:156`/`:163` (`$localeDate`), so that entry errors for such a person. mira `src/server/automation/when.prism.ts:125` reads `2000-<clock.on>` (built at `src/server/automation/offered.ts:33`): 2000 is a leap year, so only a draft with `02-30` or `04-31` would now be refused. anima-finance builds only valid dates.
+- External:
+  - **AnimaApp must change `NEXT_BIRTHDAY` (`src/app/vex/pulse.entries.ts:126-163`) before it upgrades.** It joins this year to the stored month and day of a birthday. For someone born 1996-02-29 that is `2027-02-29` in a common year.
+    - At 4268d9f6, on 2027-02-20, the person showed `next_on "2027-02-29"`, day "Mon", date "1 Mar", in 9 days, "Turns 31": the date rolled over to 1 March. That had two errors of its own: after 1 March it gave 2028-03-01 instead of 2028-02-29, and on 1 March itself it did not show the birthday.
+    - Now, on every day of every common year (2026, 2027, 2029), the whole `people/birthdays` entry fails with `E_DATE_INVALID`, at `$dateAdd` (`:143`) or at `$dateDiff.to` (`:154`). One person inside its `$map` fails the list for everyone: vex answers 500, the card's mount call has no `onError`, nova throws a `LifecycleError`, and staff see no birthdays and no "No birthdays" line. Leap years work.
+    - What to change: build the date so it exists — when the year is not a leap year, use 28 February or 1 March for a 29 February birthday (for example a `$case` on the joined text before `$dateAdd`).
+  - mira `src/server/automation/when.prism.ts:125` reads `2000-<clock.on>` (built at `src/server/automation/offered.ts:33`): 2000 is a leap year, so only a draft with `02-30` or `04-31` would now be refused.
+  - anima-finance builds only valid dates.
 
 ### prism — A constant with a `__proto__` key answers the same on every call
 - Before: `{ out: { $fromEntries: [["__proto__", { $const: { admin: true } }], ["name","x"]] } }` kept an own `__proto__` key on the first call; from the second call of the same config object the key was gone and `out.admin` read `true` through the prototype.
