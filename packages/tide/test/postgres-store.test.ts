@@ -22,6 +22,17 @@ describe('the store contract — postgres', () => {
     });
 });
 
+describe('the ids the postgres store mints', () => {
+  it('are UUIDs, so two processes minting at one instant cannot collide', async () => {
+    const store = await freshStore();
+    const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+    const fact = await store.appendIfAbsent('fact', { kind: 'signal', name: 's', at: 1, depth: 0 });
+    const run = await store.appendIfAbsent('run', { reflexId: 'r', version: 'v', cause: 'c', state: 'fanned', depth: 0, total: 1, done: 0, failed: 0, dueAt: 0, createdAt: 0 });
+    const task = await store.appendIfAbsent('task', { runId: run?.id ?? '', reflexId: 'r', unit: 'u', cause: 'c', env: {}, depth: 0, state: 'pending', attempt: 0, claimedUntil: 0, notBefore: 0, createdAt: 0 });
+    expect([fact?.id, run?.id, task?.id]).toEqual([expect.stringMatching(uuid), expect.stringMatching(uuid), expect.stringMatching(uuid)]);
+  });
+});
+
 // `query` is a method that needs its receiver, as on a checked-out `pg` client.
 const storeOverClient = async () => {
   const { db, pool } = await database.emptied();

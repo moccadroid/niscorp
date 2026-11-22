@@ -731,7 +731,9 @@ A `TideStore` over four tables: `tide_fact`, `tide_run`, `tide_work`,
 `tide_reflex_state` (`TIDE_TABLES`). `appendIfAbsent` is `ON CONFLICT DO
 NOTHING` on the key `UNIQUE_BY` names; `claim` is one `UPDATE … FOR UPDATE SKIP
 LOCKED`; the state columns carry CHECK constraints; deleting a run cascades to
-its work.
+its work. The ids it mints for `fact`, `run` and `task` rows are UUIDs (rows
+written by an earlier version keep theirs: an id is text, and nothing reads its
+shape).
 
 - **`pool`** is a `TidePool`: `{ query(text, values?), transaction?(fn) }`. It
   is a type of the store's own, and structural: vex's `PgPool`, a PGlite behind

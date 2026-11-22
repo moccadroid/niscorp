@@ -8,13 +8,8 @@ import type { Atomically, Client, TidePool } from './pool';
 import { SQL_TABLE, rowToEntity, snake, toColumn } from './rows';
 import { TIDE_SEQUENCE } from './tables';
 
-const mintId = ((): ((table: TableName) => string) => {
-  let sequence = 0;
-  return (table) => {
-    sequence += 1;
-    return `${table}_${Date.now().toString(36)}_${sequence.toString(36)}`;
-  };
-})();
+// Not time and a counter: two processes on one database mint ids at the same instant.
+const mintId = (): string => crypto.randomUUID();
 
 export type TideStoreOptions = {
   migrate?: boolean;
@@ -49,7 +44,7 @@ export const createTideStore = (pool: TidePool, options: TideStoreOptions = {}):
       appendIfAbsent: async <T extends TableName>(table: T, input: Omit<TideTables[T], 'id'> & { id?: string }) => {
         await ready;
         const given: Fields = input;
-        const withId: Fields = PRIMARY_KEY[table] === 'id' ? { ...given, id: input.id ?? mintId(table) } : given;
+        const withId: Fields = PRIMARY_KEY[table] === 'id' ? { ...given, id: input.id ?? mintId() } : given;
         const entries = Object.entries(withId).filter(([, value]) => value !== undefined);
         const columns = entries.map(([field]) => snake(field));
         const params = entries.map(([field, value]) => toColumn(snake(field), value));
