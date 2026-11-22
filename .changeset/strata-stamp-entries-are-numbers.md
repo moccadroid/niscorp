@@ -1,8 +1,8 @@
 ---
-"@niscorp/strata": patch
+"@niscorp/strata": minor
 ---
 
-BREAKING (pending consolidation): nothing unless an app stores documents whose stamp has an entry, for a grammar it upgrades, that is not a number (`{ "acme.kit": "v0" }`), or keeps stamps in a column that is not jsonb. `upgrader.upgrade` and `upgrader.behind` now throw `INVALID_SEQUENCE` for such an entry, where `upgrade` returned the document unmigrated and stamped current; `upgradeStore` leaves such rows as they are and names them in a new `unread` list on its report, where it skipped them silently (jsonb) or ran every migration over them again (a `text` column).
+BREAKING — approved by moccadroid (owner), 2026-11-22: nothing unless an app stores documents whose stamp has an entry, for a grammar it upgrades, that is not a number (`{ "acme.kit": "v0" }`), or keeps stamps in a column that is not jsonb. `upgrader.upgrade` and `upgrader.behind` now throw `INVALID_SEQUENCE` for such an entry, where `upgrade` returned the document unmigrated and stamped current; `upgradeStore` leaves such rows as they are and names them in a new `unread` list on its report, where it skipped them silently (jsonb) or ran every migration over them again (a `text` column).
 
 A stamp entry is read with `Number`, as the comparisons always read it, so digits in a string and `null` read as before. An entry for a grammar the upgrader was given that reads as no number is refused with `INVALID_SEQUENCE`, naming the grammar and the entry.
 

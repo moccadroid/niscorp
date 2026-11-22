@@ -1,8 +1,8 @@
 ---
-"@niscorp/solid": patch
+"@niscorp/solid": minor
 ---
 
-BREAKING (pending consolidation): nothing unless an app relied on a selection's `final()` resolving with the frozen value after a strict failure, or on a root key `""` ending the stream at its object's close.
+BREAKING — approved by moccadroid (owner), 2026-11-22: nothing unless an app relied on a selection's `final()` resolving with the frozen value after a strict failure, or on a root key `""` ending the stream at its object's close.
 
 A stream now ends once:
 

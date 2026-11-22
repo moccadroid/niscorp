@@ -1,8 +1,8 @@
 ---
-"@niscorp/signal": patch
+"@niscorp/signal": minor
 ---
 
-BREAKING (pending consolidation): nothing unless an app relied on a Groq tool call that was cut off inside its arguments being run with the arguments closed.
+BREAKING — approved by moccadroid (owner), 2026-11-22: nothing unless an app relied on a Groq tool call that was cut off inside its arguments being run with the arguments closed.
 
 A result now says how the provider ended the reply. `meta.finishReason` on `complete()` and `stream()` is the last reply's finish reason (`stop`, `length`, `content_filter`, …). A `step()` or `stepStream()` result whose output was rescued from a reply the provider cut off (`length` or `content_filter`) while its JSON was still open carries `wire.truncated: true`: `{"items":["alpha","beta","gam` gives `{ items: ["alpha","beta"] }` as before, now marked.
 

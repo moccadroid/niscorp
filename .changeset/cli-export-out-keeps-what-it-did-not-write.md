@@ -1,5 +1,7 @@
 ---
-"@niscorp/cli": patch
+"@niscorp/cli": minor
 ---
+
+BREAKING — approved by moccadroid (owner), 2026-11-22: a build step that relied on `nisc export --out <dir>` emptying that folder empties it itself before the export; the default `out/` is unchanged.
 
 `nisc export --out <dir>` no longer empties the folder it is given. It removes only the files the previous export wrote there, recorded in `node_modules/.cache/nisc/exports.json`, then writes the new export; everything else in the folder (a `.git`, a notes file) stays and is named on one line each run. The default `out/` is emptied and written exactly as before, also when named with `--out out` or, on Windows and macOS, `--out OUT`. For a folder named with `--out`: the export is first written whole into a folder of its own inside it, so a file that cannot be made changes nothing already there; removal goes by real location, so a link in the folder is removed as a link and never written or deleted through; `--out` is also refused when where it points is the app, above it, or the build; if the record cannot be written, the export still finishes and says the next export will remove none of it. What changes for a folder named with `--out`: files an older export left there, before the record or without it (a fresh CI checkout), are named on every run instead of removed; a file another step put in the folder survives the next export; a link named with `--out` is written into, where it used to be replaced by a folder; a file at the `--out` path, or a folder with files of its own where the export writes a file, is said and nothing is written, where both used to be replaced; a kill during an export can leave a `.nisc-export-…` folder in it until the next export removes it.

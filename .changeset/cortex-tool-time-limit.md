@@ -1,6 +1,8 @@
 ---
-"@niscorp/cortex": patch
+"@niscorp/cortex": minor
 ---
+
+BREAKING — approved by moccadroid (owner), 2026-11-22: a tool or delegated agent that hands `ctx.signal` to work meant to outlive its time limit sets a longer `timeoutMs`, or gives that work a signal of its own.
 
 A tool call that passes its time limit (`timeoutMs`) now has its `ctx.signal` aborted, with an `AbortError` as when the run is aborted. A tool that hands `ctx.signal` to its work stops there, instead of running on after the model was told it timed out: a `send_email` that timed out and was called again sent the email twice before, and sends it once now. A tool that ignores `ctx.signal` runs on as before.
 

@@ -1,6 +1,8 @@
 ---
-"@niscorp/signal": patch
+"@niscorp/signal": minor
 ---
+
+BREAKING — approved by moccadroid (owner), 2026-11-22: code that detects an aborted `stream()` by its error ("stream ended without a done event") checks `signal.aborted` after the loop instead.
 
 An `AbortSignal` now aborts every call: the one set with `.options({ signal })` is read by `complete()`, `stream()`, `step()`, `stepStream()`, `embed()` and `decide()`, and `step()` takes `{ signal }` as its second argument. An aborted `stream()` ends without a `done` event instead of throwing "stream ended without a done event"; `complete()`, `step()`, `embed()` and `decide()` reject with `E_PROVIDER_ERROR`, and a call aborted before it starts sends nothing.
 

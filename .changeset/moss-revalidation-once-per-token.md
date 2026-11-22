@@ -1,7 +1,7 @@
 ---
-"@niscorp/moss": patch
+"@niscorp/moss": minor
 ---
 
-BREAKING (pending consolidation): nothing unless the app's `session` verifier relied on being called one connection at a time, or on the lower rate of calls a pass that ran over its interval used to give it.
+BREAKING — approved by moccadroid (owner), 2026-11-22: nothing unless the app's `session` verifier relied on being called one connection at a time, or on the lower rate of calls a pass that ran over its interval used to give it.
 
 A revoked session's socket now closes within one `sessionRevalidateMs` plus the time the verifier takes to answer, however many connections are open: each revalidation pass asks the verifier once for each token, every token at the same moment, instead of one connection after another (200 connections with a 20 ms verifier and `sessionRevalidateMs: 500` closed a revoked socket after about 6.7 seconds; now after about 520 ms). Connections that present one token share one call. The most the verifier is now called is once for each distinct token every interval, and the calls of a pass arrive together at its start. Where a pass used to take longer than the interval, that is more calls than before: in the same example about 28 calls a second, one at a time, become about 350 a second, up to 200 at once. With `session: 'sessions'` the calls are queries on the app's pool, every 60 seconds by default. A pass that comes due while the previous one is still waiting for answers starts as soon as that one ends, instead of an interval later. The log line for a verifier that could not be asked still counts connections. The log line for an answer that fails after its pass went on now reads "could not be asked about a token after its pass went on. Its connections stay open and are asked again", since it is written once for each token.

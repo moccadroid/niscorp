@@ -1,8 +1,8 @@
 ---
-"@niscorp/strata": patch
+"@niscorp/strata": minor
 ---
 
-BREAKING (pending consolidation): nothing unless an app runs `strata upgrade` with a `workDir` in which it keeps a `REPORT.md` or `plan.json` of its own (upgrade now exits 1 and leaves it, where it replaced and later deleted it), or relied on `strata verify` accepting a `plan.json` whose `from` differs from the committed `strata.lock.json` (it now refuses: plan again).
+BREAKING — approved by moccadroid (owner), 2026-11-22: nothing unless an app runs `strata upgrade` with a `workDir` in which it keeps a `REPORT.md` or `plan.json` of its own (upgrade now exits 1 and leaves it, where it replaced and later deleted it), or relied on `strata verify` accepting a `plan.json` whose `from` differs from the committed `strata.lock.json` (it now refuses: plan again).
 
 In a `workDir` the host names, strata treats a `REPORT.md` as its own only when it begins with `# strata upgrade` (a byte-order mark aside), and a `plan.json` only when it has a plan's shape. Given one that is not, `upgrade` leaves it as it is and exits 1 with "… is not one strata wrote — it is left as it is. Move it, or give strata a workDir of its own.", and `upgrade` and `verify` never remove it. In the default `.strata/upgrade`, which is strata's own, its files are replaced as before.
 
