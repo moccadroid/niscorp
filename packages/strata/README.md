@@ -202,13 +202,17 @@ const { document, stamp, applied } = upgrader.upgrade(storedAction, { kind: 'nis
   the code** on any grammar the code was given is refused, `TOO_NEW`: the reader
   upgrades first. A stamp entry for a grammar the code was not given is neither
   ahead nor behind: it is kept on the stamp as it was, for code that has it.
+- **An entry is a number of migrations.** It is read with `Number`, so digits
+  in a string and `null` (none) read too. An entry for a grammar the code was
+  given that reads as no number (`"v0"`) is refused, `INVALID_SEQUENCE`: read
+  as current, the document would come back unmigrated and stamped current.
 
 | | |
 |---|---|
 | `createUpgrader(grammars, { transform })` | `{ stamp, upgrade, locate, behind }` — the stamp a document written now carries; upgrade one; every document inside one, by kind; is a stamp behind (throws if ahead). A kind no sequence given declares is refused (`UNKNOWN_KIND`): a step's `at` or an embedding's target when the upgrader is created, the `kind` passed to `upgrade` or `locate` when it is called. |
 | `upgrader.upgrade(document, { kind, stamp })` | Returns `{ document, stamp, applied }`: `stamp` is what to store with the document, `applied` the refs of the migrations that ran, in order — empty when the document was already current. |
 | `upgrader.locate(document, kind)` | Given the root's kind, `{ path, kind, value }` for the root itself and every document embedded in it; `path` is the keys and indexes from the root. |
-| `upgradeStore(pool, store, upgrader)` | `@niscorp/strata/postgres`. Rewrites every row of a table holding documents that is behind, in one transaction; a row from newer code refuses the pass. `store` is `{ table, schema?, column, stamp, kind, key }`: `column` and `stamp` name the jsonb columns holding the document and its stamp, `kind` is the kind of every document in the store (`"nisc.nova/action"`), `key` lists the columns that identify a row. Returns `{ total, upgraded, applied }`: rows read, rows that were behind and rewritten, and per migration ref the number of rows it was applied to. |
+| `upgradeStore(pool, store, upgrader)` | `@niscorp/strata/postgres`. Rewrites every row of a table holding documents that is behind, in one transaction; a row from newer code refuses the pass. It locks every row and reads each one's key and stamp, then reads a behind row's document by its key, one at a time: a store whose rows are all current loads no document. `store` is `{ table, schema?, column, stamp, kind, key }`: `column` and `stamp` name the jsonb columns holding the document and its stamp, `kind` is the kind of every document in the store (`"nisc.nova/action"`), `key` lists the columns that identify a row. Returns `{ total, upgraded, applied, unread? }`: rows read, rows that were behind and rewritten, per migration ref the number of rows it was applied to, and — only when there are any — the rows it could not read and left as they are, each named by its key (`id="e"`): a stamp that is neither null nor a JSON object (a `text` column), an entry for a given grammar that is no number, or a key the driver does not hand back exactly as stored (a `timestamptz` with microseconds). |
 
 ## The check
 
@@ -275,6 +279,7 @@ sentence says which:
 | two sequences with one id | `prepare` |
 | a ledger `table` or `schema`, or a store's table, schema or column, that is not a plain identifier | `migrate`, `status`, `readLedger`, `ledgerDdl`, `upgradeStore` |
 | a store whose `key` names no column | `upgradeStore` |
+| a stamp entry, for a grammar the upgrader was given, that is no number | `upgrader.upgrade`, `upgrader.behind` (`upgradeStore` names such a row in `unread` instead) |
 | a `strata.lock.json` that is JSON but not a lock, or has an entry that is not a whole number of migrations | `runSourceUpgrade` |
 | two artifacts with one kind and id | `planSourceUpgrade`, `runSourceUpgrade` |
 

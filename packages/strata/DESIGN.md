@@ -136,6 +136,10 @@ upgrades first. A stamp entry for a grammar the code was not given says nothing
 to it — the code cannot be ahead of or behind what it does not have — and an
 upgrade keeps the entry as it was: it is the document's record for code that
 does have that grammar, which would otherwise run its migrations a second time.
+**⟲** An entry was read leniently: `"v0"` compared as neither behind nor ahead, so the
+document came back unmigrated and stamped current, and a `text` stamp column read as no
+stamp, so every migration ran again. An entry that is no number is now refused; a store
+row strata cannot read is left as it is and named in the report.
 
 **Not every table of documents is a store.** `vex_cache` holds DSL and compiled
 Prism IR, but its protected rows are re-seeded from source on every boot and its

@@ -355,6 +355,53 @@ describe('upgradeStore — rows that hold documents', () => {
     expect(await row()).toEqual({ definition: { heading: 'Seats', price: 1200 }, grammar: { 'acme.forms': 1, 'acme.prices': 1 } });
   });
 
+  it('a row whose stamp entry is not a number is left as it is and named in `unread`; the pass goes on', async () => {
+    const pool = await withForms();
+    await pool.query(`DELETE FROM forms WHERE id <> 'a'`);
+    await pool.query(`INSERT INTO forms (id, definition, grammar) VALUES ('e', '{"title":"Five"}', '{"acme.forms":"five"}')`);
+    const upgrader = await createUpgrader([grammar([renameTitle])], { transform });
+    expect(await upgradeStore(pool, store, upgrader)).toEqual({ total: 2, upgraded: 1, applied: { 'acme.forms/1': 1 }, unread: ['id="e"'] });
+    const { rows } = await pool.query(`SELECT definition, grammar FROM forms WHERE id = 'e'`);
+    expect(rows[0]).toEqual({ definition: { title: 'Five' }, grammar: { 'acme.forms': 'five' } });
+  });
+
+  it('a stamp column that is not jsonb is not read as "no stamp": its rows are named, not migrated again', async () => {
+    const pool = freshPool();
+    await pool.query(`CREATE TABLE forms (id text PRIMARY KEY, definition jsonb NOT NULL, grammar text)`);
+    await pool.query(`INSERT INTO forms (id, definition, grammar) VALUES ('a', '{"heading":"Done"}', '{"acme.forms":1}'), ('b', '{"title":"New"}', NULL)`);
+    const upgrader = await createUpgrader([grammar([renameTitle])], { transform });
+    expect(await upgradeStore(pool, store, upgrader)).toEqual({ total: 2, upgraded: 1, applied: { 'acme.forms/1': 1 }, unread: ['id="a"'] });
+    const { rows } = await pool.query(`SELECT id, definition FROM forms ORDER BY id`);
+    expect(rows).toEqual([
+      { id: 'a', definition: { heading: 'Done' } },
+      { id: 'b', definition: { heading: 'New' } },
+    ]);
+  });
+
+  it('a key that does not come back exactly as stored is named in `unread`, and nothing is written to its row', async () => {
+    const pool = freshPool();
+    await pool.query(`CREATE TABLE forms (at timestamptz PRIMARY KEY, definition jsonb NOT NULL, grammar jsonb)`);
+    await pool.query(`INSERT INTO forms (at, definition) VALUES ('2026-03-01 10:00:00.123456+00', '{"title":"Lossy"}')`);
+    const upgrader = await createUpgrader([grammar([renameTitle])], { transform });
+    const report = await upgradeStore(pool, { ...store, key: ['at'] }, upgrader);
+    expect(report).toMatchObject({ total: 1, upgraded: 0, applied: {}, unread: [expect.stringContaining('at=')] });
+    const { rows } = await pool.query(`SELECT definition FROM forms`);
+    expect(rows[0]?.['definition']).toEqual({ title: 'Lossy' });
+  });
+
+  it('a store whose rows are all current reads no document', async () => {
+    const pool = await withForms();
+    const upgrader = await createUpgrader([grammar([renameTitle])], { transform });
+    await upgradeStore(pool, store, upgrader);
+    const statements: string[] = [];
+    const watched: StrataPool = {
+      query: (text, values) => pool.query(text, values),
+      transaction: (fn) => pool.db.transaction((tx) => fn({ query: (text, values) => (statements.push(text), tx.query(text, values)) })),
+    };
+    expect(await upgradeStore(watched, store, upgrader)).toEqual({ total: 3, upgraded: 0, applied: {} });
+    expect(statements.filter((text) => text.includes('"definition"'))).toEqual([]);
+  });
+
   it('a row written by newer code refuses the whole pass — nothing is rewritten', async () => {
     const pool = await withForms();
     await pool.query(`INSERT INTO forms (id, definition, grammar) VALUES ('z', '{"heading":"From the future"}', '{"acme.forms":7}')`);

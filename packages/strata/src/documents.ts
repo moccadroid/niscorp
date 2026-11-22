@@ -112,7 +112,15 @@ export const createUpgrader = async (sequences: readonly Sequence[], options: { 
     return found;
   };
 
-  const positionOf = (given: Stamp | null | undefined, id: string): number => given?.[id] ?? 0;
+  // Read with `Number`, as the comparisons always read it: digits and `null` still read. An entry that is no
+  // number compared as neither behind nor ahead, and the document came back unmigrated and stamped current.
+  const positionOf = (given: Stamp | null | undefined, id: string): number => {
+    const entry: unknown = given?.[id];
+    if (entry === undefined) return 0;
+    const position = Number(entry);
+    if (Number.isNaN(position)) throw new StrataError('INVALID_SEQUENCE', `The stamp's entry for ${id} is ${JSON.stringify(entry)}: not a number of migrations.`);
+    return position;
+  };
 
   const behind = (given: Stamp | null | undefined): boolean => {
     const ahead = grammars.filter((s) => positionOf(given, s.id) > s.migrations.length);
