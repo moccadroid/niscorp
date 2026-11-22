@@ -119,3 +119,28 @@ describe('a Groq tool call rejected with its attempt', () => {
     expect(fake.requests()).toBe(2);
   });
 });
+
+describe('a Groq rejection that carried the attempt cut short', () => {
+  const cutAttempt = (): Turn[] => [
+    { status: 400, error: { code: 'json_validate_failed', failed_generation: '{"items":["alpha","beta","gam' } },
+    { chunks: [textChunk('{"items":["alpha","beta","gamma"]}'), finishChunk('stop')] },
+  ];
+
+  it('is rescued by default and marked truncated', async () => {
+    const fake = sdkOverFetch(cutAttempt());
+    const result = await createSignal('groq', { apiKey: 'k', client: fake.client }).step({
+      messages: [{ role: 'user', content: 'list' }],
+      output: { accept: Items },
+    });
+    expect(result.outcome).toEqual({ kind: 'output', value: { items: ['alpha', 'beta'] } });
+    expect(result.wire).toMatchObject({ rung: 'close-truncated', truncated: true });
+  });
+
+  it('is retried under refuseCutOff', async () => {
+    const fake = sdkOverFetch(cutAttempt());
+    const result = await createSignal('groq', { apiKey: 'k', client: fake.client, refuseCutOff: true }).schema(Items).complete('list');
+    expect(result.response).toEqual({ items: ['alpha', 'beta', 'gamma'] });
+    expect(result.meta.retries).toBe(1);
+    expect(JSON.stringify(result.history)).toContain("the reply was cut off (the provider's rejection carried it cut short) before its JSON closed");
+  });
+});

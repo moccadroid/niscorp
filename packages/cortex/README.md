@@ -112,9 +112,11 @@ output: {
 
 A reply the provider cut off (finish reason `length` or
 `content_filter`) with its JSON still open is closed at its last whole
-value and checked as any other. With `output.refuseCutOff: true` it is
+value and checked as any other, as is an attempt a Groq rejection
+(`failed_generation`) carried cut short. With `output.refuseCutOff: true` it is
 refused instead, and the run corrects the model as for a reply with no
-envelope (a `retry` event of kind `termination`). An older
+envelope (a `retry` event of kind `termination`, or `provider` for a
+rejection). An older
 `@niscorp/signal`, without `refuseCutOff`, ignores the option.
 
 ---

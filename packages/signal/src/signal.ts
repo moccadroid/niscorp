@@ -285,6 +285,7 @@ const createSignalFromConfig = <T = string>(config: SignalConfig): Signal<T> => 
         ...(request.output && { accept: request.output.accept }),
         ...(request.output?.outputTool !== undefined && { outputTool: request.output.outputTool }),
         responseStrategies: responseStrategies(wireStrategies),
+        refuseCutOff: request.output?.refuseCutOff,
       });
       return recoveredStepResult(recovered, routed, error, providerRequest.messages);
     }
@@ -362,6 +363,7 @@ const createSignalFromConfig = <T = string>(config: SignalConfig): Signal<T> => 
           ...(request.output && { accept: request.output.accept }),
           ...(request.output?.outputTool !== undefined && { outputTool: request.output.outputTool }),
           responseStrategies: responseStrategies(wireStrategies),
+          refuseCutOff: request.output?.refuseCutOff,
         });
         yield { type: 'done', result: recoveredStepResult(recovered, routed, error, request.messages) };
       }

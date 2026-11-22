@@ -39,11 +39,13 @@ type Candidate = { value: unknown; rung: string };
 
 const CUT_OFF_REASONS = new Set(['length', 'content_filter']);
 
-const cutOffReason = (text: string, request: RouteRequest): string | undefined =>
-  request.finishReason !== undefined && CUT_OFF_REASONS.has(request.finishReason) && isTruncatedJson(text) ? request.finishReason : undefined;
+const cutBy = (request: RouteRequest): string | undefined =>
+  request.finishReason !== undefined && CUT_OFF_REASONS.has(request.finishReason) ? `finish reason "${request.finishReason}"` : undefined;
 
-const refusedCutOff = (text: string, finishReason: string): Routed =>
-  failed(`the reply was cut off (finish reason "${finishReason}") before its JSON closed. It began: ${text.trim().slice(0, 160)}`, { truncated: true });
+const REJECTION_CUT = "the provider's rejection carried it cut short";
+
+const refusedCutOff = (text: string, cause: string): Routed =>
+  failed(`the reply was cut off (${cause}) before its JSON closed. It began: ${text.trim().slice(0, 160)}`, { truncated: true });
 
 const tryParse = (text: string): { ok: true; value: unknown } | { ok: false; why: string } => {
   try {
@@ -111,10 +113,10 @@ const firstAccepted = (
 
 const decodedCall = (call: StepToolCall): StepToolCall => ({ ...call, args: decodeJsonish(call.args) });
 
-const finishAttempt = (call: StepToolCall, request: RouteRequest): Routed | undefined => {
+const finishAttempt = (call: StepToolCall, request: RouteRequest, cause: string | undefined): Routed | undefined => {
   if (!request.accept) return undefined;
   const text = typeof call.args === 'string' ? call.args : undefined;
-  const cutOff = text === undefined ? undefined : cutOffReason(text, request);
+  const cutOff = text !== undefined && cause !== undefined && isTruncatedJson(text) ? cause : undefined;
   if (text !== undefined && cutOff !== undefined && request.refuseCutOff === true) return refusedCutOff(text, cutOff);
   const source: Iterable<Candidate> =
     text === undefined ? [{ value: call.args, rung: 'call-args' }] : ladder(text, request.responseStrategies);
@@ -141,7 +143,8 @@ const contentEvidence = (content: string, nearMiss: string | undefined): string 
 
 const contentTurn = (request: RouteRequest): Routed => {
   if (!request.accept) return failed('no acceptance schema for a content turn');
-  const cutOff = cutOffReason(request.content, request);
+  const cause = cutBy(request);
+  const cutOff = cause !== undefined && isTruncatedJson(request.content) ? cause : undefined;
   if (cutOff !== undefined && request.refuseCutOff === true) return refusedCutOff(request.content, cutOff);
   const { winner, nearMiss } = firstAccepted(ladder(request.content, request.responseStrategies), request.accept);
   if (winner) return output(winner.value, winner.rung, undefined, cutOff !== undefined);
@@ -160,7 +163,7 @@ export const routeResponse = (request: RouteRequest): Routed => {
     return toolTurn(domainCalls.map(decodedCall), dropped);
   }
   for (const call of attempts) {
-    const routed = finishAttempt(call, request);
+    const routed = finishAttempt(call, request, cutBy(request));
     if (routed) return routed;
   }
   if (attempts.length > 0) {
@@ -181,7 +184,7 @@ export const routeRejection = (rejection: Rejection, request: Omit<RouteRequest,
   }
 
   const call: StepToolCall = { id: '', name: name ?? '', args: rejection.args ?? rejection.argsText };
-  const routed = finishAttempt(call, { ...request, content: '', toolCalls: [] });
+  const routed = finishAttempt(call, { ...request, content: '', toolCalls: [] }, rejection.truncated ? REJECTION_CUT : undefined);
   if (routed) {
     if (routed.outcome.kind === 'failed' && rejection.truncated) {
       return { ...routed, outcome: { ...routed.outcome, truncated: true } };

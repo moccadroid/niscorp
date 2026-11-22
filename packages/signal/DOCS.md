@@ -248,7 +248,7 @@ The low-level primitives `complete()` and `stream()` are built on: one model cal
 - **`tools`** — each is `{ name, description, parameters }`; `parameters` is the JSON Schema of the tool's input (`z.toJSONSchema()` of a Zod schema).
 - **`output.accept`** — gates and does not transform: `outcome.value` is the accepted candidate itself, not the schema's parsed output, so a transform or a default in the schema is not applied.
 - **`output.outputTool`** — the name of an exit tool. A call to it is routed as output, never as a tool call.
-- **`output.refuseCutOff`** — when `true`, a reply the provider ended with `length` or `content_filter` while its JSON was still open is a `failed` outcome with `truncated: true` and the evidence `the reply was cut off (finish reason "length") before its JSON closed. It began: …`, instead of being closed and accepted. A reply that ended with `stop`, or whose JSON closed before the cut, is never refused. Default `false`.
+- **`output.refuseCutOff`** — when `true`, a reply the provider ended with `length` or `content_filter` while its JSON was still open, or an output attempt a provider's rejection carried cut short, is a `failed` outcome with `truncated: true` and the evidence `the reply was cut off (finish reason "length") before its JSON closed. It began: …`, instead of being closed and accepted. A reply that ended with `stop`, or whose JSON closed before the cut, is never refused. Default `false`.
 - **`responseFormat`** — passed to the provider as given. `step()` does not check it against the capabilities: with `tools` on a model without `toolsWithStructuredOutput`, the provider rejects the request.
 - **`toolCalls`** — a call's `args` is the parsed JSON value, or the provider's string when it does not parse. It is not checked against the tool's `parameters`.
 - **`usage`** — `reported: false` means the provider sent no usage and the numbers are an estimate (about 4 characters per token). A stream does not reliably carry its usage.
@@ -319,7 +319,7 @@ type SignalMeta = {
   durationMs: number;               // wall clock time
   retries: number;                  // validation retries that occurred
   toolCalls: ToolCallRecord[];      // tools called, args, results, timing
-  finishReason?: string;            // how the provider ended the last reply: `stop`, `length`, `content_filter`, `tool_calls`, …
+  finishReason?: string;            // how the last reply ended: the provider's `stop`, `length`, `content_filter`, `tool_calls`, …; signal's `error_recovered` when it was recovered from a rejection
   provider: {
     raw: unknown;                   // null: these calls read the reply as a stream, which leaves no body to keep (an array, one entry per call, when the run took several)
     errors: ProviderError[];        // currently always empty
@@ -365,7 +365,7 @@ const { response } = await createSignal('groq')
 
 ### Cut-off replies
 
-A reply the provider ended early (`length`, or `content_filter`) while its JSON was still open is closed at its last whole value and accepted when that passes the schema: `{"items":["alpha","beta","gam` gives `{ items: ["alpha","beta"] }`. `meta.finishReason` says how the last reply ended, and a `step()` result carries `wire.truncated: true`.
+A reply the provider ended early (`length`, or `content_filter`) while its JSON was still open is closed at its last whole value and accepted when that passes the schema: `{"items":["alpha","beta","gam` gives `{ items: ["alpha","beta"] }`. The same goes for an attempt a provider's rejection carried cut short (a Groq `failed_generation` with its JSON still open, `json_validate_failed` or a call to the exit tool). `meta.finishReason` says how the last reply ended (`error_recovered` when it was recovered from a rejection; that is signal's, not a provider's), and a `step()` result carries `wire.truncated: true`.
 
 To retry such a reply instead, set `refuseCutOff`:
 

@@ -49,3 +49,38 @@ describe('an agent whose reply the provider cut off', () => {
     expect(calls()).toBe(1);
   });
 });
+
+describe('an agent on Groq whose rejected attempt arrived cut short', () => {
+  const groq = () => {
+    let at = 0;
+    const create = async () => {
+      at += 1;
+      if (at === 1) {
+        throw Object.assign(new Error('400 tool_use_failed'), {
+          error: { code: 'tool_use_failed', failed_generation: '{"name":"respond","arguments":{"data":{"picks":["a","b","c' },
+        });
+      }
+      return (async function* () {
+        yield { choices: [{ index: 0, delta: { content: whole.content }, finish_reason: null }] };
+        yield { choices: [{ index: 0, delta: {}, finish_reason: 'stop' }] };
+      })();
+    };
+    return { llm: createSignal('groq', { apiKey: 'k', client: { chat: { completions: { create } } } }), calls: () => at };
+  };
+
+  it('is retried under output.refuseCutOff', async () => {
+    const { llm, calls } = groq();
+    const agent = defineAgent({ id: 'picker', instructions: 'Pick.', output: { schema: Picks, refuseCutOff: true } });
+    const result = await agent.run('go', { llm }).result;
+    expect(result.ok && result.output.data).toEqual({ picks: ['a', 'b', 'c', 'd'] });
+    expect(calls()).toBe(2);
+  });
+
+  it('is accepted as far as it was written by default, as before', async () => {
+    const { llm, calls } = groq();
+    const agent = defineAgent({ id: 'picker', instructions: 'Pick.', output: { schema: Picks } });
+    const result = await agent.run('go', { llm }).result;
+    expect(result.ok && result.output.data).toEqual({ picks: ['a', 'b'] });
+    expect(calls()).toBe(1);
+  });
+});
