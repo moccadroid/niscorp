@@ -171,6 +171,10 @@ export async function* runStream<T>(spec: RunSpec, deps: RunDeps): AsyncGenerato
     }
 
     if (!spec.schema) {
+      // With no schema, only a provider rejection nothing was recovered from has this outcome.
+      if (result.outcome?.kind === 'failed') {
+        throw new SignalError(`Provider rejected the reply: ${result.outcome.evidence}`, ErrorCode.PROVIDER_ERROR, { raw: result.raw });
+      }
       const history: Message[] = [...messages, { role: 'assistant', content: result.content }];
       yield {
         type: 'done',

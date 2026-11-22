@@ -627,7 +627,7 @@ All errors are `SignalError` instances with a `.code` and optional `.context`:
 | `E_MISSING_SDK` | Provider SDK not installed |
 | `E_VALIDATION_FAILED` | Response failed Zod validation after all retries; a `decide()` answer failed its gate; a `reasoningEffort` the model does not take; an unknown `wire` strategy id (`context.wire`) |
 | `E_MAX_ITERATIONS` | The tool loop did not finish within its turn limit |
-| `E_PROVIDER_ERROR` | Provider API error (rate limit, server error, a refused `embed()`, etc.); tools on a provider without `nativeTools`; an adapter that is not implemented |
+| `E_PROVIDER_ERROR` | Provider API error (rate limit, server error, a refused `embed()`, etc.); tools on a provider without `nativeTools`; an adapter that is not implemented; with no schema, a reply the provider rejected that nothing could be recovered from, such as a Groq call to an undeclared tool (`Provider rejected the reply: …`, the provider's error in `context.raw`) |
 | `E_MAX_RETRIES`, `E_TOOL_NOT_FOUND`, `E_TOOL_EXECUTION`, `E_TOOL_VALIDATION` | Declared in `ErrorCode`, not currently thrown — tool failures go back to the model as tool results, and exhausted retries are `E_VALIDATION_FAILED` |
 | `E_VERB_NOT_SUPPORTED` | A chat verb was called on a decision provider |
 

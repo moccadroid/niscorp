@@ -1,6 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import { z } from 'zod';
 import { createSignal } from '../src/signal';
+import { defineTool } from '../src';
+import { sdkOverFetch } from './sdk-over-fetch';
 import { SignalError, ErrorCode } from '../src/errors';
 import { routeResponse, routeRejection } from '../src/wire/router';
 import { failedGeneration, jsonlLines, recoverRejection, resolveWireStrategies } from '../src/wire/strategies';
@@ -274,5 +276,18 @@ describe('end to end through step() — the 400 never existed', () => {
     await expect(
       llm.step({ messages: [{ role: 'user', content: 'go' }], output: { accept: Envelope } }),
     ).rejects.toThrow(/Provider error/);
+  });
+});
+
+describe('a rejection nothing was recovered from, with no schema', () => {
+  it('rejects with the provider error instead of answering an empty string', async () => {
+    const fake = sdkOverFetch([{ status: 400, error: { code: 'tool_use_failed', failed_generation: '{"name":"search_web","arguments":{"q":"x"}}' } }]);
+    const lookup = defineTool({ name: 'lookup', description: 'Looks a word up.', input: z.object({}), execute: () => 'x' });
+    const run = createSignal('groq', { apiKey: 'k', client: fake.client }).tools([lookup]).complete('x');
+    await expect(run).rejects.toMatchObject({
+      code: ErrorCode.PROVIDER_ERROR,
+      message: 'Provider rejected the reply: provider rejected the attempt (call to unknown tool "search_web") and nothing salvageable remained',
+    });
+    expect(fake.requests()).toBe(1);
   });
 });
