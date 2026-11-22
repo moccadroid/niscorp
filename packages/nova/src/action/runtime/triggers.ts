@@ -64,6 +64,7 @@ export const attachTriggers = (
   messageBus: MessageBus,
   buildContext: () => StepContext,
   ownInstanceId: string,
+  fieldRefOf: (ref: string) => string = (ref) => ref,
 ): TriggerHandle => {
   const unsubscribes: Unsubscribe[] = [];
 
@@ -75,9 +76,11 @@ export const attachTriggers = (
       const off = eventBus.on(triggerType, (event) => {
         const origin = eventOrigin(event);
         if (origin !== undefined && origin !== ownInstanceId) return;
-        if (expectedRef !== undefined && eventRef(event) !== expectedRef) return;
+        const ref = eventRef(event);
+        const fieldRef = ref === undefined ? undefined : fieldRefOf(ref);
+        if (expectedRef !== undefined && fieldRef !== expectedRef) return;
         if (expectedKey !== undefined && eventKey(event) !== expectedKey) return;
-        fireTrigger(trigger, buildContext, event, rootCause());
+        fireTrigger(trigger, buildContext, fieldRef === ref ? event : { ...event, ref: fieldRef }, rootCause());
       });
       unsubscribes.push(off);
       continue;

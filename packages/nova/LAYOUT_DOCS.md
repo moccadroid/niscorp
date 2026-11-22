@@ -78,7 +78,7 @@ The most common one. References a component by name; the registry supplies the i
 - **`component`** *(required)* — the registry name. Must match a name passed to `registry.register(name, ...)`.
 - **`props`** *(optional)* — an object of props. **Every value is a binding** — strings starting with `$` are resolved as paths, strings with `{{...}}` are interpolated, plain values pass through. See [Bindings](#bindings).
 - **`children`** *(optional)* — a single `LayoutNode` or an array of them. Components decide how to render their children slot.
-- **`ref`** *(optional)* — a stable identifier. Used by triggers (`event: 'ui:click', ref: 'header-stack'`) and as the model binding key. If unset, the renderer auto-generates one for model-bound components.
+- **`ref`** *(optional)* — a stable identifier. Used by triggers (`event: 'ui:click', ref: 'header-stack'`) and as the model binding key. If unset, the renderer auto-generates one for model-bound components. Inside a loop, a model-bound field with a `ref` gets the model ref `<ref>@<path>` (`qty@lines.0.qty`), one per row; its `ref` stays as written, and triggers on that ref still fire for every row.
 - **`model`** *(optional)* — two-way binding path. See [Two-way binding](#two-way-binding).
 - **`events`** *(optional)* — a record of event name → configuration. The schema accepts it; the renderer does not read it and it does not reach the `RenderNode`. Interaction is `ref` + an action trigger.
 

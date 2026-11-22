@@ -3,12 +3,13 @@ import type { RenderNode } from '@layout/types';
 export type ModelBinding = {
   ref: string;
   path: string;
+  fieldRef?: string;
 };
 
 const walk = (node: RenderNode, out: ModelBinding[]): void => {
   if (node.type === 'component') {
     if (node.model !== undefined) {
-      out.push({ ref: node.model.ref, path: node.model.path });
+      out.push({ ref: node.model.ref, path: node.model.path, ...(node.ref === undefined ? {} : { fieldRef: node.ref }) });
     }
     for (const child of node.children) walk(child, out);
     return;

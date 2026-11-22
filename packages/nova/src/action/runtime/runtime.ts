@@ -50,6 +50,7 @@ export const createActionRuntime = (config: ActionRuntimeConfig): ActionRuntime 
   let triggerHandle: TriggerHandle | undefined;
   let modelWriteOff: Unsubscribe | undefined;
   const modelPaths = new Map<string, string>();
+  const fieldRefs = new Map<string, string>();
 
   dataStore.subscribe((next) => {
     instance.data = next;
@@ -187,7 +188,7 @@ export const createActionRuntime = (config: ActionRuntimeConfig): ActionRuntime 
     if (triggerHandle !== undefined) return;
     const triggers = definition.triggers;
     if (triggers === undefined || triggers.length === 0) return;
-    triggerHandle = attachTriggers(triggers, config.eventBus, config.messageBus, buildContext, instance.id);
+    triggerHandle = attachTriggers(triggers, config.eventBus, config.messageBus, buildContext, instance.id, (ref) => fieldRefs.get(ref) ?? ref);
   };
 
   const detach = (): void => {
@@ -286,7 +287,14 @@ export const createActionRuntime = (config: ActionRuntimeConfig): ActionRuntime 
 
   const reconcileModelBindings = (nodes: RenderNode[]): void => {
     modelPaths.clear();
-    for (const b of collectModelBindings(nodes)) modelPaths.set(b.ref, b.path);
+    fieldRefs.clear();
+    for (const b of collectModelBindings(nodes)) {
+      modelPaths.set(b.ref, b.path);
+      if (b.fieldRef === undefined || b.fieldRef === b.ref) continue;
+      // The written ref still lands where it always did: on the last row.
+      modelPaths.set(b.fieldRef, b.path);
+      fieldRefs.set(b.ref, b.fieldRef);
+    }
   };
 
   const render = (): RenderNode[] => {

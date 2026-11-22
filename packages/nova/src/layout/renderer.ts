@@ -209,7 +209,9 @@ const renderComponent = (
   if (node.model !== undefined) {
     const resolvedPath = resolveDataPath(node.model, ctx.scopePaths);
     if (resolvedPath !== undefined) {
-      const ref = node.ref ?? makeAutoRef(node.component, resolvedPath);
+      // A field with a `ref` bound through a loop name gets a model ref per row; its own `ref` stays as written.
+      const isPerRow = node.ref !== undefined && resolveDataPath(node.model, []) !== resolvedPath;
+      const ref = node.ref === undefined ? makeAutoRef(node.component, resolvedPath) : isPerRow ? `${node.ref}@${resolvedPath}` : node.ref;
       model = { path: resolvedPath, ref };
       if (!('value' in props)) {
         props['value'] = resolve(node.model, chain);

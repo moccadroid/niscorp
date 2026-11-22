@@ -302,7 +302,10 @@ every response lands as before and none is followed.
 
 When the layout author writes `model: "$.user.name"` on a component, the
 renderer emits `model: { ref, path: 'user.name' }` on the
-`RenderComponentNode`. After every render, the runtime reconciles its
+`RenderComponentNode`. A field with a `ref` bound through a loop name
+gets the per-row model ref `<ref>@<path>`; the runtime maps it to its
+row, maps the written `ref` to the last row as before, and hands
+triggers the event with the written `ref`. After every render, the runtime reconciles its
 `ui:model` event-bus listeners against the live set of model refs:
 
 - New ref → install a listener that, on `ui:model` events for that ref,

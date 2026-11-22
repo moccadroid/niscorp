@@ -399,7 +399,10 @@ configured path.
 
 `model` paths inside loops are resolved to **absolute** paths
 (`items.0.value`) by the renderer using its scope-path tracker, so
-loop items round-trip correctly.
+loop items round-trip correctly. A field with its own `ref` inside a
+loop gets a model ref per row, `<ref>@<path>` (`qty@lines.0.qty`), so
+each row writes its own path; its `ref`, and the ref a trigger matches
+and `@event.ref` reads, stay `qty`.
 
 ---
 
