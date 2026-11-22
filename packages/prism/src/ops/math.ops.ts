@@ -54,12 +54,21 @@ export const opMod = (node: ModNode, context: EvalContext, evaluate: EvaluateFn)
 
 const ROUNDING = { nearest: Math.round, floor: Math.floor, ceil: Math.ceil };
 
+// Moved by its decimal exponent, not multiplied: 1.1 * 100 is 110.00000000000001,
+// Number("1.1e2") is 110.
+const shifted = (value: number, digits: number): number => {
+  const [mantissa, exponent = '0'] = String(value).split('e');
+  return Number(`${mantissa}e${Number(exponent) + digits}`);
+};
+
 export const opRound = (node: RoundNode, context: EvalContext, evaluate: EvaluateFn): JsonValue => {
   const value = evaluate(node.$round.value, context);
   if (typeof value !== 'number') return refuseType({ node, op: '$round', field: 'value', needs: 'a number', got: value, written: node.$round.value });
   const digits = node.$round.digits ?? 0;
-  const factor = Math.pow(10, digits);
-  return ROUNDING[node.$round.mode ?? 'nearest'](value * factor) / factor;
+  const moved = shifted(value, digits);
+  // Moved past what a number can be, it has no digit at that place to round.
+  if (!Number.isFinite(moved)) return value;
+  return shifted(ROUNDING[node.$round.mode ?? 'nearest'](moved), -digits);
 };
 
 // A number as it is written in digits, not all that Number() takes: not '',

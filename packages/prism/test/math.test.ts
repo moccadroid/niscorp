@@ -53,6 +53,20 @@ describe('$round — mode', () => {
   it('a config without a mode parses to what it did: no mode is written in', () => {
     expect(validate({ $round: { value: 1.5 } })).toEqual({ ok: true, data: { $round: { value: 1.5, digits: 0 } } });
   });
+  it('rounds at the decimals as written, not at a binary product', () => {
+    expect(round(1.1, 'ceil', 2)).toBe(1.1);
+    expect(round(4.35, 'floor', 2)).toBe(4.35);
+    expect(round(0.29, 'floor', 2)).toBe(0.29);
+    expect(round(1.005, 'nearest', 2)).toBe(1.01);
+    expect(round(0.285, 'nearest', 2)).toBe(0.29);
+    expect(round(3.14159, 'nearest', 2)).toBe(3.14);
+    expect(round(-2.5, 'nearest', 0)).toBe(-2);
+  });
+  it('more digits than a number has give the number', () => {
+    expect(round(1.5, 'nearest', 400)).toBe(1.5);
+    expect(round(1e300, 'nearest', 10)).toBe(1e300);
+    expect(round(1.23e-7, 'floor', 8)).toBe(1.2e-7);
+  });
 });
 
 describe('$mod', () => {

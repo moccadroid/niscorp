@@ -265,6 +265,8 @@ The remainder of the first number divided by the second. It takes the sign of th
 ```
 Result: `3.14`. `digits` defaults to 0. `mode` is `"nearest"` unless given: `"floor"` rounds down (toward negative infinity) and `"ceil"` rounds up, at the same `digits`.
 
+The number is rounded at its decimals as they are written: `1.1` with `"ceil"` at 2 digits is `1.1`, and `1.005` to the nearest at 2 digits is `1.01`. A half goes up, toward positive infinity (`-2.5` is `-2`). More digits than a number has give the number itself.
+
 ```json
 { "$round": { "value": { "$div": [{ "$ref": "$.minutes" }, 60] }, "mode": "floor" } }
 ```
