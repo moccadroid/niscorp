@@ -15,6 +15,7 @@ import type { FakeAgentControls, SeenRequest } from '@encore/server/agent/fake-l
 import { PREDECISIONS_HEADING, predecisionsIn } from '@encore/server/agent/predecisions';
 import type { Predecisions } from '@encore/server/agent/predecisions';
 import { QUERY_MAX_ROWS, createReadTools, readableQueries } from '@encore/server/agent/tools';
+import { assistAnswerAction } from '@encore/app/actions/frame/assist-answer.action';
 import { ANSWER_WRITE_MS, HANDOFF_IDLE_MS } from '@encore/server/intent/assist';
 import { CARDS_ONLY } from '@encore/server/intent/thread';
 import { STORM_PLAN_STEPS, cardData, createReporter, createWorld, mounted, planOf, settle } from './world-factory';
@@ -121,10 +122,13 @@ const main = async (): Promise<void> => {
 
   const runningWrites: number[] = [];
   let lastWritten = '';
+  // The card is placed with no input, so its mount writes exactly its own defaults: that write is the placing, not the run's.
+  const placedWith = JSON.stringify({ ...assistAnswerAction.data });
   shell.onDataChange(({ instanceId, data }) => {
     const card = shell.getState().canvases['assist']?.stack.find((item) => item.id === instanceId);
+    if (card === undefined || JSON.stringify(data) === placedWith) return;
     const written = JSON.stringify([data['status'], data['say'], data['answer'], data['lookups']]);
-    if (card === undefined || written === lastWritten) return;
+    if (written === lastWritten) return;
     lastWritten = written;
     if (data['status'] === 'running') runningWrites.push(performance.now());
   });

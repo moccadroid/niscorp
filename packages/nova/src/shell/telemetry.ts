@@ -1,5 +1,5 @@
 import type { EndpointEvent, EndpointHandler } from '../action';
-import type { Unsubscribe } from '../shared/common';
+import type { HandlerErrorConfig, Unsubscribe } from '../shared/common';
 import type {
   DataChangeEvent,
   DataChangeHandler,
@@ -18,14 +18,16 @@ export type Telemetry = {
   clear: () => void;
 };
 
-const safeCall = <T>(fn: ((arg: T) => void) | undefined, arg: T): void => {
-  if (fn === undefined) return;
-  try {
-    fn(arg);
-  } catch {}
-};
+export const createTelemetry = (config: ShellTelemetry | undefined, { onHandlerError }: HandlerErrorConfig = {}): Telemetry => {
+  const safeCall = <T>(fn: ((arg: T) => void) | undefined, arg: T): void => {
+    if (fn === undefined) return;
+    try {
+      fn(arg);
+    } catch (err) {
+      onHandlerError?.(err);
+    }
+  };
 
-export const createTelemetry = (config: ShellTelemetry | undefined): Telemetry => {
   const stateSubscribers: StateChangeHandler[] = [];
   const dataSubscribers: DataChangeHandler[] = [];
   const endpointSubscribers: EndpointHandler[] = [];

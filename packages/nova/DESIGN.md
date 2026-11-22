@@ -104,7 +104,8 @@ Resolution rules:
 - **String, sole `{{ expr }}`** → returns the raw resolved value (preserves
   type — number stays number, object stays object).
 - **String, `"text {{expr}} text"`** → string interpolation.
-- **String, bare `"$.path"` or `"$item.field"`** → raw resolved value.
+- **String, bare `"$.path"` or `"$item.field"`** → raw resolved value. A
+  `$` name followed by more words (`"$CAD only"`) is text.
 - **String, bare `@event…` / `@error…`** → raw resolved value, where that scope
   is present (a trigger's steps, an `onError` list).
 - **String, anything else** → returned literally.
@@ -143,6 +144,14 @@ Trigger configs with a `message` field bind to this bus.
 
 The two buses are **independent**. The previous `msg:<channel>` prefix
 bridge through the event bus is gone.
+
+A handler that throws never breaks a bus or a store: the event bus, the
+message bus and the data store catch it and go on to the next handler.
+`createEventBus`, `createMessageBus` and `createDataStore` take an optional
+`{ onHandlerError }` that is handed what was caught. A strict shell wires it
+to its `onError` (code `HANDLER_FAILED`) for the buses it creates itself,
+its telemetry, and each runtime's data store and status subscribers; a bus
+the app hands in is left as it is, and a lax shell reports nothing.
 
 ### `shared/ids.ts`, `shared/common.ts`
 
@@ -302,7 +311,10 @@ every response lands as before and none is followed.
 
 When the layout author writes `model: "$.user.name"` on a component, the
 renderer emits `model: { ref, path: 'user.name' }` on the
-`RenderComponentNode`. After every render, the runtime reconciles its
+`RenderComponentNode`. A field with a `ref` bound through a loop name
+gets the per-row model ref `<ref>@<path>`; the runtime maps it to its
+row, maps the written `ref` to the last row as before, and hands
+triggers the event with the written `ref`. After every render, the runtime reconciles its
 `ui:model` event-bus listeners against the live set of model refs:
 
 - New ref → install a listener that, on `ui:model` events for that ref,
@@ -475,8 +487,10 @@ that spawns:
 - **layout** — `fillSlots(fragment.layout, { body: action.layout })`: the
   fragment is the outer chrome, the action's own layout is dropped into the
   fragment's `{ slot: 'body' }` node. The fragment wraps; the action is the
-  innermost content. Multiple fragments fold in array order (last listed is
-  outermost). An unfilled slot renders nothing.
+  innermost content. An action layout that is a layout id goes into the
+  slot as `{ ref: id }`, so the renderer draws the stored layout there.
+  Multiple fragments fold in array order (last listed is outermost). An
+  unfilled slot renders nothing.
 - **data / endpoints** — shallow-merge, **action wins** on conflict.
 - **triggers** — concat, fragment's first (so a fragment's `close`/`cancel`
   and the action's `confirm` coexist; authors keep refs distinct).
@@ -505,12 +519,14 @@ work (v1 fills one `body` slot with the action's `layout`).
 4. `spawn` calls `buildRuntime` → `createActionRuntime`. The runtime
    builds its data store from `definition.data` merged with `input`,
    creates an `AbortController`, registers triggers.
-5. `runtime.mount(input)` is fired and not awaited. It runs the
+5. `spawn` pushes the new instance onto the canvas and records its
+   birth, origin and key, so a mount hook that navigates (`push`,
+   `pop`, `removeSelf`) finds its own instance on top.
+6. `runtime.mount(input)` is fired and not awaited. It runs the
    `mount` lifecycle hook via `runLifecycleHook`, then transitions to
    `active`. Failures route through the strict/lax pipeline.
-6. The new instance is pushed onto the canvas; `fireState()` notifies
-   state subscribers.
-7. The adapter (when one exists) calls `runtime.render()` which returns
+7. `fireState()` notifies state subscribers.
+8. The adapter (when one exists) calls `runtime.render()` which returns
    `RenderNode[]`. The runtime reconciles model bindings against the
    produced tree.
 

@@ -22,6 +22,7 @@ export const defaultRegistry = (): ComponentRegistry<TtyComponent> => {
     Panel,
     JsonTree,
     ActionSlot,
+    CanvasSlot: ActionSlot,
   });
   return registry;
 };

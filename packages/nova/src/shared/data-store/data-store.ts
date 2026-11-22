@@ -1,8 +1,9 @@
-import type { Unsubscribe } from '../common';
+import type { HandlerErrorConfig, Unsubscribe } from '../common';
 import type { DataStore } from './types';
 
 export const createDataStore = <T extends Record<string, unknown> = Record<string, unknown>>(
   initial: T,
+  config: HandlerErrorConfig = {},
 ): DataStore<T> => {
   let current: T = { ...initial };
   const subscribers: Array<(data: T) => void> = [];
@@ -14,7 +15,9 @@ export const createDataStore = <T extends Record<string, unknown> = Record<strin
     for (const handler of subscribers.slice()) {
       try {
         handler(current);
-      } catch {}
+      } catch (err) {
+        config.onHandlerError?.(err);
+      }
     }
   };
 

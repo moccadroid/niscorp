@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { createDataStore } from '@shared/data-store';
 import type { DataStore } from '@shared/data-store';
 import { createIdFactory } from '@shared/ids';
-import { DefinitionValidationError, ErrorCodes, NovaError } from '@shared/errors';
+import { DefinitionValidationError, ErrorCodes, NovaError, reportWithoutThrowing, toHandlerFailed } from '@shared/errors';
 import type { RenderNode } from '@layout/types';
 import type { Mutation, Step } from '../schemas';
 import { StepSchema } from '../schemas';
@@ -31,11 +31,14 @@ export const createActionRuntime = (config: ActionRuntimeConfig): ActionRuntime 
   const definition = config.definition;
   const initialData = buildInitialData(definition, config.input);
   const initialSnapshot: Record<string, unknown> = structuredClone(initialData);
-  const dataStore: DataStore = createDataStore(initialData);
-
-  const abortController = new AbortController();
   const strict = config.strict ?? false;
   const onError: OnErrorHandler = config.onError ?? noopOnError;
+  const onHandlerError = (err: unknown): void => {
+    if (strict) reportWithoutThrowing(onError, toHandlerFailed(err));
+  };
+  const dataStore: DataStore = createDataStore(initialData, { onHandlerError });
+
+  const abortController = new AbortController();
   const instanceIdFn = config.instanceIdFn ?? defaultInstanceIdFactory;
 
   const instance: ActionInstance = {
@@ -50,6 +53,7 @@ export const createActionRuntime = (config: ActionRuntimeConfig): ActionRuntime 
   let triggerHandle: TriggerHandle | undefined;
   let modelWriteOff: Unsubscribe | undefined;
   const modelPaths = new Map<string, string>();
+  const fieldRefs = new Map<string, string>();
 
   dataStore.subscribe((next) => {
     instance.data = next;
@@ -86,6 +90,7 @@ export const createActionRuntime = (config: ActionRuntimeConfig): ActionRuntime 
       entry.stop?.();
       entry.stop = stop;
     },
+    isSuperseded: (endpoint, ticket) => ticket < entryOf(endpoint).landed,
   };
   const stopFollowing = (): void => {
     for (const entry of ledger.values()) {
@@ -164,7 +169,9 @@ export const createActionRuntime = (config: ActionRuntimeConfig): ActionRuntime 
     for (const handler of statusSubscribers.slice()) {
       try {
         handler(next);
-      } catch {}
+      } catch (err) {
+        onHandlerError(err);
+      }
     }
   };
 
@@ -187,7 +194,7 @@ export const createActionRuntime = (config: ActionRuntimeConfig): ActionRuntime 
     if (triggerHandle !== undefined) return;
     const triggers = definition.triggers;
     if (triggers === undefined || triggers.length === 0) return;
-    triggerHandle = attachTriggers(triggers, config.eventBus, config.messageBus, buildContext, instance.id);
+    triggerHandle = attachTriggers(triggers, config.eventBus, config.messageBus, buildContext, instance.id, (ref) => fieldRefs.get(ref) ?? ref);
   };
 
   const detach = (): void => {
@@ -251,7 +258,12 @@ export const createActionRuntime = (config: ActionRuntimeConfig): ActionRuntime 
     if (instance.status === 'initializing') setStatus('active');
   };
 
+  // Bumped by every status move: a suspend whose hook ends after a later
+  // resume or unmount leaves the status that one set.
+  let moves = 0;
+
   const unmount = async (): Promise<void> => {
+    moves += 1;
     abortController.abort();
     stopFollowing();
     detach();
@@ -264,13 +276,16 @@ export const createActionRuntime = (config: ActionRuntimeConfig): ActionRuntime 
   };
 
   const suspend = async (): Promise<void> => {
+    moves += 1;
+    const mine = moves;
     await runLifecycleHook('suspend', definition, buildContext);
-    setStatus('suspended');
+    if (moves === mine) setStatus('suspended');
   };
 
   const resume = async (): Promise<void> => {
     // `mount` runs again: a suspended action ignored everything, and this
     // re-read is what makes it current when it is revealed.
+    moves += 1;
     setStatus('active');
     await runLifecycleHook('mount', definition, buildContext);
     await runLifecycleHook('resume', definition, buildContext);
@@ -278,7 +293,14 @@ export const createActionRuntime = (config: ActionRuntimeConfig): ActionRuntime 
 
   const reconcileModelBindings = (nodes: RenderNode[]): void => {
     modelPaths.clear();
-    for (const b of collectModelBindings(nodes)) modelPaths.set(b.ref, b.path);
+    fieldRefs.clear();
+    for (const b of collectModelBindings(nodes)) {
+      modelPaths.set(b.ref, b.path);
+      if (b.fieldRef === undefined || b.fieldRef === b.ref) continue;
+      // A ui:model with the written ref writes the last row.
+      modelPaths.set(b.fieldRef, b.path);
+      fieldRefs.set(b.ref, b.fieldRef);
+    }
   };
 
   const render = (): RenderNode[] => {

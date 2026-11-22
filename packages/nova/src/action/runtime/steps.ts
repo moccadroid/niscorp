@@ -8,7 +8,7 @@ import { setPath } from '@shared/bindings/paths';
 import { applyMutations } from '../mutations';
 import { isMutationStep } from '../grammar';
 import type { EndpointConfig, Mutation, ReconcileEffect, Step } from '../schemas';
-import { LifecycleError, UnknownFunctionError, type LifecycleHook, type NovaError } from '@shared/errors';
+import { ErrorCodes, LifecycleError, NovaError, UnknownFunctionError, reportWithoutThrowing, type LifecycleHook } from '@shared/errors';
 import type {
   EndpointEventInit,
   FetchFn,
@@ -30,6 +30,7 @@ export type EndpointCalls = {
   begin: (endpoint: string) => number;
   land: (endpoint: string, ticket: number) => boolean;
   follow: (endpoint: string, ticket: number, stop: Unsubscribe) => void;
+  isSuperseded: (endpoint: string, ticket: number) => boolean;
 };
 
 export type StepContext = {
@@ -90,6 +91,16 @@ const resolveMutationValues = (
   });
 };
 
+// A literal negative index is a deliberate "from the end"; one a template made is almost always a "not found".
+const reportTemplatedNegativeRemoveAt = (written: Mutation[], resolved: Mutation[], onError: OnErrorHandler): void => {
+  written.forEach((m, at) => {
+    const r = resolved[at];
+    if (!('removeAt' in m) || typeof m.index !== 'string' || r === undefined || !('removeAt' in r)) return;
+    if (typeof r.index !== 'number' || r.index >= 0) return;
+    const message = `removeAt: index ${m.index} resolved to ${r.index}, which counts from the end (-1 removes the last element)`;
+    reportWithoutThrowing(onError, new NovaError(ErrorCodes.mutation, message, { path: m.removeAt, index: r.index, template: m.index }));
+  });
+};
 
 const writeTarget = (
   dataStore: DataStore,
@@ -121,6 +132,7 @@ const raiseUnknown = async (
     throw new LifecycleError(message, { hook: ctx.lifecycleHook });
   }
   if (ctx.strict && strictError !== undefined) throw strictError;
+  if (ctx.strict) reportWithoutThrowing(ctx.onError, new NovaError(ErrorCodes.endpointFailed, message, {}));
 };
 
 const runCall = async (
@@ -177,7 +189,8 @@ const runCall = async (
     if (onSuccess) await executeSteps(onSuccess, ctx);
     return;
   }
-  writeTarget(ctx.dataStore, endpoint.errorTarget, result.error);
+  const isSuperseded = ticket !== undefined && ctx.calls !== undefined && ctx.calls.isSuperseded(callName, ticket);
+  if (!isSuperseded) writeTarget(ctx.dataStore, endpoint.errorTarget, result.error);
   if (onError) {
     const errorExtras: ExtraScopes = { ...ctx.extras, '@error': result.error };
     await executeSteps(onError, { ...ctx, extras: errorExtras });
@@ -187,6 +200,9 @@ const runCall = async (
     throw new LifecycleError(`endpoint '${callName}' failed: ${result.error.message}`, {
       hook: ctx.lifecycleHook,
     });
+  }
+  if (ctx.strict && endpoint.errorTarget === undefined) {
+    reportWithoutThrowing(ctx.onError, new NovaError(ErrorCodes.endpointFailed, `endpoint '${callName}' failed: ${result.error.message}`, { endpoint: callName, status: result.error.status }));
   }
 };
 
@@ -255,6 +271,7 @@ export const executeSteps = async (steps: Step[], ctx: StepContext): Promise<voi
     // stood before the run.
     const chain = createScopeChain(ctx.dataStore.get());
     const resolved = resolveMutationValues(list, chain, ctx.extras);
+    reportTemplatedNegativeRemoveAt(list, resolved, ctx.onError);
     ctx.dataStore.update((curr) =>
       applyMutations(curr, resolved, { ...(ctx.initial === undefined ? {} : { initial: ctx.initial }), strict: ctx.strict }),
     );

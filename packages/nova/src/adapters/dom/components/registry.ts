@@ -21,6 +21,7 @@ export const defaultRegistry = (): ComponentRegistry<DomComponent> => {
     Panel,
     JsonTree,
     ActionSlot,
+    CanvasSlot: ActionSlot,
   });
   return registry;
 };

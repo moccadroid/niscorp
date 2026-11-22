@@ -196,7 +196,7 @@ Remove an element at a specific index.
 
 The index can also be a template string (e.g. `"{{@event.payload}}"`) resolved before applying. One that does not resolve to a whole number (a missing path, a fraction, a word) leaves the array as it is, and the steps after it run.
 
-A negative index counts from the end, as in JavaScript's `splice`: `-1` removes the last element, and an index further back than the first element removes the first. An index computed as `-1` for "not found" therefore removes the last element: check the index before the step runs. An index past the end removes nothing.
+A negative index counts from the end, as in JavaScript's `splice`: `-1` removes the last element, and an index further back than the first element removes the first. An index computed as `-1` for "not found" therefore removes the last element: check the index before the step runs. An `index` template that resolves to a negative number is reported to `onError` (a `NovaError` with code `MUTATION_ERROR` naming the template) and then applied; a literal negative `index` is not reported. An index past the end removes nothing.
 
 ### `move`
 
@@ -252,7 +252,7 @@ Invoke a named endpoint. Optional `onSuccess` and `onError` step branches run af
 }
 ```
 
-The response is written to the endpoint's `target` before `onSuccess` runs; there is no implicit per-call response slot. If a newer call to the same endpoint has already landed, an older response arriving late does not overwrite `target` (its `onSuccess` still runs).
+The response is written to the endpoint's `target` before `onSuccess` runs; there is no implicit per-call response slot. If a newer call to the same endpoint has already landed, an older response arriving late does not overwrite `target` (its `onSuccess` still runs), and an older failure arriving late does not overwrite `errorTarget` (its `onError` steps still run). A failure that comes back while a newer call is still on its way is written, as before.
 
 The `onError` branch has access to a special **`@error`** scope inside templates: `{{@error.message}}`, `{{@error.status}}`, `{{@error.data}}`. Use it to surface error messages in the UI.
 
@@ -445,8 +445,8 @@ lifecycle: {
 
 ### When each fires
 
-- **`mount`** — when the action is pushed onto a canvas (after `data` and `input` are merged and triggers attach; the instance is `initializing` until the hook completes), and **again on every resume**, before the `resume` hook. A suspended action ignores everything while backgrounded, so re-running `mount` is what brings its data current when it is revealed again. A `{ reload: true }` step re-runs it too.
-- **`suspend`** — when another action is pushed on top on a `stack` canvas, this action transitions from `active` → `suspended`. Triggers stay attached but do not fire while suspended. A `mode: 'list'` canvas suspends nothing.
+- **`mount`** — when the action is pushed onto a canvas (after `data` and `input` are merged, triggers attach and the instance is on its canvas, so a `push`, `pop` or `removeSelf` step in it acts from this instance; the instance is `initializing` until the hook completes), and **again on every resume**, before the `resume` hook. A suspended action ignores everything while backgrounded, so re-running `mount` is what brings its data current when it is revealed again. A `{ reload: true }` step re-runs it too.
+- **`suspend`** — when another action is pushed on top on a `stack` canvas, this action transitions from `active` → `suspended` once the hook has run. Triggers stay attached but do not fire while suspended. A `mode: 'list'` canvas suspends nothing. If the action is revealed (or removed) before its `suspend` hook finishes, it stays `active` (or `unmounted`).
 - **`resume`** — when the action above is popped, this action transitions from `suspended` → `active`. Runs after the re-run of `mount`.
 - **`unmount`** — once, when the action is popped from the canvas (or the shell is disposed). In-flight steps are aborted and triggers detach BEFORE the unmount steps run; the unmount steps run on a fresh signal, so they can do their own async work.
 
@@ -475,7 +475,7 @@ const modalFrame: ActionFragment = {
 
 Fields: `kind`, `id`, and optional `name`, `description`, `layout`, `data`, `triggers`, `endpoints`, `lifecycle` — the same shapes as on an action. A fragment has no `title` or `input`.
 
-On merge (`composeAction(action, fragments)`): each fragment's layout wraps the layout so far, filling its `{ slot: 'body' }` with it as it is — the last fragment listed is the outermost, and a layout so far that is a layout id fills the slot as a string, which renders as that text; a fragment whose `layout` is a layout id replaces the layout instead of wrapping it. `data` and `endpoints` merge with the action winning on a clash (`data` is a shallow merge). Triggers concatenate, fragment first. Lifecycle steps concatenate per hook, fragment first. An unknown fragment id throws `UnknownFragmentError`.
+On merge (`composeAction(action, fragments)`): each fragment's layout wraps the layout so far, filling its `{ slot: 'body' }` with it — the last fragment listed is the outermost, and a layout so far that is a layout id fills the slot with a `{ ref }` to it, so the slot renders the stored layout; a fragment whose `layout` is a layout id replaces the layout instead of wrapping it. `data` and `endpoints` merge with the action winning on a clash (`data` is a shallow merge). Triggers concatenate, fragment first. Lifecycle steps concatenate per hook, fragment first. An unknown fragment id throws `UnknownFragmentError`.
 
 ---
 
@@ -514,7 +514,7 @@ onError: [
 Fields available on `@error`:
 - `message: string`
 - `status: number` (HTTP status, or 0 for network/function errors)
-- `data: unknown` (the response body if any)
+- `data: unknown` (the response body if any: parsed JSON, or the text of a body that is not JSON when the response offers `clone()`, as a real `Response` does; without `clone`, or when the host already read the body, a non-JSON body leaves `data` empty)
 - `timedOut?: boolean` (true if no reply arrived within the endpoint's wait)
 
 A call aborted by an unmount is silent: `onError` does not run, `errorTarget` is not written, and nothing is reported to telemetry.
@@ -559,6 +559,10 @@ Action-time errors all extend `NovaError`:
 - **`MutationError`** — in strict mode, `push`, `pop`, `removeAt`, `move` or `clear` aimed at a path that is missing or of the wrong type. It is reported to `onError`, and the batch of mutations it was in is not applied. In lax mode the op is a no-op, except `clear`, which removes the key (see `clear` above)
 
 A runaway trigger chain is reported as a plain `NovaError` with code `RUNAWAY_CHAIN`.
+
+In strict mode, a `call` outside a lifecycle hook that fails with no `onError` steps and no `errorTarget` to take it, or that names an endpoint the action does not have with no `onError` steps, is reported to `onError` as a plain `NovaError` with code `ENDPOINT_FAILED` (`endpoint 'save' failed: disk full`, `unknown endpoint: svae`). Nothing is thrown. In lax mode such a call stays silent.
+
+In strict mode, a subscriber that throws (a runtime's `onDataChange` or `onStatusChange` handler, a shell's state, data or endpoint listener, a handler on a bus the shell created) is reported to `onError` as a plain `NovaError` with code `HANDLER_FAILED` and the thrown message. It is still caught: the other handlers run.
 
 `DefinitionValidationError` always throws, from `createShell` / `registerAction`. `UnknownActionError` and `UnknownFragmentError` always throw from a direct `shell.push` / `shell.replace`; raised by a navigation step inside a trigger they route to `onError`. Lifecycle failures route to `onError`, and in strict mode also surface on the next shell call.
 

@@ -78,7 +78,7 @@ The most common one. References a component by name; the registry supplies the i
 - **`component`** *(required)* — the registry name. Must match a name passed to `registry.register(name, ...)`.
 - **`props`** *(optional)* — an object of props. **Every value is a binding** — strings starting with `$` are resolved as paths, strings with `{{...}}` are interpolated, plain values pass through. See [Bindings](#bindings).
 - **`children`** *(optional)* — a single `LayoutNode` or an array of them. Components decide how to render their children slot.
-- **`ref`** *(optional)* — a stable identifier. Used by triggers (`event: 'ui:click', ref: 'header-stack'`) and as the model binding key. If unset, the renderer auto-generates one for model-bound components.
+- **`ref`** *(optional)* — a stable identifier. Used by triggers (`event: 'ui:click', ref: 'header-stack'`) and as the model binding key. If unset, the renderer auto-generates one for model-bound components. Inside a loop, a model-bound field with a `ref` gets the model ref `<ref>@<path>` (`qty@lines.0.qty`), one per row; its `ref` stays as written, and triggers on that ref still fire for every row.
 - **`model`** *(optional)* — two-way binding path. See [Two-way binding](#two-way-binding).
 - **`events`** *(optional)* — a record of event name → configuration. The schema accepts it; the renderer does not read it and it does not reach the `RenderNode`. Interaction is `ref` + an action trigger.
 
@@ -272,6 +272,8 @@ A string starting with `$.` reads a value from the data object.
 
 The raw value is returned with its type preserved — numbers stay numbers, arrays stay arrays.
 
+A path reads what a value has, or inherits from a prototype of its own (a getter on a class the data carries, `$.person.fullName`), and never what every object inherits: `$.x.constructor`, `$.x.toString` and `$.x.__proto__` are `undefined`.
+
 **Path forms:**
 - `$.foo.bar` — start from the data root, walk `foo` then `bar`. Inside a loop, the loop's own names come first: `$.index`, `$.items` and `$.<as>` read the loop's values, not root keys of those names
 - `$foo` — read variable `foo` from the closest enclosing scope (loop variable, etc.)
@@ -279,7 +281,7 @@ The raw value is returned with its type preserved — numbers stay numbers, arra
 - `$index` — special: the loop iteration index
 - `$` alone — the whole innermost scope: the data root, or inside a loop the loop's own `{ <as>, index, items }`
 
-A string that starts with `$` and then a letter or `_` is a path, never text: `'$USD'` reads a key `USD` and renders empty when there is none. Text that starts with `$` comes from data or a binding (`'{{$.label}}'`).
+A string that starts with `$` and then a letter or `_`, with no space before its end, is a path, never text: `'$USD'` reads a key `USD` and renders empty when there is none. When more words follow the name, it is text: `'$CAD only'` renders as written (and is offered to the phrasebook like other text). As a condition such text is truthy: `if: '$count > 0'` (or `$if:`) is not a comparison and always takes `then`; compare with `{ $prism: … }`. A label that is only a `$` word comes from data or a binding (`'{{$.label}}'`).
 
 ### 2. Template strings
 
@@ -353,6 +355,8 @@ Set `model: '<path>'` on a component to wire it for two-way data binding. The re
 }
 ```
 
+A `model` (and the `for` of a loop around it) written as one template, `'{{$.draftName}}'`, binds the same as the bare path.
+
 The `Input` component built into `@niscorp/nova/adapters/react/components` already dispatches `ui:model` on change, so this just works. To wire your own component, see `REACT_DOCS.md`.
 
 ### Loop case
@@ -368,6 +372,8 @@ The `Input` component built into `@niscorp/nova/adapters/react/components` alrea
 ```
 
 Type into the second input → `data.items[1].value` updates → re-render shows the new value.
+
+`model: '$.item.value'` binds the same way: inside a loop, `$.` looks in the loop's own names (`index`, `items` and the `as` name) first, for writing as for reading. `model: '$.index'` and `model: '$index'` bind nothing — the loop index has no place in the data. Any other `$.name` is the data root's.
 
 ---
 

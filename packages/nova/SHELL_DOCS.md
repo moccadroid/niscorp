@@ -147,7 +147,7 @@ Reusable partial actions (`ActionFragment`s), keyed by id, referenceable from a 
 
 ### `fetch`, `transform`, and `functions`
 
-These are dependency injection points. HTTP endpoint calls use `fetch`. Endpoint `request`/`response` configs run through `transform` — an opaque `(config, source) => unknown` evaluator nova never interprets (the host typically wires Prism's `evaluate`); declaring a `request`/`response` without one is a hard error. `{ fn: '<name>' }` endpoints resolve their handler from `functions`. There is no default for any of the three: nova does not reach for the global `fetch`, and an HTTP endpoint called with none injected fails to `onError`.
+These are dependency injection points. HTTP endpoint calls use `fetch`. Endpoint `request`/`response` configs run through `transform` — an opaque `(config, source) => unknown` evaluator nova never interprets (the host typically wires Prism's `evaluate`); declaring a `request`/`response` without one is a hard error. `{ fn: '<name>' }` endpoints resolve their handler from `functions`: its own entries and what it inherits from a prototype of its own (a class instance, `Object.create(base)`), never a name every object inherits (`toString`, `constructor`). There is no default for any of the three: nova does not reach for the global `fetch`, and an HTTP endpoint called with none injected fails to `onError`.
 
 ### `endpointTimeoutMs`
 
@@ -173,11 +173,13 @@ The first two fire whenever the shell's state changes. The React adapter uses th
 
 ### `strict`
 
-When `true`, errors throw all the way up through the shell's public methods. Lifecycle errors surface on the next shell call (because they're inherently async). Use strict mode in tests and dev. Use lax mode (`false`, the default) in production where you want graceful degradation via `onError`.
+When `true`, errors throw all the way up through the shell's public methods. Lifecycle errors surface on the next shell call (because they're inherently async). In strict mode only, a failed `call` in a trigger that nothing takes is reported to `onError` (`ENDPOINT_FAILED`, see ACTION_DOCS "Errors"), and so is a subscriber that throws (`HANDLER_FAILED`: an `onStateChange`, `onDataChange` or `onEndpoint` handler, a handler on a bus the shell created itself, a runtime's data or status subscriber); the throw is still caught, and what it interrupted goes on. Use strict mode in tests and dev. Use lax mode (`false`, the default) in production where you want graceful degradation via `onError`.
 
 ### `onError`
 
 A single function that receives every `NovaError` produced anywhere in the shell. Use it for logging, telemetry, or showing an error UI. It fires for render errors, endpoint failures, lifecycle failures, navigation failures.
+
+A report that comes with work still to do — `ENDPOINT_FAILED`, `HANDLER_FAILED`, a negative `removeAt` index made by a template — never changes what runs: if `onError` throws for it, the throw goes no further, and the push, the step or the next handler goes on.
 
 ---
 
@@ -244,7 +246,7 @@ type Shell = {
 
 #### `push(canvasId, actionId, input?, fragments?, options?)`
 
-Mount a fresh instance of an action on top of a canvas. On a `stack` canvas it suspends the previous top (its `suspend` lifecycle hook fires). Returns the new instance id.
+Mount a fresh instance of an action on top of a canvas. On a `stack` canvas it suspends the previous top (its `suspend` lifecycle hook fires). The instance is on the canvas before its `mount` hook starts: `getCanvasState` lists it while the hook runs, and navigation in the hook acts from it. Returns the new instance id.
 
 ```ts
 const instanceId = shell.push('main', 'editor', { fileId: 'f_42' });

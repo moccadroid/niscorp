@@ -50,7 +50,7 @@ export const matcherFor = (keys: PhraseKeys | undefined): PhraseKeyMatcher => {
   };
 };
 
-const BARE_PATH = /^\$(\.|[A-Za-z_]|$)/;
+const BARE_PATH = /^\$(\.|[A-Za-z_]\S*\s*$|$)/;
 const EXTRA_SCOPE = /^@[A-Za-z_]/;
 
 export const isBinding = (value: string): boolean =>

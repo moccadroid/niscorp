@@ -1,11 +1,13 @@
 import { evaluateSafe } from '@niscorp/prism';
-import { hasKey, isArray, isObject, ownEntry } from '../common';
+import { hasKey, isArray, isEntry, isObject, ownEntry } from '../common';
 import { getPath } from './paths';
 import type { ScopeChain } from './types';
 
 const TEMPLATE_REGEX = /\{\{\s*([^}]+?)\s*\}\}/g;
 const SOLE_TEMPLATE_REGEX = /^\{\{\s*([^}]+?)\s*\}\}$/;
-const BARE_PATH_REGEX = /^\$(\.|[A-Za-z_]|$)/;
+
+export const unwrapSoleTemplate = (value: string): string => value.match(SOLE_TEMPLATE_REGEX)?.[1]?.trim() ?? value;
+const BARE_PATH_REGEX = /^\$(\.|[A-Za-z_]\S*\s*$|$)/;
 
 export type ExtraScopes = Record<string, unknown>;
 
@@ -56,7 +58,7 @@ export const resolvePath = (
     const head = segments[0];
     if (head === undefined) return undefined;
     for (const scope of chain) {
-      if (hasKey(scope, head)) {
+      if (isObject(scope) && isEntry(scope, head)) {
         return walkFromScopeHead(scope[head], segments.slice(1));
       }
     }
@@ -67,7 +69,7 @@ export const resolvePath = (
   const varName = segments[0];
   if (varName === undefined || varName.length === 0) return undefined;
   for (const scope of chain) {
-    if (hasKey(scope, varName)) {
+    if (isObject(scope) && isEntry(scope, varName)) {
       return walkFromScopeHead(scope[varName], segments.slice(1));
     }
   }

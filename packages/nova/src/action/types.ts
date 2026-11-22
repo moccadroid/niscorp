@@ -45,6 +45,7 @@ export type FetchResponse = {
   status: number;
   json: () => Promise<unknown>;
   text: () => Promise<string>;
+  clone?: () => FetchResponse;
   onChange?: (handler: (body: unknown) => void) => Unsubscribe;
 };
 

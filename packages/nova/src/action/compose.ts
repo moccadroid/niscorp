@@ -1,5 +1,4 @@
 import { fillSlots } from '@layout';
-import type { LayoutNode } from '@layout';
 import type {
   ActionDefinition,
   ActionFragment,
@@ -24,7 +23,7 @@ export const composeAction = (
       layout = wrap; // composition does not read the layout store: the id replaces the layout so far
       continue;
     }
-    layout = fillSlots(wrap, layout === undefined ? {} : { body: layout as LayoutNode });
+    layout = fillSlots(wrap, layout === undefined ? {} : { body: typeof layout === 'string' ? { ref: layout } : layout });
   }
 
   const data: Record<string, unknown> = {};

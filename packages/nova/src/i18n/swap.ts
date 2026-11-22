@@ -41,7 +41,7 @@ export const swap = (value: string, where: string, pass: Pass): string => {
   const trimmed = value.trim();
   if (trimmed !== value) {
     const onTrimmed = ownEntry(pass.phrases, trimmed);
-    if (onTrimmed !== undefined) return value.replace(trimmed, onTrimmed);
+    if (onTrimmed !== undefined) return value.replace(trimmed, () => onTrimmed);
   }
   pass.onMiss?.(trimmed, where);
   return value;

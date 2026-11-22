@@ -1,4 +1,4 @@
-import type { Unsubscribe } from '../common';
+import type { HandlerErrorConfig, Unsubscribe } from '../common';
 import type { EventBus, EventHandler, EventMatcher } from './types';
 import type { NovaEvent } from './schemas';
 
@@ -14,6 +14,7 @@ const typeMatches = (matcher: EventMatcher, type: string): boolean => {
 
 const createChildBus = <TEvent extends { type: string }>(
   parent: EventBus<TEvent> | undefined,
+  config: HandlerErrorConfig,
 ): EventBus<TEvent> => {
   const subscriptions: Subscription<TEvent>[] = [];
 
@@ -22,7 +23,9 @@ const createChildBus = <TEvent extends { type: string }>(
       if (!typeMatches(sub.matcher, event.type)) continue;
       try {
         sub.handler(event);
-      } catch {}
+      } catch (err) {
+        config.onHandlerError?.(err);
+      }
     }
     if (parent !== undefined) parent.emit(event);
   };
@@ -48,7 +51,7 @@ const createChildBus = <TEvent extends { type: string }>(
     emit,
     on,
     once,
-    scoped: () => createChildBus<TEvent>(bus),
+    scoped: () => createChildBus<TEvent>(bus, config),
   };
 
   return bus;
@@ -56,4 +59,4 @@ const createChildBus = <TEvent extends { type: string }>(
 
 export const createEventBus = <
   TEvent extends { type: string } = NovaEvent,
->(): EventBus<TEvent> => createChildBus<TEvent>(undefined);
+>(config: HandlerErrorConfig = {}): EventBus<TEvent> => createChildBus<TEvent>(undefined, config);
