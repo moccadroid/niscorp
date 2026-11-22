@@ -722,3 +722,33 @@ describe('createStream — a starting value without initial', () => {
     expect(errors).toEqual(['[solid] <root>: expected object | null, got array']);
   });
 });
+
+describe('createStream — numbers', () => {
+  const Numbers = z.object({ a: z.number(), b: z.number(), c: z.number(), d: z.number() });
+
+  it('does not read Infinity, 0x1F, +5 or .5 as numbers, in any mode', () => {
+    for (const mode of ['trust', 'recover', 'strict'] as const) {
+      const stream = createStream({ schema: Numbers, initial: { a: 0, b: 0, c: 0, d: 0 }, mode });
+      stream.write('{"a":Infinity,"b":0x1F,"c":+5,"d":.5}');
+      expect(stream.current()).toEqual({ a: 0, b: 0, c: 0, d: 0 });
+    }
+  });
+
+  it('shows a number a chunk ends inside as before', () => {
+    const cases: Array<[string, string, number[]]> = [
+      ['{"price":19.', '99}', [0, 19, 19.99]],
+      ['{"price":-', '5}', [0, -5]],
+      ['{"price":1e', '3}', [0, 1000]],
+      ['{"price":1.5e-', '2}', [0, 0.015]],
+      ['{"price":0.', '5}', [0, 0.5]],
+    ];
+    for (const [first, second, seen] of cases) {
+      const stream = createStream({ schema: z.object({ price: z.number() }), initial: { price: 0 } });
+      const prices: number[] = [];
+      stream.on((value) => prices.push(value.price));
+      stream.write(first);
+      stream.write(second);
+      expect(prices).toEqual(seen);
+    }
+  });
+});

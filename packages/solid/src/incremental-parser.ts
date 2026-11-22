@@ -558,10 +558,15 @@ const isLiteralChar = (ch: string): boolean =>
 
 type LiteralResult = { ok: true; value: unknown } | { ok: false };
 
+// Text a JSON number can still grow from (`19.`, `-`, `1e`): a chunk can end inside a number.
+// Infinity, 0x1F, +5 and .5 never become one.
+const JSON_NUMBER_SO_FAR = /^-?$|^-?(0|[1-9][0-9]*)(\.[0-9]*)?([eE][+-]?[0-9]*)?$/;
+
 const parseLiteral = (buf: string): LiteralResult => {
   if (buf === 'true') return { ok: true, value: true };
   if (buf === 'false') return { ok: true, value: false };
   if (buf === 'null') return { ok: true, value: null };
+  if (!JSON_NUMBER_SO_FAR.test(buf)) return { ok: false };
   const num = Number(buf);
   if (!Number.isNaN(num)) return { ok: true, value: num };
   return { ok: false };

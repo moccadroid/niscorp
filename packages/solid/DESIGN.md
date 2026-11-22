@@ -131,7 +131,7 @@ write(chunk)
 
 **How:** The parser calls `setValue(valueBuffer)` on every non-escape character while inside a string. The dirty tracking and snapshot machinery handle the rest.
 
-A number is shown as read so far, as a string is: `{"price":19` then `99}` shows 19, then 1999.
+A number is shown as read so far, as a string is: `{"price":19` then `99}` shows 19, then 1999. Text that a JSON number can still grow from (`19.`, `-`, `1e`) is read as `Number()` reads it; text that never can (`Infinity`, `0x1F`, `+5`, `.5`) is dropped, with no error, and the field keeps what it had.
 
 ### 5. Skip-if-unchanged for setValue
 

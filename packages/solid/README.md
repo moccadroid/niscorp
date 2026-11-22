@@ -114,7 +114,7 @@ This runs the sub-schema `safeParse` at the exact moment each field closes in th
 
 2. **Incremental parsing** — each `write(chunk)` feeds characters into a state machine that tracks JSON structure, extracts values, and emits structural events. No `JSON.parse`, no buffer re-scanning. What is written should be the JSON value and nothing else. A code fence around it is ignored, and so is text with no double quote, bracket or brace in it. A `"` in text before the JSON is read as a string where the root belongs: an `onError` (`[solid] <root>: expected object, got string`) in `recover`, a failed stream in `strict`. A bracket or brace in text before the JSON is read as the root itself: the stream ends there, on the initial value or, in `strict`, sometimes as a failure.
 
-   A string is shown as read so far, and a number is too: `{"price":19` then `99}` shows 19, then 1999.
+   A string is shown as read so far, and a number is too: `{"price":19` then `99}` shows 19, then 1999. Only JSON numbers are read: `Infinity`, `0x1F`, `+5` and `.5` are dropped, and the field keeps what it had.
 
 3. **Value-open validation** — the moment the parser detects a value's JSON kind (`{`, `[`, `"`, digit, `t`/`f`/`n`), it checks it against the schema. If the kind doesn't match (string where number expected, array where object lives), the parser enters **skip-mode** — consuming the entire bad subtree without writing, dirtying, or emitting anything. The prior valid value stays in place.
 
