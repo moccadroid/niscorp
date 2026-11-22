@@ -280,3 +280,65 @@ describe('nisc export --out — the default folder is emptied; a named one loses
     expect(said).not.toContain('not removed');
   }, SLOW);
 });
+
+describe('nisc export — every file is made in a fresh folder before any folder is touched', () => {
+  const withPaths = (paths: readonly string[]): void => {
+    writeFileSync(
+      join(app, 'nisc.config.ts'),
+      `import { project as base } from ${JSON.stringify(pathToFileURL(join(OWN_SHELL, 'nisc.config.ts')).href)};
+export const project = { ...base, paths: () => ${JSON.stringify(paths)} };
+`,
+    );
+  };
+  const filesIn = (folder: string): string[] => (existsSync(folder) ? readdirSync(folder, { recursive: true, encoding: 'utf8' }).sort() : []);
+
+  it.runIf(process.platform === 'win32')('a path the system cannot make is said, and neither out/ nor a named folder is touched', () => {
+    expect(exportTo().code).toBe(0);
+    const site = join(scratch, 'site');
+    expect(exportTo(site).code).toBe(0);
+    writeFileSync(join(site, 'notes.txt'), 'mine');
+    const [before, siteBefore] = [filesIn(join(app, 'out')), filesIn(site)];
+    withPaths(['/', '/a:b']);
+    for (const out of [undefined, site]) {
+      const { code, out: said } = exportTo(out);
+      expect(said).toContain('nisc: the path "/a:b" cannot be written here (ENOENT). Nothing was written.');
+      expect(said).not.toContain('    at ');
+      expect(code).toBe(1);
+    }
+    expect(filesIn(join(app, 'out'))).toEqual(before);
+    expect(filesIn(site)).toEqual(siteBefore);
+    expect(readdirSync(app).sort()).toEqual(['built', 'nisc.config.ts', 'node_modules', 'out', 'package.json']);
+  }, SLOW);
+
+  it.runIf(process.platform === 'win32')('a path whose file would land outside the export is refused, and nothing is written anywhere', () => {
+    withPaths(['/', '/z\\..\\..\\escape']);
+    const site = join(scratch, 'site', 'sub');
+    for (const out of [undefined, site]) {
+      const { code, out: said } = exportTo(out);
+      expect(said).toContain('nisc: the path "/z\\..\\..\\escape" cannot be written here (its file would be outside');
+      expect(code).toBe(1);
+    }
+    expect(existsSync(join(app, 'out'))).toBe(false);
+    expect(existsSync(join(app, 'escape'))).toBe(false);
+    expect(filesIn(join(scratch, 'site'))).toEqual(['sub']);
+    expect(readdirSync(scratch).sort()).toEqual(['app', 'site']);
+  }, SLOW);
+
+  it.runIf(process.platform !== 'win32')('a name the system accepts is written as today: /a:b is a:b/index.html', () => {
+    withPaths(['/', '/a:b']);
+    expect(exportTo().code).toBe(0);
+    expect(readdirSync(join(app, 'out', 'a:b'))).toEqual(['index.html']);
+  }, SLOW);
+
+  it('a failed export leaves no fresh folder behind, in the app or in the named folder', () => {
+    withPaths(['/', '/a', '/a/index.html']);
+    const site = join(scratch, 'site');
+    for (const out of [undefined, site]) {
+      const { code, out: said } = exportTo(out);
+      expect(said).toMatch(/nisc: the path "\/a(\/index\.html)?" cannot be written here \(E[A-Z]+\)\. Nothing was written\./);
+      expect(code).toBe(1);
+    }
+    expect(readdirSync(app).sort()).toEqual(['built', 'nisc.config.ts', 'node_modules', 'package.json']);
+    expect(readdirSync(site)).toEqual([]);
+  }, SLOW);
+});

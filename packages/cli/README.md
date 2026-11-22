@@ -271,19 +271,32 @@ makes does.
 bundle, and one `index.html` per path — `/` at the top, `/about` at
 `about/index.html` — which is what any static host serves for that path.
 
-**The default folder, `out/`**, is emptied before anything is written to it.
+Every export is first written whole into a fresh folder of its own,
+`.nisc-export-<process>-<id>`: beside `out/` (in the app's folder), or inside
+a folder named with `--out`. Only when every file was made there is anything
+already in the export's folder touched. A path whose file the system will not
+make (on Windows, `/a:b`), or whose file would land outside the export's folder
+(on Windows, `/a\..\..\x`), is said, and nothing is written (exit code 1):
+
+```
+nisc: the path "/a:b" cannot be written here (ENOENT). Nothing was written.
+```
+
+Which names are refused is the system's own answer: names Windows accepts, such
+as `/about.` or `/con`, export as any other. A `.nisc-export-…` folder that an
+ended export left (a kill, a Ctrl+C) is removed by the next export that makes
+its fresh folder in the same place. It is never part of what is written.
+
+**The default folder, `out/`**, is then emptied and written as it always was:
+the fresh folder only checked that every file can be made, and is removed.
 `--out out`, the full path to it, or on Windows and macOS another spelling of
 it such as `--out OUT` is the same folder; a link to it is not.
 
 **A folder named with `--out`** loses only the files the previous export wrote
 there. A link named with `--out` is followed: the export goes into the folder
-it points to.
+it points to. If a file cannot be made, nothing already in the folder is
+changed; a folder that did not exist has been made, and is left empty.
 
-- The export is first written whole into a folder of its own inside it
-  (`.nisc-export-<process>-<id>`). Only when every file was made is anything
-  already there touched. If a file cannot be made, nothing already in the
-  folder is changed; a folder that did not exist has been made, and is left
-  empty.
 - What each export writes there is recorded in
   `node_modules/.cache/nisc/exports.json` under the app's root, keyed by the
   folder's real location: outside the folder, so nothing published lists the
@@ -297,8 +310,6 @@ it points to.
   system will not let go of, another export into the same folder at the same
   time), the command says how many of its files are in place, and exits 1:
   export again to finish.
-- A `.nisc-export-…` folder that an ended export left (a kill, a Ctrl+C) is
-  removed by the next export into that folder. Until then it is in the folder.
 - Everything else in the folder stays, and every export names it on one line,
   the first five and how many more:
 

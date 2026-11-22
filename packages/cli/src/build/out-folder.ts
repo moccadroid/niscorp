@@ -45,7 +45,7 @@ export const isDefaultOut = (out: string, root: string): boolean => {
   return given === undefined && own === undefined && IS_CASE_BLIND && location.toLowerCase() === defaultLocation.toLowerCase();
 };
 
-export const writeRoutes = (folder: string, routes: readonly { path: string; html: string }[]): void => {
+const writeRoutes = (folder: string, routes: readonly { path: string; html: string }[]): void => {
   for (const route of routes) {
     const file = join(folder, fileOf(route.path));
     mkdirSync(dirname(file), { recursive: true });
@@ -168,26 +168,54 @@ const replaceWritten = (root: string, out: string, folder: string, stage: string
   ];
 };
 
-// The export is written whole into a folder of its own inside `out` first; only then is anything already in `out` touched.
-export const writeNamedFolder = (root: string, out: string, dist: string, routes: readonly { path: string; html: string }[]): string[] => {
-  const folder = realOf(out);
-  if (lstatOf(folder)?.isDirectory() === false) throw new Error(`nisc: --out ${out} is a file, not a folder. Nothing was written.`);
-  mkdirSync(folder, { recursive: true });
-  removeEndedStages(folder);
-  const stage = join(folder, `${STAGE}${process.pid}-${randomUUID()}`);
+const cannotWrite = (path: string, why: string): Error => new Error(`nisc: the path "${path}" cannot be written here (${why}). Nothing was written.`);
+
+// The export whole, in a fresh folder inside `parent`: what the system cannot make fails there, before anything already in `out` is touched.
+const stageExport = (parent: string, out: string, dist: string, routes: readonly { path: string; html: string }[]): string => {
+  removeEndedStages(parent);
+  const stage = join(parent, `${STAGE}${process.pid}-${randomUUID()}`);
   try {
     try {
       mkdirSync(stage);
       cpSync(dist, stage, { recursive: true });
-      writeRoutes(stage, routes);
     } catch (error) {
-      throw isOwn(error) ? error : new Error(`nisc: the export could not be written into ${out} (${describe(error)}). Nothing already in it was changed.`);
+      throw new Error(`nisc: the export could not be written into ${out} (${describe(error)}). Nothing already in it was changed.`);
     }
-    try {
-      return replaceWritten(root, out, folder, stage);
-    } catch (error) {
-      throw isOwn(error) ? error : new Error(`nisc: the export could not be put into ${out} (${describe(error)}); part of it may be in place. Export again to finish.`);
+    for (const route of routes) {
+      const file = join(stage, fileOf(route.path));
+      if (!isWithin(stage, file)) throw cannotWrite(route.path, `its file would be outside ${out}`);
+      try {
+        mkdirSync(dirname(file), { recursive: true });
+        writeFileSync(file, route.html);
+      } catch (error) {
+        const code = codeOf(error);
+        throw cannotWrite(route.path, typeof code === 'string' ? code : describe(error));
+      }
     }
+    return stage;
+  } catch (error) {
+    rmSync(stage, { recursive: true, force: true });
+    throw error;
+  }
+};
+
+// Made whole beside it first, then written as it always was, so its modes and what it ends up holding are unchanged.
+export const writeDefaultFolder = (out: string, dist: string, routes: readonly { path: string; html: string }[]): void => {
+  rmSync(stageExport(dirname(out), out, dist, routes), { recursive: true });
+  rmSync(out, { recursive: true, force: true });
+  cpSync(dist, out, { recursive: true });
+  writeRoutes(out, routes);
+};
+
+export const writeNamedFolder = (root: string, out: string, dist: string, routes: readonly { path: string; html: string }[]): string[] => {
+  const folder = realOf(out);
+  if (lstatOf(folder)?.isDirectory() === false) throw new Error(`nisc: --out ${out} is a file, not a folder. Nothing was written.`);
+  mkdirSync(folder, { recursive: true });
+  const stage = stageExport(folder, out, dist, routes);
+  try {
+    return replaceWritten(root, out, folder, stage);
+  } catch (error) {
+    throw isOwn(error) ? error : new Error(`nisc: the export could not be put into ${out} (${describe(error)}); part of it may be in place. Export again to finish.`);
   } finally {
     rmSync(stage, { recursive: true, force: true });
   }
