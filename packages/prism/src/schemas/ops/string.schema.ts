@@ -87,7 +87,7 @@ export const ReplaceNodeSchema = z
       .object({
         value: z.lazy(node).describe('String to search in.'),
         search: z.string().describe('Substring to find.'),
-        replacement: z.string().describe('Replacement string.'),
+        replacement: z.string().describe('Replacement text, written as given: "$$" and "$&" are not patterns.'),
         all: z.boolean().optional().describe('true replaces every occurrence. Default: only the first.'),
       })
       .strict(),

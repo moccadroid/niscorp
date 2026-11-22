@@ -91,5 +91,7 @@ export const opReplace = (node: ReplaceNode, context: EvalContext, evaluate: Eva
   const value = evaluate(node.$replace.value, context);
   if (typeof value !== 'string') return refuseType({ node, op: '$replace', field: 'value', needs: 'text', got: value, written: node.$replace.value });
   const { search, replacement, all } = node.$replace;
-  return all === true ? value.replaceAll(search, replacement) : value.replace(search, replacement);
+  // A function's answer is written as it is; a replacement string would read `$&` and `$$` as patterns.
+  const written = (): string => replacement;
+  return all === true ? value.replaceAll(search, written) : value.replace(search, written);
 };

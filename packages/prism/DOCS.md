@@ -346,7 +346,7 @@ Result: `["a", "b", "c"]`
 { "$replace": { "value": { "$ref": "$.text" }, "search": "world", "replacement": "there" } }
 { "$replace": { "value": { "$ref": "$.phone" }, "search": " ", "replacement": "", "all": true } }
 ```
-The first occurrence of `search`, or every occurrence with `all: true`. `search` is plain text, not a pattern.
+The first occurrence of `search`, or every occurrence with `all: true`. `search` is plain text, not a pattern, and `replacement` is written as given: `"US$$5"` writes `US$$5`, and `$&` is the two characters `$&`.
 
 ---
 
