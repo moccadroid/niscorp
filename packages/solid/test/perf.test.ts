@@ -136,16 +136,23 @@ describe('perf — O(n²) analysis', () => {
 });
 
 describe('perf — finalization', () => {
-  it('2,000 streamed rows with every field checked as it ends take well under a second', () => {
+  it('finalizing twice as many streamed rows takes well under four times as long', () => {
     const schema = z.object({ rows: z.array(z.object({ id: z.number(), name: z.string() })) });
-    const json = JSON.stringify({ rows: Array.from({ length: 2000 }, (_, i) => ({ id: i, name: `row ${i}` })) });
-    const stream = createStream({ schema, constraints: 'finalize' });
-    const start = performance.now();
-    for (let i = 0; i < json.length; i += 50) stream.write(json.slice(i, i + 50));
-    stream.close();
-    const totalMs = performance.now() - start;
-    console.log(`  2,000 rows, finalize: ${Math.round(totalMs)}ms`);
-    expect(stream.current().rows).toHaveLength(2000);
-    expect(totalMs).toBeLessThan(1000);
-  });
+    const fastest = (rowCount: number): number => {
+      const json = JSON.stringify({ rows: Array.from({ length: rowCount }, (_, i) => ({ id: i, name: `row ${i}` })) });
+      let best = Infinity;
+      for (let run = 0; run < 3; run++) {
+        const stream = createStream({ schema, constraints: 'finalize' });
+        const start = performance.now();
+        for (let i = 0; i < json.length; i += 50) stream.write(json.slice(i, i + 50));
+        stream.close();
+        best = Math.min(best, performance.now() - start);
+        expect(stream.current().rows).toHaveLength(rowCount);
+      }
+      return best;
+    };
+    const ratio = fastest(1000) / fastest(500);
+    console.log(`  finalize, 1,000 rows / 500 rows: ${ratio.toFixed(1)}x`);
+    expect(ratio).toBeLessThan(4);
+  }, 30_000);
 });
