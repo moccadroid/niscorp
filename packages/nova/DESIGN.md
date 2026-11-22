@@ -478,8 +478,10 @@ that spawns:
 - **layout** — `fillSlots(fragment.layout, { body: action.layout })`: the
   fragment is the outer chrome, the action's own layout is dropped into the
   fragment's `{ slot: 'body' }` node. The fragment wraps; the action is the
-  innermost content. Multiple fragments fold in array order (last listed is
-  outermost). An unfilled slot renders nothing.
+  innermost content. An action layout that is a layout id goes into the
+  slot as `{ ref: id }`, so the renderer draws the stored layout there.
+  Multiple fragments fold in array order (last listed is outermost). An
+  unfilled slot renders nothing.
 - **data / endpoints** — shallow-merge, **action wins** on conflict.
 - **triggers** — concat, fragment's first (so a fragment's `close`/`cancel`
   and the action's `confirm` coexist; authors keep refs distinct).

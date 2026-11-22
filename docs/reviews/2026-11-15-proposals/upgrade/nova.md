@@ -25,3 +25,11 @@ Each section is one change an app can see, in `@niscorp/nova`. None of them chan
 - What to do: nothing, unless a layout reads such a member: put the value in the data instead.
 - Breaking: yes
 - Affected apps: none found. No binding reads `constructor`, `toString` or `__proto__` in the lab apps, the templates, AnimaApp, anima-finance or mira, and moss builds `functions`, `reconcilers` and `phrases` as plain objects (`packages/moss/src/shells/build.ts:166-179`).
+
+### nova — a fragment's slot renders the stored layout an action names
+- Before: an action `invoice` with `layout: 'invoice-body'` (an id in the layout store), pushed with a fragment whose layout has `{ slot: 'body' }`, showed the text `invoice-body` in the slot.
+- Now: the slot shows the stored layout (`Invoice 7`). A fragment whose own `layout` is an id still replaces the layout composed so far, as before.
+- Who notices: actions with a string `layout` pushed `with` a fragment.
+- What to do: nothing.
+- Breaking: yes (what the slot shows changes; nobody wants the old text)
+- Affected apps: none found. No action definition in the lab apps, the templates, AnimaApp, anima-finance or mira has a string `layout`; stored layouts are used through `{ ref }` nodes (`apps/lab/encore/src/app/app.ts:37`, `apps/lab/lyceum/src/app/app.ts:39`). moss accepts string layouts (`packages/moss/src/shells/host-state.ts:21`, `src/artifactory/generated.ts:67`), so a model-made action pushed with a fragment gets the new behaviour.

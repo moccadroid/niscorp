@@ -475,7 +475,7 @@ const modalFrame: ActionFragment = {
 
 Fields: `kind`, `id`, and optional `name`, `description`, `layout`, `data`, `triggers`, `endpoints`, `lifecycle` — the same shapes as on an action. A fragment has no `title` or `input`.
 
-On merge (`composeAction(action, fragments)`): each fragment's layout wraps the layout so far, filling its `{ slot: 'body' }` with it as it is — the last fragment listed is the outermost, and a layout so far that is a layout id fills the slot as a string, which renders as that text; a fragment whose `layout` is a layout id replaces the layout instead of wrapping it. `data` and `endpoints` merge with the action winning on a clash (`data` is a shallow merge). Triggers concatenate, fragment first. Lifecycle steps concatenate per hook, fragment first. An unknown fragment id throws `UnknownFragmentError`.
+On merge (`composeAction(action, fragments)`): each fragment's layout wraps the layout so far, filling its `{ slot: 'body' }` with it — the last fragment listed is the outermost, and a layout so far that is a layout id fills the slot with a `{ ref }` to it, so the slot renders the stored layout; a fragment whose `layout` is a layout id replaces the layout instead of wrapping it. `data` and `endpoints` merge with the action winning on a clash (`data` is a shallow merge). Triggers concatenate, fragment first. Lifecycle steps concatenate per hook, fragment first. An unknown fragment id throws `UnknownFragmentError`.
 
 ---
 
