@@ -1,7 +1,7 @@
 import type { z } from 'zod';
 import type { ValueKind } from './schema-walker';
 import type { ParserEvent } from './types';
-import { walkSchema, type SchemaInfo } from './schema-walker';
+import { fitsShape, unionVariantsOf, walkSchema, type SchemaInfo } from './schema-walker';
 import { splitPath, getByPath } from './path';
 
 const childPathOf = (containerPath: string, key: string): string =>
@@ -123,9 +123,34 @@ export const createValidator = (deps: ValidatorDeps): Validator => {
     finalizeField(containerPath, base, getRoot);
   };
 
+  // A field's kinds are those of every union variant that has it, so the object they make up is
+  // checked against the variants when it closes. Under 'finalize' its safeParse does that.
+  const checkUnionAtClose = (containerPath: string, getRoot: () => unknown): void => {
+    const segments = segmentsOf(containerPath);
+    const info = walkSchema(deps.schema, segments);
+    const variants = info ? unionVariantsOf(info) : undefined;
+    if (!variants) return;
+    const value = getByPath(getRoot(), segments);
+    if (value === undefined || variants.some((variant) => fitsShape(variant, value))) return;
+    deps.emitError({
+      path: containerPath,
+      expected: 'a variant of the union',
+      received: describeValue(value),
+      phase: 'finalize',
+      message: `[solid] ${containerPath || '<root>'}: matches no variant of the union`,
+    });
+    if (deps.mode === 'strict') { failed = true; deps.onFailed(); }
+  };
+
   const processEvents = (events: ParserEvent[], getRoot: () => unknown): void => {
     if (deps.mode === 'trust') return;
-    if (deps.constraints !== 'finalize') return;
+    if (deps.constraints !== 'finalize') {
+      for (const ev of events) {
+        if (ev.type === 'leaveObject' || ev.type === 'leaveArray') checkUnionAtClose(ev.path, getRoot);
+        if (failed) return;
+      }
+      return;
+    }
 
     for (const ev of events) {
       switch (ev.type) {

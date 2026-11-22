@@ -264,7 +264,7 @@ A constraint violation (phase 2) is found after the value has been written, so i
 - `ZodArray` → `element`
 - `ZodTuple` → `items[idx]` or `rest`
 - `ZodRecord` → `valueType`
-- `ZodUnion` (discriminated too) → every variant that has the segment: the field takes the kinds of all of them, and passes finalize if any of them accepts its value
+- `ZodUnion` (discriminated too) → every variant that has the segment: the field takes the kinds of all of them, and passes finalize if any of them accepts its value. So that a field cannot take one variant's kind under another variant's discriminator, an object or list a union decides is checked when it closes: it must fit one variant, by the kinds of its fields and the values of its literal and enum fields (constraints are left to `constraints: 'finalize'`, whose safeParse covers this). One that fits none is an `onError` (`phase: 'finalize'`, `expected: 'a variant of the union'`) in `recover`, where the value stays, and fails the stream in `strict`. `{"w":{"kind":"text","value":5}}` against the union of `{kind:'text', value: string}` and `{kind:'count', value: number}` is such an object.
 - `ZodOptional` / `ZodNullable` / `ZodDefault` → unwrap and recurse
 - `ZodLiteral`, `ZodEnum`, `ZodString/Number/Boolean/Null` → leaf kinds
 - Discriminated unions → object kind; full narrowing deferred to finalize

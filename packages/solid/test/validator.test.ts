@@ -886,12 +886,12 @@ describe('a field of a union', () => {
     expect(errors).toEqual([]);
   });
 
-  it('refuses a kind no variant takes', () => {
+  it('refuses a kind no variant takes, and reports the object it leaves behind', () => {
     const errors: string[] = [];
     const stream = createStream({ schema: Widget, initial: { w: { kind: 'text' as const, value: '' } } });
     stream.onError((error) => errors.push(error.expected));
     stream.write('{"w":{"kind":"count","value":[5]}}');
-    expect(errors).toEqual(['string | number']);
+    expect(errors).toEqual(['string | number', 'a variant of the union']);
   });
 
   it('passes the finalize check when any variant takes the value', () => {
@@ -902,5 +902,38 @@ describe('a field of a union', () => {
     stream.write('{"u":{"n":12}}');
     stream.close();
     expect(errors).toEqual([]);
+  });
+});
+
+describe('a union object that no variant takes', () => {
+  const Widget = z.object({
+    w: z.discriminatedUnion('kind', [
+      z.object({ kind: z.literal('text'), value: z.string() }),
+      z.object({ kind: z.literal('count'), value: z.number() }),
+    ]),
+  });
+  const Pair = z.union([z.object({ a: z.string(), b: z.string() }), z.object({ a: z.number(), c: z.number() })]);
+
+  it('fails a strict stream when it closes', async () => {
+    const widget = createStream({ schema: Widget, initial: { w: { kind: 'text' as const, value: '' } }, mode: 'strict' });
+    widget.write('{"w":{"kind":"text","value":5}}');
+    await expect(widget.final()).rejects.toThrow('[solid] stream failed validation');
+
+    const pair = createStream({ schema: Pair, initial: { a: '', b: '' }, mode: 'strict' });
+    pair.write('{"a":1,"b":"x"}');
+    await expect(pair.final()).rejects.toThrow('[solid] stream failed validation');
+  });
+
+  it('is reported in recover mode when it closes', () => {
+    const errors: string[] = [];
+    const widget = createStream({ schema: Widget, initial: { w: { kind: 'text' as const, value: '' } } });
+    widget.onError((error) => errors.push(`${error.path}: ${error.message}`));
+    widget.write('{"w":{"kind":"text","value":5}}');
+    expect(errors).toEqual(['w: [solid] w: matches no variant of the union']);
+
+    const pair = createStream({ schema: Pair, initial: { a: '', b: '' } });
+    pair.onError((error) => errors.push(`${error.path}: ${error.message}`));
+    pair.write('{"a":1,"b":"x"}');
+    expect(errors.at(-1)).toBe(': [solid] <root>: matches no variant of the union');
   });
 });
