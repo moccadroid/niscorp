@@ -43,6 +43,7 @@ export type DataConfig = {
   rowRules?: NiscApp['behaviors'];
   telemetry?: Telemetry;
   answerReadableRows?: boolean;
+  checkMovedRows?: boolean;
 };
 
 type Caller = Pick<ResolvedIdentity, 'memoKey' | 'roles'>;
@@ -174,7 +175,7 @@ const createUpgradeStore =
 
 export const createDataWith = (
   prepared: PreparedEngine,
-  config: Pick<DataConfig, 'db' | 'charter' | 'behaviors' | 'rowRules' | 'telemetry' | 'vexConfig' | 'featureTables' | 'upgradedColumns' | 'answerReadableRows'>,
+  config: Pick<DataConfig, 'db' | 'charter' | 'behaviors' | 'rowRules' | 'telemetry' | 'vexConfig' | 'featureTables' | 'upgradedColumns' | 'answerReadableRows' | 'checkMovedRows'>,
 ): Data => {
   refuseUpgradedOwnedTables(config);
   const { grammars, engine, grants } = prepared;
@@ -220,6 +221,7 @@ export const createDataWith = (
       policyFor: (roles) => policies.of(callerOfRoles(roles)),
       policyAtReach: (roles, reach) => policies.atReach(callerOfRoles(roles), reach),
       ...(onExecute !== undefined ? { onExecute } : {}),
+      ...(config.checkMovedRows === false ? { checkMovedRows: false } : {}),
     }),
     answerIntent: async (writers, asked, who, scope) =>
       answering()(writers, asked, { policy: policies.of(who), policyAtReach: (reach) => policies.atReach(who, reach), scope }),
@@ -236,6 +238,7 @@ export const createDataWith = (
         ...(onExecute !== undefined ? { onExecute } : {}),
         writes,
         ...(config.answerReadableRows === true ? { answerReadableRows: true } : {}),
+        ...(config.checkMovedRows === false ? { checkMovedRows: false } : {}),
       }),
     upgradeStore: createUpgradeStore(prepared, tablesOf),
     onWrite: writes.subscribe,

@@ -72,6 +72,7 @@ export type ExecuteAsDeps = {
   policyFor: (roles: readonly string[]) => ScopePolicy;
   policyAtReach: (roles: readonly string[], reach: string) => ScopePolicy;
   onExecute?: (record: ExecuteRecord) => void;
+  checkMovedRows?: boolean;
 };
 
 export const createExecuteAs =
@@ -85,7 +86,7 @@ export const createExecuteAs =
         locked: true,
         scopePolicy: policy,
         policyForReach: (reach) => deps.policyAtReach(roles, reach),
-        mutations: { client: deps.db, policy },
+        mutations: { client: deps.db, policy, ...(deps.checkMovedRows === false ? { checkMovedRows: false } : {}) },
         ...(deps.onExecute !== undefined ? { onExecute: deps.onExecute } : {}),
       },
       { fingerprint, context },

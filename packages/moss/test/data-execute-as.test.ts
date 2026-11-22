@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { createScopePolicy } from '@niscorp/vex';
 import type { ExecuteRecord, ScopePolicy } from '@niscorp/vex';
 import { createExecuteAs } from '../src/data/policy';
-import { engineDouble } from './data-double';
+import { engineDouble, entriesDouble } from './data-double';
 
 const POLICIES: Readonly<Record<string, ScopePolicy>> = {
   reader: createScopePolicy(new Set(['notes.read'])),
@@ -93,5 +93,31 @@ describe('executeAs — a seeded entry as a charter role', () => {
     await executeAs('reader', 'notes/all', {}, { studioId: 'st_1' });
     expect(records).toHaveLength(1);
     expect(records[0]).toMatchObject({ kind: 'query', status: 'ok', fingerprint: 'notes/all', scope: { studioId: 'st_1' } });
+  });
+});
+
+describe('executeAs — a write that would move a row out of its update rule', () => {
+  const STUDIO: ScopePolicy = { default: 'deny', entities: { notes: { read: [], update: [{ match: 'studio_id', to: 'userId' }] } } };
+
+  const move = async (checkMovedRows: boolean | undefined) => {
+    const double = await engineDouble();
+    double.askFirst(await entriesDouble([{ fingerprint: 'notes/move', mutation: { op: 'update', table: 'notes', set: { studio_id: { $context: 'studio' } }, where: { eq: ['notes.id', { $context: 'id' }] } } }]));
+    const executeAs = createExecuteAs({
+      engine: double.engine,
+      db: double.db,
+      policyFor: () => STUDIO,
+      policyAtReach: () => STUDIO,
+      ...(checkMovedRows !== undefined ? { checkMovedRows } : {}),
+    });
+    await logged(() => executeAs('writer', 'notes/move', { id: 7, studio: 'elsewhere' }, { userId: 'usr_writer' }));
+    return double.written.map((write) => write.sql);
+  };
+
+  it('is checked first, by default', async () => {
+    expect((await move(undefined))[0]).toMatch(/^SELECT /);
+  });
+
+  it('runs as the update alone with checkMovedRows: false', async () => {
+    expect(await move(false)).toEqual(['UPDATE notes SET studio_id = $1 WHERE (notes.id = $2 AND notes.studio_id = $3) RETURNING *']);
   });
 });

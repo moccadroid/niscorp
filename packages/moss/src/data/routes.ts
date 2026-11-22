@@ -29,6 +29,7 @@ export type VexRoutesDeps<E extends Env> = {
   onExecute?: (record: ExecuteRecord) => void;
   writes: Pick<WriteNotifier, 'within' | 'report'>;
   answerReadableRows?: boolean;
+  checkMovedRows?: boolean;
 };
 
 export const createVexRoutes = <E extends Env>(deps: VexRoutesDeps<E>): Hono<E> => {
@@ -52,7 +53,12 @@ export const createVexRoutes = <E extends Env>(deps: VexRoutesDeps<E>): Hono<E> 
         getPolicy: deps.policy,
         getPolicyForReach: deps.policyAtReach,
         ...(deps.onExecute !== undefined ? { onExecute: deps.onExecute } : {}),
-        mutations: { client: deps.db, onWrite: deps.writes.report, ...(deps.answerReadableRows === true ? { answerReadableRows: true } : {}) },
+        mutations: {
+          client: deps.db,
+          onWrite: deps.writes.report,
+          ...(deps.answerReadableRows === true ? { answerReadableRows: true } : {}),
+          ...(deps.checkMovedRows === false ? { checkMovedRows: false } : {}),
+        },
       }),
     );
   };

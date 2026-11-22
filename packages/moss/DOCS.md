@@ -818,6 +818,7 @@ type NiscRuntime = {
   cache?: CacheBackend;            // defaults to vex's postgres cache on `pool`
   vexConfig?: QueryEngineConfig['config'];  // the query engine's settings (limits, read timeout); default vex's own
   answerReadableRows?: boolean;    // a write on the vex surfaces answers only the rows the caller may read; default false
+  checkMovedRows?: boolean;        // refuse a write that moves a row out of the caller's update rule; default true
   session: SessionVerifier | 'sessions' | 'dev-open';  // REQUIRED — no default
   origins?: readonly string[];     // origins that are the app's own page, beside the host a request names (a proxy that rewrites `Host`)
   migrations?: 'apply' | 'verify'; // the boot's ledgered run; default 'verify'
@@ -863,6 +864,12 @@ whatever the caller's read rules say. With it, a write answers only the rows
 the caller's charter lets them read, and an entry whose role cannot read the
 table it writes answers no row: a sign-in entry that deletes a one-time link
 and reads who signs in from the deleted row stops working.
+
+`checkMovedRows` is vex's option of that name, on the `/api/vex` surfaces and
+`executeAs` (vex DOCS, "Replay"). An update that writes a column the caller's
+update rule pins (`owner_id` under an `owner_id = me` rule) to a value the rule
+does not allow is refused with 400 `scope_denied`, and nothing is written.
+`checkMovedRows: false` lets such a write move the row, as moss did before.
 
 `session` is required, deliberately — authentication is the one door that must
 not default open, and it used to. Three answers: `'sessions'` uses moss's own

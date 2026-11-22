@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { Hono } from 'hono';
 import { createScopePolicy } from '@niscorp/vex';
-import type { ExecuteRecord, ScopePolicy, WriteEvent } from '@niscorp/vex';
+import type { ExecuteRecord, ScopePolicy, SeedMutation, WriteEvent } from '@niscorp/vex';
 import { createVexRoutes } from '../src/data/routes';
 import { createWriteNotifier } from '../src/data/writes';
 import type { WriteRequest } from '../src/data/writes';
@@ -173,5 +173,37 @@ describe('what a write on the vex surfaces answers', () => {
     const { body, sql } = await dropNote(true);
     expect(sql).toEqual(['DELETE FROM notes WHERE notes.id = $1 RETURNING *, (studio_id = $2) AS "vex:readable"']);
     expect(body).toEqual({ result: [] });
+  });
+});
+
+describe('a write on the vex surfaces that would move a row out of its update rule', () => {
+  const STUDIO: ScopePolicy = { default: 'deny', entities: { notes: { read: [], update: [{ match: 'studio_id', to: 'userId' }] } } };
+  const MOVE: SeedMutation = { fingerprint: 'notes/move', mutation: { op: 'update', table: 'notes', set: { studio_id: { $context: 'studio' } }, where: { eq: ['notes.id', { $context: 'id' }] } } };
+
+  const moveNote = async (checkMovedRows: boolean | undefined) => {
+    const double = await engineDouble();
+    double.askFirst(await entriesDouble([MOVE]));
+    const server = createVexRoutes({
+      engine: double.engine,
+      db: double.db,
+      scope: () => ({ userId: 'usr_writer' }),
+      policy: () => STUDIO,
+      policyAtReach: () => STUDIO,
+      writes: createWriteNotifier(),
+      ...(checkMovedRows !== undefined ? { checkMovedRows } : {}),
+    });
+    const response = await server.request('/api/vex', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ fingerprint: 'notes/move', context: { id: 7, studio: 'elsewhere' } }) });
+    return { body: await response.json(), sql: double.written.map((write) => write.sql) };
+  };
+
+  it('is checked first, by default', async () => {
+    const { sql } = await moveNote(undefined);
+    expect(sql[0]).toMatch(/^SELECT /);
+  });
+
+  it('runs as the update alone with checkMovedRows: false', async () => {
+    const { body, sql } = await moveNote(false);
+    expect(sql).toEqual(['UPDATE notes SET studio_id = $1 WHERE (notes.id = $2 AND notes.studio_id = $3) RETURNING *']);
+    expect(body).toEqual({ result: { id: 7, body: 'written' } });
   });
 });
