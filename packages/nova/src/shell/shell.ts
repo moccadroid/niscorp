@@ -352,17 +352,30 @@ export const createShell = (config: ShellConfig): Shell => {
     onChain: chains.hold,
   });
 
+  // The instance is on its canvas, with its birth, origin and key, before its
+  // mount hook starts: a hook that navigates or removes itself finds it there.
   const spawn = (
-    canvasId: string,
+    canvas: Canvas,
+    actionId: string,
     definition: ActionDefinition,
     input: Record<string, unknown> | undefined,
+    fragmentIds: string[] | undefined,
+    options?: PushOptions,
   ): ActionRuntime => {
-    const runtime = buildRuntime(canvasId, definition, input);
+    const runtime = buildRuntime(canvas.id, definition, input);
     const instId = runtime.instance.id;
     registry.register(runtime, (data) => {
       if (disposed) return;
       telemetry.fireDataChange({ instanceId: instId, canvasId: runtime.instance.canvasId, data });
     });
+    canvas.pushInstance(runtime.instance);
+    births.set(instId, {
+      action: actionId,
+      ...(input === undefined ? {} : { input }),
+      ...(fragmentIds === undefined ? {} : { with: fragmentIds }),
+    });
+    if (options?.origin !== undefined) origins.set(instId, options.origin);
+    if (options?.key !== undefined) keys.set(instId, options.key);
     runtime.mount(input).catch(handleLifecycleRejection);
     return runtime;
   };
@@ -379,15 +392,7 @@ export const createShell = (config: ShellConfig): Shell => {
     const canvas = getCanvas(canvasId);
     const definition = resolveDefinition(actionId, fragmentIds);
     if (!listCanvases.has(canvasId)) ops.suspendTop(canvas);
-    const runtime = spawn(canvasId, definition, input);
-    canvas.pushInstance(runtime.instance);
-    births.set(runtime.instance.id, {
-      action: actionId,
-      ...(input === undefined ? {} : { input }),
-      ...(fragmentIds === undefined ? {} : { with: fragmentIds }),
-    });
-    if (options?.origin !== undefined) origins.set(runtime.instance.id, options.origin);
-    if (options?.key !== undefined) keys.set(runtime.instance.id, options.key);
+    const runtime = spawn(canvas, actionId, definition, input, fragmentIds, options);
     fireState();
     return runtime.instance.id;
   };
@@ -474,13 +479,7 @@ export const createShell = (config: ShellConfig): Shell => {
     const definition = resolveDefinition(actionId, fragmentIds);
     const old = canvas.popInstance();
     if (old !== undefined) ops.unmountInstance(old.id);
-    const runtime = spawn(canvasId, definition, input);
-    canvas.pushInstance(runtime.instance);
-    births.set(runtime.instance.id, {
-      action: actionId,
-      ...(input === undefined ? {} : { input }),
-      ...(fragmentIds === undefined ? {} : { with: fragmentIds }),
-    });
+    const runtime = spawn(canvas, actionId, definition, input, fragmentIds);
     fireState();
     return runtime.instance.id;
   };

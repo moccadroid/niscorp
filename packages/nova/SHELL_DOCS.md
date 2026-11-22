@@ -244,7 +244,7 @@ type Shell = {
 
 #### `push(canvasId, actionId, input?, fragments?, options?)`
 
-Mount a fresh instance of an action on top of a canvas. On a `stack` canvas it suspends the previous top (its `suspend` lifecycle hook fires). Returns the new instance id.
+Mount a fresh instance of an action on top of a canvas. On a `stack` canvas it suspends the previous top (its `suspend` lifecycle hook fires). The instance is on the canvas before its `mount` hook starts: `getCanvasState` lists it while the hook runs, and navigation in the hook acts from it. Returns the new instance id.
 
 ```ts
 const instanceId = shell.push('main', 'editor', { fileId: 'f_42' });

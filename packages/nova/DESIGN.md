@@ -505,12 +505,14 @@ work (v1 fills one `body` slot with the action's `layout`).
 4. `spawn` calls `buildRuntime` → `createActionRuntime`. The runtime
    builds its data store from `definition.data` merged with `input`,
    creates an `AbortController`, registers triggers.
-5. `runtime.mount(input)` is fired and not awaited. It runs the
+5. `spawn` pushes the new instance onto the canvas and records its
+   birth, origin and key, so a mount hook that navigates (`push`,
+   `pop`, `removeSelf`) finds its own instance on top.
+6. `runtime.mount(input)` is fired and not awaited. It runs the
    `mount` lifecycle hook via `runLifecycleHook`, then transitions to
    `active`. Failures route through the strict/lax pipeline.
-6. The new instance is pushed onto the canvas; `fireState()` notifies
-   state subscribers.
-7. The adapter (when one exists) calls `runtime.render()` which returns
+7. `fireState()` notifies state subscribers.
+8. The adapter (when one exists) calls `runtime.render()` which returns
    `RenderNode[]`. The runtime reconciles model bindings against the
    produced tree.
 

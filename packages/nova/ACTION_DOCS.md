@@ -445,8 +445,8 @@ lifecycle: {
 
 ### When each fires
 
-- **`mount`** — when the action is pushed onto a canvas (after `data` and `input` are merged and triggers attach; the instance is `initializing` until the hook completes), and **again on every resume**, before the `resume` hook. A suspended action ignores everything while backgrounded, so re-running `mount` is what brings its data current when it is revealed again. A `{ reload: true }` step re-runs it too.
-- **`suspend`** — when another action is pushed on top on a `stack` canvas, this action transitions from `active` → `suspended`. Triggers stay attached but do not fire while suspended. A `mode: 'list'` canvas suspends nothing.
+- **`mount`** — when the action is pushed onto a canvas (after `data` and `input` are merged, triggers attach and the instance is on its canvas, so a `push`, `pop` or `removeSelf` step in it acts from this instance; the instance is `initializing` until the hook completes), and **again on every resume**, before the `resume` hook. A suspended action ignores everything while backgrounded, so re-running `mount` is what brings its data current when it is revealed again. A `{ reload: true }` step re-runs it too.
+- **`suspend`** — when another action is pushed on top on a `stack` canvas, this action transitions from `active` → `suspended` once the hook has run. Triggers stay attached but do not fire while suspended. A `mode: 'list'` canvas suspends nothing. If the action is revealed (or removed) before its `suspend` hook finishes, it stays `active` (or `unmounted`).
 - **`resume`** — when the action above is popped, this action transitions from `suspended` → `active`. Runs after the re-run of `mount`.
 - **`unmount`** — once, when the action is popped from the canvas (or the shell is disposed). In-flight steps are aborted and triggers detach BEFORE the unmount steps run; the unmount steps run on a fresh signal, so they can do their own async work.
 

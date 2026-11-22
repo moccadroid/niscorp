@@ -251,7 +251,12 @@ export const createActionRuntime = (config: ActionRuntimeConfig): ActionRuntime 
     if (instance.status === 'initializing') setStatus('active');
   };
 
+  // Bumped by every status move: a suspend whose hook ends after a later
+  // resume or unmount leaves the status that one set.
+  let moves = 0;
+
   const unmount = async (): Promise<void> => {
+    moves += 1;
     abortController.abort();
     stopFollowing();
     detach();
@@ -264,13 +269,16 @@ export const createActionRuntime = (config: ActionRuntimeConfig): ActionRuntime 
   };
 
   const suspend = async (): Promise<void> => {
+    moves += 1;
+    const mine = moves;
     await runLifecycleHook('suspend', definition, buildContext);
-    setStatus('suspended');
+    if (moves === mine) setStatus('suspended');
   };
 
   const resume = async (): Promise<void> => {
     // `mount` runs again: a suspended action ignored everything, and this
     // re-read is what makes it current when it is revealed.
+    moves += 1;
     setStatus('active');
     await runLifecycleHook('mount', definition, buildContext);
     await runLifecycleHook('resume', definition, buildContext);
