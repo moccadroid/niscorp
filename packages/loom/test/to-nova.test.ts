@@ -204,6 +204,19 @@ describe('toNova — optional fields and the starting document', () => {
   });
 });
 
+describe('toNova — an object with a key that has a dot in it', () => {
+  it('compiles to the raw JSON box at its own path', () => {
+    const layout = render(z.object({ meta: z.object({ 'a.b': z.string() }) })).action.layout as ComponentNode;
+    const [meta] = layout.children as ComponentNode[];
+    expect(meta?.children).toEqual({ component: Roles.raw, model: '$.meta' });
+  });
+
+  it('at the root with rootKey, the box is bound one level in', () => {
+    const { action } = render(z.object({ 'a.b': z.string() }), { rootKey: 'value' });
+    expect(action.layout).toEqual({ component: Roles.raw, model: '$.value' });
+  });
+});
+
 describe('toNova — recursion', () => {
   const Comment = z.object({
     body: z.string(),

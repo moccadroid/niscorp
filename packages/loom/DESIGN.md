@@ -154,7 +154,8 @@ so the forms of one editor, which share a layout store, never share a template.
 This covers recursion through a list. A self-reference that is not inside an
 array (`next: z.lazy(() => Stop).optional()`) has no list write to grow by: it
 compiles to `loom:raw`, a raw JSON box, as does every kind outside the model
-(records, dates, transforms, intersections, a union no pattern tells
+(records, dates, transforms, intersections, an object with a key that has a
+dot in it, which Nova cannot bind, a union no pattern tells
 apart).
 
 ### Custom widgets

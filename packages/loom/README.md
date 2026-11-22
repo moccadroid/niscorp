@@ -119,11 +119,13 @@ Two things are worth knowing before you rely on them:
   `path`) is shown nowhere, and a problem in a list row shows in the Validations
   pane only. They are not the verdict on a document; the schema is
   ([DESIGN.md](./DESIGN.md), "Validation").
-- **A key with a dot in it is not edited correctly.** Nova reads a binding
-  path by splitting it at each `.`, so a field such as `"a.b"` is bound as `b`
-  inside `a`: the control shows nothing and an edit writes to the wrong place.
-  Loom has no fix for it until Nova can bind such a key; keep dots out of the
-  keys of a schema you edit with Loom.
+- **An object with a key that has a dot in it is edited as JSON.** Nova reads
+  a binding path by splitting it at each `.`, so a field such as `"a.b"` cannot
+  be bound to a control of its own. Its object is compiled to the raw JSON box,
+  bound where the object stands, and an edit there writes the right keys. The
+  editor wraps such a root document as it wraps a non-object root. `toNova`
+  used directly at the root without `rootKey` has nothing to bind the box to and
+  keeps the controls, which bind the wrong place: pass `rootKey`.
 
 A **plugin** wires one domain into the editor. It contributes the schemas to edit
 (its *documents*), optional custom field widgets, and usually a preview. The three

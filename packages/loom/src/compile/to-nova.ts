@@ -101,7 +101,13 @@ const buildGroup = (field: Extract<Field, { kind: 'object' }>, loc: Loc, ctx: Bu
     field,
   );
 
+// Nova splits a binding at every `.`: a key `a.b` would be bound as `b` inside
+// `a`. Its object is edited as JSON where it stands; at the bare `$` there is
+// nothing to bind a box to, so the root keeps its controls (use `rootKey`).
+const hasDottedKey = (field: Extract<Field, { kind: 'object' }>): boolean => field.fields.some((f) => f.key.includes('.'));
+
 const objectBuild: Build<'object'> = (field, loc, ctx) => {
+  if (hasDottedKey(field) && loc.expr !== ROOT.expr) return control(Roles.raw, loc.expr);
   if (field.recursive !== true) return buildGroup(field, loc, ctx);
   const name = ctx.name();
   ctx.templates.push({ name, defaultChild: buildDocument(field, ctx.options), containers: [] });

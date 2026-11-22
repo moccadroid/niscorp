@@ -519,3 +519,23 @@ describe('LoomForm — clearing a number', () => {
     expect(price?.getAttribute('step')).toBe('any');
   });
 });
+
+describe('LoomEditor — an object with a key that has a dot in it', () => {
+  it('is edited as JSON at its root, and an edit lands on the key', () => {
+    const onChange = vi.fn();
+    render(<LoomForm schema={z.object({ 'a.b': z.string() })} options={{ value: { 'a.b': 'x' } }} onChange={onChange} />);
+    const box = screen.getByRole('textbox');
+    expect(box).toHaveProperty('value', expect.stringContaining('"a.b"'));
+    fireEvent.change(box, { target: { value: '{"a.b":"y"}' } });
+    expect(onChange).toHaveBeenLastCalledWith({ 'a.b': 'y' });
+  });
+
+  it('is edited as JSON where it stands, and its siblings keep their controls', () => {
+    const onChange = vi.fn();
+    render(<LoomForm schema={z.object({ name: z.string(), meta: z.object({ 'a.b': z.string() }) })} options={{ value: { name: 'n', meta: { 'a.b': 'x' } } }} onChange={onChange} />);
+    const [name, meta] = screen.getAllByRole('textbox');
+    expect(name).toHaveProperty('value', 'n');
+    fireEvent.change(meta!, { target: { value: '{"a.b":"y"}' } });
+    expect(onChange).toHaveBeenLastCalledWith({ name: 'n', meta: { 'a.b': 'y' } });
+  });
+});
