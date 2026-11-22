@@ -196,7 +196,7 @@ Remove an element at a specific index.
 
 The index can also be a template string (e.g. `"{{@event.payload}}"`) resolved before applying. One that does not resolve to a whole number (a missing path, a fraction, a word) leaves the array as it is, and the steps after it run.
 
-A negative index counts from the end, as in JavaScript's `splice`: `-1` removes the last element, and an index further back than the first element removes the first. An index computed as `-1` for "not found" therefore removes the last element: check the index before the step runs. An index past the end removes nothing.
+A negative index counts from the end, as in JavaScript's `splice`: `-1` removes the last element, and an index further back than the first element removes the first. An index computed as `-1` for "not found" therefore removes the last element: check the index before the step runs. An `index` template that resolves to a negative number is reported to `onError` (a `NovaError` with code `MUTATION_ERROR` naming the template) and then applied; a literal negative `index` is not reported. An index past the end removes nothing.
 
 ### `move`
 

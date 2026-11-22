@@ -113,3 +113,11 @@ Each section is one change an app can see, in `@niscorp/nova`. None of them chan
 - What to do: nothing; handle the new code if `onError` switches over codes.
 - Breaking: yes (strict shells only)
 - Affected apps: none. No shell in the lab apps, the templates, moss, AnimaApp, anima-finance or mira is strict (see the `ENDPOINT_FAILED` section).
+
+### nova — a template-made negative `removeAt` index is reported, then applied
+- Before: `{ removeAt: 'rows', index: '{{$.found}}' }` with `found = -1` (a search's "not found") removed the last row without a word.
+- Now: the last row is still removed, exactly as before, and `onError` receives a `NovaError` with code `MUTATION_ERROR`: `removeAt: index {{$.found}} resolved to -1, which counts from the end (-1 removes the last element)`. In strict and lax mode. A literal `index: -1` is not reported.
+- Who notices: apps whose `onError` logs or shows errors, when a `removeAt` template yields a negative index.
+- What to do: nothing if the index is never negative. If it can be (a "not found"), guard the step (`$if`) so it does not run; if it is meant (count from the end), the report can be ignored.
+- Breaking: yes (a new report; the data is unchanged)
+- Affected apps: six steps use a template index, and each passes an index taken from the clicked row, which is never negative, so none should see a report: `packages/create-nisc/templates/model-first/files/src/app/actions/guide/checklist.action.ts:20,21` (`'{{@event.payload}}'`), AnimaApp `src/app/actions/signup/form.action.ts:192,197` (`'{{@event.payload.at}}'`), AnimaApp `src/app/actions/store/edit-coupon.action.ts:519` and `edit-gift.action.ts:290` (`'{{@event.payload}}'`). Not checked at run time: whether every kit there sends a non-negative payload.

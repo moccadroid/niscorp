@@ -91,6 +91,16 @@ const resolveMutationValues = (
   });
 };
 
+// A literal negative index is a deliberate "from the end"; one a template made is almost always a "not found".
+const reportTemplatedNegativeRemoveAt = (written: Mutation[], resolved: Mutation[], onError: OnErrorHandler): void => {
+  written.forEach((m, at) => {
+    const r = resolved[at];
+    if (!('removeAt' in m) || typeof m.index !== 'string' || r === undefined || !('removeAt' in r)) return;
+    if (typeof r.index !== 'number' || r.index >= 0) return;
+    const message = `removeAt: index ${m.index} resolved to ${r.index}, which counts from the end (-1 removes the last element)`;
+    onError(new NovaError(ErrorCodes.mutation, message, { path: m.removeAt, index: r.index, template: m.index }));
+  });
+};
 
 const writeTarget = (
   dataStore: DataStore,
@@ -261,6 +271,7 @@ export const executeSteps = async (steps: Step[], ctx: StepContext): Promise<voi
     // stood before the run.
     const chain = createScopeChain(ctx.dataStore.get());
     const resolved = resolveMutationValues(list, chain, ctx.extras);
+    reportTemplatedNegativeRemoveAt(list, resolved, ctx.onError);
     ctx.dataStore.update((curr) =>
       applyMutations(curr, resolved, { ...(ctx.initial === undefined ? {} : { initial: ctx.initial }), strict: ctx.strict }),
     );
