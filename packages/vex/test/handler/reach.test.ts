@@ -139,8 +139,8 @@ describe('a mutation that declares its reach', () => {
   let writeSql = '';
   const client = {
     query: async (sql: string) => {
-      // The SELECT checks that no row moves out of its update rule; none does here.
-      if (sql.startsWith('SELECT')) return { rows: [] };
+      // The check that no row moves out of its update rule: none does here.
+      if (/^SELECT .* IS TRUE AS "0" FROM bookings WHERE .* IS NOT TRUE LIMIT 1$/.test(sql)) return { rows: [] };
       writeSql = sql;
       return { rows: [{ id: 'b1' }] };
     },
