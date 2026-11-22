@@ -460,12 +460,14 @@ const runQuery = async (
         },
       };
     }
-    console.error('[vex] unhandled error:', err);
     const errObj = err as Record<string, unknown> | null;
     const message = err instanceof Error
       ? err.message
       : (typeof errObj?.message === 'string' ? errObj.message : 'Unknown error');
     const code = typeof errObj?.code === 'string' ? errObj.code : 'execution_error';
+    // Never the error object: a driver's error can carry the statement's bound values, the caller's scope among them.
+    const sql = typeof errObj?.query === 'string' ? ` in: ${errObj.query}` : '';
+    console.error(`[vex] unhandled error ${code}${sql}`, err instanceof Error && err.stack !== undefined ? err.stack : message);
     return {
       status: 500,
       body: { error: code, message },
