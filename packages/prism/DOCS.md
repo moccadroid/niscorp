@@ -192,7 +192,7 @@ The `acc` name defaults to `"acc"` if omitted. When `as` and `acc` are one name 
 `start` defaults to 0, `end` defaults to length. A string is indexed in UTF-16
 units, as `$length` counts it, and is never cut inside a character: a cut that
 falls between the two halves of one (an emoji such as 👍 is two units) moves to
-the near side of it. `start` 0 and `end` 5 of `"Hey 👍 there"` is `"Hey "`, and
+the near side of it, so that code point is left out. `start` 0 and `end` 5 of `"Hey 👍 there"` is `"Hey "`, and
 `start` 5 is `" there"`. `$take` and `$drop` cut the same way.
 
 ### `$flatten` — Flatten one level
@@ -343,7 +343,7 @@ Result: `"hello"`
 ```json
 { "$split": { "value": { "$const": "a,b,c" }, "sep": "," } }
 ```
-Result: `["a", "b", "c"]`. With `"sep": ""` the text is split into characters: `"a👍"` → `["a", "👍"]`.
+Result: `["a", "b", "c"]`. With `"sep": ""` the text is split into code points: `"a👍"` → `["a", "👍"]`, and `"👍🏽"` gives two items.
 
 ### `$replace` — Replace a substring
 ```json
@@ -513,7 +513,7 @@ Returns one of: `"string"`, `"number"`, `"boolean"`, `"null"`, `"array"`, `"obje
 { "$length": { "$ref": "$.items" } }
 { "$length": { "$ref": "$.name" } }
 ```
-A string's length counts UTF-16 units, as zod's `.max()` does: `"👍🏽"` is 4.
+A string's length counts UTF-16 units, not characters: `"👍🏽"` is 4.
 
 ---
 

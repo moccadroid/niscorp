@@ -64,7 +64,7 @@ export const SliceNodeSchema = z
       .strict(),
   })
   .strict()
-  .describe('Slice an array or string by start/end indices. A string is indexed in UTF-16 units and never cut inside a character: a cut there moves to the near side of it.');
+  .describe('Slice an array or string by start/end indices. A string is indexed in UTF-16 units; a cut that falls inside one code point leaves that code point out.');
 
 export type SliceNode = z.infer<typeof SliceNodeSchema>;
 
