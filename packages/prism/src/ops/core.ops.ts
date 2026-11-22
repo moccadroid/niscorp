@@ -30,7 +30,7 @@ const copyOf = (value: JsonValue): JsonValue => {
   if (value === null || typeof value !== 'object') return value;
   if (Array.isArray(value)) return value.map(copyOf);
   const copy: Record<string, JsonValue> = {};
-  for (const [key, inner] of Object.entries(value)) copy[key] = copyOf(inner);
+  for (const [key, inner] of Object.entries(value)) writeOwnKey(copy, key, copyOf(inner));
   return copy;
 };
 

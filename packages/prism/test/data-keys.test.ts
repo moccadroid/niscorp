@@ -102,4 +102,15 @@ describe('a key called __proto__ stays a key of the result', () => {
   it('as a loop variable', () => {
     expect(evaluate({ $map: { over: { $const: [1, 2] }, as: '__proto__', body: { $var: '__proto__' } } }, {})).toEqual([1, 2]);
   });
+  it('in a constant of a config run again, on every call as on the first', () => {
+    const config = { out: { $fromEntries: [['__proto__', { $const: { admin: true } }], ['name', 'x']] } };
+    const answers = [1, 2, 3].map(() => {
+      const result = evaluate(config, {});
+      const out = Object(Reflect.get(Object(result), 'out'));
+      return { json: JSON.stringify(result), own: Object.keys(out), admin: Reflect.get(out, 'admin') };
+    });
+    expect(answers[0]).toEqual({ json: '{"out":{"__proto__":{"admin":true},"name":"x"}}', own: ['__proto__', 'name'], admin: undefined });
+    expect(answers[1]).toEqual(answers[0]);
+    expect(answers[2]).toEqual(answers[0]);
+  });
 });
