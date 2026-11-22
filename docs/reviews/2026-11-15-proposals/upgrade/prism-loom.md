@@ -119,7 +119,7 @@ Checked against the lab apps (`apps/lab/*`) and, read-only, AnimaApp, anima-fina
 - What to do: nothing.
 - Breaking: yes
 - Lab apps: lyceum `{{at}}`: unchanged.
-- External: AnimaApp `src/server/mails/index.ts:35-36` interpolates owner-written mail templates from the database: a template with `{{straße}}`-style names would now be filled.
+- External: AnimaApp `src/server/mails/index.ts:35-36` interpolates owner-written mail templates from the database. A placeholder with a non-ASCII name, such as `{{größe}}`, showed its braces in the mail; the catalogue has no such field, so it is now replaced by empty text, not filled. (A prism error in a mail's words is not swapped quietly for the default wording either: `mails/index.ts:98-105` retries with the first wording, which fails the same way, and the mail is not sent.)
 
 ### prism — Date and locale ops are answered where they run
 - Before: `compile` (and a kept `evaluate` from its second call) worked out `$date`, `$dateAdd`, `$dateDiff`, `$localeDate`, `$localeMoney` and `$localeNumber` whose inputs were all written: `{"$date":{"value":"2026-01-01T09:00:00Z","format":"HH:mm"}}` compiled in Vienna was stored as `{"$const":"10:00"}` and `execute` in Los Angeles answered `10:00`, where `evaluate` there answered `01:00`. A `$localeDate` with a written `timeZone` was folded.
