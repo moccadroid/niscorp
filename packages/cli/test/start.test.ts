@@ -83,10 +83,11 @@ describe('nisc start — what a browser may keep, and how it travels', () => {
     expect(answer.bytes.length).toBeLessThan(file.length / 2);
   });
 
-  it('asked for again, it is the same bytes — compressed once, sent with their length', async () => {
+  it('asked for again, it is compressed again as it streams: the same file, with no length', async () => {
     const [first, second] = [await ask('/assets/app.js'), await ask('/assets/app.js')];
-    expect(second.bytes.equals(first.bytes)).toBe(true);
-    expect(second.headers['content-length']).toBe(String(second.bytes.length));
+    expect(decoded(second)).toBe(decoded(first));
+    expect(second.headers['content-encoding']).toBe('br');
+    expect(second.headers['content-length']).toBeUndefined();
   });
 
   it('gzip for an asker that takes only that, and the file as it is for one that takes neither', async () => {
