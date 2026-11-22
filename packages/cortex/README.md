@@ -257,6 +257,17 @@ a tool error the model reacts to; the run continues. They run in
 order — the `policy` gate, the agent's `toolGates`, the manifold's
 `gates`, the run's `gates` — and the first deny ends the chain.
 
+`onToolResult` hooks run **after** every call that was executed,
+whether it returned, threw or passed its time limit, in order — the
+agent's, then the run's. A hook that returns `{ result }` replaces
+what the model and `tool-end` get: on an `error` observation it
+replaces the error text, so `(o) => ({ result: '[redacted]' })` turns
+`connect failed: postgres://admin:hunter2@…` into `error: [redacted]`.
+A hook that throws turns the call into an error carrying the hook's
+message. A hook that should touch results only checks
+`observation.kind`. Hooks do not run for a denied call, an unknown
+tool, or arguments that failed the tool's input check.
+
 ```ts
 type GateDecision =
   | { allow: true; args?: unknown }   // optionally rewrite args

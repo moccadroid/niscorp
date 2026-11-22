@@ -240,7 +240,7 @@ step:
   for each tool call, in order:
     tool gates (allow / deny / ask)               — BEFORE execution
     execute (Zod-validated input; past timeoutMs the call's ctx.signal aborts)
-    onToolResult hooks (replace / redact / truncate)
+    onToolResult hooks (replace / redact / truncate), after a result, an error or a timeout
     append tool result message; emit tool-end observation
   respond call → validate envelope → end (or correction + continue)
 ```

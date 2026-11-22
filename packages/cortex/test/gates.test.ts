@@ -120,4 +120,77 @@ describe('result hooks', () => {
       '[REDACTED]',
     );
   });
+
+  const failing = defineTool({
+    id: 'connect',
+    name: 'connect',
+    description: 'Connects to the database.',
+    input: z.object({}),
+    execute: () => {
+      throw new Error('connect failed: postgres://admin:hunter2@db.internal/prod');
+    },
+  });
+  const failingScript = () => [
+    { toolCalls: [{ id: 'c1', name: 'connect', args: {} }] },
+    { toolCalls: [{ id: 'c2', name: 'respond', args: { data: { done: true } } }] },
+  ];
+
+  it('see a tool error, and their result replaces the error text', async () => {
+    const llm = stubSignal(failingScript());
+    const events: CortexEvent[] = [];
+    const seen: string[] = [];
+    const agent = defineAgent({
+      id: 'redacted',
+      instructions: 'connect then respond',
+      tools: [failing],
+      output: { schema: OutSchema },
+      onToolResult: [
+        (observation) => {
+          seen.push(observation.kind);
+          return { result: '[redacted]' };
+        },
+      ],
+    });
+
+    await agent.run('go', { llm, onEvent: (event) => events.push(event) }).result;
+    expect(seen).toEqual(['error']);
+    const toolMessage = llm.requests[1]?.messages.find((message) => message.role === 'tool');
+    expect(toolMessage?.content).toBe('error: [redacted]');
+    const toolEnd = events.find((event) => event.type === 'tool-end');
+    expect(toolEnd?.type === 'tool-end' && toolEnd.observation).toMatchObject({ kind: 'error', error: '[redacted]' });
+  });
+
+  it('that throw on a tool error send the hook\'s message, never the original text', async () => {
+    const llm = stubSignal(failingScript());
+    const agent = defineAgent({
+      id: 'redacted',
+      instructions: 'connect then respond',
+      tools: [failing],
+      output: { schema: OutSchema },
+      onToolResult: [
+        () => {
+          throw new Error('redaction failed');
+        },
+      ],
+    });
+
+    await agent.run('go', { llm }).result;
+    expect(llm.requests[1]?.messages.find((message) => message.role === 'tool')?.content).toBe('error: redaction failed');
+  });
+
+  it('that look only at results leave a tool error as it was', async () => {
+    const llm = stubSignal(failingScript());
+    const agent = defineAgent({
+      id: 'redacted',
+      instructions: 'connect then respond',
+      tools: [failing],
+      output: { schema: OutSchema },
+      onToolResult: [(observation) => (observation.kind === 'result' ? { result: '[REDACTED]' } : undefined)],
+    });
+
+    await agent.run('go', { llm }).result;
+    expect(llm.requests[1]?.messages.find((message) => message.role === 'tool')?.content).toBe(
+      'error: connect failed: postgres://admin:hunter2@db.internal/prod',
+    );
+  });
 });

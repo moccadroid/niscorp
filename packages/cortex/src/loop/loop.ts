@@ -34,6 +34,8 @@ import { newApprovalId } from '../utils/id';
 
 export type NormalizedCall = { id: string; toolId: string; args: unknown };
 
+type ExecutedObservation = Extract<ToolObservation, { kind: 'result' | 'error' }>;
+
 export type PendingApproval = {
   approvalId: string;
   call: NormalizedCall;
@@ -277,6 +279,15 @@ export const runLoop = async <TData, TDeps>(
     }
 
     const started = Date.now();
+    const errorObservation = (cause: unknown): ExecutedObservation => ({
+      kind: 'error',
+      callId: call.id,
+      toolId,
+      args: parsedArgs.data,
+      error: cause instanceof Error ? cause.message : String(cause),
+      durationMs: Date.now() - started,
+    });
+    let observation: ExecutedObservation;
     try {
       const timeoutMs = tool.config.timeoutMs ?? DEFAULT_TOOL_TIMEOUT_MS;
       const value = await withTimeout((signal) => tool.config.execute(parsedArgs.data, toolContext(signal)), {
@@ -284,37 +295,24 @@ export const runLoop = async <TData, TDeps>(
         label: `tool ${toolId}`,
         run: cfg.abort,
       });
-      let observation: ToolObservation = {
-        kind: 'result',
-        callId: call.id,
-        toolId,
-        args: parsedArgs.data,
-        result: value,
-        durationMs: Date.now() - started,
-      };
+      observation = { kind: 'result', callId: call.id, toolId, args: parsedArgs.data, result: value, durationMs: Date.now() - started };
+    } catch (cause) {
+      observation = errorObservation(cause);
+    }
+    try {
       for (const hook of cfg.resultHooks) {
         const outcome = await hook(observation, runCtx());
         if (outcome && outcome.result !== undefined) {
-          observation = { ...observation, result: outcome.result };
+          observation =
+            observation.kind === 'error'
+              ? { ...observation, error: stringify(outcome.result) }
+              : { ...observation, result: outcome.result };
         }
       }
-      const finalResult = observation.kind === 'result' ? observation.result : undefined;
-      record(call, observation, stringify(finalResult));
     } catch (cause) {
-      const message = cause instanceof Error ? cause.message : String(cause);
-      record(
-        call,
-        {
-          kind: 'error',
-          callId: call.id,
-          toolId,
-          args: parsedArgs.data,
-          error: message,
-          durationMs: Date.now() - started,
-        },
-        `error: ${message}`,
-      );
+      observation = errorObservation(cause);
     }
+    record(call, observation, observation.kind === 'error' ? `error: ${observation.error}` : stringify(observation.result));
     return undefined;
   };
 
