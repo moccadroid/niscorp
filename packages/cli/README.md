@@ -271,9 +271,56 @@ makes does.
 bundle, and one `index.html` per path — `/` at the top, `/about` at
 `about/index.html` — which is what any static host serves for that path.
 
-The folder is the export's own: it is emptied before anything is written to it.
-So `--out` may not be the app's folder, a folder above it, the build, or a
-folder inside the build: each is refused before anything is drawn (exit code 1).
+**The default folder, `out/`**, is emptied before anything is written to it.
+`--out out`, the full path to it, or on Windows and macOS another spelling of
+it such as `--out OUT` is the same folder; a link to it is not.
+
+**A folder named with `--out`** loses only the files the previous export wrote
+there. A link named with `--out` is followed: the export goes into the folder
+it points to.
+
+- The export is first written whole into a folder of its own inside it
+  (`.nisc-export-<process>-<id>`). Only when every file was made is anything
+  already there touched. If a file cannot be made, nothing already in the
+  folder is changed; a folder that did not exist has been made, and is left
+  empty.
+- What each export writes there is recorded in
+  `node_modules/.cache/nisc/exports.json` under the app's root, keyed by the
+  folder's real location: outside the folder, so nothing published lists the
+  paths. The record is never written through a link. If it cannot be written
+  (a read-only `node_modules`, a link on the way), the export still finishes
+  and says so on one line: the next export removes none of what this one wrote.
+- The next export removes the recorded files (and any folder that leaves
+  empty), then moves its own in. A file or link at a path where it writes is
+  replaced; a folder with files of its own where it writes a file is said, and
+  nothing is written (exit code 1). If moving the files in fails (a file the
+  system will not let go of, another export into the same folder at the same
+  time), the command says how many of its files are in place, and exits 1:
+  export again to finish.
+- A `.nisc-export-…` folder that an ended export left (a kill, a Ctrl+C) is
+  removed by the next export into that folder. Until then it is in the folder.
+- Everything else in the folder stays, and every export names it on one line,
+  the first five and how many more:
+
+```
+nisc: left as they were in /work/site, not written by this export (2): .git/, notes.txt
+```
+
+Removal goes by real location. A link where the export writes is removed as a
+link, and nothing is written through it. A recorded file is never removed
+through a link, nor when it lies outside the folder (a record edited by hand):
+it is named `not removed`. So a file the command never recorded — one an older
+export left before the record, or after it was lost (a fresh CI checkout has
+none) — is never removed by it: it is named on every export until someone
+deletes it, and deleting the folder once ends it. A file another step puts in
+the folder survives the next export.
+
+`--out` may not be the app's folder, a folder above it, the build, or a folder
+inside the build: each is refused before anything is drawn (exit code 1). For a
+folder named with `--out`, that is checked as written and where it really
+points. A file at a path named with `--out` (other than `out`, which is
+replaced as before) is said and left as it is, and nothing is written (exit
+code 1).
 
 A file is **only ever the page as nobody sees it**. No credential reaches a
 build, so there is nothing to leak into one.
@@ -490,7 +537,7 @@ what a value means.
 | | |
 |---|---|
 | `--root <dir>` | the app's root (default: the current directory) |
-| `--out <dir>` | `export`: where the files go (default `out`); emptied first, so never the app's folder or its build |
+| `--out <dir>` | `export`: where the files go (default `out`, which is emptied first); a folder named here loses only what the previous export wrote there (`nisc export`). Never the app's folder or its build |
 | `--allow-live` | `export`: write even though some path wants a server |
 | `--skip-bundle` | `build`, `export`: the terminal is already built — it is neither bundled nor has its stylesheet written into its page |
 | `--check` | `migrate`: do all of it, then roll it back |

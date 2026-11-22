@@ -1,32 +1,31 @@
-import { cpSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
-import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { cpSync, rmSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { distOf, loadProject, say } from '../project';
 import type { CommandOptions, NiscProject } from '../project';
 import { build } from './build';
 import type { BuildResult } from './build';
-import { fileOf } from './routes';
+import { isDefaultOut, isWithin, realOf, writeNamedFolder, writeRoutes } from './out-folder';
 
 const write = (options: CommandOptions, project: NiscProject, out: string, routes: readonly { path: string; html: string }[]): void => {
-  rmSync(out, { recursive: true, force: true });
-  cpSync(distOf(options.root, project), out, { recursive: true });
-  for (const route of routes) {
-    const file = join(out, fileOf(route.path));
-    mkdirSync(dirname(file), { recursive: true });
-    writeFileSync(file, route.html);
+  const dist = distOf(options.root, project);
+  const isDefault = isDefaultOut(out, options.root);
+  if (isDefault) {
+    rmSync(out, { recursive: true, force: true });
+    cpSync(dist, out, { recursive: true });
+    writeRoutes(out, routes);
   }
+  const said = isDefault ? [] : writeNamedFolder(options.root, out, dist, routes);
   say(options)('');
   say(options)(`nisc: ${routes.length} paths written to ${out}`);
-};
-
-const isWithin = (folder: string, path: string): boolean => {
-  const way = relative(folder, path);
-  return way === '' || (way !== '..' && !way.startsWith(`..${sep}`) && !isAbsolute(way));
+  for (const line of said) say(options)(line);
 };
 
 const refuseOut = (out: string, root: string, dist: string): void => {
-  const what = isWithin(out, root) ? `the app's folder (${root}) or a folder above it` : isWithin(out, dist) || isWithin(dist, out) ? `the built app (${dist}), a folder inside it or one above it` : undefined;
+  const refusalOf = (folder: string, app: string, built: string): string | undefined =>
+    isWithin(folder, app) ? `the app's folder (${root}) or a folder above it` : isWithin(folder, built) || isWithin(built, folder) ? `the built app (${dist}), a folder inside it or one above it` : undefined;
+  const what = refusalOf(out, root, dist) ?? (isDefaultOut(out, root) ? undefined : refusalOf(realOf(out), realOf(root), realOf(dist)));
   if (what === undefined) return;
-  throw new Error(`nisc: --out ${out} is ${what}, and an export empties its folder before writing to it. Nothing was written. Give the export a folder of its own: \`--out out\`.`);
+  throw new Error(`nisc: --out ${out} is ${what}, and an export writes over what is there. Nothing was written. Give the export a folder of its own: \`--out out\`.`);
 };
 
 export const exportSite = async (options: CommandOptions): Promise<{ written: boolean; result: BuildResult; out: string }> => {

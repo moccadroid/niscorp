@@ -13,7 +13,10 @@ const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, 'fixtures', 'own-shell');
 const scratch = mkdtempSync(join(tmpdir(), 'nisc-own-shell-'));
 
-afterAll(() => rmSync(scratch, { recursive: true, force: true }));
+afterAll(() => {
+  rmSync(scratch, { recursive: true, force: true });
+  rmSync(join(root, 'node_modules'), { recursive: true, force: true });
+});
 
 const SLOW = 60_000;
 
