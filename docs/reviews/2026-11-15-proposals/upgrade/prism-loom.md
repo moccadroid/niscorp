@@ -123,7 +123,11 @@ Checked against the lab apps (`apps/lab/*`) and, read-only, AnimaApp, anima-fina
 
 ### prism — Date and locale ops are answered where they run
 - Before: `compile` (and a kept `evaluate` from its second call) worked out `$date`, `$dateAdd`, `$dateDiff`, `$localeDate`, `$localeMoney` and `$localeNumber` whose inputs were all written: `{"$date":{"value":"2026-01-01T09:00:00Z","format":"HH:mm"}}` compiled in Vienna was stored as `{"$const":"10:00"}` and `execute` in Los Angeles answered `10:00`, where `evaluate` there answered `01:00`. A `$localeDate` with a written `timeZone` was folded.
-- Now: these ops stay ops in a compiled IR (including a written-zone `$localeDate`) and answer on the machine that runs them. On the compiling machine every answer is the same.
+- Now: these ops stay ops in a compiled IR and answer on the machine that runs them. On the compiling machine every answer is the same. What is given up:
+  - main's fold of a `$localeDate` with a written zone (686e9c76): it now stays an op, as it reads Intl data;
+  - folding of the ops whose answer does not depend on the zone at all — `$dateDiff` between two bare dates, `$localeMoney`, `$localeNumber` — which read only Intl data or nothing machine-bound: a config with five such literal ops (`$date`, `$localeDate`, `$localeMoney`, `$dateDiff` and one `$upper`) went from `constantsFolded` 5 to 1;
+  - so the `fingerprint` of a config that holds such an op changes once (vex re-seeds that cache entry once at boot), and each call spends one more step and one Intl format for each such op.
+- `EvalContext`, an exported type, gains an optional `folding?: boolean`: set while the optimizer works a subtree out ahead of time. Additive; an op written against `EvalContext` can ignore it.
 - Who notices: code comparing stored `fingerprint`s or `meta.stats.optimizations.constantsFolded` of such configs; IRs compiled on one machine and run on another. An IR stored before the release keeps its folded constant until compiled again.
 - What to do: nothing; recompile stored IRs if they should answer where they run.
 - Breaking: yes
