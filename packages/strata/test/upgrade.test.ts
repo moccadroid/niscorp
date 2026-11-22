@@ -121,6 +121,46 @@ describe('strata upgrade — the loop', () => {
     expect(a.lines.join('\n')).toContain('contact was not in the plan, but the migrations would change it now');
   });
 
+  it('verify believes the lock, not what plan.json says the plan was made from', async () => {
+    const a = app();
+    await a.run([forms([])], 'init');
+    const twice = [forms([renameTitle, { description: 'later', steps: [] }])];
+    await a.run(twice, 'upgrade');
+    const planPath = join(a.root, '.strata', 'upgrade', 'plan.json');
+    const plan = JSON.parse(readFileSync(planPath, 'utf8'));
+    writeFileSync(planPath, JSON.stringify({ ...plan, from: { 'acme.forms': 2 }, documents: [], untouched: ['acme.forms/form:contact', 'acme.forms/form:signup'] }));
+
+    expect(await a.run(twice, 'verify')).toBe(1);
+    expect(a.lines.join('\n')).toContain('the plan was made from acme.forms 2, but strata.lock.json records acme.forms 0');
+    expect(a.lock()).toEqual({ grammar: { 'acme.forms': 0 } });
+  });
+
+  it('verify does not care in which order the grammars are given', async () => {
+    const a = app();
+    const notes: Sequence = { id: 'acme.notes', documents: { note: {} }, migrations: [] };
+    await a.run([forms([])], 'init');
+    expect(await a.run([notes, forms([renameTitle])], 'upgrade')).toBe(0);
+    a.edit('signup', { id: 'signup', heading: 'Sign up', fields: ['email'] });
+    expect(await a.run([forms([renameTitle]), notes], 'verify')).toBe(0);
+  });
+
+  it('two ids that clean to one file name each get an expected file of their own', async () => {
+    const a = app();
+    await a.run([forms([])], 'init');
+    a.source.push({ kind: 'acme.forms/form', id: 'a/b', document: { id: 'a/b', title: 'Slash', fields: [] } });
+    a.source.push({ kind: 'acme.forms/form', id: 'a_b', document: { id: 'a_b', title: 'Underscore', fields: [] } });
+    expect(await a.run([forms([renameTitle])], 'upgrade')).toBe(0);
+    const expected = join(a.root, '.strata', 'upgrade', 'expected', 'acme.forms_form');
+    expect(JSON.parse(readFileSync(join(expected, 'a_b.json'), 'utf8'))).toEqual({ id: 'a/b', heading: 'Slash', fields: [] });
+    expect(JSON.parse(readFileSync(join(expected, 'a_b~2.json'), 'utf8'))).toEqual({ id: 'a_b', heading: 'Underscore', fields: [] });
+
+    a.edit('signup', { id: 'signup', heading: 'Sign up', fields: ['email'] });
+    a.edit('a/b', { id: 'a/b', heading: 'Slash', fields: [] });
+    a.edit('a_b', { id: 'a_b', heading: 'Underscore', fields: [] });
+    expect(await a.run([forms([renameTitle])], 'verify')).toBe(0);
+    expect(existsSync(join(a.root, '.strata'))).toBe(false);
+  });
+
   it('verify refuses a plan made for other grammars, and an artifact added since', async () => {
     const a = app();
     await a.run([forms([])], 'init');
@@ -211,11 +251,36 @@ describe('strata upgrade — it removes only what it wrote', () => {
   it('a plan.json that names a path outside expected/ has nothing removed for it', async () => {
     const a = app('.');
     writeFileSync(join(a.root, 'package.json'), '{}\n');
-    writeFileSync(join(a.root, 'plan.json'), JSON.stringify({ documents: [{ kind: '..', id: 'package' }] }));
+    const planted = JSON.stringify({ documents: [{ kind: '..', id: 'package' }] });
+    writeFileSync(join(a.root, 'plan.json'), planted);
     await a.run([forms([])], 'init');
 
-    expect(await a.run(next, 'upgrade')).toBe(0);
+    expect(await a.run(next, 'upgrade')).toBe(1);
     expect(existsSync(join(a.root, 'package.json'))).toBe(true);
+    expect(readFileSync(join(a.root, 'plan.json'), 'utf8')).toBe(planted);
+  });
+
+  it('in a work directory the host chose, a REPORT.md strata did not write is neither replaced nor removed', async () => {
+    const a = app('.');
+    writeFileSync(join(a.root, 'REPORT.md'), '# Quarterly report\n');
+    await a.run([forms([])], 'init');
+
+    expect(await a.run(next, 'upgrade')).toBe(1);
+    expect(a.lines.join('\n')).toContain('REPORT.md is not one strata wrote — it is left as it is');
+    expect(readFileSync(join(a.root, 'REPORT.md'), 'utf8')).toBe('# Quarterly report\n');
+    expect(existsSync(join(a.root, 'plan.json'))).toBe(false);
+  });
+
+  it('a REPORT.md strata wrote is still its own after an editor saved it with a byte-order mark', async () => {
+    for (const workDir of [undefined, '.']) {
+      const a = app(workDir);
+      await a.run([forms([])], 'init');
+      expect(await a.run(next, 'upgrade')).toBe(0);
+      const report = join(a.root, workDir ?? join('.strata', 'upgrade'), 'REPORT.md');
+      writeFileSync(report, `\uFEFF${readFileSync(report, 'utf8')}`);
+      expect(await a.run(next, 'upgrade')).toBe(0);
+      expect(readFileSync(report, 'utf8').startsWith('# strata upgrade')).toBe(true);
+    }
   });
 
   it('by default verify removes .strata/upgrade, and keeps anything else in .strata', async () => {

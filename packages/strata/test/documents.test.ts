@@ -119,6 +119,18 @@ describe('upgrade — a document catches up to the code', () => {
     expect(upgrader.upgrade(action, { kind: 'nisc.nova/action', stamp: null }).applied).toEqual(['nisc.nova/1']);
   });
 
+  it('a stamp entry that is not a number of migrations is INVALID_SEQUENCE — never read as current', async () => {
+    const upgrader = await createUpgrader([nova([{ description: 'rename', steps: [renameLabel] }]), prism()], { transform });
+    const read = (entry: unknown) => upgrader.upgrade(action, { kind: 'nisc.nova/action', stamp: JSON.parse(JSON.stringify({ 'nisc.nova': entry })) });
+    expect(() => read('v0')).toThrow(expect.objectContaining({ code: 'INVALID_SEQUENCE', message: expect.stringContaining('nisc.nova is "v0"') }));
+    expect(() => upgrader.behind(JSON.parse('{"nisc.nova":{}}'))).toThrow(expect.objectContaining({ code: 'INVALID_SEQUENCE' }));
+    expect(() => upgrader.behind({ 'nisc.nova': Number('v0') })).toThrow(expect.objectContaining({ message: expect.stringContaining('nisc.nova is NaN') }));
+    expect(read('1').applied).toEqual([]);
+    expect(read('0').applied).toEqual(['nisc.nova/1']);
+    expect(read(null).applied).toEqual(['nisc.nova/1']);
+    expect(upgrader.upgrade(action, { kind: 'nisc.nova/action', stamp: JSON.parse('{"acme.kit":"v0"}') }).stamp).toEqual({ 'nisc.nova': 1, 'nisc.prism': 0, 'acme.kit': 'v0' });
+  });
+
   it('a document written by newer code is TOO_NEW — never guessed at', async () => {
     const upgrader = await createUpgrader([nova(), prism()], { transform });
     expect(() => upgrader.upgrade(action, { kind: 'nisc.nova/action', stamp: { 'nisc.nova': 2 } })).toThrow(expect.objectContaining({ code: 'TOO_NEW' }));

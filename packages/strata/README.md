@@ -202,13 +202,17 @@ const { document, stamp, applied } = upgrader.upgrade(storedAction, { kind: 'nis
   the code** on any grammar the code was given is refused, `TOO_NEW`: the reader
   upgrades first. A stamp entry for a grammar the code was not given is neither
   ahead nor behind: it is kept on the stamp as it was, for code that has it.
+- **An entry is a number of migrations.** It is read with `Number`, so digits
+  in a string and `null` (none) read too. An entry for a grammar the code was
+  given that reads as no number (`"v0"`) is refused, `INVALID_SEQUENCE`: read
+  as current, the document would come back unmigrated and stamped current.
 
 | | |
 |---|---|
 | `createUpgrader(grammars, { transform })` | `{ stamp, upgrade, locate, behind }` — the stamp a document written now carries; upgrade one; every document inside one, by kind; is a stamp behind (throws if ahead). A kind no sequence given declares is refused (`UNKNOWN_KIND`): a step's `at` or an embedding's target when the upgrader is created, the `kind` passed to `upgrade` or `locate` when it is called. |
 | `upgrader.upgrade(document, { kind, stamp })` | Returns `{ document, stamp, applied }`: `stamp` is what to store with the document, `applied` the refs of the migrations that ran, in order — empty when the document was already current. |
 | `upgrader.locate(document, kind)` | Given the root's kind, `{ path, kind, value }` for the root itself and every document embedded in it; `path` is the keys and indexes from the root. |
-| `upgradeStore(pool, store, upgrader)` | `@niscorp/strata/postgres`. Rewrites every row of a table holding documents that is behind, in one transaction; a row from newer code refuses the pass. `store` is `{ table, schema?, column, stamp, kind, key }`: `column` and `stamp` name the jsonb columns holding the document and its stamp, `kind` is the kind of every document in the store (`"nisc.nova/action"`), `key` lists the columns that identify a row. Returns `{ total, upgraded, applied }`: rows read, rows that were behind and rewritten, and per migration ref the number of rows it was applied to. |
+| `upgradeStore(pool, store, upgrader)` | `@niscorp/strata/postgres`. Rewrites every row of a table of documents that is behind, in one transaction; a row from newer code refuses the pass. It locks every row and reads each one's key and stamp, then reads a behind row's document by its key, one at a time: a store whose rows are all current loads no document. `store` is `{ table, schema?, column, stamp, kind, key }`: `column` and `stamp` name the jsonb columns with the document and its stamp, `kind` is the kind of every document in the store (`"nisc.nova/action"`), `key` lists the columns that identify a row. Returns `{ total, upgraded, applied, unread? }`: rows read, rows that were behind and rewritten, per migration ref the number of rows it was applied to, and — only when there are any — the rows it could not read and left as they are, each named by its key (`id="e"`): a stamp that is neither null nor a JSON object (a `text` column), an entry for a given grammar that is no number, or a key the driver does not hand back exactly as stored (a `timestamptz` with microseconds). |
 
 ## The check
 
@@ -253,14 +257,17 @@ the rest are recorded as untouched. `verify` passes only when every planned
 artifact equals its expected JSON (key order aside) and passes its kind's
 current schema in `schemas`, every untouched one is
 still one no migration would change, and nothing was added or removed since
-the plan — then the lock moves and the files the plan wrote go. A migration whose result
+the plan — then the lock moves and the files the plan wrote go. The lock is the
+source's stamp: `verify` refuses a plan made from any other ("plan again"),
+whatever `plan.json` says, and compares stamps by grammar, not by the order
+the grammars were given in. A migration whose result
 fails the current schema stops the plan: no edit could pass. `init` records a
 lock for a source that has never had one.
 
 | | |
 |---|---|
 | `@niscorp/strata/upgrade` | Pure: `planSourceUpgrade`, `verifySourceUpgrade`, `renderReport`, `changedStrings`. `verifySourceUpgrade` compares JSON only; `runSourceUpgrade` checks the schemas as well. `planSourceUpgrade`'s `describe(ref)` returns the description of the migration `ref` names, for the report; it is asked for every migration between the source's stamp and the upgrader's. |
-| `@niscorp/strata/node` | `runSourceUpgrade(options, argv)` — the lock, the work directory, the report, "look in" hints from the source. `sources` is the directory under `root` that is searched for the files an artifact is written in (default `src`). `workDir` (default `.strata/upgrade`) is where `upgrade` writes `plan.json`, `REPORT.md` and `expected/`; `upgrade` and `verify` remove only those files, and a directory only once it is empty, so nothing else in it is touched. |
+| `@niscorp/strata/node` | `runSourceUpgrade(options, argv)` — the lock, the work directory, the report, "look in" hints from the source. `sources` is the directory under `root` that is searched for the files an artifact is written in (default `src`). `workDir` (default `.strata/upgrade`) is where `upgrade` writes `plan.json`, `REPORT.md` and `expected/`; `upgrade` and `verify` remove only those files, and a directory only once it is empty, so nothing else in it is touched. In a `workDir` the host names, a `REPORT.md` is strata's only when it begins with `# strata upgrade` (a byte-order mark aside) and a `plan.json` only when it has a plan's shape: given one that is not, `upgrade` leaves it as it is and exits 1 ("Move it, or give strata a workDir of its own."), and nothing removes it. An expected file is named after the artifact's kind and id; a second id that cleans to the same name (`a/b`, `a_b`) gets `~2`. |
 
 See [DESIGN.md](./DESIGN.md) and [the plan](../../docs/plans/versioning.md).
 
@@ -275,6 +282,7 @@ sentence says which:
 | two sequences with one id | `prepare` |
 | a ledger `table` or `schema`, or a store's table, schema or column, that is not a plain identifier | `migrate`, `status`, `readLedger`, `ledgerDdl`, `upgradeStore` |
 | a store whose `key` names no column | `upgradeStore` |
+| a stamp entry, for a grammar the upgrader was given, that is no number | `upgrader.upgrade`, `upgrader.behind` (`upgradeStore` names such a row in `unread` instead) |
 | a `strata.lock.json` that is JSON but not a lock, or has an entry that is not a whole number of migrations | `runSourceUpgrade` |
 | two artifacts with one kind and id | `planSourceUpgrade`, `runSourceUpgrade` |
 

@@ -389,6 +389,27 @@ describe('the tenant boundary, door by door', () => {
     expect(reached(calls, 'signal')).toEqual([]);
   });
 
+  it('...and a manual fact ingested as one identity runs no reflex of another, disabled or not', async () => {
+    const refund: ReflexInput = { id: 'northrock:refund', intent: 'x', on: { manual: {} }, as: OTHER, enabled: false, effect: { name: 'seen', input: { by: 'northrock', door: 'manual' } } };
+    const { tide, calls } = await harness([...both, refund], effects({ run: () => ({}) }));
+    await tide.ingest({ kind: 'manual', target: 'northrock:refund', at: T0 }, { as: MINE });
+    await tide.ingest({ kind: 'manual', target: 'northrock:refund', at: T0 });
+    for (let n = 0; n < 3; n += 1) await tide.advance({ now: T0 + n });
+    expect(reached(calls, 'manual')).toEqual([]);
+
+    await tide.fire('northrock:refund', { now: T0 + 10 });
+    for (let n = 0; n < 3; n += 1) await tide.advance({ now: T0 + 10 + n });
+    expect(reached(calls, 'manual')).toEqual(['northrock']);
+  });
+
+  it('...and a run fact is not ingested: only a settled run mints one', async () => {
+    const { tide, calls } = await harness(both, effects({ run: () => ({}) }));
+    const forged = tide.ingest({ kind: 'run', reflex: 'lumen:source', runId: 'run_forged', stats: { total: 1, done: 1, failed: 0 }, at: T0 }, { as: MINE });
+    await expect(forged).rejects.toMatchObject({ code: 'invalid_fact' });
+    for (let n = 0; n < 3; n += 1) await tide.advance({ now: T0 + n });
+    expect(reached(calls, 'run')).toEqual([]);
+  });
+
   it('door 3 — a handler’s `emit` reaches only its own tenant', async () => {
     const { tide, calls } = await harness(
       both,
@@ -444,6 +465,84 @@ describe('fan-out failure', () => {
     expect(second.tasksCreated).toBe(2);
     expect(calls).toHaveLength(2);
     expect((await tide.ledger.runs())).toHaveLength(1);
+  });
+
+  it('runs whose fan-out keeps failing wait their turn, and a healthy run behind them fans out', async () => {
+    let selects = 0;
+    const broken: ReflexInput = { id: 'broken', intent: 'x', on: { manual: {} }, select: { query: {}, mode: 'batch' }, effect: { name: 'work' }, policy: { overlap: 'allow' } };
+    const healthy: ReflexInput = { id: 'healthy', intent: 'x', on: { manual: {} }, effect: { name: 'work' } };
+    const select: SelectFn = () => {
+      selects += 1;
+      throw new Error('ECONNREFUSED');
+    };
+    const { tide, store } = await harness([broken, healthy], { work: { run: () => null } }, { select });
+    for (let n = 0; n < 3; n += 1) await tide.fire('broken', { now: T0 });
+    await tide.advance({ now: T0, limit: 3 });
+    await tide.fire('healthy', { now: T0 + 1_000 });
+    for (let n = 0; n < 5; n += 1) await tide.advance({ now: T0 + 1_000, limit: 3 });
+
+    expect((await tide.ledger.runs({ reflexId: 'healthy' }))[0]?.state).toBe('settled');
+    expect(selects).toBe(3);
+
+    await tide.advance({ now: T0 + 60_000, limit: 3 });
+    expect(selects).toBe(6);
+    await tide.advance({ now: T0 + 120_000, limit: 3 });
+    expect(selects).toBe(6);
+    await tide.advance({ now: T0 + 180_000, limit: 3 });
+    expect(selects).toBe(9);
+
+    const restarted = createTide({ store, transform: testTransform, select, effects: { work: { run: () => null } } });
+    await restarted.load([broken, healthy], { at: T0 });
+    await restarted.advance({ now: T0 + 181_000, limit: 3 });
+    await restarted.advance({ now: T0 + 182_000, limit: 3 });
+    expect(selects).toBe(12);
+    expect((await tide.ledger.runs({ reflexId: 'broken' })).map((run) => run.state)).toEqual(['pending', 'pending', 'pending']);
+  });
+
+  it('a wait that has grown past any number is still a number: the run is tried again once it is over', async () => {
+    let selects = 0;
+    const broken: ReflexInput = { id: 'broken', intent: 'x', on: { manual: {} }, select: { query: {}, mode: 'batch' }, effect: { name: 'work' }, policy: { retry: { max: 2_000, baseMs: 1 } } };
+    const select: SelectFn = () => {
+      selects += 1;
+      throw new Error('ECONNREFUSED');
+    };
+    const { tide } = await harness([broken], { work: { run: () => null } }, { select, armedAt: 0 });
+    await tide.fire('broken', { now: 1 });
+    for (let power = 0; power < 1_023; power += 1) await tide.advance({ now: 2 ** power });
+    for (const now of [1.5, 1.6, 1.7, 1.8, 1.9].map((share) => share * 2 ** 1_023)) await tide.advance({ now });
+    expect(selects).toBe(1_028);
+    await tide.advance({ now: Number.MAX_VALUE });
+    expect(selects).toBe(1_029);
+  });
+
+  it('an engine forgets the wait of a run another engine has fanned out', async () => {
+    let up = false;
+    const reads: unknown[] = [];
+    const store = createMemoryStore();
+    const watched: TideStore = { ...store, query: (spec) => (reads.push(spec.where), store.query(spec)) };
+    const reflex: ReflexInput = { id: 'r', intent: 'x', on: { manual: {} }, select: { query: {}, mode: 'batch' }, effect: { name: 'work' } };
+    const select: SelectFn = () => {
+      if (!up) throw new Error('ECONNREFUSED');
+      return [{ id: 'm' }];
+    };
+    const make = (on: TideStore) => createTide({ store: on, transform: testTransform, select, effects: { work: { run: () => null } } });
+    const a = make(watched);
+    const b = make(store);
+    await a.load([reflex], { at: T0 });
+    await b.load([reflex], { at: T0 });
+    await a.fire('r', { now: T0 });
+    await a.advance({ now: T0 });
+    up = true;
+    await b.advance({ now: T0 + 1 });
+    const [run] = await b.ledger.runs();
+    expect(run?.state).not.toBe('pending');
+
+    const asked = () => reads.filter((where) => JSON.stringify(where).includes(run?.id ?? '-')).length;
+    await a.advance({ now: T0 + 2 });
+    const once = asked();
+    await a.advance({ now: T0 + 3 });
+    expect(once).toBeGreaterThan(0);
+    expect(asked()).toBe(once);
   });
 
   it('still refuses a malformed reflex loudly', async () => {

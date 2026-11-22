@@ -185,7 +185,8 @@ for monthly, `2026-03-07` for daily/weekly, `2026` for yearly. A DST transition
 can move the instant a key fires at but cannot mint a second key or lose one.
 Day-31 clamps to month end (February bills on the 28th). An erased
 spring-forward local time shifts past the gap; an ambiguous fall-back time takes
-the first occurrence. Both match Temporal's `disambiguation: 'compatible'`.
+the first occurrence. Both match Temporal's `disambiguation: 'compatible'`, in
+every zone, those at +12 and +13 (Auckland, Chatham) included.
 
 A clock reflex with **no arming time** establishes its baseline on the first
 `advance` and mints nothing — materializing from the epoch would backfill decades.
@@ -408,7 +409,8 @@ ingest(fact: FactInput, options?: { as?: string; cause?: string; depth?: number 
 One write. Undefined means a `dedupeKey` collision — a refusal, not an error,
 announced as `fact.deduped` so a repeat is never mistaken for silence — or,
 under `storeUnwatchedWrites: false`, a write nothing watches, dropped silently.
-A fact that does not parse throws `invalid_fact`.
+A fact that does not parse throws `invalid_fact`, and so does a `run` fact: tide
+mints one when a run settles, and one ingested would forge that settlement.
 Matching happens in `advance`, against whatever is loaded when the fact comes
 due, which is what lets a delayed fact meet the reflexes of the day it fires.
 
@@ -419,8 +421,8 @@ signal. It is a second argument rather than a field on the fact because the
 fact shape is what a webhook body parses into: an identity a caller can choose
 is not an identity.
 
-The rule is strict — a fact with no identity reaches only reflexes with no
-identity. A single-tenant host names no `as` anywhere and is unaffected;
+The rule is strict, and a `manual` fact keeps it too — a fact with no identity
+reaches only reflexes with no identity. A single-tenant host names no `as` anywhere and is unaffected;
 a multi-tenant host that forgets one gets silence rather than a leak. An event
 that genuinely concerns every tenant is ingested once per tenant, by the only
 party that can know which those are.
@@ -478,8 +480,9 @@ What is loaded now, as parsed.
 ```typescript
 fire(reflexId, { now, input?, by? }): Promise<Fact | undefined>
 ```
-Sugar over `ingest`: mints a `manual` fact aimed at one reflex, with `input` as
-its `payload` and `by` (default `'operator'`) recorded. Works on a
+Sugar over `ingest`: mints a `manual` fact aimed at one reflex, under that
+reflex's own `as`, with `input` as its `payload` and `by` (default `'operator'`)
+recorded. Works on a
 **disarmed** reflex — arming gates triggers, not people. Throws
 `unknown_reflex` when the reflex is not loaded.
 
@@ -582,7 +585,7 @@ logs at whatever grain it wants.
 | `run.created` | `run` | a run opened |
 | `run.settled` | `run` | its last task settled, or it fanned out to no tasks — once per run, not again after a `retry` |
 | `run.skipped` | `reflexId`, `reason` | overlap, or a fan-out tide refused |
-| `run.deferred` | `reflexId`, `runId`, `reason` | a fan-out failed in a host seam; retried next `advance` |
+| `run.deferred` | `reflexId`, `runId`, `reason` | a fan-out failed in a host seam; retried after the reflex's retry wait |
 | `task.done` / `task.failed` | `task` | an attempt recorded a terminal outcome |
 | `task.retrying` | `task`, `nextAt` | an attempt threw or timed out with retries left |
 | `task.reclaimed` | `task` | a lapsed lease was taken back |
@@ -664,7 +667,10 @@ of one operation and diverged three ways.
   per value of `column` be held at a time, counting rows that match `held`
   from an earlier claim; it applies to the values listed in `only`, and every
   other value claims freely. A value in `only` with nothing to claim takes no
-  room from the others.
+  room from the others. A store should take the values in `only` first, one row
+  each, and give what they leave of `limit` to the other rows, as both of
+  tide's stores do: taken strictly in `order`, a busy reflex outside `only` can
+  fill every claim before a serial one's row is reached.
 - **`cas`** is the fence: a timed-out attempt finishing late finds its token
   superseded and is discarded. Setting a field to `undefined` clears it.
 - **`transact`** is required. Fan-out committing with its run's transition, and
@@ -725,7 +731,9 @@ A `TideStore` over four tables: `tide_fact`, `tide_run`, `tide_work`,
 `tide_reflex_state` (`TIDE_TABLES`). `appendIfAbsent` is `ON CONFLICT DO
 NOTHING` on the key `UNIQUE_BY` names; `claim` is one `UPDATE … FOR UPDATE SKIP
 LOCKED`; the state columns carry CHECK constraints; deleting a run cascades to
-its work.
+its work. The ids it mints for `fact`, `run` and `task` rows are UUIDs (rows
+written by an earlier version keep theirs: an id is text, and nothing reads its
+shape).
 
 - **`pool`** is a `TidePool`: `{ query(text, values?), transaction?(fn) }`. It
   is a type of the store's own, and structural: vex's `PgPool`, a PGlite behind
@@ -848,7 +856,9 @@ often does not. It is told to write every date it drafts or asks about with
 its weekday ("Fri 2026-11-06"), and a date its reasoning writes beside the wrong
 weekday is sent back in the same run with the weekday it is, as is a date that
 does not exist. How it words a date is its own: a draft is never sent back for
-that, so a date it writes some other way is not checked.
+that, so a date it writes some other way is not checked. The draft itself is: a
+one-shot clock whose date does not exist (`2026-02-30`, which would fire on
+2 March) is sent back too, whatever the reasoning says.
 
 ```typescript
 const agent = createReflexAgent({ effects, triggers: ['clock', 'timer'] });
@@ -880,7 +890,7 @@ if (result.ok && isDraft(result.output.data)) {
 | Code | Raised when |
 |---|---|
 | `invalid_reflex` | a reflex failed `ReflexSchema` — including `when` on a non-fact trigger and `each` with no `unitKey` |
-| `invalid_fact` | a fact failed `FactInputSchema`, or a handler emitted one that did, or emitted a kind other than `write` / `signal` |
+| `invalid_fact` | a fact failed `FactInputSchema`, or `ingest` was given a `run` fact, or a handler emitted one that did not parse, or emitted a kind other than `write` / `signal` |
 | `duplicate_reflex` | two reflexes share an id |
 | `unknown_reflex` | `fire`/`preview` named a reflex that is not loaded, or `load` found a reflex watching the run of one that is not there |
 | `unguarded_cycle` | `load` found a loop on which no reflex has a `select` or a `when` |
@@ -903,7 +913,16 @@ A `TideError` is tide's own refusal — a duplicate unit key, a missing `select`
 seam — which means the reflex is wrong and will be wrong again next `advance`, so the
 run is `skipped` with a note. Anything else came out of a host seam: a
 selection, a transform, a database. That is a bad minute, not a bad reflex, so
-the run stays `pending` and is tried again on the next `advance` — a row past
-its due time that a query can see. Skipping it instead would
+the run stays `pending` and is tried again after a wait — a row past its due
+time that a query can see. The wait is the reflex's own `policy.retry`: after
+the n-th deferral it is `baseMs` with `backoff: 'fixed'`, and
+`baseMs · 2^(min(n, max) − 1)` with `'exponential'` — with the defaults 60 s,
+120 s, 240 s, then 240 s for good. `max` does not end the run, and nothing caps
+the wait but the largest whole number of milliseconds (about 285 000 years): a
+large `max` makes a long wait, `max: 20` with the default `baseMs` 364 days.
+While a run waits, the pending runs behind it fan out. Each engine keeps its own
+waits, in memory: after a restart each deferred run is tried once at once, then
+waits again, and two instances each pace it by their own count. A run another
+instance fans out or skips is forgotten on the next pass. Skipping it instead would
 lose it for good: runs are idempotent on `(reflexId, cause)`, so the occurrence
 cannot open a second run.

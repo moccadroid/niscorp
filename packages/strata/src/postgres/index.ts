@@ -198,6 +198,7 @@ export type StoreReport = {
   total: number;
   upgraded: number;
   applied: Readonly<Record<string, number>>;
+  unread?: readonly string[];
 };
 
 export const upgradeStore = async (pool: StrataPool, store: DocumentStore, upgrader: Upgrader): Promise<StoreReport> => {
@@ -210,18 +211,38 @@ export const upgradeStore = async (pool: StrataPool, store: DocumentStore, upgra
   const keys = store.key.map((k) => quote(k, 'column'));
   if (keys.length === 0) throw new StrataError('INVALID_SEQUENCE', `The store ${store.table} names no key columns.`);
 
+  // Every row is locked, but only its key and stamp are read with the lock; a behind row's document is read
+  // by its key, one at a time.
+  const byKey = keys.map((k, i) => `${k} = $${i + 1}`).join(' AND ');
   return pool.transaction(async (tx) => {
-    const { rows } = await tx.query(`SELECT ${[...keys, column, stamp].join(', ')} FROM ${table} FOR UPDATE`);
+    const { rows } = await tx.query(`SELECT ${[...keys, stamp].join(', ')} FROM ${table} FOR UPDATE`);
     const applied: Record<string, number> = {};
+    const unread: string[] = [];
     let upgraded = 0;
     for (const row of rows) {
       const given = row[store.stamp];
-      const rowStamp = typeof given === 'object' && given !== null && !Array.isArray(given) ? Object.fromEntries(Object.entries(given).map(([k, v]) => [k, Number(v)])) : {};
       const where = store.key.map((k) => `${k}=${JSON.stringify(row[k])}`).join(', ');
+      // Null is no stamp. Anything else that is not an object (a text column's string) cannot be read as one.
+      if (given !== null && given !== undefined && (typeof given !== 'object' || Array.isArray(given))) {
+        unread.push(where);
+        continue;
+      }
+      const rowStamp = given === null || given === undefined ? {} : Object.fromEntries(Object.entries(given).map(([k, v]) => [k, Number(v)]));
+      if (Object.keys(upgrader.stamp).some((id) => Number.isNaN(rowStamp[id]))) {
+        unread.push(where);
+        continue;
+      }
       let result: UpgradeResult;
       try {
         if (!upgrader.behind(rowStamp)) continue;
-        result = upgrader.upgrade(row[store.column], { kind: store.kind, stamp: rowStamp });
+        // A key the driver does not hand back exactly as stored (a timestamptz with microseconds) finds no row;
+        // an update by it would have changed nothing either.
+        const [current] = (await tx.query(`SELECT ${column} FROM ${table} WHERE ${byKey}`, store.key.map((k) => row[k]))).rows;
+        if (current === undefined) {
+          unread.push(where);
+          continue;
+        }
+        result = upgrader.upgrade(current[store.column], { kind: store.kind, stamp: rowStamp });
       } catch (cause) {
         if (cause instanceof StrataError) {
           throw new StrataError(cause.code, `${store.table} (${where}): ${cause.message.split('\n')[0] ?? ''}`, cause.details, { cause });
@@ -235,6 +256,6 @@ export const upgradeStore = async (pool: StrataPool, store: DocumentStore, upgra
       upgraded += 1;
       for (const ref of result.applied) applied[ref] = (applied[ref] ?? 0) + 1;
     }
-    return { total: rows.length, upgraded, applied };
+    return unread.length === 0 ? { total: rows.length, upgraded, applied } : { total: rows.length, upgraded, applied, unread };
   });
 };

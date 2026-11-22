@@ -73,13 +73,13 @@ const factAsRow = (fact: Fact): Row => ({ ...fact });
 export const reflexMatchesFact = (loaded: LoadedReflex, fact: Fact): boolean => {
   const { reflex } = loaded;
 
-  // Before enablement and arming: a person can fire a reflex that is disabled.
-  if (fact.kind === 'manual') return fact.target === reflex.id;
-
   // The tenant boundary inside the engine: a fact wakes only reflexes running
   // under the same identity, since its row reaches the effect with no query
   // and so no host policy. No identity wakes only reflexes with none.
   if (fact.as !== reflex.as) return false;
+
+  // Before enablement and arming: a person can fire a reflex that is disabled.
+  if (fact.kind === 'manual') return fact.target === reflex.id;
 
   if (!reflex.enabled) return false;
   if (fact.at < loaded.armedAt) return false;

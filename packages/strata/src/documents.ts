@@ -112,7 +112,18 @@ export const createUpgrader = async (sequences: readonly Sequence[], options: { 
     return found;
   };
 
-  const positionOf = (given: Stamp | null | undefined, id: string): number => given?.[id] ?? 0;
+  // An entry is read with `Number`: digits and `null` read; one that reads as no number is refused rather
+  // than read as current. A number is named as itself: JSON would print `NaN` as `null`.
+  const positionOf = (given: Stamp | null | undefined, id: string): number => {
+    const entry: unknown = given?.[id];
+    if (entry === undefined) return 0;
+    const position = Number(entry);
+    if (Number.isNaN(position)) {
+      const named = typeof entry === 'number' ? String(entry) : JSON.stringify(entry);
+      throw new StrataError('INVALID_SEQUENCE', `The stamp's entry for ${id} is ${named}: not a number of migrations.`);
+    }
+    return position;
+  };
 
   const behind = (given: Stamp | null | undefined): boolean => {
     const ahead = grammars.filter((s) => positionOf(given, s.id) > s.migrations.length);

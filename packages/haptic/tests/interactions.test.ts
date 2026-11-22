@@ -355,6 +355,11 @@ assert.deepEqual(
   prepareArtifact({ stamp: { 'nisc.haptic': 0, 'nisc.prism': 3 }, policy: policy(), stages: [items], mapping: titles, outputSchema: list }).artifact.stamp,
   { 'nisc.haptic': 1, 'nisc.prism': PRISM_SEQUENCE.migrations.length },
 );
+// A stamp entry that is not a number of migrations is refused, not read as current.
+assert.throws(
+  () => prepareArtifact({ stamp: { 'nisc.haptic': 'v0', 'nisc.prism': 3 }, policy: policy(), stages: [items], mapping: titles, outputSchema: list }),
+  (error: unknown) => error instanceof Error && 'code' in error && error.code === 'UPGRADE' && /nisc\.haptic is "v0"/.test(error.message),
+);
 
 // The three examples in ARTIFACTS.md prepare and run as it says, on pages shaped like the sites'.
 const doc = await readFile(new URL('../ARTIFACTS.md', import.meta.url), 'utf8');

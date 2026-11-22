@@ -466,7 +466,11 @@ The requirements doc calls this "the part that must not be hand-waved." In order
   `TideError` is tide's own refusal — a duplicate unit key, a missing `select` seam —
   so the reflex is wrong and will be wrong again next time: the run is `skipped`, with
   a note. Anything else came out of a host seam, and the run stays `pending` to be
-  retried, which is a row past its due time that a query can see. **⟲** Every throw
+  retried after the reflex's retry wait, which is a row past its due time that a query
+  can see. **⟲** It was retried on every `advance`, read oldest first: a page of runs
+  whose database was down filled every pass, and no run behind them fanned out. The
+  wait is pacing only, so it lives in the engine's memory, not a column: a restart
+  costs one early attempt per deferred run, and loses nothing. **⟲** Every throw
   used to skip; because runs are idempotent on `(reflexId, cause)`, the occurrence
   could never re-materialize, so one unreachable database destroyed that night's
   billing run permanently — and since `skipped` is not `settled`, everything waiting on
@@ -592,7 +596,10 @@ rationalisation on top, and it failed open.
 
 **Identity equality** stops a fact crossing between tenants at every door —
 ingest (the bridge stamps `as` from the WRITE's own scope, mapped by the
-app's naming rule), fire, emit, and run-settlement. And within one tenant, a
+app's naming rule), fire, emit, and run-settlement. A `manual` fact passes the
+identity check before it skips enablement and arming: ⟲ it skipped both, so a
+manual fact ingested as one tenant ran another tenant's reflex, disabled or not.
+And `ingest` refuses a `run` fact: only the settler mints one. Within one tenant, a
 write fact is a STREAM: every reflex watching the entity hears the same fact,
 which is what makes "welcome them" and "tell the desk" two reflexes instead
 of one with two jobs.
@@ -614,7 +621,10 @@ rather than carefully avoided. The calendar edges are decided, not discovered:
 - A local time erased by spring-forward is **shifted forward by the length of the gap**
   (Vienna 02:30 → 03:30), as Temporal's `disambiguation: 'compatible'`; a local time
   that fall-back makes ambiguous takes the **first occurrence**. The key is identical
-  either way.
+  either way. **⟲** The offset was probed half a day either side of the guess; in zones
+  at +12 and +13 a transition lies just outside that, so Auckland's 02:00 on the
+  spring-forward day fired at 01:00 and its repeated hour took the second occurrence.
+  It is probed a day either side: no zone is more than 14 h from UTC.
 - Timezone resolution uses the platform's IANA data (`Intl`), keeping the dependency
   count at zero. "03:00 in Vienna" and "03:00 in Denver" are both honest.
 

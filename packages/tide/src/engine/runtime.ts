@@ -22,6 +22,7 @@ export type EngineDeps = {
   hasLoaded: () => boolean;
   find: (id: string) => LoadedReflex | undefined;
   nextToken: () => string;
+  deferred: Map<string, { reflexId: string; count: number; until: number }>;
 };
 
 export type EnvParts = {
