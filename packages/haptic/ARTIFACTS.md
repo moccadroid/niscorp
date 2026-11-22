@@ -65,7 +65,7 @@ An artifact with a `request` is run with its inputs instead of an address: `prep
 
 | `ArtifactError.code` | What is wrong                                                                                              | Example message                                                                                |
 | -------------------- | ---------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| `UPGRADE`            | The `stamp` names a grammar version that cannot be upgraded.                                               |                                                                                                |
+| `UPGRADE`            | The `stamp` names a grammar version that cannot be upgraded, or an entry that is no number.                | `The stamp's entry for nisc.haptic is "v0": not a number of migrations.`                      |
 | `GRAMMAR`            | A key is missing, unknown or of the wrong type, or `required` or `where.in` names a field the stage lacks. | `stages.0.where.in: "price" is not a field or "text"; this stage's fields are "title", "link"` |
 | `SELECTOR`           | A CSS selector the HTML reader cannot run, or an XPath expression that does not parse.                     | `stages.0.fields.title.selector: "h3[" is not CSS the reader runs (…)`                         |
 | `PROGRAM`            | The mapping or a reference program is not a valid Prism program.                                           | `mapping: $mapp: Not a Prism op. …`                                                            |
