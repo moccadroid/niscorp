@@ -870,9 +870,13 @@ what carries a member's identity stamp onto a write no other role grants.
 
 Two rule sets with the same number of matches are not combined: the role listed
 first wins, and the principal reads only the rows its rules allow. The merged
-policy is `default: 'deny'`, and a role's `public` or `deny` entry is skipped, so
-an entity only such entries name is refused. Policies from `createScopePolicy`
-carry neither.
+policy is `default: 'deny'`, so a role's `default: 'allow'` is not carried over.
+Each entity is read as the phases it grants before the rule sets are compared: a
+`public` entity grants all four phases with no rule; a `write` list is added to
+insert, update and delete (its `match` rules only, for delete), as
+`createScopePolicy` does; a `deny` entity grants nothing, so another role's grant
+stands. `{ write: [tenant], update: [] }` therefore merges to
+`update: [tenant]`.
 
 ### A read that must stay narrow
 

@@ -169,3 +169,25 @@ describe('merging per-role policies', () => {
     expect(mergeScopePolicies([asMember]).entities).toEqual(asMember.entities);
   });
 });
+
+describe('merging hand-written policies', () => {
+  const tenant: ScopeMatch = { match: 'tenant_id', to: 'tenantId' };
+
+  it('a public table stays readable and writable with no rule', () => {
+    const merged = mergeScopePolicies([{ default: 'deny', entities: { countries: { public: true } } }]);
+    expect(phases(merged, 'countries')).toEqual({ read: [], insert: [], update: [], delete: [] });
+  });
+
+  it("write reaches insert, update and delete, on top of each phase's own rules", () => {
+    const merged = mergeScopePolicies([{ default: 'deny', entities: { tasks: { read: [], write: [tenant], update: [] } } }]);
+    expect(phases(merged, 'tasks')).toEqual({ read: [], insert: [tenant], update: [tenant], delete: [tenant] });
+  });
+
+  it("one role's deny leaves another role's grant standing", () => {
+    const merged = mergeScopePolicies([
+      { default: 'deny', entities: { s: { deny: true } } },
+      { default: 'deny', entities: { s: { read: [] } } },
+    ]);
+    expect(phases(merged, 's')).toEqual({ read: [] });
+  });
+});

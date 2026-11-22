@@ -103,11 +103,28 @@ export const createScopePolicy = (
 const matchCount = (rules: readonly (ScopeMatch | ScopeRule)[] | undefined): number =>
   (rules ?? []).filter((r) => 'match' in r).length;
 
+type Phases = { read?: ScopeMatch[]; insert?: ScopeRule[]; update?: ScopeRule[]; delete?: ScopeMatch[] };
+
+// A `deny` grants nothing here, so another role's grant stands.
+const phasesOf = (rule: ScopePolicy['entities'][string]): Phases => {
+  if (rule === undefined || 'deny' in rule) return {};
+  if ('public' in rule) return { read: [], insert: [], update: [], delete: [] };
+  const { read, write, insert, update, delete: del } = rule;
+  const withWrite = <R extends ScopeRule>(common: R[] | undefined, own: R[] | undefined): R[] => [...(common ?? []), ...(own ?? [])];
+  return {
+    ...(read !== undefined ? { read } : {}),
+    ...(write !== undefined || insert !== undefined ? { insert: withWrite(write, insert) } : {}),
+    ...(write !== undefined || update !== undefined ? { update: withWrite(write, update) } : {}),
+    ...(write !== undefined || del !== undefined ? { delete: withWrite(write && onlyMatches(write), del) } : {}),
+  };
+};
+
 export const mergeScopePolicies = (policies: readonly ScopePolicy[]): ScopePolicy => {
-  const entities: Record<string, { read?: ScopeMatch[]; insert?: ScopeRule[]; update?: ScopeRule[]; delete?: ScopeMatch[] }> = {};
+  const entities: Record<string, Phases> = {};
   for (const policy of policies) {
-    for (const [table, rule] of Object.entries(policy.entities)) {
-      if (rule === undefined || 'public' in rule || 'deny' in rule) continue;
+    for (const [table, listed] of Object.entries(policy.entities)) {
+      const rule = phasesOf(listed);
+      if (Object.keys(rule).length === 0) continue;
       const into = (entities[table] ??= {});
       for (const phase of ['read', 'insert', 'update', 'delete'] as const) {
         const incoming = rule[phase];
