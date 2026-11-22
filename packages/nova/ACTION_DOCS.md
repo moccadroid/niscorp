@@ -252,7 +252,7 @@ Invoke a named endpoint. Optional `onSuccess` and `onError` step branches run af
 }
 ```
 
-The response is written to the endpoint's `target` before `onSuccess` runs; there is no implicit per-call response slot. If a newer call to the same endpoint has already landed, an older response arriving late does not overwrite `target` (its `onSuccess` still runs).
+The response is written to the endpoint's `target` before `onSuccess` runs; there is no implicit per-call response slot. If a newer call to the same endpoint has already landed, an older response arriving late does not overwrite `target` (its `onSuccess` still runs), and an older failure arriving late does not overwrite `errorTarget` (its `onError` steps still run). A failure that comes back while a newer call is still on its way is written, as before.
 
 The `onError` branch has access to a special **`@error`** scope inside templates: `{{@error.message}}`, `{{@error.status}}`, `{{@error.data}}`. Use it to surface error messages in the UI.
 

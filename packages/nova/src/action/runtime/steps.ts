@@ -30,6 +30,7 @@ export type EndpointCalls = {
   begin: (endpoint: string) => number;
   land: (endpoint: string, ticket: number) => boolean;
   follow: (endpoint: string, ticket: number, stop: Unsubscribe) => void;
+  isSuperseded: (endpoint: string, ticket: number) => boolean;
 };
 
 export type StepContext = {
@@ -178,7 +179,8 @@ const runCall = async (
     if (onSuccess) await executeSteps(onSuccess, ctx);
     return;
   }
-  writeTarget(ctx.dataStore, endpoint.errorTarget, result.error);
+  const isSuperseded = ticket !== undefined && ctx.calls !== undefined && ctx.calls.isSuperseded(callName, ticket);
+  if (!isSuperseded) writeTarget(ctx.dataStore, endpoint.errorTarget, result.error);
   if (onError) {
     const errorExtras: ExtraScopes = { ...ctx.extras, '@error': result.error };
     await executeSteps(onError, { ...ctx, extras: errorExtras });

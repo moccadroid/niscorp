@@ -89,3 +89,11 @@ Each section is one change an app can see, in `@niscorp/nova`. None of them chan
 - What to do: nothing.
 - Breaking: yes (a field is present where it was missing)
 - Affected apps: none found. No layout or step reads `@error.data` in the lab apps, the templates, AnimaApp, anima-finance or mira. The lab apps' 120 HTTP endpoints with `errorTarget` talk to servers that answer errors as JSON `{ message }` (for example `apps/lab/atrium/src/server/boot.ts:60-79`, `apps/lab/mythos/src/api/routes.ts:45-75`); AnimaApp's plain-text error routes (`src/server/media/index.ts:317`) have no nova endpoint with `errorTarget`.
+
+### nova — a failure that comes back after a newer call of the endpoint came back is dropped
+- Before: search "a" (slow, fails after 50 ms), then search "ab" (succeeds after 5 ms), on an endpoint with `target: 'rows'` and `errorTarget: 'err'`: the rows showed "ab", then the late failure wrote `err = 'first search failed late'` over a screen that was fine.
+- Now: `err` stays as it was (`null`), as a late success already does not overwrite `target`. The failed call's `onError` steps still run. Unchanged: a failure that comes back while a newer call is still on its way is written (save row 1, then row 2; row 1's failure shows), and stays written if that newer call then succeeds, because a success does not clear `errorTarget`.
+- Who notices: endpoints with `errorTarget` called again before an earlier call failed (search as you type, repeated saves).
+- What to do: nothing.
+- Breaking: yes
+- Affected apps: four lab apps call such endpoints repeatedly, and each gets the intended result (a stale error no longer shows): `apps/lab/atrium/src/admin/app/actions/catalog.action.ts:19` and `entries.action.ts:15` (load on every filter change), `apps/lab/lyceum/src/app/actions/screens/screens.ts:90` (`type` on every keystroke), `apps/lab/encore/src/app/actions/live/move-impact.action.ts:35-49` (four endpoints re-read on each draft move). AnimaApp, anima-finance and mira: none found.

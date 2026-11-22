@@ -87,6 +87,7 @@ export const createActionRuntime = (config: ActionRuntimeConfig): ActionRuntime 
       entry.stop?.();
       entry.stop = stop;
     },
+    isSuperseded: (endpoint, ticket) => ticket < entryOf(endpoint).landed,
   };
   const stopFollowing = (): void => {
     for (const entry of ledger.values()) {
