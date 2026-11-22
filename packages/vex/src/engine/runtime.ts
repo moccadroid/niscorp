@@ -656,6 +656,7 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
     getDslSchema,
     getSchema,
     cache,
+    ...(scopePolicy !== undefined ? { scopePolicy } : {}),
     invalidate: live.invalidate,
     rows: { stats: live.stats, stop: live.stop },
   };

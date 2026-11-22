@@ -208,7 +208,8 @@ const listFingerprints = async (engine: QueryEngine, policy?: ScopePolicy): Prom
 };
 
 export const handleDiscovery = async (config: VexHandlerConfig): Promise<DiscoveryResponse> => {
-  const { engine, entities: entityFilter, scopePolicy } = config;
+  const { engine, entities: entityFilter } = config;
+  const scopePolicy = config.scopePolicy ?? engine.scopePolicy;
   const filtered = filterSchema(engine.getSchema(), entityFilter).filter(
     (e) => scopePolicy === undefined || canReadTable(scopePolicy, e.name),
   );

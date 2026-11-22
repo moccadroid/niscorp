@@ -379,6 +379,7 @@ type QueryEngine = {
   getDslSchema: () => object;
   getSchema: () => DatabaseSchema | undefined;
   cache: CacheBackend;
+  readonly scopePolicy?: ScopePolicy;
   invalidate: (tables: readonly string[]) => void;
   rows: { stats: () => LiveRowsStats; stop: () => void };
 };
@@ -402,6 +403,9 @@ type QueryEngine = {
   feed an LLM so it learns the DSL.
 - **`getSchema()`** — the last introspected `DatabaseSchema`, or `undefined`.
 - **`cache`** — the live `CacheBackend` for inspection or manual eviction.
+- **`scopePolicy`** — the policy given to `createQueryEngine` (`scope`), absent
+  when none was. A call that passes no policy of its own runs under it, and
+  discovery lists under it when the handler has none.
 - **`invalidate(tables)`** — these tables were written: every reactive read
   over any of them is refetched (once per burst). The vex handler calls it after
   every committed mutation; a host calls it for writes vex did not make.
@@ -1734,8 +1738,9 @@ policy. Any method other than `GET`/`POST`/`PATCH`/`DELETE` answers 405.
   shape|effect }]` — `context` is the derived, typed input signature; `effect`
   summarizes a write), and the full DSL JSON Schema. A client or agent can read
   this to learn how to call the resource — and exactly what each fingerprint
-  takes. Under a per-request policy, entities and entries the policy cannot
-  touch are not listed.
+  takes. Entities and entries the endpoint's policy cannot touch are not
+  listed: the per-request policy when there is one, otherwise the engine's
+  (`createQueryEngine({ scope })`), the policy a query there runs under.
 - **`POST`** → runs a query OR replays a write, one body shape. A
   `fingerprint` naming a `kind: 'mutation'` entry dispatches to the write
   pipeline (when `mutations` is configured); anything else is the read path
