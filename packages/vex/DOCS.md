@@ -1030,7 +1030,11 @@ REQUIRE a `where` (a real vex `Filter`).
 ```
 
 An `upsert` updates the row when the call's context carries its `key`, and
-inserts when the key is absent or an empty string.
+inserts when the key is absent or an empty string. A `null` key inserts where
+the database makes the key (the introspected key column has a default, such as
+`gen_random_uuid()` or a sequence); on a key column with no default it is an
+update of no row and answers `[]`, since an insert there would break the key's
+`NOT NULL`. A write that matched no row answers `[]`: check the length.
 
 An array of ops is a batch and runs in ONE transaction (the client must
 expose `transaction`; a batch on a non-transactional client is refused).

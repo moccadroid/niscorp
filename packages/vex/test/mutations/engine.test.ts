@@ -241,6 +241,21 @@ describe('upsert desugar', () => {
     expect(calls[0]!.sql).toMatch(/^UPDATE tasks SET/);
     expect(calls[0]!.sql).not.toContain('deal_id');
   });
+
+  it('inserts on a null key where the database makes the key, and updates no row where it does not', async () => {
+    const context = { id: null, title: 'T', due_date: null, deal_id: 'deal_9' };
+    const keyMade: DatabaseSchema = {
+      entities: schema.entities.map((e) =>
+        e.table === 'tasks' ? { ...e, fields: e.fields.map((f) => (f.name === 'id' ? { ...f, defaultValue: 'gen_random_uuid()' } : f)) } : e,
+      ),
+    };
+    const made = fakeClient();
+    await executeMutation(made.client, upsertTask, { context, scope: { userId: 'usr_1' }, policy, schema: keyMade });
+    expect(made.calls[0]!.sql).toMatch(/^INSERT INTO tasks/);
+    const notMade = fakeClient();
+    await executeMutation(notMade.client, upsertTask, { context, scope: { userId: 'usr_1' }, policy, schema });
+    expect(notMade.calls[0]!.sql).toMatch(/^UPDATE tasks SET/);
+  });
 });
 
 describe('mutationMisfits', () => {
