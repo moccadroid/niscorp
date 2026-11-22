@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { compile, execute, evaluate, validate, type Config, type JsonObject } from '../src';
+import { compile, execute, evaluate, evaluateSafe, validate, PrismError, type Config, type JsonObject } from '../src';
 import { OP_KEYS } from '../src/schemas';
 
 const both = async (config: Config, source: Parameters<typeof evaluate>[1]) => {
@@ -51,6 +51,33 @@ describe('$update — one path changed, everything else identical', () => {
 
   it('an array index that does not exist is an error', () => {
     expect(() => evaluate({ $update: { from: { $ref: '$.xs' }, path: [5], value: 1 } }, { xs: [0] })).toThrow(/No array item/);
+  });
+});
+
+describe('$update and $has read a path as $get does', () => {
+  const codeOf = (config: Config, source: Parameters<typeof evaluate>[1]): string | undefined => {
+    const result = evaluateSafe(config, source);
+    return result.ok || !(result.error instanceof PrismError) ? undefined : result.error.code;
+  };
+
+  it('digit text on a list is an index: the item is updated, and $has finds it', async () => {
+    const doc = { items: [{ qty: 1 }, { qty: 2 }] };
+    expect(await both({ $update: { from: { $ref: '$.doc' }, path: ['items', '0', 'qty'], value: { $add: [{ $var: 'current' }, 4] } } }, { doc })).toEqual({ items: [{ qty: 5 }, { qty: 2 }] });
+    expect(await both({ $has: { from: { $ref: '$.doc' }, path: ['items', '0', 'qty'] } }, { doc })).toBe(true);
+    expect(await both({ $has: { from: { $ref: '$.doc' }, path: ['items', '2'] } }, { doc })).toBe(false);
+  });
+
+  it('a key on a list, a string, a number or a boolean is refused, not replaced by an object', () => {
+    expect(codeOf({ $update: { from: { $ref: '$.doc' }, path: ['items', 'x'], value: 5 } }, { doc: { items: [1] } })).toBe('E_TYPE');
+    expect(codeOf({ $update: { from: { $ref: '$.doc' }, path: ['items', '01'], value: 5 } }, { doc: { items: [1, 2] } })).toBe('E_TYPE');
+    expect(codeOf({ $update: { from: { $ref: '$.doc' }, path: ['title', 'en'], value: 'Hi' } }, { doc: { title: 'Hello' } })).toBe('E_TYPE');
+    expect(codeOf({ $update: { from: { $ref: '$.doc' }, path: ['on', 'x'], value: 1 } }, { doc: { on: true } })).toBe('E_TYPE');
+    expect(codeOf({ $update: { from: { $ref: '$.n' }, path: ['a'], value: 1 } }, { n: 5 })).toBe('E_TYPE');
+  });
+
+  it('a missing key or a null on the path is still created as an object', async () => {
+    expect(await both({ $update: { from: { $ref: '$.doc' }, path: ['props', 'look'], value: 'dom' } }, { doc: {} })).toEqual({ props: { look: 'dom' } });
+    expect(await both({ $update: { from: { $ref: '$.doc' }, path: ['props', 'look'], value: 'dom' } }, { doc: { props: null } })).toEqual({ props: { look: 'dom' } });
   });
 });
 

@@ -521,7 +521,9 @@ precise edit.
 { "$has": { "from": { "$ref": "$.document" }, "path": ["props", "label"] } }
 ```
 True when the whole path exists — a key present with `null` counts; a missing
-one does not (which `$get` with a `fallback` cannot tell apart).
+one does not (which `$get` with a `fallback` cannot tell apart). A path is read
+as `$get` reads it: a number, or digit text such as `"0"` on a list, is an
+index.
 
 ### `$renameKeys` — Rename in place
 ```json
@@ -535,8 +537,12 @@ existing key replaces that entry.
 { "$update": { "from": { "$ref": "$.document" }, "path": ["props", "count"], "value": { "$add": [{ "$var": "current" }, 1] } } }
 ```
 The value currently at `path` (null when absent) is bound as `current` (rename
-it with `"as"`). Missing objects along a string path are created; an array index
-that does not exist is `E_MISSING_PATH`.
+it with `"as"`). The path is read as `$get` reads it: `["items", "0", "qty"]`
+over a list updates its first item. Missing objects along a string path are
+created, and so is an object where the path meets `null`; an array index that
+does not exist is `E_MISSING_PATH`. A key on a list (`["items", "x"]`, and
+`"01"`, which is not index text) or on a string, number or boolean is `E_TYPE`:
+`$update` never replaces a value with an object.
 
 ### `$assert` — Refuse loudly
 ```json
