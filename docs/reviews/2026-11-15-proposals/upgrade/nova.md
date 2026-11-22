@@ -41,3 +41,11 @@ Each section is one change an app can see, in `@niscorp/nova`. None of them chan
 - What to do: nothing.
 - Breaking: yes (the list has one more name)
 - Affected apps: none found. `defaultRegistry()` of these kits is used in `apps/lab/relay/src/console.ts:21`, `apps/lab/relay/src/dev/devtools-check.ts:37` and moss's terminals (`packages/moss/src/terminal/dom/index.ts:25`, `dom/server.ts:16`, `tty/index.ts:47`); none calls `.list()`. The `.list()` calls in the apps (`apps/lab/relay/src/app/app.ts:50`, the model-first template's `src/dev/artifacts-check.ts:54`, AnimaApp `src/dev/artifacts-check.ts:63`, anima-finance `src/dev/artifacts-check.ts:50`, mira `src/dev/artifacts-check.ts:45`) are on the apps' own React registries.
+
+### nova — `NovaShell` adds only the React components a registry lacks
+- Before: `<NovaShell shell={shell} registry={registry} />` with a registry that had no `CanvasSlot` registered all nine default React components on it, replacing the registry's own `Text`, `Stack`, `Input`, `Button`, `Box`, `Panel`, `JsonTree` and `ActionSlot`. The Ink kit's registry came back with React's `Text` in place of Ink's. `NovaCanvas` did the same.
+- Now: only the names the registry does not have are added (`CanvasSlot`, and any other missing one); the registry's own components stay.
+- Who notices: an app that hands `NovaShell`/`NovaCanvas` its own registry with its own versions of those names and no `CanvasSlot`: it now sees its own components where it saw React's.
+- What to do: nothing, unless the app wanted React's defaults over its own: then register React's (`registerNovaReactComponents(registry)`) itself.
+- Breaking: yes
+- Affected apps: none found. The only `NovaShell` users, `apps/lab/fable/src/app.tsx:4` and the create-nisc React template's `with/page/src/ui/screen.tsx:5`, hand registries that have `CanvasSlot`. mythos's registry has no `CanvasSlot` (`apps/lab/mythos/src/ui/registry.ts:9`) but renders through `NovaShellProvider` and `RenderTree`, not `NovaShell`/`NovaCanvas`.

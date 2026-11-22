@@ -22,7 +22,12 @@ import type { NovaComponent } from './types';
 
 const ensureReactBuiltins = (registry: ComponentRegistry<NovaComponent>): void => {
   if (registry.has('CanvasSlot')) return;
-  registerNovaReactComponents(registry);
+  const builtins = createComponentRegistry<NovaComponent>();
+  registerNovaReactComponents(builtins);
+  for (const name of builtins.list()) {
+    const entry = builtins.get(name);
+    if (!registry.has(name) && entry !== undefined) registry.register(name, entry.component, entry.meta);
+  }
 };
 
 export type NovaLayoutProps = {

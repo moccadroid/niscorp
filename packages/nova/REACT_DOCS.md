@@ -140,8 +140,8 @@ Three components that hide the registry/provider/render-tree wiring. Each is als
 ```
 
 - **`<Nova.Layout>`** — `layout` (a `LayoutNode` or a layout-store id), `data?`, `components?` (registered after the builtins), `registry?` / `store?` (pre-built; with `registry`, `components` and `builtins` are ignored), `builtins?` (default `true`), `strict?`, `onError?`, and the i18n fields `phrases?` / `phraseKeys?` / `onPhraseMiss?` (see `I18N_DOCS.md`). Renders through a `NovaRenderProvider` with no-op dispatch. A `layout` given as an id is read from `store`, so pass the `store` that holds it; an id it does not hold renders nothing.
-- **`<Nova.Shell>`** — `shell`, `registry?` (default `shell.registry`), `slotWrapper?`, `builtins?` (default `true`: registers the default component set on the registry if `CanvasSlot` is missing). Renders the shell's canvasLayout.
-- **`<Nova.Canvas>`** — `id`, plus optional `shell`, `registry?`, `builtins?`. With `shell` it provides its own `NovaShellProvider`; without, it must sit inside one. Renders that canvas's actionLayout.
+- **`<Nova.Shell>`** — `shell`, `registry?` (default `shell.registry`), `slotWrapper?`, `builtins?` (default `true`: if `CanvasSlot` is missing, adds the default components the registry does not have, and replaces none it has). Renders the shell's canvasLayout.
+- **`<Nova.Canvas>`** — `id`, plus optional `shell`, `registry?`, `builtins?` (as for `<Nova.Shell>`). With `shell` it provides its own `NovaShellProvider`; without, it must sit inside one. Renders that canvas's actionLayout.
 
 ---
 
