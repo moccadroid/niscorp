@@ -61,6 +61,10 @@ sides is two changes.
   passes the caller's acceptance schema; otherwise the original bytes
   and the original error stand. This is why the ladder safely runs on
   every response of every provider.
+  The router is told the finish reason: a reply the provider cut off
+  (`length`, `content_filter`) with its JSON still open is rescued as
+  any other and marked `wire.truncated`, or, under `refuseCutOff`, is
+  `failed` with `truncated` so the caller retries.
 - **The router owns classification.** A response is `tool_calls`
   (declared tool), `output` (anything whose repaired value passes the
   acceptance gate — exit-tool args and pseudo-tool args included), or
@@ -70,6 +74,9 @@ sides is two changes.
   attempt is recovered by an error-hook strategy and routed
   identically: a rejected call to a declared tool IS a tool call; a
   rejected pseudo-call carrying valid output IS output.
+  A rejected call whose arguments had to be closed is not run with the
+  closed arguments: they go on as the text they are, and fail the
+  tool's input check.
 - **Transport resolution is pure.** `resolveTransport(spec,
   capabilities)` — previews resolve exactly like runs. `auto` picks what
   ENFORCES: native when grammar is viable; respond when its tool params

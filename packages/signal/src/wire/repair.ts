@@ -203,6 +203,11 @@ export const closeTruncated = (content: string): string | undefined => {
   return tryParse(candidate).ok ? candidate : undefined;
 };
 
+export const openDepth = (content: string): number => {
+  const cleaned = content.replace(INVISIBLES, '').trim();
+  return tryParse(cleaned).ok ? 0 : (scan(cleaned)?.openAtEnd ?? 0);
+};
+
 export const isTruncatedJson = (content: string): boolean => {
   const cleaned = content.replace(INVISIBLES, '').trim();
   if (!cleaned.startsWith('{') && !cleaned.startsWith('[')) return false;

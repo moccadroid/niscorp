@@ -29,6 +29,7 @@ export type RunSpec = {
   schema?: ZodType | undefined;
   tools?: Tool[] | undefined;
   retries: number;
+  refuseCutOff?: boolean | undefined;
   options?: SignalOptions | undefined;
   streamOptions?: StreamOptions | undefined;
   onRetry?: ((error: Error, attempt: number) => void) | undefined;
@@ -72,7 +73,7 @@ const buildRequest = (spec: RunSpec, caps: Capabilities): Omit<StepRequest, 'mes
     (tools.length === 0 || caps.toolsWithStructuredOutput);
   return {
     ...(descriptors.length > 0 && { tools: descriptors }),
-    ...(spec.schema && { output: { accept: spec.schema } }),
+    ...(spec.schema && { output: { accept: spec.schema, ...(spec.refuseCutOff === true && { refuseCutOff: true }) } }),
     ...(grammarViable && spec.schema
       ? {
           responseFormat: {
@@ -94,12 +95,14 @@ const buildMeta = (
   retries: number,
   toolCalls: ToolCallRecord[],
   raws: unknown[],
+  finishReason: string,
 ): SignalMeta => ({
   model,
   usage,
   durationMs: Date.now() - start,
   retries,
   toolCalls,
+  finishReason,
   provider: { raw: raws.length === 1 ? raws[0] : raws, errors: [] },
 });
 
@@ -173,7 +176,7 @@ export async function* runStream<T>(spec: RunSpec, deps: RunDeps): AsyncGenerato
         type: 'done',
         response: asOutput<T>(result.content),
         history,
-        meta: buildMeta(deps.model, usage, start, retries, records, raws),
+        meta: buildMeta(deps.model, usage, start, retries, records, raws, result.finishReason),
       };
       return;
     }
@@ -185,7 +188,7 @@ export async function* runStream<T>(spec: RunSpec, deps: RunDeps): AsyncGenerato
           type: 'done',
           response: parsed.data as T,
           history,
-          meta: buildMeta(deps.model, usage, start, retries, records, raws),
+          meta: buildMeta(deps.model, usage, start, retries, records, raws, result.finishReason),
         };
         return;
       }
