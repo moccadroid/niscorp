@@ -104,7 +104,8 @@ Resolution rules:
 - **String, sole `{{ expr }}`** → returns the raw resolved value (preserves
   type — number stays number, object stays object).
 - **String, `"text {{expr}} text"`** → string interpolation.
-- **String, bare `"$.path"` or `"$item.field"`** → raw resolved value.
+- **String, bare `"$.path"` or `"$item.field"`** → raw resolved value. A
+  `$` name followed by more words (`"$CAD only"`) is text.
 - **String, bare `@event…` / `@error…`** → raw resolved value, where that scope
   is present (a trigger's steps, an `onError` list).
 - **String, anything else** → returned literally.

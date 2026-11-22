@@ -281,7 +281,7 @@ A path reads what a value has, or inherits from a prototype of its own (a getter
 - `$index` — special: the loop iteration index
 - `$` alone — the whole innermost scope: the data root, or inside a loop the loop's own `{ <as>, index, items }`
 
-A string that starts with `$` and then a letter or `_` is a path, never text: `'$USD'` reads a key `USD` and renders empty when there is none. Text that starts with `$` comes from data or a binding (`'{{$.label}}'`).
+A string that starts with `$` and then a letter or `_`, with no space before its end, is a path, never text: `'$USD'` reads a key `USD` and renders empty when there is none. When more words follow the name, it is text: `'$CAD only'` renders as written (and is offered to the phrasebook like other text). A label that is only a `$` word comes from data or a binding (`'{{$.label}}'`).
 
 ### 2. Template strings
 

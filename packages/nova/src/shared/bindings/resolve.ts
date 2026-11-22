@@ -7,7 +7,7 @@ const TEMPLATE_REGEX = /\{\{\s*([^}]+?)\s*\}\}/g;
 const SOLE_TEMPLATE_REGEX = /^\{\{\s*([^}]+?)\s*\}\}$/;
 
 export const unwrapSoleTemplate = (value: string): string => value.match(SOLE_TEMPLATE_REGEX)?.[1]?.trim() ?? value;
-const BARE_PATH_REGEX = /^\$(\.|[A-Za-z_]|$)/;
+const BARE_PATH_REGEX = /^\$(\.|[A-Za-z_]\S*\s*$|$)/;
 
 export type ExtraScopes = Record<string, unknown>;
 

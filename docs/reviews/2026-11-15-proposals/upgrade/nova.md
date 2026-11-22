@@ -65,3 +65,11 @@ Each section is one change an app can see, in `@niscorp/nova`. None of them chan
 - What to do: nothing.
 - Breaking: yes (such fields now write)
 - Affected apps: none found in the lab apps, the templates, AnimaApp, anima-finance or mira. Layouts a model generates at run time (relay's screen builder, lyceum's screens, moss's artifactory) could contain the form; such fields now work.
+
+### nova — `'$CAD only'` renders as text
+- Before: any string starting with `$` and a letter was read as a path: `children: '$CAD only'` rendered empty, and it never reached the phrasebook.
+- Now: a `$` name followed by more words is text: `'$CAD only'` renders `$CAD only`, and with a phrasebook it is looked up and reported to `onPhraseMiss` when missing. Unchanged: `'$'` alone is the innermost scope, `'$USD'` is a path (empty when there is no `USD`), `'$item.größe'` and `'$item.name '` resolve as before.
+- Who notices: layouts with such text; an `onPhraseMiss` handler hears of it.
+- What to do: nothing; add a translation if the phrasebook reports it.
+- Breaking: yes
+- Affected apps: none found. No layout string in the lab apps, the templates, AnimaApp, anima-finance or mira starts with `$`, a name and more words, and no app found sets `onPhraseMiss`.

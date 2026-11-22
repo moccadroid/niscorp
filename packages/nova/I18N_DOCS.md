@@ -116,9 +116,10 @@ string.
 rule, where a query manufactures a word and a read puts it on screen. There the
 key is what protects data.
 
-A string is a binding (`isBinding`) when it is `$` alone or starts with `$`
-followed by `.`, a letter or `_`, when it starts with `@` followed by a letter or
-`_` (an extra scope such as `@event.payload.id`), or when it holds `{{`.
+A string is a binding (`isBinding`) when it is `$` alone, starts with `$.`, or
+is `$` followed by a letter or `_` and no space before its end (so `'$CAD only'`
+is a phrase), when it starts with `@` followed by a letter or `_` (an extra
+scope such as `@event.payload.id`), or when it holds `{{`.
 
 A phrase (`isPhrase`) is a non-blank string that is not a binding and holds at
 least one letter. Only a phrase is harvested, looked up in the book or reported
