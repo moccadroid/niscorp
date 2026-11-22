@@ -138,7 +138,7 @@ signal.retries(3)
 ```
 
 ### `.apiKey(key)`
-Override the API key.
+Override the API key. On a custom provider it also replaces the provider's own `apiKey`, so the key given here is the one sent. An `apiKey` passed beside a custom provider at creation (`createSignal(custom, { apiKey })`) is used only when the provider has none.
 ```typescript
 signal.apiKey('gsk_...')
 ```

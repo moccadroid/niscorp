@@ -434,7 +434,7 @@ const createSignalFromConfig = <T = string>(config: SignalConfig): Signal<T> => 
   };
 
   return {
-    apiKey: (key) => fork({ apiKey: key }),
+    apiKey: (key) => fork(typeof config.provider === 'string' ? { apiKey: key } : { apiKey: key, provider: { ...config.provider, apiKey: key } }),
     model: (m) => fork({ model: m }),
     systemPrompt: (prompt) => fork({ systemPrompt: prompt }),
     history: (msgs) => fork({ history: msgs }),
