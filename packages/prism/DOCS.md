@@ -659,10 +659,14 @@ three countries:
 - `digits` overrides the currency's own fraction digits.
 - `fallback` (default `""`) is rendered for a null/absent amount, so an empty
   SUM shows a dash rather than a confident `€0.00`.
-- An ISO code `Intl` does not know prints beside the number instead of throwing.
-  So does a locale tag `Intl` cannot read (`"en_GB"`), and then the divisor is
-  100 whatever the currency, as `Intl` was not asked for its exponent: 4500 JPY
-  prints `JPY 45.00`, the hundredfold error above. Give it a locale `Intl` reads.
+- `value` is a number, or text that is a number written in digits (`"1999"`,
+  `" 1999 "`), as `$toNumber` reads it. Anything else — a list, `true`, `"0x10"`,
+  blank text — is refused with `E_TYPE`. `$localeNumber` reads its `value` the
+  same way.
+- An ISO code `Intl` does not know prints beside the number instead of throwing,
+  with two fraction digits. So does a locale tag `Intl` cannot read (`"en_GB"`),
+  with the currency's own digits: the amount does not depend on the locale, so
+  1500 JPY prints `JPY 1500`.
 
 ### `$localeDate` — a date for a human
 ```json
@@ -718,7 +722,8 @@ still wins.
 { "$localeNumber": { "value": { "$ref": "$.rate" }, "locale": "en-GB", "style": "percent" } }
 ```
 
-`style` is `decimal` (default) or `percent` — percent multiplies by 100, so pass
+`value` is a number or numeric text, as for `$localeMoney`. `style` is
+`decimal` (default) or `percent` — percent multiplies by 100, so pass
 `0.42`, not `42`. `digits`/`minDigits` cap and floor the fraction digits;
 `compact` gives `1.2k`. Grouping and the decimal mark follow the locale
 (`1.234,5` in Germany, `1 234,5` in Austria, `1,234.5` in Britain).

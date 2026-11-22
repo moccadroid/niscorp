@@ -76,7 +76,7 @@ export const opRound = (node: RoundNode, context: EvalContext, evaluate: Evaluat
 
 // A number as it is written in digits, not all that Number() takes: not '',
 // not '0x10', not 'Infinity'.
-const NUMERIC_TEXT = /^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/;
+export const NUMERIC_TEXT = /^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/;
 
 export const opToNumber = (node: ToNumberNode, context: EvalContext, evaluate: EvaluateFn): JsonValue => {
   const value = evaluate(node.$toNumber.value, context);
