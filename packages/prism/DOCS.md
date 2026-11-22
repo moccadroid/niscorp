@@ -311,7 +311,7 @@ Numbers → `"42"`, null → `"null"`, objects → JSON string.
   }
 }
 ```
-Replaces `{{key}}` placeholders with values from the evaluated object. Missing keys become empty strings. A value that is an object or a list is refused (`E_TYPE`).
+Replaces `{{key}}` placeholders with values from the evaluated object. A key is letters, marks, digits and `_` in any script (`{{straße}}`, `{{名前}}`); a placeholder with any other character (`{{first-name}}`, `{{ name }}`) is left as written. Missing keys become empty strings. A value that is an object or a list is refused (`E_TYPE`).
 
 ### `$fill` — Fill a counted phrase
 ```json

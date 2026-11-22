@@ -32,7 +32,7 @@ export const opInterpolate = (node: InterpolateNode, context: EvalContext, evalu
   const { template, values: valuesNode } = node.$interpolate;
   const values = evaluate(valuesNode, context);
   if (!isJsonObject(values)) return refuseType({ node, op: '$interpolate', field: 'values', needs: 'an object', got: values, written: valuesNode });
-  return template.replace(/\{\{(\w+)\}\}/g, (_match, key: string) => {
+  return template.replace(/\{\{([\p{L}\p{M}\p{N}_]+)\}\}/gu, (_match, key: string) => {
     const value = readOwnKey(values, key) ?? '';
     if (!isTextLike(value))
       return failAt(

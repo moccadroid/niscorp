@@ -31,7 +31,7 @@ export const InterpolateNodeSchema = z
   .object({
     $interpolate: z
       .object({
-        template: z.string().describe('Template with {{key}} placeholders.'),
+        template: z.string().describe('Template with {{key}} placeholders. A key is letters, digits and _ in any script ({{straße}}, {{名前}}); {{first-name}} is left as written.'),
         values: z.lazy(node).describe('Object whose keys replace {{key}} placeholders.'),
       })
       .strict(),
