@@ -49,3 +49,11 @@ Each section is one change an app can see, in `@niscorp/nova`. None of them chan
 - What to do: nothing, unless the app wanted React's defaults over its own: then register React's (`registerNovaReactComponents(registry)`) itself.
 - Breaking: yes
 - Affected apps: none found. The only `NovaShell` users, `apps/lab/fable/src/app.tsx:4` and the create-nisc React template's `with/page/src/ui/screen.tsx:5`, hand registries that have `CanvasSlot`. mythos's registry has no `CanvasSlot` (`apps/lab/mythos/src/ui/registry.ts:9`) but renders through `NovaShellProvider` and `RenderTree`, not `NovaShell`/`NovaCanvas`.
+
+### nova — inside a loop, `model: '$.<as>.x'` writes the row it shows
+- Before: in `{ for: '$.lines', as: 'line', do: { component: 'Input', model: '$.line.qty' } }` the field showed the row's `qty` but typing wrote `data.line.qty`, a root key no field shows. `model: '$.index'` showed the loop index and wrote a root `index`.
+- Now: `model: '$.line.qty'` writes `lines.0.qty` (its model path is `lines.0.qty`); `model: '$.index'` binds nothing (no `model` on the node), as `model: '$index'` already did. Any other `$.name` in a loop still binds the root. What every layout shows is unchanged.
+- Who notices: a layout in a loop that writes through `$.<as>`, `$.items` or `$.index`.
+- What to do: nothing.
+- Breaking: yes (where the write lands)
+- Affected apps: none found. Loop models in the lab apps, the templates, AnimaApp, anima-finance and mira use the `$part.answer` / `$field.value` form, not `$.<as>`.

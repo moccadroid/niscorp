@@ -371,6 +371,8 @@ The `Input` component built into `@niscorp/nova/adapters/react/components` alrea
 
 Type into the second input → `data.items[1].value` updates → re-render shows the new value.
 
+`model: '$.item.value'` binds the same way: inside a loop, `$.` looks in the loop's own names (`index`, `items` and the `as` name) first, for writing as for reading. `model: '$.index'` and `model: '$index'` bind nothing — the loop index has no place in the data. Any other `$.name` is the data root's.
+
 ---
 
 ## Render context

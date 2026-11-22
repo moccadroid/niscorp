@@ -67,11 +67,11 @@ const resolveDataPath = (
   scopePaths: string[],
 ): string | undefined => {
   if (!binding.startsWith('$')) return undefined;
-  const after = binding.slice(1);
-  if (after.startsWith('.')) return after.slice(1);
+  const isDotted = binding.startsWith('$.');
+  const after = binding.slice(isDotted ? 2 : 1);
   const segments = after.split('.');
   const head = segments[0];
-  if (head === undefined || head.length === 0) return undefined;
+  if (head === undefined || head.length === 0) return isDotted ? after : undefined;
   for (let i = scopePaths.length - 1; i >= 0; i -= 1) {
     const entry = scopePaths[i];
     if (entry === undefined) continue;
@@ -80,11 +80,12 @@ const resolveDataPath = (
     const key = entry.slice(0, eq);
     if (key !== head) continue;
     const rooted = entry.slice(eq + 1);
+    if (rooted === '') return undefined;
     const rest = segments.slice(1).join('.');
     if (rest.length === 0) return rooted;
     return `${rooted}.${rest}`;
   }
-  return undefined;
+  return isDotted ? after : undefined;
 };
 
 const sameEntries = (a: ReadonlyMap<string, unknown>, b: ReadonlyMap<string, unknown>): boolean =>
@@ -162,10 +163,11 @@ const renderNode = (
     const out: RenderNode[] = [];
     items.forEach((item, index) => {
       const innerChain = pushScope(chain, { [node.as]: item, index, items });
+      // `index=` has no path: the loop index is nowhere in the data, so a model on `$.index` binds nothing.
       const nextScopePaths =
         loopBasePath === undefined
           ? ctx.scopePaths
-          : [...ctx.scopePaths, `${node.as}=${loopBasePath}.${index}`, `items=${loopBasePath}`];
+          : [...ctx.scopePaths, 'index=', `${node.as}=${loopBasePath}.${index}`, `items=${loopBasePath}`];
       const innerCtx: InternalRenderContext = { ...ctx, scopePaths: nextScopePaths };
       const idKey = node.key !== undefined ? getPath(item, node.key) : index;
       const rendered = safeRenderSingle(node.do, innerChain, innerCtx, undefined);
