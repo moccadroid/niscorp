@@ -30,7 +30,7 @@ Checked against the lab apps (`apps/lab/*`) and, read-only, AnimaApp, anima-fina
 
 ### prism — An overflowing sum, difference, product or quotient is an error
 - Before: `{ "$mul": [1e308, 10] }` → `Infinity`, which JSON stores as `null`.
-- Now: `E_TYPE`, "$mul gave Infinity, which is not a JSON number." Same for `$add`, `$sub` and `$div`.
+- Now: `E_TYPE`, "$mul gave Infinity, which is not a JSON number." Same for `$add`, `$sub` and `$div`, and for `$sum` and `$avg`, which run as `$add`: `$sum` of `[1e308, 1e308]` is "$add gave Infinity, which is not a JSON number. At $sum, in the $add that $sum runs as."
 - Who notices: arithmetic on numbers a person types without a bound.
 - What to do: nothing for real amounts. Where a typed number is unbounded, refuse it before the arithmetic (`$lt` against a ceiling) or let the error reach the form.
 - Breaking: yes
