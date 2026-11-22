@@ -298,6 +298,11 @@ ask under it, and `approve` or `deny` with it does nothing.
 The resumed run keeps the snapshot's run id, transcript, step and
 output-retry counts, usage and elapsed time, so `stepCount`, `tokens`,
 `duration` and `outputRetries` count on from there.
+A run aborted between the calls of one step leaves calls with no
+answer and no pending approval. Resumed, it first runs those calls,
+through their gates, approvals and hooks, and then calls the model.
+A fresh `agent.run()` given a transcript that ends in a call runs
+nothing before the model.
 `policy.approvalTimeoutMs` turns an unanswered ask into a denial
 (an observation, not a run failure). The denial's `reason` is
 `approval timeout`.

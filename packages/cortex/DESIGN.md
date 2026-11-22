@@ -428,6 +428,10 @@ type StopCondition = (s: RunProgress) => StopVerdict;   // { stop: StopReason; m
   one the resumed handle answers to. `snapshot.pending.approvalId`
   names the ask of the run the snapshot came from, not the resumed
   one's.
+  A snapshot with no pending approval whose last step has calls no
+  tool message answers (the run was aborted between them) resumes by
+  running those calls first; a fresh run never runs calls from its
+  input.
 - **Output validation** closes the generate→verify loop in-run:
 
   ```ts

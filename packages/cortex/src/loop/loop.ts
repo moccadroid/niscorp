@@ -81,6 +81,7 @@ export type LoopConfig<TData, TDeps> = {
   partials: PartialTracker;
   state: LoopState;
   resumePending?: PendingApproval;
+  resumed?: boolean;
   refuseCutOff?: boolean;
 };
 
@@ -97,7 +98,31 @@ const stringify = (value: unknown): string => {
   }
 };
 
-export const buildToolDescriptor = (tool: ToolDefinition): StepToolDescriptor => ({
+const argsFromText = (text: string): unknown => {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
+  }
+};
+
+// The calls of the transcript's last step that no tool message answers: a run aborted between
+// the calls of one step leaves them, and a provider refuses a transcript that ends so.
+const unansweredCalls = (messages: ReadonlyArray<Message>): NormalizedCall[] => {
+  const answered = new Set<string>();
+  let at = messages.length - 1;
+  for (let message = messages[at]; message?.role === 'tool'; message = messages[at]) {
+    answered.add(message.toolCallId);
+    at -= 1;
+  }
+  const step = messages[at];
+  if (step?.role !== 'assistant' || step.toolCalls === undefined) return [];
+  return step.toolCalls
+    .filter((call) => !answered.has(call.id))
+    .map((call) => ({ id: call.id, toolId: call.name, args: argsFromText(call.args) }));
+};
+
+export const buildToolDescriptor =(tool: ToolDefinition): StepToolDescriptor => ({
   name: tool.config.name,
   description: tool.config.description,
   // Converted by the schema's own zod, not by cortex's: it may come from another copy of zod.
@@ -413,8 +438,13 @@ export const runLoop = async <TData, TDeps>(
 
   // The pending call goes through its gates again, so a resumed run asks for
   // the approval again, under a new id.
-  if (cfg.resumePending) {
-    const structural = await processBatch([cfg.resumePending.call, ...cfg.resumePending.remaining]);
+  const resumedCalls = cfg.resumePending
+    ? [cfg.resumePending.call, ...cfg.resumePending.remaining]
+    : cfg.resumed === true
+      ? unansweredCalls(s.messages)
+      : [];
+  if (resumedCalls.length > 0) {
+    const structural = await processBatch(resumedCalls);
     if (structural) return structural;
   }
 

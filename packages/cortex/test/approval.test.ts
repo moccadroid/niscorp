@@ -404,3 +404,50 @@ describe('an approval asked inside a delegated agent', () => {
     expect(deleted).toEqual(['old.log']);
   });
 });
+
+describe('a run aborted between two calls of one step', () => {
+  const counter = (executed: number[], onFirst: () => void) =>
+    defineTool({
+      id: 'count',
+      name: 'count',
+      description: 'Counts.',
+      input: z.object({ n: z.number() }),
+      execute: ({ n }) => {
+        executed.push(n);
+        if (n === 1) onFirst();
+        return `counted ${n}`;
+      },
+    });
+  const twoCalls = { toolCalls: [{ id: 'c1', name: 'count', args: { n: 1 } }, { id: 'c2', name: 'count', args: { n: 2 } }] };
+  const answer = { toolCalls: [{ id: 'r', name: 'respond', args: { response: 'done' } }] };
+
+  it('runs the call left without an answer when it is resumed, before the model is called', async () => {
+    const executed: number[] = [];
+    const controller = new AbortController();
+    const agent = defineAgent({ id: 'counter', instructions: 'Count.', tools: [counter(executed, () => controller.abort())] });
+    const first = agent.run('go', { llm: stubSignal([twoCalls]), signal: controller.signal });
+    expect((await first.result).ok).toBe(false);
+    const snapshot: RunSnapshot = JSON.parse(JSON.stringify(first.snapshot()));
+    expect(snapshot.pending).toBeUndefined();
+
+    const llm = stubSignal([answer]);
+    const result = await resumeRun(agent, snapshot, { llm }).result;
+
+    expect(result.ok).toBe(true);
+    expect(executed).toEqual([1, 2]);
+    const sent = llm.requests[0]?.messages ?? [];
+    expect(sent.slice(-3).map((m) => (m.role === 'tool' ? `tool:${m.toolCallId}` : m.role))).toEqual(['assistant', 'tool:c1', 'tool:c2']);
+  });
+
+  it('is not what a fresh run does with a transcript that ends in a call', async () => {
+    const executed: number[] = [];
+    const agent = defineAgent({ id: 'counter', instructions: 'Count.', tools: [counter(executed, () => undefined)] });
+    const input = [
+      { role: 'user' as const, content: 'count' },
+      { role: 'assistant' as const, content: '', toolCalls: [{ id: 'c1', name: 'count', args: '{"n":1}' }] },
+    ];
+    const result = await agent.run(input, { llm: stubSignal([answer]) }).result;
+    expect(result.ok).toBe(true);
+    expect(executed).toEqual([]);
+  });
+});

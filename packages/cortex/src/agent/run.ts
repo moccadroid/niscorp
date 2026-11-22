@@ -176,6 +176,7 @@ const wireRun = <TData, TDeps>(wiring: Wiring<TData, TDeps>): RunHandle<TData> =
         partials,
         state,
         ...(wiring.seeded?.pending && { resumePending: wiring.seeded.pending }),
+        resumed: wiring.seeded !== undefined,
         ...(config.output?.refuseCutOff === true && { refuseCutOff: true }),
       });
     } catch (cause) {
