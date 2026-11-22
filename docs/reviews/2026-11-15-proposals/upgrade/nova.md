@@ -22,7 +22,7 @@ Each section is one change an app can see, in `@niscorp/nova`. None of them chan
 
 ### nova — bindings never read what every object inherits; a record's own prototype counts
 - Before: `{{$.x.constructor}}` rendered `function Object() { [native code] }`, and `$toString` read a function. On this branch before the release, a `functions` object made with `Object.create({ hello })` or as a class instance no longer found `hello` (the call failed with `LIFECYCLE_ERROR`); in the last release it was found.
-- Now: `$.x.constructor`, `$.x.toString` and `$.x.__proto__` are `undefined` (the text renders empty). `Object.create({ hello })` as `functions` calls `hello`, as in the last release; the same holds for endpoints, phrasebooks and reconcilers. A getter on a class the data carries (`$.person.full`) still reads, and `fn: 'toString'` still fails as an unknown function.
+- Now: `$.x.constructor`, `$.x.toString` and `$.x.__proto__` are `undefined` (the text renders empty). `Object.create({ hello })` as `functions` calls `hello`, as in the last release, and endpoints, phrasebooks and reconcilers resolve the same way. A getter on a class the data carries (`$.person.full`) still reads, and `fn: 'toString'` still fails as an unknown function.
 - Who notices: a layout that reads one of `Object.prototype`'s members through a binding.
 - What to do: nothing, unless a layout reads such a member: put the value in the data instead.
 - Breaking: yes

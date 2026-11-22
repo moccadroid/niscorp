@@ -12,7 +12,7 @@ describe('one rule for names a record inherits: its own prototype counts, Object
     expect(resolve('$.constructor', createScopeChain({}))).toBeUndefined();
   });
 
-  it('a path still reads a getter of a class the data holds', () => {
+  it('a path still reads a getter of a class the data carries', () => {
     class Person { constructor(readonly first: string, readonly last: string) {} get full(): string { return `${this.first} ${this.last}`; } }
     expect(getPath({ p: new Person('Ada', 'Lovelace') }, 'p.full')).toBe('Ada Lovelace');
   });

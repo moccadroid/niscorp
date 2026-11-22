@@ -297,7 +297,7 @@ export const createActionRuntime = (config: ActionRuntimeConfig): ActionRuntime 
     for (const b of collectModelBindings(nodes)) {
       modelPaths.set(b.ref, b.path);
       if (b.fieldRef === undefined || b.fieldRef === b.ref) continue;
-      // The written ref still lands where it always did: on the last row.
+      // A ui:model with the written ref writes the last row.
       modelPaths.set(b.fieldRef, b.path);
       fieldRefs.set(b.ref, b.fieldRef);
     }
