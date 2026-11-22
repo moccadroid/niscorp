@@ -246,6 +246,29 @@ describe('a locale tag Intl cannot read', () => {
   });
 });
 
+describe('options Intl refuses', () => {
+  const refusal = (config: object): unknown => {
+    const result = evaluateSafe(config as never, {});
+    return result.ok ? 'ok' : result.error;
+  };
+
+  it('are a Prism error with E_SCHEMA and the op, not a bare RangeError or TypeError', () => {
+    expect(refusal({ $localeDate: { value: '2026-03-14', locale: 'de-AT', options: { dateStyle: 'medium', weekday: 'short' } } })).toMatchObject({
+      code: ErrorCode.SCHEMA,
+      message: expect.stringContaining('$localeDate: Intl refused its options'),
+    });
+    expect(refusal({ $localeNumber: { value: 3.1, locale: 'de-AT', minDigits: 2, digits: 1 } })).toMatchObject({
+      code: ErrorCode.SCHEMA,
+      message: expect.stringContaining('$localeNumber: Intl refused its options'),
+    });
+    expect(refusal({ $localeNumber: { value: 3.1, locale: 'de-AT', minDigits: 2, digits: 1 } })).toBeInstanceOf(PrismError);
+  });
+
+  it('a zone Intl does not know stays E_TYPE, as a zone was refused before', () => {
+    expect(refusal({ $localeDate: { value: '2026-03-14', locale: 'de-AT', options: { timeZone: 'Europe/Wien' } } })).toMatchObject({ code: ErrorCode.TYPE });
+  });
+});
+
 describe('$localeNumber', () => {
   it('uses the locale decimal mark and grouping', () => {
     const number = (locale: string): string => flat(evaluate({ $localeNumber: { value: { $const: 1234.5 }, locale, minDigits: 1 } }, source));

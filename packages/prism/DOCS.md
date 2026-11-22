@@ -637,6 +637,11 @@ discover it is a reader in Vienna being shown American dates.
 All three take an optional `fallback` (default `""`), returned when `value` is
 null or an empty string — before `locale` is even looked at.
 
+Some option sets pass the schema and are still refused by `Intl` —
+`dateStyle` beside `weekday`, `minDigits` above `digits`. `$localeDate` and
+`$localeNumber` refuse them as a config Prism cannot run: a `PrismError` with
+`E_SCHEMA`, the op and its place in the config, saying what `Intl` refused.
+
 ### `$localeMoney` — an amount as money
 ```json
 { "$localeMoney": { "value": { "$ref": "$.price_cents" }, "currency": { "$ref": "$.currency" }, "locale": "de-AT" } }
