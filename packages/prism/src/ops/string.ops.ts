@@ -32,7 +32,7 @@ export const opInterpolate = (node: InterpolateNode, context: EvalContext, evalu
   const { template, values: valuesNode } = node.$interpolate;
   const values = evaluate(valuesNode, context);
   if (!isJsonObject(values)) return refuseType({ node, op: '$interpolate', field: 'values', needs: 'an object', got: values, written: valuesNode });
-  return template.replace(/\{\{(\w+)\}\}/g, (_match, key: string) => {
+  return template.replace(/\{\{([\p{L}\p{M}\p{N}_]+)\}\}/gu, (_match, key: string) => {
     const value = readOwnKey(values, key) ?? '';
     if (!isTextLike(value))
       return failAt(
@@ -84,12 +84,14 @@ export const opUpper = (node: UpperNode, context: EvalContext, evaluate: Evaluat
 export const opSplit = (node: SplitNode, context: EvalContext, evaluate: EvaluateFn): JsonValue => {
   const value = evaluate(node.$split.value, context);
   if (typeof value !== 'string') return refuseType({ node, op: '$split', field: 'value', needs: 'text', got: value, written: node.$split.value });
-  return value.split(node.$split.sep);
+  return node.$split.sep === '' ? Array.from(value) : value.split(node.$split.sep);
 };
 
 export const opReplace = (node: ReplaceNode, context: EvalContext, evaluate: EvaluateFn): JsonValue => {
   const value = evaluate(node.$replace.value, context);
   if (typeof value !== 'string') return refuseType({ node, op: '$replace', field: 'value', needs: 'text', got: value, written: node.$replace.value });
   const { search, replacement, all } = node.$replace;
-  return all === true ? value.replaceAll(search, replacement) : value.replace(search, replacement);
+  // A function's answer is written as it is; a replacement string would read `$&` and `$$` as patterns.
+  const written = (): string => replacement;
+  return all === true ? value.replaceAll(search, written) : value.replace(search, written);
 };

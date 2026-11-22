@@ -13,8 +13,10 @@ const formCanvas = (document: string): string => `form:${document}`;
 const ROOT_KEY = '$root';
 
 // The error channel sits beside the document's own keys, so a document with
-// a field of that name is wrapped as a non-object root is.
-const needsWrap = (ir: Field): boolean => ir.kind !== 'object' || ir.fields.some((field) => field.key === ERROR_NAMESPACE);
+// a field of that name is wrapped as a non-object root is; so is one with a key
+// that has a dot in it, whose JSON box needs a path to bind.
+const needsWrap = (ir: Field): boolean =>
+  ir.kind !== 'object' || ir.fields.some((field) => field.key === ERROR_NAMESPACE || field.key.includes('.'));
 
 export const createLoomEditor = (config: LoomEditorConfig): LoomEditor => {
   const plugins = new Map<string, LoomPlugin>();

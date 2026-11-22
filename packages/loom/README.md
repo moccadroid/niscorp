@@ -51,14 +51,20 @@ const { action, layouts } = toNova(parse(schema));
 ```
 
 A new document starts from each field's empty value: `''`, `0`, `false`, `[]`,
-the schema's default where it has one, and `null` for a kind Loom does not
-model. A required enum with no default is left out. These can fail the schema
+the schema's default where it has one, a literal's own value, and `null` for a
+kind Loom does not model. A required enum with no default is left out. These can fail the schema
 (`''` is not an email, `0` is not `min(1)`, `null` is not a record), and
 optional fields get them too. `toNova(model, { empty, includeOptional })`
-changes both: `empty` supplies a kind's starting value, `includeOptional: false`
-leaves optional fields out. A field is optional when its schema accepts a missing
+changes both, in every branch of a union too: `empty` supplies a kind's
+starting value, `includeOptional: false` leaves optional fields out. In a form,
+an optional field that has a value shows a **Remove** link beside its label,
+which writes the field back to absent; its controls stay, and typing into them
+adds it again. A field is optional when its schema accepts a missing
 value; one whose own code throws on a missing value (a `z.preprocess` that trims
-its input) is required.
+its input) is required. An emptied number box leaves the number absent, or
+`null` where the schema takes `null`. An enum with no `.default()` starts with no
+value in the document, and its select shows a disabled "—" until an option is
+chosen.
 
 The other options: `value` is the document to edit, used as given in place of
 that starting document. `id` is the id of the action `toNova` returns (default
@@ -105,7 +111,7 @@ import { prism } from '@niscorp/loom/plugins/prism/react';
 - To switch to a different artifact, give the element a new React `key`.
   `plugins` and `artifact` are read once, when the element mounts.
 
-Three things are worth knowing before you rely on them:
+Two things are worth knowing before you rely on them:
 
 - **Messages follow edits.** The inline messages and the Validations pane show
   what the schema said after the last edit. They are empty until the first one,
@@ -113,14 +119,13 @@ Three things are worth knowing before you rely on them:
   `path`) is shown nowhere, and a problem in a list row shows in the Validations
   pane only. They are not the verdict on a document; the schema is
   ([DESIGN.md](./DESIGN.md), "Validation").
-- **A select has no row for "none".** An enum with no `.default()` starts with no
-  value in the document, and the select displays its first option all the same.
-  Give the enum a `.default()` and the two start out agreeing.
-- **A key with a dot in it is not edited correctly.** Nova reads a binding
-  path by splitting it at each `.`, so a field such as `"a.b"` is bound as `b`
-  inside `a`: the control shows nothing and an edit writes to the wrong place.
-  Loom has no fix for it until Nova can bind such a key; keep dots out of the
-  keys of a schema you edit with Loom.
+- **An object with a key that has a dot in it is edited as JSON.** Nova reads
+  a binding path by splitting it at each `.`, so a field such as `"a.b"` cannot
+  be bound to a control of its own. Its object is compiled to the raw JSON box,
+  bound where the object stands, and an edit there writes the right keys. The
+  editor wraps such a root document as it wraps a non-object root. `toNova`
+  used directly at the root without `rootKey` has nothing to bind the box to and
+  keeps the controls, which bind the wrong place: pass `rootKey`.
 
 A **plugin** wires one domain into the editor. It contributes the schemas to edit
 (its *documents*), optional custom field widgets, and usually a preview. The three
@@ -128,7 +133,9 @@ reference plugins:
 
 - `prism({ input })` — edit a [Prism](../prism) transform config; the preview
   applies it to `input` and shows the output. `schema` replaces the schema of
-  the `config` document (default: Prism's `NodeSchema`).
+  the `config` document (default: Prism's `NodeSchema`). An op chosen in the
+  editor starts with its required arguments only (`$localeMoney` starts as
+  `{}`), and an optional argument that has a value shows a Remove link.
 - `vex({ run, db })` — edit a [Vex](../vex) query; the preview runs it with `run`
   and shows the rows. Pass `db` to get column-aware field pickers. The artifact
   is `{ type: 'vex', documents: { query } }`; `schema` replaces the schema of
@@ -162,7 +169,7 @@ editor to restyle what is inside it:
 | `--loom-label` | `#374151` | field labels, panel heads |
 | `--loom-muted` | `#6b7280` | descriptions, empty previews, table heads |
 | `--loom-faint` | `#9ca3af` | a disabled menu item, op tags in the Prism chooser |
-| `--loom-accent` | `#1d4ed8` | the active op in the Prism chooser |
+| `--loom-accent` | `#1d4ed8` | the active op in the Prism chooser, a field's Remove link |
 | `--loom-accent-fill` | `#eff6ff` | behind the active op in the Prism chooser |
 | `--loom-danger` | `#dc2626` | a field's message, the required mark, a refused name or JSON |
 | `--loom-danger-text` | `#991b1b` | a preview's error |

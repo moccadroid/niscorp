@@ -61,6 +61,31 @@ describe('the prism node editor', () => {
     expect(second).toHaveProperty('value', 'fiel');
   });
 
+  it('a chosen op starts with its required arguments only', () => {
+    const chosen = (op: string): unknown => {
+      const { lastConfig } = openConfig({ $ref: '$.name' });
+      fireEvent.click(chooserOf('$ref'));
+      fireEvent.change(screen.getByPlaceholderText('Search ops…'), { target: { value: op } });
+      fireEvent.click(screen.getByRole('button', { name: new RegExp(`^\\${op}\\b`) }));
+      const config = lastConfig();
+      cleanup();
+      return config;
+    };
+    expect(chosen('$localeMoney')).toEqual({ $localeMoney: {} });
+    expect(chosen('$localeDate')).toEqual({ $localeDate: {} });
+    expect(chosen('$round')).toEqual({ $round: {} });
+    expect(chosen('$sortBy')).toEqual({ $sortBy: { as: '' } });
+  });
+
+  it('an optional argument with a value can be removed', () => {
+    const { lastConfig } = openConfig({ $round: { value: 1.5, digits: 2 } });
+    const removes = screen.getAllByRole('button', { name: 'Remove' });
+    expect(removes).toHaveLength(1);
+    fireEvent.click(removes[0]!);
+    expect(lastConfig()).toEqual({ $round: { value: 1.5 } });
+    expect(screen.queryAllByRole('button', { name: 'Remove' })).toHaveLength(0);
+  });
+
   it('lists every prism op under a category of the chooser', () => {
     openConfig({ $ref: '$.name' });
     fireEvent.click(chooserOf('$ref'));

@@ -56,6 +56,21 @@ describe('$localeMoney', () => {
   it('prints the code beside the number for a locale Intl does not read', () => {
     expect(evaluate({ $localeMoney: { value: { $ref: '$.cents' }, currency: 'EUR', locale: 'de_AT' } }, source)).toBe('EUR 45.00');
   });
+  it('takes the divisor from the currency whatever the locale, and prints its digits beside the code', () => {
+    expect(evaluate({ $localeMoney: { value: 1500, currency: 'JPY', locale: { $ref: '$.locale' } } }, { locale: 'en_US' })).toBe('JPY 1500');
+    expect(evaluate({ $localeMoney: { value: 1500, currency: 'KWD', locale: 'en_US' } }, {})).toBe('KWD 1.500');
+    expect(evaluate({ $localeMoney: { value: 1500, currency: 'JPY', locale: 'en_US', digits: 2 } }, {})).toBe('JPY 1500.00');
+  });
+
+  it('reads the amount as $toNumber reads text, and refuses anything else', () => {
+    const money = (value: unknown): unknown => evaluate({ $localeMoney: { value: { $ref: '$.v' }, currency: 'EUR', locale: 'de-DE' } }, { v: value });
+    for (const value of [[1999], true, '0x10', '   ', '12 kg']) {
+      const result = evaluateSafe({ $localeMoney: { value: { $ref: '$.v' }, currency: 'EUR', locale: 'de-DE' } }, { v: value });
+      expect(result.ok ? 'ok' : result.error).toMatchObject({ code: ErrorCode.TYPE });
+    }
+    expect(flat(money(' 1999 '))).toBe('19,99 €');
+    expect(flat(money('1e3'))).toBe('10,00 €');
+  });
 });
 
 describe('$localeDate', () => {
@@ -191,9 +206,10 @@ describe('$localeDate with a zone and a locale read from the source', () => {
     expect(() => execute(stored, { stamp, zone: 'Mars/Olympus', locale: 'en-GB' })).toThrow(PrismError);
   });
 
-  it('folds a written zone as before, and keeps a bound one for the run', async () => {
+  it('keeps a written zone and a bound one for the run: the words are the Intl data of the machine that runs it', async () => {
     const written = await compile({ when: { $localeDate: { value: stamp, locale: 'en-GB', options: { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Vienna' } } } });
-    expect(written.core).toEqual({ when: { $const: '23:30' } });
+    expect(written.meta.stats.optimizations.constantsFolded).toBe(0);
+    expect(execute(written, {})).toEqual({ when: '23:30' });
     // Value and locale written, so only the bound zone keeps it from folding.
     const bound = await compile({ when: { $localeDate: { value: stamp, locale: 'en-GB', options: { hour: '2-digit', minute: '2-digit', timeZone: { $ref: '$.zone' } } } } });
     expect(bound.meta.stats.optimizations.constantsFolded).toBe(0);
@@ -231,6 +247,29 @@ describe('a locale tag Intl cannot read', () => {
   });
 });
 
+describe('options Intl refuses', () => {
+  const refusal = (config: object): unknown => {
+    const result = evaluateSafe(config as never, {});
+    return result.ok ? 'ok' : result.error;
+  };
+
+  it('are a Prism error with E_SCHEMA and the op, not a bare RangeError or TypeError', () => {
+    expect(refusal({ $localeDate: { value: '2026-03-14', locale: 'de-AT', options: { dateStyle: 'medium', weekday: 'short' } } })).toMatchObject({
+      code: ErrorCode.SCHEMA,
+      message: expect.stringContaining('$localeDate: Intl refused its options'),
+    });
+    expect(refusal({ $localeNumber: { value: 3.1, locale: 'de-AT', minDigits: 2, digits: 1 } })).toMatchObject({
+      code: ErrorCode.SCHEMA,
+      message: expect.stringContaining('$localeNumber: Intl refused its options'),
+    });
+    expect(refusal({ $localeNumber: { value: 3.1, locale: 'de-AT', minDigits: 2, digits: 1 } })).toBeInstanceOf(PrismError);
+  });
+
+  it('a zone Intl does not know stays E_TYPE, as a zone was refused before', () => {
+    expect(refusal({ $localeDate: { value: '2026-03-14', locale: 'de-AT', options: { timeZone: 'Europe/Wien' } } })).toMatchObject({ code: ErrorCode.TYPE });
+  });
+});
+
 describe('$localeNumber', () => {
   it('uses the locale decimal mark and grouping', () => {
     const number = (locale: string): string => flat(evaluate({ $localeNumber: { value: { $const: 1234.5 }, locale, minDigits: 1 } }, source));
@@ -245,6 +284,14 @@ describe('$localeNumber', () => {
 
   it('compacts when asked', () => {
     expect(flat(evaluate({ $localeNumber: { value: { $const: 1200 }, locale: 'en-GB', compact: true } }, source))).toBe('1.2k');
+  });
+
+  it('refuses an amount that is not a number or numeric text', () => {
+    for (const value of [[1999], true, '0x10', '   ']) {
+      const result = evaluateSafe({ $localeNumber: { value: { $ref: '$.v' }, locale: 'en-GB' } }, { v: value });
+      expect(result.ok ? 'ok' : result.error).toMatchObject({ code: ErrorCode.TYPE });
+    }
+    expect(evaluate({ $localeNumber: { value: { $ref: '$.v' }, locale: 'en-GB' } }, { v: ' 1234 ' })).toBe('1,234');
   });
 
   it('refuses a locale Intl does not read with a type error', () => {

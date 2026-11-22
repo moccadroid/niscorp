@@ -46,6 +46,10 @@ const kindOf = (value: unknown): string => {
   return 'template';
 };
 
+// A new op starts with its required arguments only: an optional one changes
+// what the op does ($localeMoney's minorUnits and digits).
+const REQUIRED_ONLY = { includeOptional: false } as const;
+
 const defaultFor = (id: string): unknown => {
   switch (id) {
     case 'template': return {};
@@ -56,13 +60,12 @@ const defaultFor = (id: string): unknown => {
     case 'null': return null;
     default: {
       const arg = argFieldOf(BY_ID.get(id)!.variant);
-      return { [id]: arg !== undefined ? buildDocument(arg, {}) : {} };
+      return { [id]: arg !== undefined ? buildDocument(arg, REQUIRED_ONLY) : {} };
     }
   }
 };
 
-const defaultItem = (field: Field): unknown =>
-  field.kind === 'self' ? null : field.kind === 'string' ? '' : field.kind === 'number' ? 0 : field.kind === 'boolean' ? false : buildDocument(field, {});
+const defaultItem = (field: Field): unknown => (field.kind === 'self' ? null : buildDocument(field, REQUIRED_ONLY));
 
 const nodeSlot = (field: Field): ((node: unknown) => unknown) | undefined => {
   if (field.kind === 'self') return (node) => node;
@@ -71,7 +74,7 @@ const nodeSlot = (field: Field): ((node: unknown) => unknown) | undefined => {
     const at = field.items.findIndex((item) => item.kind === 'self');
     if (at < 0) return undefined;
     return (node) => {
-      const slots = (buildDocument(field, {}) as unknown[]).slice();
+      const slots = (buildDocument(field, REQUIRED_ONLY) as unknown[]).slice();
       slots[at] = node;
       return slots;
     };
@@ -80,7 +83,7 @@ const nodeSlot = (field: Field): ((node: unknown) => unknown) | undefined => {
     const prop = field.fields.find((p) => nodeSlot(p.field) !== undefined);
     if (prop === undefined) return undefined;
     const place = nodeSlot(prop.field)!;
-    return (node) => ({ ...(isObj(buildDocument(field, {})) ? (buildDocument(field, {}) as object) : {}), [prop.key]: place(node) });
+    return (node) => ({ ...(isObj(buildDocument(field, REQUIRED_ONLY)) ? (buildDocument(field, REQUIRED_ONLY) as object) : {}), [prop.key]: place(node) });
   }
   return undefined;
 };
@@ -261,6 +264,11 @@ const ArgEditor: FC<{ field: Field; value: unknown; onChange: (next: unknown) =>
                 value={isObj(value) ? value[prop.key] : undefined}
                 onChange={(next) => onChange({ ...(isObj(value) ? value : {}), [prop.key]: next })}
               />
+              {!prop.required && isObj(value) && value[prop.key] !== undefined ? (
+                <button type="button" style={iconBtn} onClick={() => onChange(Object.fromEntries(Object.entries(value).filter(([key]) => key !== prop.key)))}>
+                  Remove
+                </button>
+              ) : null}
             </Labeled>
           ))}
         </div>

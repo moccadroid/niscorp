@@ -35,6 +35,43 @@ describe('$min', () => {
   });
 });
 
+describe('$min and $max skip null wherever it is', () => {
+  const run = (op: '$min' | '$max', xs: unknown[]): unknown => evaluate({ [op]: { over: { $ref: '$.xs' } } } as never, { xs });
+
+  it('give the same answer with null first, between or last', () => {
+    expect(run('$min', [3, null, 1])).toBe(1);
+    expect(run('$min', [null, 3, 1])).toBe(1);
+    expect(run('$min', [3, 1, null])).toBe(1);
+    expect(run('$max', [3, null, 1])).toBe(3);
+    expect(run('$max', [null, 3, 1])).toBe(3);
+  });
+
+  it('a list of nulls answers null, as an empty list does', () => {
+    expect(run('$min', [null, null])).toBe(null);
+    expect(run('$max', [])).toBe(null);
+  });
+
+  it('cost 9 steps an item', () => {
+    const xs = Array.from({ length: 1000 }, (_, i) => 1000 - i);
+    const fits = (maxSteps: number): boolean => {
+      try {
+        evaluate({ $min: { over: { $ref: '$.xs' } } }, { xs }, { limits: { maxSteps }, check: 'always' });
+        return true;
+      } catch {
+        return false;
+      }
+    };
+    let low = 1;
+    let high = 100_000;
+    while (low < high) {
+      const middle = Math.floor((low + high) / 2);
+      if (fits(middle)) high = middle;
+      else low = middle + 1;
+    }
+    expect(Math.round(low / 1000)).toBe(9);
+  });
+});
+
 describe('$max', () => {
   it('finds maximum', () => {
     expect(evaluate({ $max: { over: { $ref: '$.numbers' } } }, source)).toBe(40);

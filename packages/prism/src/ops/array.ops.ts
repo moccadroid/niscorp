@@ -54,10 +54,28 @@ export const opReduce = (node: ReduceNode, context: EvalContext, evaluate: Evalu
   return accumulator;
 };
 
+const isLowHalf = (text: string, at: number): boolean => {
+  const code = text.charCodeAt(at);
+  const before = text.charCodeAt(at - 1);
+  return code >= 0xdc00 && code <= 0xdfff && before >= 0xd800 && before <= 0xdbff;
+};
+
+const unitAt = (text: string, index: number): number => (index < 0 ? Math.max(text.length + index, 0) : Math.min(index, text.length));
+
+// Cut in UTF-16 units, but never between the two halves of one character: a
+// start cut there moves forward past the character, an end cut back before it.
+const sliceText = (text: string, start: number | undefined, end: number | undefined): string => {
+  let from = unitAt(text, start ?? 0);
+  let to = end === undefined ? text.length : unitAt(text, end);
+  if (from > 0 && from < text.length && isLowHalf(text, from)) from += 1;
+  if (to > 0 && to < text.length && isLowHalf(text, to)) to -= 1;
+  return from < to ? text.slice(from, to) : '';
+};
+
 export const opSlice = (node: SliceNode, context: EvalContext, evaluate: EvaluateFn): JsonValue => {
   const { from, start, end } = node.$slice;
   const input = evaluate(from, context);
-  if (typeof input === 'string') return input.slice(start, end);
+  if (typeof input === 'string') return sliceText(input, start, end);
   if (isJsonArray(input)) return input.slice(start, end);
   return refuseType({ node, op: '$slice', field: 'from', needs: 'a list or text', got: input, written: from, contextOp: '$slice' });
 };

@@ -13,6 +13,8 @@ export type EvalContext = {
   // The tree being evaluated is kept and run again, so a `$const` is handed
   // out as a copy: a caller that changes a result must not change the next one.
   readonly kept?: boolean;
+  // Set while the optimizer works a literal subtree out ahead of time.
+  readonly folding?: boolean;
 };
 
 // Passed to every op: an op importing the evaluator would be a circular import.

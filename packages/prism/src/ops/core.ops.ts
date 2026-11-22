@@ -3,7 +3,7 @@ import type { RefNode, ConstNode, VarNode, GetNode, WithNode } from '../schemas'
 import { ErrorCode, failAt } from '../errors';
 import { INDEX_TEXT, parseJsonPathCached, getByPath, jsonPathUpTo, whereStopped, type JsonPathSegment, type Step } from '../utils/jsonpath';
 import { isJsonObject, isJsonArray } from '../schemas/guards';
-import { measure } from '../engine/budget';
+import { measure, spendSteps } from '../engine/budget';
 import { readOwnKey, writeOwnKey } from '../utils/own-keys';
 
 export const SEGMENTS_KEY = '__segments';
@@ -30,12 +30,19 @@ const copyOf = (value: JsonValue): JsonValue => {
   if (value === null || typeof value !== 'object') return value;
   if (Array.isArray(value)) return value.map(copyOf);
   const copy: Record<string, JsonValue> = {};
-  for (const [key, inner] of Object.entries(value)) copy[key] = copyOf(inner);
+  for (const [key, inner] of Object.entries(value)) writeOwnKey(copy, key, copyOf(inner));
   return copy;
 };
 
-export const opConst = (node: ConstNode, context: EvalContext, _evaluate: EvaluateFn): JsonValue =>
-  context.kept === true ? copyOf(node.$const as JsonValue) : (node.$const as JsonValue);
+export const COST_KEY = '__cost';
+
+// A constant the optimizer worked out spends the steps working it out took, so
+// a kept config spends on every call what its first call spent.
+export const opConst = (node: ConstNode, context: EvalContext, _evaluate: EvaluateFn): JsonValue => {
+  const cost = Reflect.get(node, COST_KEY);
+  if (typeof cost === 'number' && context.budget !== undefined) spendSteps(context.budget, node, cost);
+  return context.kept === true ? copyOf(node.$const as JsonValue) : (node.$const as JsonValue);
+};
 
 export const opVar = (node: VarNode, context: EvalContext, _evaluate: EvaluateFn): JsonValue => {
   const value = readOwnKey(context.vars, node.$var);

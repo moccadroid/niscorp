@@ -68,7 +68,7 @@ export const LocaleMoneyNodeSchema = z
   .object({
     $localeMoney: z
       .object({
-        value: z.lazy(node).describe('The amount. Minor units (cents) unless `minorUnits` is false.'),
+        value: z.lazy(node).describe('The amount: a number, or text that is a number written in digits ("1999"). Minor units (cents) unless `minorUnits` is false.'),
         currency: z.lazy(node).describe('ISO-4217 code — "EUR", "CHF". Required: an amount without one is a number, not money.'),
         locale: localeField,
         minorUnits: z
@@ -90,7 +90,7 @@ export const LocaleNumberNodeSchema = z
   .object({
     $localeNumber: z
       .object({
-        value: z.lazy(node).describe('The number to format.'),
+        value: z.lazy(node).describe('The number to format: a number, or text that is a number written in digits ("12.5").'),
         locale: localeField,
         style: z.enum(['decimal', 'percent']).optional().describe('Default "decimal". "percent" multiplies by 100 — pass 0.42, not 42.'),
         digits: z.number().int().min(0).max(20).optional().describe('Maximum fraction digits. Default: the locale\'s own.'),

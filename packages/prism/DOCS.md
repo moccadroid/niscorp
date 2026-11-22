@@ -189,7 +189,11 @@ The `acc` name defaults to `"acc"` if omitted. When `as` and `acc` are one name 
 { "$slice": { "from": { "$ref": "$.text" }, "start": 0, "end": 5 } }
 ```
 
-`start` defaults to 0, `end` defaults to length.
+`start` defaults to 0, `end` defaults to length. A string is indexed in UTF-16
+units, as `$length` counts it, and is never cut inside a character: a cut that
+falls between the two halves of one (an emoji such as 👍 is two units) moves to
+the near side of it, so that code point is left out. `start` 0 and `end` 5 of `"Hey 👍 there"` is `"Hey "`, and
+`start` 5 is `" there"`. `$take` and `$drop` cut the same way.
 
 ### `$flatten` — Flatten one level
 
@@ -230,7 +234,7 @@ Source: `{ "tags": ["a", "b", "a", "c", "b"] }` → `["a", "b", "c"]`
 
 ## Math Operations
 
-`$add`, `$sub`, `$mul`, `$div` and `$mod` take a `[left, right]` pair. Both operands are evaluated and must be numbers. `$round` and `$toNumber` take an object.
+`$add`, `$sub`, `$mul`, `$div` and `$mod` take a `[left, right]` pair. Both operands are evaluated and must be numbers. An answer past what a JSON number can be (`{ "$mul": [1e308, 10] }`) is refused with `E_TYPE`, not handed out as `Infinity`. `$round` and `$toNumber` take an object.
 
 ### `$add`
 ```json
@@ -264,6 +268,8 @@ The remainder of the first number divided by the second. It takes the sign of th
 { "$round": { "value": { "$const": 3.14159 }, "digits": 2 } }
 ```
 Result: `3.14`. `digits` defaults to 0. `mode` is `"nearest"` unless given: `"floor"` rounds down (toward negative infinity) and `"ceil"` rounds up, at the same `digits`.
+
+The number is rounded at its decimals as they are written: `1.1` with `"ceil"` at 2 digits is `1.1`, and `1.005` to the nearest at 2 digits is `1.01`. A half goes up, toward positive infinity (`-2.5` is `-2`). More digits than a number has give the number itself.
 
 ```json
 { "$round": { "value": { "$div": [{ "$ref": "$.minutes" }, 60] }, "mode": "floor" } }
@@ -305,7 +311,7 @@ Numbers → `"42"`, null → `"null"`, objects → JSON string.
   }
 }
 ```
-Replaces `{{key}}` placeholders with values from the evaluated object. Missing keys become empty strings. A value that is an object or a list is refused (`E_TYPE`).
+Replaces `{{key}}` placeholders with values from the evaluated object. A key is letters, marks, digits and `_` in any script (`{{straße}}`, `{{名前}}`); a placeholder with any other character (`{{first-name}}`, `{{ name }}`) is left as written. Missing keys become empty strings. A value that is an object or a list is refused (`E_TYPE`).
 
 ### `$fill` — Fill a counted phrase
 ```json
@@ -337,14 +343,14 @@ Result: `"hello"`
 ```json
 { "$split": { "value": { "$const": "a,b,c" }, "sep": "," } }
 ```
-Result: `["a", "b", "c"]`
+Result: `["a", "b", "c"]`. With `"sep": ""` the text is split into code points: `"a👍"` → `["a", "👍"]`, and `"👍🏽"` gives two items.
 
 ### `$replace` — Replace a substring
 ```json
 { "$replace": { "value": { "$ref": "$.text" }, "search": "world", "replacement": "there" } }
 { "$replace": { "value": { "$ref": "$.phone" }, "search": " ", "replacement": "", "all": true } }
 ```
-The first occurrence of `search`, or every occurrence with `all: true`. `search` is plain text, not a pattern.
+The first occurrence of `search`, or every occurrence with `all: true`. `search` is plain text, not a pattern, and `replacement` is written as given: `"US$$5"` writes `US$$5`, and `$&` is the two characters `$&`.
 
 ---
 
@@ -507,6 +513,7 @@ Returns one of: `"string"`, `"number"`, `"boolean"`, `"null"`, `"array"`, `"obje
 { "$length": { "$ref": "$.items" } }
 { "$length": { "$ref": "$.name" } }
 ```
+A string's length counts UTF-16 units, not characters: `"👍🏽"` is 4.
 
 ---
 
@@ -521,7 +528,9 @@ precise edit.
 { "$has": { "from": { "$ref": "$.document" }, "path": ["props", "label"] } }
 ```
 True when the whole path exists — a key present with `null` counts; a missing
-one does not (which `$get` with a `fallback` cannot tell apart).
+one does not (which `$get` with a `fallback` cannot tell apart). A path is read
+as `$get` reads it: a number, or digit text such as `"0"` on a list, is an
+index.
 
 ### `$renameKeys` — Rename in place
 ```json
@@ -535,8 +544,12 @@ existing key replaces that entry.
 { "$update": { "from": { "$ref": "$.document" }, "path": ["props", "count"], "value": { "$add": [{ "$var": "current" }, 1] } } }
 ```
 The value currently at `path` (null when absent) is bound as `current` (rename
-it with `"as"`). Missing objects along a string path are created; an array index
-that does not exist is `E_MISSING_PATH`.
+it with `"as"`). The path is read as `$get` reads it: `["items", "0", "qty"]`
+over a list updates its first item. Missing objects along a string path are
+created, and so is an object where the path meets `null`; an array index that
+does not exist is `E_MISSING_PATH`. A key on a list (`["items", "x"]`, and
+`"01"`, which is not index text) or on a string, number or boolean is `E_TYPE`:
+`$update` never replaces a value with an object.
 
 ### `$assert` — Refuse loudly
 ```json
@@ -587,6 +600,10 @@ removal. Changes to the grammar are strata migrations on `nisc.prism`
 
 Powered by [dayjs](https://day.js.org/). Date values can be ISO 8601 strings or Unix timestamps (milliseconds). A date-only string (`YYYY-MM-DD`) is parsed and computed in UTC, so the calendar day survives the round trip.
 
+An ISO date or time with a field out of range — `2026-02-30`, `2026-13-01`, `2026-02-29` in a common year, `T25:00`, a minute or second of `60` — is refused with `E_DATE_INVALID` by `$date`, `$dateAdd`, `$dateDiff` and `$localeDate`, instead of rolling over into a later date. `24:00:00` is read as ISO allows it, as the next midnight. Text that is not ISO-shaped (`"3/4/26"`, `"14 Mar 26"`, an RFC 2822 date) is read as the platform reads it, as before.
+
+**Worked out where it runs.** `$date`, `$dateAdd`, `$dateDiff`, `$localeDate`, `$localeMoney` and `$localeNumber` read the machine's clock zone or its `Intl` data, so neither `compile` nor a kept `evaluate` works them out ahead of time, even when every input is written in the config: a compiled IR keeps them as ops, and `execute` answers them on the machine it runs on, as `evaluate` there does.
+
 A date and time with no zone (`2026-01-01T09:00`) is read in the time zone of the machine that runs Prism: `$date` answers `2026-01-01T08:00:00.000Z` on a server in Vienna and `2026-01-01T17:00:00.000Z` in Los Angeles. A `format` without `utc: true` prints in that zone too: `2026-01-01T09:00Z` with `"format": "HH:mm"` is `10:00` in Vienna and `01:00` in Los Angeles. For the same answer on every server, write the zone into the value (`Z` or `+01:00`) and pass `utc: true` when formatting.
 
 ### `$date` — Format a date
@@ -629,6 +646,11 @@ discover it is a reader in Vienna being shown American dates.
 All three take an optional `fallback` (default `""`), returned when `value` is
 null or an empty string — before `locale` is even looked at.
 
+Some option sets pass the schema and are still refused by `Intl` —
+`dateStyle` beside `weekday`, `minDigits` above `digits`. `$localeDate` and
+`$localeNumber` refuse them as a config Prism cannot run: a `PrismError` with
+`E_SCHEMA`, the op and its place in the config, saying what `Intl` refused.
+
 ### `$localeMoney` — an amount as money
 ```json
 { "$localeMoney": { "value": { "$ref": "$.price_cents" }, "currency": { "$ref": "$.currency" }, "locale": "de-AT" } }
@@ -651,10 +673,14 @@ three countries:
 - `digits` overrides the currency's own fraction digits.
 - `fallback` (default `""`) is rendered for a null/absent amount, so an empty
   SUM shows a dash rather than a confident `€0.00`.
-- An ISO code `Intl` does not know prints beside the number instead of throwing.
-  So does a locale tag `Intl` cannot read (`"en_GB"`), and then the divisor is
-  100 whatever the currency, as `Intl` was not asked for its exponent: 4500 JPY
-  prints `JPY 45.00`, the hundredfold error above. Give it a locale `Intl` reads.
+- `value` is a number, or text that is a number written in digits (`"1999"`,
+  `" 1999 "`), as `$toNumber` reads it. Anything else — a list, `true`, `"0x10"`,
+  blank text — is refused with `E_TYPE`. `$localeNumber` reads its `value` the
+  same way.
+- An ISO code `Intl` does not know prints beside the number instead of throwing,
+  with two fraction digits. So does a locale tag `Intl` cannot read (`"en_GB"`),
+  with the currency's own digits: the amount does not depend on the locale, so
+  1500 JPY prints `JPY 1500`.
 
 ### `$localeDate` — a date for a human
 ```json
@@ -687,7 +713,8 @@ fallback is the author's to write: for a zone that may be `null`,
 refused). A bad date is refused (`E_DATE_INVALID`) before the zone is looked
 at. A config with a bound zone compiles once: its fingerprint does not depend
 on the zone, and `execute` reads the zone from each source it is run on. A
-written zone is folded at compile time as before.
+written zone is kept for the run too, as every date and locale op is (see
+"Worked out where it runs" under Time Operations).
 
 **A locale, written or read, is a tag `Intl` can read.** One that is not text,
 or text `Intl` cannot read as a locale tag (`"en_GB"`, `"not a locale!"`), is
@@ -710,7 +737,8 @@ still wins.
 { "$localeNumber": { "value": { "$ref": "$.rate" }, "locale": "en-GB", "style": "percent" } }
 ```
 
-`style` is `decimal` (default) or `percent` — percent multiplies by 100, so pass
+`value` is a number or numeric text, as for `$localeMoney`. `style` is
+`decimal` (default) or `percent` — percent multiplies by 100, so pass
 `0.42`, not `42`. `digits`/`minDigits` cap and floor the fraction digits;
 `compact` gives `1.2k`. Grouping and the decimal mark follow the locale
 (`1.234,5` in Germany, `1 234,5` in Austria, `1,234.5` in Britain).
@@ -744,7 +772,7 @@ Empty array → `0`.
 { "$min": { "over": { "$ref": "$.prices" } } }
 { "$max": { "over": { "$ref": "$.scores" } } }
 ```
-Empty array → `null`.
+Empty array → `null`. A `null` item is skipped wherever it is: `[3, null, 1]` and `[null, 3, 1]` both give `1`, and a list of nulls gives `null`. Each item costs 9 steps of `maxSteps`.
 
 ### `$pluck` — Extract a field from each element
 ```json
@@ -796,6 +824,8 @@ const result2 = execute(ir, source2); // Each op's handler already attached
 ```
 
 The IR is JSON-serializable — store it in a database, cache in Redis, send over a wire.
+
+The date and locale ops stay ops in the IR, even on written values: an IR compiled in Vienna and executed in Los Angeles answers in Los Angeles's zone, as `evaluate` there does. An IR stored by an earlier release keeps whatever it worked out then until it is compiled again.
 
 **A constant in an answer is frozen.** Every `execute` of an IR hands out the IR's own constants: a `$const` that is a list or an object, and anything the compiler worked out ahead of time because it did not depend on the source (`{ "$split": { "value": "a,b", "sep": "," } }` is a constant list). They are frozen, all the way down, so one caller cannot change what the next is given: `answer.tags.push(x)` on a list that came from `{ "$const": [] }` throws a `TypeError`. To change an answer, copy the part first (`[...answer.tags, x]`). Everything built for the call — a template's object, a `$map`'s list — is the caller's own. `evaluate` does not freeze: what it answers may be changed.
 
@@ -860,6 +890,12 @@ third argument: a `Partial<Limits>`, merged over `DEFAULT_LIMITS`:
 | `maxSteps` | `1_000_000` | Nodes evaluated in one evaluation |
 | `maxStringLength` | `1_000_000` | Characters in any one string a node produces |
 | `maxValues` | `1_000_000` | Values (scalars, array items, object fields) in a `$reduce` accumulator, a `$with` binding, or the result |
+
+A config that `evaluate` keeps and runs again spends on every call the steps
+its first call spent: a part worked out ahead of time from the second call
+(a `$join` of 600 written parts) still costs the nodes it took. `execute` counts
+such a part of a compiled IR as one step, since the IR is JSON and carries no
+record of what working it out cost.
 
 Past any of them the evaluation throws `E_BUDGET`. `maxValues` counts a value
 each time it appears, as it would be serialized: a `$reduce` whose body is

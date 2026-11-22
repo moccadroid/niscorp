@@ -21,25 +21,28 @@ const requireNumbers = (node: object, pair: [unknown, unknown], context: EvalCon
 const refuseZero = (node: object, op: string): never =>
   failAt(`Division by zero: the second value of ${op} is 0.`, ErrorCode.DIVISION_BY_ZERO, { op }, { node, op, field: '1', form: false });
 
+const finite = (result: number, node: object, op: string): number =>
+  Number.isFinite(result) ? result : failAt(`${op} gave ${result}, which is not a JSON number.`, ErrorCode.TYPE, { op }, { node, op, form: false });
+
 export const opAdd = (node: AddNode, context: EvalContext, evaluate: EvaluateFn): JsonValue => {
   const [a, b] = requireNumbers(node, node.$add, context, evaluate, '$add');
-  return a + b;
+  return finite(a + b, node, '$add');
 };
 
 export const opSub = (node: SubNode, context: EvalContext, evaluate: EvaluateFn): JsonValue => {
   const [a, b] = requireNumbers(node, node.$sub, context, evaluate, '$sub');
-  return a - b;
+  return finite(a - b, node, '$sub');
 };
 
 export const opMul = (node: MulNode, context: EvalContext, evaluate: EvaluateFn): JsonValue => {
   const [a, b] = requireNumbers(node, node.$mul, context, evaluate, '$mul');
-  return a * b;
+  return finite(a * b, node, '$mul');
 };
 
 export const opDiv = (node: DivNode, context: EvalContext, evaluate: EvaluateFn): JsonValue => {
   const [a, b] = requireNumbers(node, node.$div, context, evaluate, '$div');
   if (b === 0) return refuseZero(node, '$div');
-  return a / b;
+  return finite(a / b, node, '$div');
 };
 
 // The remainder with the sign of the divisor, not of the dividend as `%` gives it.
@@ -54,17 +57,26 @@ export const opMod = (node: ModNode, context: EvalContext, evaluate: EvaluateFn)
 
 const ROUNDING = { nearest: Math.round, floor: Math.floor, ceil: Math.ceil };
 
+// Moved by its decimal exponent, not multiplied: 1.1 * 100 is 110.00000000000001,
+// Number("1.1e2") is 110.
+const shifted = (value: number, digits: number): number => {
+  const [mantissa, exponent = '0'] = String(value).split('e');
+  return Number(`${mantissa}e${Number(exponent) + digits}`);
+};
+
 export const opRound = (node: RoundNode, context: EvalContext, evaluate: EvaluateFn): JsonValue => {
   const value = evaluate(node.$round.value, context);
   if (typeof value !== 'number') return refuseType({ node, op: '$round', field: 'value', needs: 'a number', got: value, written: node.$round.value });
   const digits = node.$round.digits ?? 0;
-  const factor = Math.pow(10, digits);
-  return ROUNDING[node.$round.mode ?? 'nearest'](value * factor) / factor;
+  const moved = shifted(value, digits);
+  // Moved past what a number can be, it has no digit at that place to round.
+  if (!Number.isFinite(moved)) return value;
+  return shifted(ROUNDING[node.$round.mode ?? 'nearest'](moved), -digits);
 };
 
 // A number as it is written in digits, not all that Number() takes: not '',
 // not '0x10', not 'Infinity'.
-const NUMERIC_TEXT = /^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/;
+export const NUMERIC_TEXT = /^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/;
 
 export const opToNumber = (node: ToNumberNode, context: EvalContext, evaluate: EvaluateFn): JsonValue => {
   const value = evaluate(node.$toNumber.value, context);

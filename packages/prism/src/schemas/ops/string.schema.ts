@@ -31,7 +31,7 @@ export const InterpolateNodeSchema = z
   .object({
     $interpolate: z
       .object({
-        template: z.string().describe('Template with {{key}} placeholders.'),
+        template: z.string().describe('Template with {{key}} placeholders. A key is letters, digits and _ in any script ({{straße}}, {{名前}}); {{first-name}} is left as written.'),
         values: z.lazy(node).describe('Object whose keys replace {{key}} placeholders.'),
       })
       .strict(),
@@ -73,7 +73,7 @@ export const SplitNodeSchema = z
     $split: z
       .object({
         value: z.lazy(node).describe('String to split.'),
-        sep: z.string().describe('Separator to split on.'),
+        sep: z.string().describe('Separator to split on. "" splits into code points ("👍🏽" gives two items).'),
       })
       .strict(),
   })
@@ -87,7 +87,7 @@ export const ReplaceNodeSchema = z
       .object({
         value: z.lazy(node).describe('String to search in.'),
         search: z.string().describe('Substring to find.'),
-        replacement: z.string().describe('Replacement string.'),
+        replacement: z.string().describe('Replacement text, written as given: "$$" and "$&" are not patterns.'),
         all: z.boolean().optional().describe('true replaces every occurrence. Default: only the first.'),
       })
       .strict(),

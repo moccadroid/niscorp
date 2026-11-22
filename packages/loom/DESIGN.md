@@ -34,7 +34,11 @@ Zod schema  ──parse──▶  Field model (IR)  ──toNova──▶  { act
 (the IR — intermediate representation). Zod has many ways to express the same
 shape; `parse` collapses those into one tagged union so every later stage can
 dispatch on a single `kind`. The kinds are: `string`, `number`, `boolean`,
-`enum`, `object`, `array`, `tuple`, `union`, `self`, and `unknown`.
+`enum`, `object`, `array`, `tuple`, `union`, `self`, and `unknown`. A
+`z.literal` is an `enum` of its values whose `default` is the first, so it
+starts at its value. A field whose schema takes `null` (`.nullable()`, under any
+other wrapper) carries `nullable: true`: the number control writes `null` when
+it is emptied only for such a field, and leaves any other number absent.
 
 This model is pure data. It knows nothing about Nova. It is *what Loom edits*,
 described independently of how it is rendered.
@@ -80,7 +84,9 @@ editor without touching the compiler.
 The vocabulary is deliberately small and stable
 ([roles.ts](./src/compile/roles.ts)): layout primitives (`box`, `group`,
 `array`, `array-item`, `variant`, `branch`), a field wrapper (`field` — label,
-description, error, required marker), controls (`text`, `number`, `checkbox`,
+description, error, required marker; an optional field's wrapper is bound to
+the field's value and carries `optional: true`, so the kit offers Remove while
+it has one), controls (`text`, `number`, `checkbox`,
 `select`, `raw`), and list actions (`append`, `row-menu`). Structural shapes
 (objects, arrays, unions) are *compositions* of these roles, not roles of their
 own. An array is a `loom:array` holding one `loom:array-item` per element and
@@ -111,15 +117,21 @@ layout. Instead, `parse` records a `Pattern` for each branch — the one fact th
 recognizes it in a value:
 
 - `tag` — a shared field equals a literal (`z.discriminatedUnion`).
-- `key` — a field unique to this branch is present (a structural union).
+- `key` — a field unique to this branch is present (a structural union). A
+  field the branch requires is preferred, since every value of the branch has
+  it; an optional one is used only when the branch requires none.
 - `type` — the value's own JS type is unique to this branch, e.g. a string or
   array among objects (a mixed union).
 - `fallback` — the single catch-all branch, selected only when nothing else
   matches (e.g. an unconstrained object among tagged operations).
 
-At render, the variant widget matches the current value against these patterns
-in plain JS and shows the branch that fits; choosing a different branch writes
-that branch's defaults into the document. Tagged, structural, and mixed unions
+A branch is read as what it unwraps to, so a branch behind `z.lazy`, or an
+optional one, is told apart like any other. At render, the variant widget
+matches the current value against these patterns in plain JS and shows the
+branch that fits; choosing a different branch writes that branch's defaults
+into the document. A value that no branch matches, in a union with no fallback
+branch, chooses none: the chooser shows "—" and the value is shown in the JSON
+editor, so nothing is written into it until a branch is chosen. Tagged, structural, and mixed unions
 are one code path, and no union-specific concept leaks into Nova.
 
 ### Recursion
@@ -142,7 +154,8 @@ so the forms of one editor, which share a layout store, never share a template.
 This covers recursion through a list. A self-reference that is not inside an
 array (`next: z.lazy(() => Stop).optional()`) has no list write to grow by: it
 compiles to `loom:raw`, a raw JSON box, as does every kind outside the model
-(records, literals, dates, transforms, intersections, a union no pattern tells
+(records, dates, transforms, intersections, an object with a key that has a
+dot in it, which Nova cannot bind, a union no pattern tells
 apart).
 
 ### Custom widgets

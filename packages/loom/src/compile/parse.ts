@@ -70,11 +70,14 @@ const objectFields = (schema: ZodType, walk: Walk): ObjectField[] =>
     field: parseField(value, walk),
   }));
 
-const branchKeys = (branch: ZodType): string[] => Object.keys(defOf(branch).shape ?? {});
+// A branch is read as what it unwraps to: a `z.lazy` or an optional branch has
+// no shape of its own.
+const shapeOf = (branch: ZodType): Record<string, ZodType> => defOf(unwrap(branch).core).shape ?? {};
+const branchKeys = (branch: ZodType): string[] => Object.keys(shapeOf(branch));
 
 const JSON_TYPES = new Set(['string', 'number', 'boolean', 'object', 'array', 'null']);
 const jsonType = (branch: ZodType): string | undefined => {
-  const type = defOf(branch).type;
+  const type = defOf(unwrap(branch).core).type;
   return JSON_TYPES.has(type) ? type : undefined;
 };
 
@@ -87,11 +90,17 @@ const tagPattern = (key: string, discriminator: ZodType | undefined): Pattern =>
 };
 
 const distinguish = (branch: ZodType, siblings: readonly ZodType[], tag: string | undefined): Pattern | undefined => {
+  const shape = shapeOf(branch);
   if (tag !== undefined) {
-    return tagPattern(tag, (defOf(branch).shape ?? {})[tag]);
+    return tagPattern(tag, shape[tag]);
   }
   const elsewhere = new Set(siblings.flatMap(branchKeys));
-  const key = branchKeys(branch).find((k) => !elsewhere.has(k));
+  const own = Object.keys(shape).filter((k) => !elsewhere.has(k));
+  // A key the branch requires is in every value of it; an optional one may be absent.
+  const key = own.find((k) => {
+    const schema = shape[k];
+    return schema !== undefined && !acceptsAbsence(schema);
+  }) ?? own[0];
   if (key !== undefined) return { kind: 'key', key };
   const type = jsonType(branch);
   if (type !== undefined && siblings.every((s) => jsonType(s) !== type)) return { kind: 'type', type };
@@ -128,6 +137,10 @@ const parseByType: Record<string, (schema: ZodType, walk: Walk) => Field> = {
   number: (schema) => (isInteger(schema) ? { kind: 'number', integer: true } : { kind: 'number' }),
   boolean: () => ({ kind: 'boolean' }),
   enum: (schema) => ({ kind: 'enum', options: enumOptions(schema) }),
+  literal: (schema) => {
+    const values = defOf(schema).values ?? [];
+    return { kind: 'enum', options: values.map((value) => ({ value, label: String(value) })), default: values[0] };
+  },
   object: (schema, walk) => {
     const def = defOf(schema);
     walk.stack.add(def);
@@ -178,11 +191,13 @@ const resolveLazy = (lazy: ZodType): ZodType | undefined => {
   return resolved;
 };
 
-const unwrap = (schema: ZodType): { core: ZodType; default?: unknown } => {
+const unwrap = (schema: ZodType): { core: ZodType; default?: unknown; nullable?: true } => {
   let core = schema;
   let fallback: unknown;
+  let nullable = false;
   let def = defOf(core);
   while (WRAPPERS.has(def.type) || def.type === 'lazy') {
+    if (def.type === 'nullable') nullable = true;
     const inner = def.type === 'lazy' ? resolveLazy(core) : def.innerType;
     if (inner === undefined) break;
     // The outermost default is the one zod applies.
@@ -190,7 +205,7 @@ const unwrap = (schema: ZodType): { core: ZodType; default?: unknown } => {
     core = inner;
     def = defOf(core);
   }
-  return fallback !== undefined ? { core, default: fallback } : { core };
+  return { core, ...(fallback !== undefined ? { default: fallback } : {}), ...(nullable ? { nullable: true } : {}) };
 };
 
 const readMeta = (schema: ZodType): FieldMeta => {
@@ -202,14 +217,14 @@ const readMeta = (schema: ZodType): FieldMeta => {
 };
 
 const parseField = (schema: ZodType, walk: Walk): Field => {
-  const { core, default: fallback } = unwrap(schema);
+  const { core, default: fallback, nullable } = unwrap(schema);
   if (walk.stack.has(defOf(core))) {
     walk.targets.add(defOf(core));
     return { kind: 'self' };
   }
   const body = (parseByType[defOf(core).type] ?? unknownField)(core, walk);
   const meta = { ...readMeta(core), ...readMeta(schema) };
-  return { ...body, ...meta, ...(fallback !== undefined ? { default: fallback } : {}) };
+  return { ...body, ...meta, ...(fallback !== undefined ? { default: fallback } : {}), ...(nullable === true ? { nullable } : {}) };
 };
 
 export const parse = (schema: ZodType): Field =>
@@ -237,10 +252,10 @@ const EMPTY: Record<FieldKind, EmptyValue> = {
     }
     return document;
   },
-  union: (field) => {
+  union: (field, options) => {
     if (field.kind !== 'union') return {};
     const first = field.variants[0];
-    return first === undefined ? {} : variantDefaults(first);
+    return first === undefined ? {} : variantDefaults(first, options);
   },
 };
 
@@ -252,8 +267,8 @@ export const buildDocument = (field: Field, options: CompileOptions): unknown =>
 export const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
-export const variantDefaults = (variant: Variant): unknown => {
-  const defaults = buildDocument(variant.field, {});
+export const variantDefaults = (variant: Variant, options: CompileOptions): unknown => {
+  const defaults = buildDocument(variant.field, options);
   if (variant.pattern.kind !== 'tag') return defaults;
   return { [variant.pattern.key]: variant.pattern.value, ...(isRecord(defaults) ? defaults : {}) };
 };

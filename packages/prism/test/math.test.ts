@@ -53,6 +53,20 @@ describe('$round — mode', () => {
   it('a config without a mode parses to what it did: no mode is written in', () => {
     expect(validate({ $round: { value: 1.5 } })).toEqual({ ok: true, data: { $round: { value: 1.5, digits: 0 } } });
   });
+  it('rounds at the decimals as written, not at a binary product', () => {
+    expect(round(1.1, 'ceil', 2)).toBe(1.1);
+    expect(round(4.35, 'floor', 2)).toBe(4.35);
+    expect(round(0.29, 'floor', 2)).toBe(0.29);
+    expect(round(1.005, 'nearest', 2)).toBe(1.01);
+    expect(round(0.285, 'nearest', 2)).toBe(0.29);
+    expect(round(3.14159, 'nearest', 2)).toBe(3.14);
+    expect(round(-2.5, 'nearest', 0)).toBe(-2);
+  });
+  it('more digits than a number has give the number', () => {
+    expect(round(1.5, 'nearest', 400)).toBe(1.5);
+    expect(round(1e300, 'nearest', 10)).toBe(1e300);
+    expect(round(1.23e-7, 'floor', 8)).toBe(1.2e-7);
+  });
 });
 
 describe('$mod', () => {
@@ -120,5 +134,26 @@ describe('the new math ops, compiled', () => {
 describe('type errors', () => {
   it('$add throws on non-numbers', () => {
     expect(() => evaluate({ $add: [{ $const: 'a' }, { $const: 1 }] }, source)).toThrow();
+  });
+});
+
+describe('a math answer is a JSON number', () => {
+  const codeOf = (config: object, src: object): string | undefined => {
+    try {
+      evaluate(config as never, src);
+    } catch (error) {
+      return error instanceof PrismError ? error.code : String(error);
+    }
+    return undefined;
+  };
+  it('a sum, difference, product or quotient past what a number can be is refused', () => {
+    expect(codeOf({ $mul: [{ $ref: '$.a' }, 10] }, { a: 1e308 })).toBe('E_TYPE');
+    expect(codeOf({ $div: [{ $ref: '$.a' }, { $ref: '$.b' }] }, { a: 1, b: 5e-324 })).toBe('E_TYPE');
+    expect(codeOf({ $add: [{ $ref: '$.a' }, { $ref: '$.a' }] }, { a: 1e308 })).toBe('E_TYPE');
+    expect(codeOf({ $sub: [{ $ref: '$.a' }, { $ref: '$.a' }] }, { a: -1e308 })).toBe(undefined);
+    expect(codeOf({ $sub: [{ $ref: '$.a' }, 1e308] }, { a: -1e308 })).toBe('E_TYPE');
+  });
+  it('the refusal says which op gave what', () => {
+    expect(() => evaluate({ $mul: [{ $ref: '$.a' }, 10] }, { a: 1e308 })).toThrow(/\$mul gave Infinity, which is not a JSON number/);
   });
 });

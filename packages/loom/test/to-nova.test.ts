@@ -14,6 +14,16 @@ const personSchema = z.object({
 
 const render = (schema: z.ZodType, options?: Parameters<typeof toNova>[1]) => toNova(parse(schema), options);
 
+const findVariant = (node: ComponentNode): ComponentNode | undefined => {
+  if (node.component === Roles.variant) return node;
+  const children = Array.isArray(node.children) ? node.children : node.children === undefined ? [] : [node.children];
+  for (const child of children) {
+    const found = typeof child === 'object' && child !== null && 'component' in child ? findVariant(child as ComponentNode) : undefined;
+    if (found !== undefined) return found;
+  }
+  return undefined;
+};
+
 describe('toNova — object schema', () => {
   it('emits a schema-valid Nova ActionDefinition', () => {
     expect(() => ActionDefinitionSchema.parse(render(personSchema).action)).not.toThrow();
@@ -174,6 +184,36 @@ describe('toNova — object schema', () => {
     expect((cell!.children as ComponentNode).model).toBe('$item');
     expect(menu!).toMatchObject({ component: Roles.rowMenu, model: '$items', props: { index: '$index' } });
     expect((menu!.props as { containers?: unknown }).containers).toBeUndefined();
+  });
+});
+
+describe('toNova — optional fields and the starting document', () => {
+  it('binds the wrapper of an optional field to its value and marks it optional; a required one stays as it was', () => {
+    const layout = render(z.object({ name: z.string(), email: z.string().optional() })).action.layout as ComponentNode;
+    const [name, email] = layout.children as ComponentNode[];
+    expect(name).toEqual({ component: Roles.field, props: { label: 'name', required: true, error: '$._errors.name' }, children: { component: Roles.text, model: '$.name' } });
+    expect(email).toMatchObject({ component: Roles.field, model: '$.email', props: { label: 'email', required: false, optional: true } });
+  });
+
+  it('includeOptional and empty reach the branches of a union', () => {
+    const shape = z.discriminatedUnion('kind', [z.object({ kind: z.literal('a'), note: z.string().optional(), size: z.number() }), z.object({ kind: z.literal('b') })]);
+    expect(render(z.object({ shape }), { includeOptional: false }).action.data).toEqual({ shape: { kind: 'a', size: 0 } });
+    expect(render(z.object({ shape }), { empty: { number: () => 7 } }).action.data).toEqual({ shape: { kind: 'a', note: '', size: 7 } });
+    const branches = decode((findVariant(render(z.object({ shape }), { includeOptional: false }).action.layout as ComponentNode)?.props as { branches?: unknown }).branches);
+    expect(branches).toMatchObject([{ defaults: { kind: 'a', size: 0 } }, { defaults: { kind: 'b' } }]);
+  });
+});
+
+describe('toNova — an object with a key that has a dot in it', () => {
+  it('compiles to the raw JSON box at its own path', () => {
+    const layout = render(z.object({ meta: z.object({ 'a.b': z.string() }) })).action.layout as ComponentNode;
+    const [meta] = layout.children as ComponentNode[];
+    expect(meta?.children).toEqual({ component: Roles.raw, model: '$.meta' });
+  });
+
+  it('at the root with rootKey, the box is bound one level in', () => {
+    const { action } = render(z.object({ 'a.b': z.string() }), { rootKey: 'value' });
+    expect(action.layout).toEqual({ component: Roles.raw, model: '$.value' });
   });
 });
 

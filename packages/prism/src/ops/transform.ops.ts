@@ -4,12 +4,18 @@ import { PrismError, ErrorCode, describeValue, failAt } from '../errors';
 import { refuseType } from './refuse';
 import { isJsonObject, isJsonArray } from '../schemas/guards';
 import { readOwnKey, writeOwnKey } from '../utils/own-keys';
+import { INDEX_TEXT } from '../utils/jsonpath';
 
 type Segment = string | number;
 
+// $get's rule: a number, or digit text on a list, is an index; other text is a key.
+const asIndex = (at: JsonValue, segment: Segment): Segment =>
+  typeof segment === 'string' && isJsonArray(at) && INDEX_TEXT.test(segment) ? Number(segment) : segment;
+
 const has = (value: JsonValue, path: readonly Segment[]): boolean => {
   let at: JsonValue = value;
-  for (const segment of path) {
+  for (const written of path) {
+    const segment = asIndex(at, written);
     if (typeof segment === 'number') {
       if (!isJsonArray(at) || segment >= at.length) return false;
       at = at[segment] ?? null;
@@ -40,7 +46,8 @@ export const opRenameKeys = (node: RenameKeysNode, context: EvalContext, evaluat
 
 const current = (value: JsonValue, path: readonly Segment[]): JsonValue => {
   let at: JsonValue = value;
-  for (const segment of path) {
+  for (const written of path) {
+    const segment = asIndex(at, written);
     if (typeof segment === 'number') at = isJsonArray(at) ? (at[segment] ?? null) : null;
     else at = isJsonObject(at) ? (readOwnKey(at, segment) ?? null) : null;
   }
@@ -48,14 +55,22 @@ const current = (value: JsonValue, path: readonly Segment[]): JsonValue => {
 };
 
 const setIn = (value: JsonValue, path: readonly Segment[], next: JsonValue, full: readonly Segment[], node: UpdateNode): JsonValue => {
-  const [head, ...rest] = path;
-  if (head === undefined) return next;
+  const [written, ...rest] = path;
+  if (written === undefined) return next;
+  const head = asIndex(value, written);
   if (typeof head === 'number') {
     if (!isJsonArray(value) || head >= value.length) {
       return failAt(`No array item at ${full.join('.')}: the value there is ${describeValue(value)}.`, ErrorCode.MISSING_PATH, { op: '$update', path: full.join('.') }, { node, op: '$update', field: 'path', form: false });
     }
     return value.map((item, i) => (i === head ? setIn(item, rest, next, full, node) : item));
   }
+  if (value !== null && !isJsonObject(value))
+    return failAt(
+      `No key ${JSON.stringify(head)} at ${full.join('.')}: the value there is ${describeValue(value)}, and $update does not replace it.`,
+      ErrorCode.TYPE,
+      { op: '$update', path: full.join('.') },
+      { node, op: '$update', field: 'path', form: false },
+    );
   const base: JsonObject = isJsonObject(value) ? value : {};
   return { ...base, [head]: setIn(readOwnKey(base, head) ?? null, rest, next, full, node) };
 };

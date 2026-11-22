@@ -26,6 +26,10 @@ describe('$interpolate', () => {
   it('handles missing keys', () => {
     const config = { $interpolate: { template: 'Hi {{unknown}}', values: { $ref: '$.user' } } };
     expect(evaluate(config, source)).toBe('Hi ');
+  });  it('fills a name written in any script, and leaves a name with other characters as written', () => {
+    const config = { $interpolate: { template: 'Hallo {{straße}} {{名前}} {{x_1}} {{first-name}} {{ name }}', values: { $ref: '$.v' } } };
+    expect(evaluate(config, { v: { straße: 'A', 名前: 'C', x_1: 'D', 'first-name': 'B', name: 'E' } })).toBe('Hallo A C D {{first-name}} {{ name }}');
+    expect(evaluate(config, { v: {} })).toBe('Hallo    {{first-name}} {{ name }}');
   });
 });
 
@@ -61,6 +65,10 @@ describe('$replace — all', () => {
   it('reads search as text, not as a pattern', () => {
     expect(replace('a.b.c', '.', '-', true)).toBe('a-b-c');
     expect(replace('1+1', '+', ' plus ', true)).toBe('1 plus 1');
+  });  it('writes the replacement as given: $$, $& and the other $ patterns are text', () => {
+    expect(replace('price: X', 'X', 'US$$5')).toBe('price: US$$5');
+    expect(replace('X X', 'X', '[$&]', true)).toBe('[$&] [$&]');
+    expect(replace('aXb', 'X', "$`$'")).toBe("a$`$'b");
   });
 });
 

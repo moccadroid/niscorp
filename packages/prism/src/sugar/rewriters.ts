@@ -51,6 +51,8 @@ export const rewriteAvg = (node: AvgNode, recurse: Recurse): unknown => {
   };
 };
 
+// In $min and $max a null item is compared as the accumulator, so it is never
+// taken: a null is skipped wherever it is in the list.
 export const rewriteMin = (node: MinNode, recurse: Recurse): unknown => ({
   $reduce: {
     over: recurse(node.$min.over),
@@ -61,7 +63,7 @@ export const rewriteMin = (node: MinNode, recurse: Recurse): unknown => ({
       $case: {
         branches: [
           { when: { $eq: [{ $var: '__acc' }, null] }, then: { $var: '__x' } },
-          { when: { $lt: [{ $var: '__x' }, { $var: '__acc' }] }, then: { $var: '__x' } },
+          { when: { $lt: [{ $coalesce: [{ $var: '__x' }, { $var: '__acc' }] }, { $var: '__acc' }] }, then: { $var: '__x' } },
         ],
         else: { $var: '__acc' },
       },
@@ -79,7 +81,7 @@ export const rewriteMax = (node: MaxNode, recurse: Recurse): unknown => ({
       $case: {
         branches: [
           { when: { $eq: [{ $var: '__acc' }, null] }, then: { $var: '__x' } },
-          { when: { $gt: [{ $var: '__x' }, { $var: '__acc' }] }, then: { $var: '__x' } },
+          { when: { $gt: [{ $coalesce: [{ $var: '__x' }, { $var: '__acc' }] }, { $var: '__acc' }] }, then: { $var: '__x' } },
         ],
         else: { $var: '__acc' },
       },

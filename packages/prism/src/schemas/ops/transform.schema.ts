@@ -9,7 +9,7 @@ const node = (): z.ZodTypeAny => _NodeSchema;
 const PathSchema = z
   .array(z.union([z.string(), z.number().int().nonnegative()]))
   .min(1)
-  .describe('Literal path segments: object keys (strings) and array indexes (numbers).');
+  .describe('Literal path segments, read as `$get` reads them: a number, or digit text without a leading zero ("0", "12") on a list, is an array index; other text is an object key.');
 
 export const HasNodeSchema = z
   .object({
@@ -56,7 +56,7 @@ export const UpdateNodeSchema = z
   .strict()
   .describe(
     'A copy of `from` with the value at `path` replaced and everything else identical. Missing objects along a string path are created; ' +
-      'an index that does not exist is an error.',
+      'an index that does not exist is an error, and so is a key where the value is a list, text, a number or a boolean: $update never replaces that value with an object (a null is, like a missing object).',
   );
 export type UpdateNode = z.infer<typeof UpdateNodeSchema>;
 

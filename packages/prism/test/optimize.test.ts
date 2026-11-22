@@ -39,6 +39,33 @@ describe('compile — constant folding', () => {
   });
 });
 
+describe('what depends on the machine is not worked out ahead of time', () => {
+  const machineOps = {
+    opens: { $date: { value: '2026-01-01T09:00:00Z', format: 'HH:mm' } },
+    later: { $dateAdd: { date: '2026-01-01T09:00:00', amount: 1, unit: 'day' } },
+    days: { $dateDiff: { from: '2026-01-01T09:00:00', to: '2026-03-01T09:00:00', unit: 'day' } },
+    when: { $localeDate: { value: '2026-01-01T09:00:00Z', locale: 'en-GB', options: { timeStyle: 'short', timeZone: 'Europe/Vienna' } } },
+    price: { $localeMoney: { value: 4500, currency: 'EUR', locale: 'de-AT' } },
+    count: { $localeNumber: { value: 1234.5, locale: 'de-AT' } },
+    n: { $upper: 'a' },
+  };
+
+  it('the date and locale ops stay ops in a compiled IR, and the rest still folds', async () => {
+    const ir = await compile(machineOps);
+    const core = JSON.stringify(ir.core);
+    for (const op of ['$date', '$dateAdd', '$dateDiff', '$localeDate', '$localeMoney', '$localeNumber']) expect(core).toContain(`"${op}"`);
+    expect(ir.meta.stats.optimizations.constantsFolded).toBe(1);
+    expect(execute(ir, {})).toEqual(evaluate(machineOps, {}, { check: 'always' }));
+  });
+
+  it('a kept config answers the same from its second call as its first', () => {
+    const config = structuredClone(machineOps);
+    const first = evaluate(config, {});
+    expect(evaluate(config, {})).toEqual(first);
+    expect(evaluate(config, {})).toEqual(first);
+  });
+});
+
 describe('compile — handler attachment', () => {
   it('attaches a handler to every recognized op node', async () => {
     const ir = await compile({

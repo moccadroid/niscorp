@@ -213,3 +213,66 @@ describe('parse — a schema whose own code runs on a missing value', () => {
     ]);
   });
 });
+
+describe('parse — which key tells a union branch apart', () => {
+  it('a key the branch requires, before one it may leave out', () => {
+    const ir = parse(
+      z.union([
+        z.object({ a: z.number(), b: z.number().optional(), n: z.number() }),
+        z.object({ a: z.string(), note: z.string().optional(), t: z.string() }),
+      ]),
+    );
+    expect(ir.kind === 'union' ? ir.variants.map((variant) => variant.pattern) : []).toEqual([
+      { kind: 'key', key: 'n' },
+      { kind: 'key', key: 't' },
+    ]);
+  });
+
+  it('an optional unique key when the branch has no required one, as before', () => {
+    const ir = parse(z.union([z.object({ b: z.number().optional() }), z.object({ c: z.string().optional() })]));
+    expect(ir.kind === 'union' ? ir.variants.map((variant) => variant.pattern) : []).toEqual([
+      { kind: 'key', key: 'b' },
+      { kind: 'key', key: 'c' },
+    ]);
+  });
+
+  it('branches behind z.lazy are read as what they resolve to', () => {
+    const A = z.object({ a: z.string() });
+    const B = z.object({ b: z.number() });
+    const ir = parse(z.union([z.lazy(() => A), z.lazy(() => B)]));
+    expect(ir.kind).toBe('union');
+    expect(ir.kind === 'union' ? ir.variants.map((variant) => variant.pattern) : []).toEqual([
+      { kind: 'key', key: 'a' },
+      { kind: 'key', key: 'b' },
+    ]);
+    const tagged = parse(z.discriminatedUnion('kind', [z.object({ kind: z.literal('a'), x: z.string() }), z.object({ kind: z.literal('b') })]));
+    expect(tagged.kind).toBe('union');
+    const strings = parse(z.union([z.lazy(() => z.string()), z.object({ x: z.number() })]));
+    expect(strings.kind === 'union' ? strings.variants.map((variant) => variant.pattern.kind) : []).toEqual(['type', 'key']);
+  });
+});
+
+describe('parse — a literal', () => {
+  it('is a select of its values that starts at the first', () => {
+    expect(parse(z.literal('circle'))).toEqual({ kind: 'enum', options: [{ value: 'circle', label: 'circle' }], default: 'circle' });
+    expect(parse(z.literal([1, 2]))).toEqual({ kind: 'enum', options: [{ value: 1, label: '1' }, { value: 2, label: '2' }], default: 1 });
+  });
+
+  it('starts a plain union of literal-tagged objects at a document its first branch accepts', () => {
+    const schema = z.union([z.object({ kind: z.literal('circle'), radius: z.number() }), z.object({ kind: z.literal('square'), side: z.number() })]);
+    const document = buildDocument(parse(schema), {});
+    expect(document).toEqual({ kind: 'circle', radius: 0 });
+    expect(schema.safeParse(document).success).toBe(true);
+  });
+});
+
+describe('parse — a schema that takes null', () => {
+  it('marks the field nullable, through any wrapper', () => {
+    const ir = parse(z.object({ a: z.number().nullable(), b: z.number().nullable().optional(), c: z.number().optional() }));
+    expect(ir.kind === 'object' ? ir.fields.map((field) => [field.key, field.field.nullable]) : []).toEqual([
+      ['a', true],
+      ['b', true],
+      ['c', undefined],
+    ]);
+  });
+});

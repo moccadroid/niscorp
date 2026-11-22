@@ -443,3 +443,99 @@ describe('LoomEditor — a branch whose discriminator is an enum', () => {
     expect(onChange).toHaveBeenLastCalledWith({ shape: { kind: 'box', side: 7 } });
   });
 });
+
+describe('LoomEditor — an optional field can be removed', () => {
+  it('Remove takes the field out of the document, and typing into its control writes it again', () => {
+    const schema = z.object({ email: z.string().email().optional(), name: z.string() });
+    const onChange = vi.fn();
+    render(<LoomForm schema={schema} onChange={onChange} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+    const removed = onChange.mock.lastCall?.[0];
+    expect(removed).toEqual({ name: '' });
+    expect(Object.hasOwn(Object(removed), 'email') ? Reflect.get(Object(removed), 'email') : undefined).toBeUndefined();
+    expect(schema.safeParse(removed).success).toBe(true);
+    expect(screen.queryAllByRole('button', { name: 'Remove' })).toHaveLength(0);
+    expect(screen.getAllByRole('textbox')).toHaveLength(2);
+    fireEvent.change(screen.getAllByRole('textbox')[0]!, { target: { value: 'a@b.at' } });
+    expect(onChange).toHaveBeenLastCalledWith({ name: '', email: 'a@b.at' });
+    expect(screen.getAllByRole('button', { name: 'Remove' })).toHaveLength(1);
+  });
+
+  it('a stored document without the field shows its controls and no Remove', () => {
+    render(<LoomForm schema={z.object({ email: z.string().optional(), name: z.string() })} options={{ value: { name: 'x' } }} />);
+    expect(screen.getAllByRole('textbox')).toHaveLength(2);
+    expect(screen.queryAllByRole('button', { name: 'Remove' })).toHaveLength(0);
+  });
+
+  it('a required field has no Remove', () => {
+    render(<LoomForm schema={z.object({ name: z.string() })} />);
+    expect(screen.queryAllByRole('button', { name: 'Remove' })).toHaveLength(0);
+  });
+});
+
+describe('LoomEditor — a stored value no union branch recognises', () => {
+  it('is shown as JSON with no branch chosen, and choosing a branch writes its defaults', () => {
+    const shape = z.discriminatedUnion('kind', [z.object({ kind: z.literal('circle'), radius: z.number() }), z.object({ kind: z.literal('square'), side: z.number() })]);
+    const onChange = vi.fn();
+    render(<LoomForm schema={z.object({ shape })} options={{ value: { shape: { kind: 'triangle', a: 1 } } }} onChange={onChange} />);
+    const select = screen.getByRole('combobox');
+    expect(select instanceof HTMLSelectElement ? select.value : undefined).toBe('');
+    expect(screen.queryAllByRole('spinbutton')).toHaveLength(0);
+    expect(screen.getByRole('textbox')).toHaveProperty('value', expect.stringContaining('triangle'));
+    fireEvent.change(select, { target: { value: '1' } });
+    expect(onChange).toHaveBeenLastCalledWith({ shape: { kind: 'square', side: 0 } });
+    expect(screen.getByRole('spinbutton')).toHaveProperty('value', '0');
+  });
+
+  it('a value valid for the second branch, with its optional key absent, shows the second branch', () => {
+    const schema = z.object({ v: z.union([z.object({ a: z.number(), b: z.number().optional() }), z.object({ a: z.string(), note: z.string().optional(), t: z.string() })]) });
+    render(<LoomForm schema={schema} options={{ value: { v: { a: 'x', t: 'y' } } }} />);
+    const select = screen.getByRole('combobox');
+    expect(select instanceof HTMLSelectElement ? select.selectedOptions[0]?.textContent : undefined).toBe('t');
+  });
+});
+
+describe('LoomForm — clearing a number', () => {
+  it('leaves a number the schema does not take null for absent', () => {
+    const onChange = vi.fn();
+    render(<LoomForm schema={z.object({ qty: z.number().optional() })} onChange={onChange} />);
+    fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '' } });
+    const cleared = onChange.mock.lastCall?.[0];
+    expect(cleared).toEqual({});
+    expect(z.object({ qty: z.number().optional() }).safeParse(cleared).success).toBe(true);
+  });
+
+  it('writes null where the schema takes null', () => {
+    const onChange = vi.fn();
+    render(<LoomForm schema={z.object({ qty: z.number().nullable() })} onChange={onChange} />);
+    fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '' } });
+    expect(onChange).toHaveBeenLastCalledWith({ qty: null });
+  });
+
+  it('an integer steps by one, any other number by any amount', () => {
+    render(<LoomForm schema={z.object({ qty: z.number().int(), price: z.number() })} />);
+    const [qty, price] = screen.getAllByRole('spinbutton');
+    expect(qty?.getAttribute('step')).toBe('1');
+    expect(price?.getAttribute('step')).toBe('any');
+  });
+});
+
+describe('LoomEditor — an object with a key that has a dot in it', () => {
+  it('is edited as JSON at its root, and an edit lands on the key', () => {
+    const onChange = vi.fn();
+    render(<LoomForm schema={z.object({ 'a.b': z.string() })} options={{ value: { 'a.b': 'x' } }} onChange={onChange} />);
+    const box = screen.getByRole('textbox');
+    expect(box).toHaveProperty('value', expect.stringContaining('"a.b"'));
+    fireEvent.change(box, { target: { value: '{"a.b":"y"}' } });
+    expect(onChange).toHaveBeenLastCalledWith({ 'a.b': 'y' });
+  });
+
+  it('is edited as JSON where it stands, and its siblings keep their controls', () => {
+    const onChange = vi.fn();
+    render(<LoomForm schema={z.object({ name: z.string(), meta: z.object({ 'a.b': z.string() }) })} options={{ value: { name: 'n', meta: { 'a.b': 'x' } } }} onChange={onChange} />);
+    const [name, meta] = screen.getAllByRole('textbox');
+    expect(name).toHaveProperty('value', 'n');
+    fireEvent.change(meta!, { target: { value: '{"a.b":"y"}' } });
+    expect(onChange).toHaveBeenLastCalledWith({ name: 'n', meta: { 'a.b': 'y' } });
+  });
+});
