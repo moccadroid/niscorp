@@ -752,3 +752,31 @@ describe('createStream — numbers', () => {
     }
   });
 });
+
+describe('createStream — strict without initial', () => {
+  it.each([
+    ['an empty string for .min(1)', z.object({ t: z.string().min(1) }), '{"t":""}'],
+    ['-1 for .positive()', z.object({ n: z.number().positive() }), '{"n":-1}'],
+    ['the starting 0 left for .positive()', z.object({ n: z.number().positive() }), '{}'],
+  ])('rejects final() with %s', async (_name, schema, reply) => {
+    const errors: string[] = [];
+    const stream = createStream<unknown>({ schema, mode: 'strict' });
+    stream.onError((error) => errors.push(error.phase));
+    stream.write(reply);
+    await expect(stream.final()).rejects.toThrow('[solid] stream failed validation');
+    expect(errors).toEqual(['finalize']);
+  });
+
+  it('resolves a reply its schema takes', async () => {
+    const stream = createStream<unknown>({ schema: z.object({ t: z.string().min(1), n: z.number().positive() }), mode: 'strict' });
+    stream.write('{"t":"x","n":2}');
+    expect(await stream.final()).toEqual({ t: 'x', n: 2 });
+  });
+
+  it('checks the value close() resolves with too', async () => {
+    const stream = createStream<unknown>({ schema: z.object({ t: z.string().min(1) }), mode: 'strict' });
+    stream.write('{"t":"');
+    stream.close();
+    await expect(stream.final()).rejects.toThrow('[solid] stream failed validation');
+  });
+});

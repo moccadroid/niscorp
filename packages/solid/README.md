@@ -143,8 +143,8 @@ This runs the sub-schema `safeParse` at the exact moment each field closes in th
 import { createStream } from '@niscorp/solid';
 
 // Create a stream with schema + optional initial value + validation opts.
-// Without initial, the starting value is derived from the schema; constraints such as
-// .min(1) or an email format are checked when a field finishes, not on that value.
+// Without initial, the starting value is derived from the schema; a constraint such as
+// .min(1) is not asked of it. In strict mode, final() then rejects a value the schema refuses.
 const stream = createStream({
   schema,
   initial?,

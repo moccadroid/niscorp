@@ -8,9 +8,12 @@ import { createValidator } from './validator';
 import { fitsShape } from './schema-walker';
 
 export const createStream = <T>(options: CreateStreamOptions<T>): Stream<T> => {
-  const base = resolveBase(options);
+  const { base, isBaseValid } = resolveBase(options);
   const mode = options.mode ?? 'recover';
   const constraints = options.constraints ?? 'kind';
+  // Without initial, strict can start from a value its schema refuses (a '' under .min(1)); what it
+  // resolves with is then checked whole, so it never resolves with a value its schema refuses.
+  const isFinalChecked = mode === 'strict' && !isBaseValid;
 
   let currentValue: T = structuredClone(base);
   let isClosed = false;
@@ -112,6 +115,20 @@ export const createStream = <T>(options: CreateStreamOptions<T>): Stream<T> => {
 
   const notifyFinal = (value: T): void => {
     if (finalState.resolved) return;
+    if (isFinalChecked) {
+      const checked = options.schema.safeParse(value);
+      if (!checked.success) {
+        emitError({
+          path: '',
+          expected: 'a value the schema takes',
+          received: value === null ? 'null' : Array.isArray(value) ? 'array' : typeof value,
+          phase: 'finalize',
+          message: `[solid] <root>: ${checked.error.issues[0]?.message ?? 'the schema refuses the value'}`,
+        });
+        enterFailedState();
+        return;
+      }
+    }
     const { resolve } = finalState;
     finalState = { resolved: true, value };
     resolve(value);
@@ -271,7 +288,7 @@ export const createStream = <T>(options: CreateStreamOptions<T>): Stream<T> => {
   return { write, close, destroy, current, final, on, onFinal, onError, select };
 };
 
-const resolveBase = <T>(options: CreateStreamOptions<T>): T => {
+const resolveBase = <T>(options: CreateStreamOptions<T>): { base: T; isBaseValid: boolean } => {
   const { schema, initial } = options;
 
   if (initial !== undefined) {
@@ -279,18 +296,18 @@ const resolveBase = <T>(options: CreateStreamOptions<T>): T => {
     if (!result.success) {
       throw new Error(`[solid] initial value is invalid: ${result.error.message}`);
     }
-    return result.data;
+    return { base: result.data, isBaseValid: true };
   }
 
   const candidate = deriveDefaults(schema);
   const result = schema.safeParse(candidate);
-  // A constraint (.min(1), a format) is checked when its field finishes, not on the starting
-  // value: only the kinds of what deriveDefaults built from the schema's shape must fit.
-  if (!result.success && fitsShape(schema, candidate)) return candidate as T;
+  // Only the shape of what deriveDefaults built must fit: a constraint (.min(1), a format) is not
+  // asked of a starting value. Strict checks what it resolves with instead (isFinalChecked).
+  if (!result.success && fitsShape(schema, candidate)) return { base: candidate as T, isBaseValid: false };
   if (!result.success) {
     throw new Error(
       `[solid] cannot derive valid base from schema defaults. Provide an explicit initial value. Error: ${result.error.message}`,
     );
   }
-  return result.data;
+  return { base: result.data, isBaseValid: true };
 };
