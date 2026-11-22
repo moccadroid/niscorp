@@ -47,9 +47,6 @@ Each line is a pattern to search the app for, and the change to make where it is
 - **vex: a cache wrapper that overrides `set`.** Search for a cache made by spreading `createPostgresCache(…)`, `createMemoryCache(…)` or `createTieredCache(…)` and overriding `set`. "Last used" stamps now go through the `touch` it inherits; override `touch` too if the wrapper must see them.
 - **vex: a semantic filter with `$scope`.** Search for `semantic:` with `$scope`. The text now comes from the scope values the host supplies, never from the caller's context; a request without it is refused with `missing_scope`. Supply that scope value from the server.
 
-<!-- P7 -->
-- **prism: a date built from parts.** Search for `$date`, `$dateAdd`, `$dateDiff` and `$localeDate` fed by `$join`, `$interpolate` or `$fill`, above all a year joined to a stored month and day. An impossible date such as `2027-02-29` is now `E_DATE_INVALID`, and inside `$map` one such item fails the whole list. Build the date so it exists: for a 29 February in a common year, use 28 February or 1 March (a `$case` on the joined text before `$dateAdd`).
-
 ---
 
 ## @niscorp/charter
@@ -379,13 +376,6 @@ Each line is a pattern to search the app for, and the change to make where it is
 - Now: every call answers as the first. `compile` and `execute` are unchanged.
 - You are affected if: a kept config's first call is near `maxSteps`, or a constant has a `__proto__` key.
 - What to do: nothing.
-
-<!-- P7 -->
-### An impossible ISO date is `E_DATE_INVALID`
-- Before: `"2026-02-30"` was read as 2026-03-02, `"2026-13-01"` as 2027-01-01, `"2026-02-29"` as 2026-03-01, `"…T10:00:60"` as 10:01; `$dateDiff` from `2026-02-28` to `2026-02-30` gave 2.
-- Now: `$date`, `$dateAdd`, `$dateDiff` and `$localeDate` refuse each with `E_DATE_INVALID`. `"…T24:00:00"` is still the next midnight, and text that is not ISO (`"3/4/26"`, RFC 2822) is read as before. A date built from parts fails where it does not exist: this year joined to a stored `02-29` gives `2027-02-29`, which fails on every day of a common year. Inside `$map`, one failing item fails the whole list: an entry that lists everyone's next birthday answers an error for everyone, and the screen that reads it shows nothing. In a strata document step, the document's upgrade stops with the error.
-- You are affected if: a config passes `$date`, `$dateAdd`, `$dateDiff` or `$localeDate` a date built by `$join`, `$interpolate` or `$fill`, above all a year joined to a stored month and day.
-- What to do: build the date so it exists: when the year is not a leap year, use 28 February or 1 March for a 29 February (a `$case` on the joined text before `$dateAdd`).
 
 ### New, opt-in
 - `EvalContext.folding?: boolean`, set while the optimizer works a subtree out ahead of time; an op written against `EvalContext` can ignore it.

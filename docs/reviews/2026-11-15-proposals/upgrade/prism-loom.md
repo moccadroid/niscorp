@@ -56,6 +56,7 @@ Checked against the lab apps (`apps/lab/*`) and, read-only, AnimaApp, anima-fina
 - External: none. `minDigits` beside `digits` appears in AnimaApp `src/app/prisms/media.prism.ts:83-87` (1, 1), `src/app/actions/store/edit-coupon.action.ts:185-189` (2, 2) and mira `src/app/actions/things/tab.prism.ts:27` (2, 2): `minDigits` is never above `digits`, so Intl takes them.
 
 ### prism — An impossible ISO date is `E_DATE_INVALID`
+- **Not in this release.** Taken out of review-fix/all-check on 2026-11-22 (it breaks the birthdays entry below in every common year); the build is commit 41cd480c on review-confirm/prism-loom, for the owner to decide.
 - Before: `"2026-02-30"` was read as 2026-03-02, `"2026-13-01"` as 2027-01-01, `"2026-02-29"` as 2026-03-01, `"…T10:00:60"` as 10:01; `$dateDiff` from 02-28 to 02-30 gave 2.
 - Now: `$date`, `$dateAdd`, `$dateDiff` and `$localeDate` refuse each with `E_DATE_INVALID`. `"…T24:00:00"` is still the next midnight; non-ISO text (`"3/4/26"`, RFC 2822) is read as before.
 - Who notices: a date built from parts (a year joined to a stored month and day), and a strata document step that reads such a date: the upgrade of that document stops with the error.

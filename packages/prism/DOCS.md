@@ -600,8 +600,6 @@ removal. Changes to the grammar are strata migrations on `nisc.prism`
 
 Powered by [dayjs](https://day.js.org/). Date values can be ISO 8601 strings or Unix timestamps (milliseconds). A date-only string (`YYYY-MM-DD`) is parsed and computed in UTC, so the calendar day survives the round trip.
 
-An ISO date or time with a field out of range — `2026-02-30`, `2026-13-01`, `2026-02-29` in a common year, `T25:00`, a minute or second of `60` — is refused with `E_DATE_INVALID` by `$date`, `$dateAdd`, `$dateDiff` and `$localeDate`, instead of rolling over into a later date. `24:00:00` is read as ISO allows it, as the next midnight. Text that is not ISO-shaped (`"3/4/26"`, `"14 Mar 26"`, an RFC 2822 date) is read as the platform reads it, as before.
-
 **Worked out where it runs.** `$date`, `$dateAdd`, `$dateDiff`, `$localeDate`, `$localeMoney` and `$localeNumber` read the machine's clock zone or its `Intl` data, so neither `compile` nor a kept `evaluate` works them out ahead of time, even when every input is written in the config: a compiled IR keeps them as ops, and `execute` answers them on the machine it runs on, as `evaluate` there does.
 
 A date and time with no zone (`2026-01-01T09:00`) is read in the time zone of the machine that runs Prism: `$date` answers `2026-01-01T08:00:00.000Z` on a server in Vienna and `2026-01-01T17:00:00.000Z` in Los Angeles. A `format` without `utc: true` prints in that zone too: `2026-01-01T09:00Z` with `"format": "HH:mm"` is `10:00` in Vienna and `01:00` in Los Angeles. For the same answer on every server, write the zone into the value (`Z` or `+01:00`) and pass `utc: true` when formatting.
