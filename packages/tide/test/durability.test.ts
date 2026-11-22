@@ -499,6 +499,52 @@ describe('fan-out failure', () => {
     expect((await tide.ledger.runs({ reflexId: 'broken' })).map((run) => run.state)).toEqual(['pending', 'pending', 'pending']);
   });
 
+  it('a wait that has grown past any number is still a number: the run is tried again once it is over', async () => {
+    let selects = 0;
+    const broken: ReflexInput = { id: 'broken', intent: 'x', on: { manual: {} }, select: { query: {}, mode: 'batch' }, effect: { name: 'work' }, policy: { retry: { max: 2_000, baseMs: 1 } } };
+    const select: SelectFn = () => {
+      selects += 1;
+      throw new Error('ECONNREFUSED');
+    };
+    const { tide } = await harness([broken], { work: { run: () => null } }, { select, armedAt: 0 });
+    await tide.fire('broken', { now: 1 });
+    for (let power = 0; power < 1_023; power += 1) await tide.advance({ now: 2 ** power });
+    for (const now of [1.5, 1.6, 1.7, 1.8, 1.9].map((share) => share * 2 ** 1_023)) await tide.advance({ now });
+    expect(selects).toBe(1_028);
+    await tide.advance({ now: Number.MAX_VALUE });
+    expect(selects).toBe(1_029);
+  });
+
+  it('an engine forgets the wait of a run another engine has fanned out', async () => {
+    let up = false;
+    const reads: unknown[] = [];
+    const store = createMemoryStore();
+    const watched: TideStore = { ...store, query: (spec) => (reads.push(spec.where), store.query(spec)) };
+    const reflex: ReflexInput = { id: 'r', intent: 'x', on: { manual: {} }, select: { query: {}, mode: 'batch' }, effect: { name: 'work' } };
+    const select: SelectFn = () => {
+      if (!up) throw new Error('ECONNREFUSED');
+      return [{ id: 'm' }];
+    };
+    const make = (on: TideStore) => createTide({ store: on, transform: testTransform, select, effects: { work: { run: () => null } } });
+    const a = make(watched);
+    const b = make(store);
+    await a.load([reflex], { at: T0 });
+    await b.load([reflex], { at: T0 });
+    await a.fire('r', { now: T0 });
+    await a.advance({ now: T0 });
+    up = true;
+    await b.advance({ now: T0 + 1 });
+    const [run] = await b.ledger.runs();
+    expect(run?.state).not.toBe('pending');
+
+    const asked = () => reads.filter((where) => JSON.stringify(where).includes(run?.id ?? '-')).length;
+    await a.advance({ now: T0 + 2 });
+    const once = asked();
+    await a.advance({ now: T0 + 3 });
+    expect(once).toBeGreaterThan(0);
+    expect(asked()).toBe(once);
+  });
+
   it('still refuses a malformed reflex loudly', async () => {
     const select: SelectFn = () => [{ id: 'same' }, { id: 'same' }];
     const { tide } = await harness([reflex], { bill: { run: () => ({ ok: true }) } }, { select });

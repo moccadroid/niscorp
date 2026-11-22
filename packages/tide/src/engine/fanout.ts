@@ -52,7 +52,13 @@ export const fanOut = async (deps: EngineDeps, now: number, limit: number): Prom
 
   // A run this engine deferred is passed over until its wait is over, so runs that keep failing cannot fill
   // every page; one whose reflex a load left out is not, and is skipped below. The wait is kept in memory:
-  // after a restart a deferred run is tried once at once, then waits again.
+  // after a restart a deferred run is tried once at once, then waits again. A run no longer pending, whoever
+  // moved it, is forgotten.
+  if (deps.deferred.size > 0) {
+    const still = await deps.store.query({ table: 'run', where: { id: { in: [...deps.deferred.keys()] }, state: 'pending' } });
+    const pendingIds = new Set(still.map((run) => run.id));
+    for (const runId of deps.deferred.keys()) if (!pendingIds.has(runId)) deps.deferred.delete(runId);
+  }
   const waiting = new Set(
     [...deps.deferred].filter(([, deferral]) => deferral.until > now && deps.find(deferral.reflexId) !== undefined).map(([runId]) => runId),
   );
@@ -62,7 +68,6 @@ export const fanOut = async (deps: EngineDeps, now: number, limit: number): Prom
   for (const run of pending) {
     const loaded = deps.find(run.reflexId);
     if (loaded === undefined) {
-      deps.deferred.delete(run.id);
       await deps.store.cas('run', run.id, { state: 'pending' }, { state: 'skipped', settledAt: now, drained: true, note: 'reflex is no longer loaded' });
       continue;
     }
@@ -71,7 +76,6 @@ export const fanOut = async (deps: EngineDeps, now: number, limit: number): Prom
       const facts = await factRowsOf(deps, run);
       const units = await unitsForRun(deps, loaded, shapeOf(run), facts, now);
       created += await commitFanout(deps, run, units.map((unit) => taskOf(unit, run, loaded, now)), units.length, now);
-      deps.deferred.delete(run.id);
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
 
@@ -79,17 +83,18 @@ export const fanOut = async (deps: EngineDeps, now: number, limit: number): Prom
       // good. Anything else came out of a host seam (the selection, the
       // transform, the database): the run stays `pending` and is tried again.
       if (isTideError(error)) {
-        deps.deferred.delete(run.id);
         await deps.store.cas('run', run.id, { state: 'pending' }, { state: 'skipped', settledAt: now, drained: true, note: `fan-out refused: ${reason}` });
         deps.emit({ type: 'run.skipped', reflexId: run.reflexId, reason });
         continue;
       }
 
       await deps.store.cas('run', run.id, { state: 'pending' }, { note: `fan-out deferred: ${reason}` });
-      // The reflex's own retry numbers: the wait grows over the first `max` deferrals, then stays that long.
+      // The reflex's own retry numbers: the wait grows over the first `max` deferrals, then stays that long. It
+      // stops growing at the largest whole number of milliseconds a number keeps exact, so it never reads as Infinity.
       const count = (deps.deferred.get(run.id)?.count ?? 0) + 1;
       const retry = loaded.reflex.policy.retry;
-      deps.deferred.set(run.id, { reflexId: run.reflexId, count, until: now + backoffFor(Math.min(count, retry?.max ?? 3), retry?.baseMs ?? 60_000, retry?.backoff ?? 'exponential') });
+      const wait = backoffFor(Math.min(count, retry?.max ?? 3), retry?.baseMs ?? 60_000, retry?.backoff ?? 'exponential');
+      deps.deferred.set(run.id, { reflexId: run.reflexId, count, until: now + Math.min(wait, Number.MAX_SAFE_INTEGER) });
       deps.emit({ type: 'run.deferred', reflexId: run.reflexId, runId: run.id, reason });
     }
   }

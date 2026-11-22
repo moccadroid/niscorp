@@ -914,11 +914,15 @@ seam — which means the reflex is wrong and will be wrong again next `advance`,
 run is `skipped` with a note. Anything else came out of a host seam: a
 selection, a transform, a database. That is a bad minute, not a bad reflex, so
 the run stays `pending` and is tried again after a wait — a row past its due
-time that a query can see. The wait is the reflex's own `policy.retry`: `baseMs`,
-growing by `backoff` over the first `max` deferrals and then staying that long
-(with the defaults 60 s, 120 s, 240 s, 240 s …); `max` does not end the run. While
-a run waits, the pending runs behind it fan out. The engine keeps the waits in
-memory: after a restart each deferred run is tried once at once, then waits
-again, and two instances each keep their own. Skipping it instead would
+time that a query can see. The wait is the reflex's own `policy.retry`: after
+the n-th deferral it is `baseMs` with `backoff: 'fixed'`, and
+`baseMs · 2^(min(n, max) − 1)` with `'exponential'` — with the defaults 60 s,
+120 s, 240 s, then 240 s for good. `max` does not end the run, and nothing caps
+the wait but the largest whole number of milliseconds (about 285 000 years): a
+large `max` makes a long wait, `max: 20` with the default `baseMs` 364 days.
+While a run waits, the pending runs behind it fan out. Each engine keeps its own
+waits, in memory: after a restart each deferred run is tried once at once, then
+waits again, and two instances each pace it by their own count. A run another
+instance fans out or skips is forgotten on the next pass. Skipping it instead would
 lose it for good: runs are idempotent on `(reflexId, cause)`, so the occurrence
 cannot open a second run.
