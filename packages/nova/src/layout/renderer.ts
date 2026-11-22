@@ -5,7 +5,7 @@ import {
   NovaError,
   RenderError,
 } from '../shared/errors';
-import { createScopeChain, getPath, pushScope, resolve } from '../shared/bindings';
+import { createScopeChain, getPath, pushScope, resolve, unwrapSoleTemplate } from '../shared/bindings';
 import type { ScopeChain } from '../shared/bindings';
 import { isBinding } from '../i18n/phrases';
 import { passFor, swap, walkValue } from '../i18n/swap';
@@ -63,9 +63,10 @@ const toRenderError = (err: unknown): NovaError => {
 };
 
 const resolveDataPath = (
-  binding: string,
+  written: string,
   scopePaths: string[],
 ): string | undefined => {
+  const binding = unwrapSoleTemplate(written);
   if (!binding.startsWith('$')) return undefined;
   const isDotted = binding.startsWith('$.');
   const after = binding.slice(isDotted ? 2 : 1);

@@ -57,3 +57,11 @@ Each section is one change an app can see, in `@niscorp/nova`. None of them chan
 - What to do: nothing.
 - Breaking: yes (where the write lands)
 - Affected apps: none found. Loop models in the lab apps, the templates, AnimaApp, anima-finance and mira use the `$part.answer` / `$field.value` form, not `$.<as>`.
+
+### nova — `for` and `model` written as one `{{…}}` keep their binding
+- Before: `model: '{{$.q}}'` bound nothing, so typing changed nothing; `for: '{{$.lines}}'` iterated, but every `model` inside it lost its binding.
+- Now: both bind as the bare path does (`model: '$.q'`, `for: '$.lines'`): the field's render node carries `model: { path: 'q', … }` and a `value`, and typing writes the data.
+- Who notices: layouts that write `model` or a loop's `for` as a single template.
+- What to do: nothing.
+- Breaking: yes (such fields now write)
+- Affected apps: none found in the lab apps, the templates, AnimaApp, anima-finance or mira. Layouts a model generates at run time (relay's screen builder, lyceum's screens, moss's artifactory) could contain the form; such fields now work.

@@ -355,6 +355,8 @@ Set `model: '<path>'` on a component to wire it for two-way data binding. The re
 }
 ```
 
+A `model` (and the `for` of a loop around it) written as one template, `'{{$.draftName}}'`, binds the same as the bare path.
+
 The `Input` component built into `@niscorp/nova/adapters/react/components` already dispatches `ui:model` on change, so this just works. To wire your own component, see `REACT_DOCS.md`.
 
 ### Loop case
