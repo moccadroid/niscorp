@@ -257,14 +257,17 @@ the rest are recorded as untouched. `verify` passes only when every planned
 artifact equals its expected JSON (key order aside) and passes its kind's
 current schema in `schemas`, every untouched one is
 still one no migration would change, and nothing was added or removed since
-the plan — then the lock moves and the files the plan wrote go. A migration whose result
+the plan — then the lock moves and the files the plan wrote go. The lock is the
+source's stamp: `verify` refuses a plan made from any other ("plan again"),
+whatever `plan.json` says, and compares stamps by grammar, not by the order
+the grammars were given in. A migration whose result
 fails the current schema stops the plan: no edit could pass. `init` records a
 lock for a source that has never had one.
 
 | | |
 |---|---|
 | `@niscorp/strata/upgrade` | Pure: `planSourceUpgrade`, `verifySourceUpgrade`, `renderReport`, `changedStrings`. `verifySourceUpgrade` compares JSON only; `runSourceUpgrade` checks the schemas as well. `planSourceUpgrade`'s `describe(ref)` returns the description of the migration `ref` names, for the report; it is asked for every migration between the source's stamp and the upgrader's. |
-| `@niscorp/strata/node` | `runSourceUpgrade(options, argv)` — the lock, the work directory, the report, "look in" hints from the source. `sources` is the directory under `root` that is searched for the files an artifact is written in (default `src`). `workDir` (default `.strata/upgrade`) is where `upgrade` writes `plan.json`, `REPORT.md` and `expected/`; `upgrade` and `verify` remove only those files, and a directory only once it is empty, so nothing else in it is touched. |
+| `@niscorp/strata/node` | `runSourceUpgrade(options, argv)` — the lock, the work directory, the report, "look in" hints from the source. `sources` is the directory under `root` that is searched for the files an artifact is written in (default `src`). `workDir` (default `.strata/upgrade`) is where `upgrade` writes `plan.json`, `REPORT.md` and `expected/`; `upgrade` and `verify` remove only those files, and a directory only once it is empty, so nothing else in it is touched. In a `workDir` the host names, a `REPORT.md` is strata's only when it begins with `# strata upgrade` (a byte-order mark aside) and a `plan.json` only when it has a plan's shape: given one that is not, `upgrade` leaves it as it is and exits 1 ("Move it, or give strata a workDir of its own."), and nothing removes it. An expected file is named after the artifact's kind and id; a second id that cleans to the same name (`a/b`, `a_b`) gets `~2`. |
 
 See [DESIGN.md](./DESIGN.md) and [the plan](../../docs/plans/versioning.md).
 
