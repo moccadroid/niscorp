@@ -6,7 +6,7 @@ import { OPTIONAL_FIELDS_KEY } from '../schemas/node.schema';
 import { PrismError, ErrorCode, clip, failAt } from '../errors';
 import { depthRefusal, exceedsDepth } from '@niscorp/strata';
 import { desugar } from '../sugar/desugar';
-import { createBudget, measure, measureString, spendStep, stackRefusal, type Limits } from './budget';
+import { createBudget, measure, measureString, spendSteps, stackRefusal, type Limits } from './budget';
 import { HANDLER_KEY, optimize, resolveHandler } from './optimize';
 import { placeError } from './place';
 import { writeOwnKey } from '../utils/own-keys';
@@ -19,7 +19,7 @@ const isAttachedFn = (value: unknown): value is AttachedFn => typeof value === '
 export const evaluateNode: EvaluateFn = (node: unknown, context: EvalContext): JsonValue => {
   const { budget } = context;
   if (budget === undefined) return evaluateUnbudgeted(node, context);
-  spendStep(budget, node);
+  spendSteps(budget, node);
   const out = evaluateUnbudgeted(node, context);
   measureString(out, budget, node);
   return out;
@@ -164,7 +164,7 @@ const evaluateOnce = (config: Config, source: unknown, options?: EvaluateOptions
     kept = { tree: checked(config), optimized: false };
     keptTrees.set(config, kept);
   } else if (!kept.optimized) {
-    kept.tree = optimize(kept.tree, evaluateNode).node;
+    kept.tree = optimize(kept.tree, evaluateNode, { recordFoldCost: true }).node;
     kept.optimized = true;
   }
   return run(kept.tree, input, options?.limits, true, config);

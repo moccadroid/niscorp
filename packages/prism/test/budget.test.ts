@@ -45,6 +45,32 @@ describe('the evaluation budget', () => {
   });
 });
 
+describe('a config run again spends what its first call spent', () => {
+  const joined = { $join: { parts: Array.from({ length: 600 }, (_, i) => String(i)), sep: ',' } };
+  const outcome = (config: object, maxSteps: number): string => {
+    const result = evaluateSafe(config, {}, { limits: { maxSteps } });
+    return result.ok ? 'ok' : String(Reflect.get(result.error, 'code'));
+  };
+
+  it('a part worked out ahead of time from the second call costs the steps it took', () => {
+    const config = { ...joined };
+    expect([1, 2, 3].map(() => outcome(config, 500))).toEqual([ErrorCode.BUDGET, ErrorCode.BUDGET, ErrorCode.BUDGET]);
+  });
+
+  it('every call fits where the first one fits', () => {
+    const config = { ...joined };
+    expect([1, 2, 3].map(() => outcome(config, 602))).toEqual(['ok', 'ok', 'ok']);
+    const tight = { ...joined };
+    expect([1, 2].map(() => outcome(tight, 601))).toEqual([ErrorCode.BUDGET, ErrorCode.BUDGET]);
+  });
+
+  it('a compiled IR counts such a constant as one step, as a stored IR does', async () => {
+    const ir = await compile(joined);
+    expect(execute(ir, {}, { maxSteps: 1 })).toBe(Array.from({ length: 600 }, (_, i) => String(i)).join(','));
+    expect(execute(JSON.parse(JSON.stringify(ir)), {}, { maxSteps: 1 })).toBe(execute(ir, {}));
+  });
+});
+
 describe('a source nested deeper than the stack reaches', () => {
   let deep: JsonValue = [];
   for (let i = 0; i < 100_000; i++) deep = [deep];

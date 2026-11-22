@@ -121,6 +121,8 @@ type CompiledIr = {
 
 `execute()` skips validation and desugaring — it restores each node's handler and each `$ref`'s parsed path once per IR, and evaluates `core` directly. How much that saves over `evaluate()` depends on the config: `pnpm bench` runs five against each other (`test/optimize.bench.ts`), from under 2x for a short map to over 50x where the constants fold.
 
+A constant the optimizer works out for `evaluate`'s kept tree records, as a non-enumerable property beside its handler, the steps working it out took, and `$const` spends them each time it is evaluated: a kept config spends on every call what its first call spent. `compile` records nothing, as its IR is JSON, so `execute` counts such a constant as one step.
+
 The fingerprint enables cache invalidation: store IRs by name, check the fingerprint to know if the config changed.
 
 ---

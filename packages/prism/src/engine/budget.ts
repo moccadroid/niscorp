@@ -27,8 +27,8 @@ const refuse = (what: string, limit: number, node: unknown): never => {
   throw new PrismError(message, ErrorCode.BUDGET, { details: { limit } });
 };
 
-export const spendStep = (budget: Budget, node: unknown): void => {
-  budget.steps += 1;
+export const spendSteps = (budget: Budget, node: unknown, steps = 1): void => {
+  budget.steps += steps;
   if (budget.steps > budget.limits.maxSteps) refuse('it evaluated too many nodes', budget.limits.maxSteps, node);
 };
 

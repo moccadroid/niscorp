@@ -15,7 +15,7 @@ import {
   isLocaleDateNode, isLocaleMoneyNode, isLocaleNumberNode,
 } from '../schemas/guards';
 
-import { SEGMENTS_KEY, opRef, opConst, opVar, opGet, opWith } from '../ops/core.ops';
+import { COST_KEY, SEGMENTS_KEY, opRef, opConst, opVar, opGet, opWith } from '../ops/core.ops';
 import { opMap, opFilter, opReduce, opSlice, opFlatten, opUnique, opSortBy } from '../ops/array.ops';
 import { opAdd, opSub, opMul, opDiv, opMod, opRound, opToNumber } from '../ops/math.ops';
 import { opFill, opJoin, opToString, opInterpolate, opTrim, opLower, opUpper, opSplit, opReplace } from '../ops/string.ops';
@@ -151,17 +151,23 @@ const isFoldableLiteral = (node: unknown): boolean => {
 
 type Stats = OptimizeStats;
 
+// `evaluate` keeps a config's tree and runs it again, so a constant it works
+// out records what working it out cost. A compiled IR is JSON and carries no
+// such record.
+export type OptimizeOptions = { recordFoldCost?: boolean };
+
 const optimizeNode = (
   node: unknown,
   stats: Stats,
   evaluate: EvaluateFn,
+  options: OptimizeOptions,
 ): unknown => {
   if (node === null || node === undefined) return node;
   if (typeof node !== 'object') return node;
 
   if (Array.isArray(node)) {
     const out: unknown[] = [];
-    for (const child of node) out.push(optimizeNode(child, stats, evaluate));
+    for (const child of node) out.push(optimizeNode(child, stats, evaluate, options));
     return out;
   }
 
@@ -179,7 +185,7 @@ const optimizeNode = (
 
   const optimizeValues = (record: Record<string, unknown>): Record<string, unknown> => {
     const out: Record<string, unknown> = {};
-    for (const key of Object.keys(record)) out[key] = optimizeNode(record[key], stats, evaluate);
+    for (const key of Object.keys(record)) out[key] = optimizeNode(record[key], stats, evaluate, options);
     return out;
   };
 
@@ -188,9 +194,9 @@ const optimizeNode = (
   // `$type`. The record is not a node.
   let optimized: Record<string, unknown>;
   if (isWithNode(node)) {
-    optimized = { $with: { let: optimizeValues(node.$with.let), value: optimizeNode(node.$with.value, stats, evaluate) } };
+    optimized = { $with: { let: optimizeValues(node.$with.let), value: optimizeNode(node.$with.value, stats, evaluate, options) } };
   } else if (isRenameKeysNode(node)) {
-    optimized = { $renameKeys: { ...node.$renameKeys, from: optimizeNode(node.$renameKeys.from, stats, evaluate) } };
+    optimized = { $renameKeys: { ...node.$renameKeys, from: optimizeNode(node.$renameKeys.from, stats, evaluate, options) } };
   } else {
     optimized = optimizeValues(node);
   }
@@ -224,6 +230,7 @@ const optimizeNode = (
         const replacement: Record<string, unknown> = { $const: folded };
         freezeConstant(folded);
         attachNonEnumerable(replacement, HANDLER_KEY, eraseOp(opConst));
+        if (options.recordFoldCost === true) attachNonEnumerable(replacement, COST_KEY, emptyCtx.budget?.steps ?? 0);
         stats.constantsFolded += 1;
         return replacement;
       } catch {
@@ -235,9 +242,9 @@ const optimizeNode = (
   return optimized;
 };
 
-export const optimize = (node: unknown, evaluate: EvaluateFn): OptimizeResult => {
+export const optimize = (node: unknown, evaluate: EvaluateFn, options: OptimizeOptions = {}): OptimizeResult => {
   const stats: Stats = { refsInlined: 0, handlersAttached: 0, constantsFolded: 0 };
-  const result = optimizeNode(node, stats, evaluate);
+  const result = optimizeNode(node, stats, evaluate, options);
   return { node: result, stats };
 };
 

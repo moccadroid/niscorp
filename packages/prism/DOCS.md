@@ -881,6 +881,12 @@ third argument: a `Partial<Limits>`, merged over `DEFAULT_LIMITS`:
 | `maxStringLength` | `1_000_000` | Characters in any one string a node produces |
 | `maxValues` | `1_000_000` | Values (scalars, array items, object fields) in a `$reduce` accumulator, a `$with` binding, or the result |
 
+A config that `evaluate` keeps and runs again spends on every call the steps
+its first call spent: a part worked out ahead of time from the second call
+(a `$join` of 600 written parts) still costs the nodes it took. `execute` counts
+such a part of a compiled IR as one step, since the IR is JSON and carries no
+record of what working it out cost.
+
 Past any of them the evaluation throws `E_BUDGET`. `maxValues` counts a value
 each time it appears, as it would be serialized: a `$reduce` whose body is
 `[{ "$var": "acc" }, { "$var": "acc" }]` doubles its count with every item.
