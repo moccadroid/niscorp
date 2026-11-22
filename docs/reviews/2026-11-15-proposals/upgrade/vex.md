@@ -1,48 +1,82 @@
 # Upgrading past the vex "Owner to confirm" fixes
 
-Five changes in `@niscorp/vex`. None changes a grammar (no vex entry, query or mutation schema changed, so no strata migration and no lock moves) and none changes a table: the "last used" stamp writes the `last_used_at` column the Postgres cache already has. No lab app had to change.
+Five changes in `@niscorp/vex`.
+- **No grammar change.** No vex entry, query or mutation schema changed, so there is no strata migration and no lock moves.
+- **No table change.** The "last used" stamp writes the `last_used_at` column the Postgres cache already has.
+- **No lab app had to change.**
+- **One introspection change:** an identity column now has a `defaultValue` (see the `upsert` item). The field is not part of the schema fingerprint, so cached entries stay fresh.
 
-Each item says who is affected among the lab apps (`apps/lab/*`) and the three apps outside this repo (AnimaApp, anima-finance, mira). The outside apps reach vex only through moss, through their entry files (`src/app/vex/*.entries.ts`), and through moss's `/api/vex` routes. None of them calls `mergeScopePolicies`, `handleDiscovery`, `createQueryEngine` or a cache directly, and none uses `upsert`.
+Each item says who is affected among the lab apps (`apps/lab/*`) and the three apps outside this repo (AnimaApp, anima-finance, mira). The outside apps create a cache themselves (`createPostgresCache` in each `src/server/runtime.ts`) and hand it to moss. They reach vex only through moss, through their entry files (`src/app/vex/*.entries.ts`), and through moss's `/api/vex` routes. None of them calls `mergeScopePolicies`, `handleDiscovery` or `createQueryEngine` itself, and none has an `upsert` entry.
 
-### vex — discovery lists only what the engine's policy lets run, when the handler has no policy of its own
-- Before: `createQueryEngine({ adapter, scope: tenantOnlyPolicy })`, mounted with Express without `getPolicy` (or Hono without `getPolicy`, or `handleDiscovery({ engine })` called directly). `GET` listed every table, the denied `secrets` table included with all its columns, and every fingerprint with its intent, context and write effect, although a query there runs under the engine's policy and is refused `secrets`.
-- Now: the same `GET` lists `tasks` and only the entries that policy lets run; `secrets` and `secrets/all` are not listed. A handler or request policy, when there is one, still decides alone. `QueryEngine` has a new optional read-only `scopePolicy`: the policy given to `createQueryEngine`. Each table's `rowCount` is unchanged (still the whole table's count).
-- Who notices: an app whose discovery endpoint has an engine with `scope` and no handler policy, and that reads that listing.
-- What to do: nothing, unless a client relied on seeing tables or entries the engine refuses to run. To list more, give the handler its own policy (`scopePolicy`, or `getPolicy` on an adapter).
+### vex — discovery lists only what runs, when the handler has no policy of its own
+- Before: an engine was created with `createQueryEngine({ adapter, scope: tenantOnlyPolicy })` and mounted without a policy of its own: Express or Hono without `getPolicy`, or `handleDiscovery({ engine })` called directly. Its `GET` listed every table, including the denied `secrets` table with all its columns. It also listed every fingerprint, with its intent, context and write effect. Yet a query on that endpoint runs under the engine's policy and is refused `secrets`.
+- Now: each table and entry is listed only where the policy it runs under lets it run.
+  - Tables and read entries go by the handler's or request's policy when there is one, otherwise the engine's. The same `GET` lists `tasks` and `tasks/mine`, not `secrets` or `secrets/all`.
+  - A write entry goes by the policy its write runs under: `mutations.policy`, which on an adapter with `getPolicy` is the request's policy. Example: the engine reads under `{ tasks: { read: [tenant] } }` and the handler has `mutations: { policy: { tasks: { read: [tenant], write: [tenant] } } }`. Then `tasks/rename` is listed, and `POST` runs it.
+  - `QueryEngine` has a new optional, read-only `scopePolicy`: the policy given to `createQueryEngine`.
+  - Each table's `rowCount` is unchanged: still the whole table's count.
+- Who notices: an app whose discovery endpoint has an engine created with `scope` and no handler policy, and that reads that listing. Also a direct `handleDiscovery` call with both `scopePolicy` and a different `mutations.policy`: its write entries are now judged by `mutations.policy`.
+- What to do: nothing, unless a client relied on seeing tables or entries that do not run there. To list more, give the handler its own policy (`scopePolicy`, or `getPolicy` on an adapter).
 - Breaking: yes (a listing gets shorter).
 - Affected apps: none.
-  - `apps/lab/fable/src/vex/http/fetch.ts:34` calls `handleDiscovery({ engine, entities: ENTITIES })` on an engine with `scope: scopePolicy` (`apps/lab/fable/src/vex/runtime.ts:29`). That policy is `default: 'allow'` with no entities (`apps/lab/fable/src/vex/scope.ts:5`), so the listing is the same; fable's `check` passes.
-  - `apps/lab/relay/src/dev/engine.ts:100` passes its own `scopePolicy`: unchanged.
-  - moss passes a policy on every discovery call, so AnimaApp, anima-finance, mira and lyceum see the same `GET /api/vex`.
+  - `apps/lab/fable/src/vex/http/fetch.ts:34` calls `handleDiscovery({ engine, entities: ENTITIES })` on an engine with `scope: scopePolicy` (`apps/lab/fable/src/vex/runtime.ts:29`). That policy is `default: 'allow'` with no entities (`apps/lab/fable/src/vex/scope.ts:5`), so the listing is the same. fable's `check` passes.
+  - `apps/lab/relay/src/dev/engine.ts:100` passes its own `scopePolicy` and no `mutations`, so nothing changes.
+  - moss passes a policy and no `mutations` on every discovery call (`packages/moss/src/data/data.ts:213`, `packages/moss/src/data/own-entries.ts:47`). So AnimaApp, anima-finance, mira and lyceum see the same `GET /api/vex`.
 
 ### vex — an `upsert` with a `null` key inserts where the database makes the key
-- Before: `{ op: 'upsert', table: 'tasks', key: 'id', columns: { title: … } }` called with `{ id: null, title: 'new' }` ran `UPDATE … WHERE id = NULL`, wrote nothing, and answered 200 `[]`, even when `tasks.id` has a default (`gen_random_uuid()`, a sequence).
-- Now: where the introspected key column has a default, it inserts the row and answers it (`{ id: '6249…', title: 'new' }`). On a key column with no default it is still an update of no row and answers 200 `[]` (an insert there would break the key's `NOT NULL`). An absent key or `''` inserts, as before.
-- Who notices: a client that sends `null` as an upsert's key.
-- What to do: nothing. A client that sends `null` to mean "new" now gets the row it asked for.
-- Breaking: yes (a request that wrote nothing now writes a row).
-- Affected apps: none. relay's upserts (`apps/lab/relay/src/app/vex/tasks.entries.ts:147` and the companies, contacts and deals entries) are sent `id: ''` for a new record (`apps/lab/relay/src/app/actions/domains/*/*.form.action.ts`), never `null`. No other lab app and no outside app has an `upsert` entry.
+- Before: take `{ op: 'upsert', table: 'tasks', key: 'id', columns: { title: … } }` called with `{ id: null, title: 'new' }`. It ran `UPDATE … WHERE id = NULL`, wrote nothing, and answered 200 `[]`. That happened even when the database fills `tasks.id` (a default such as `gen_random_uuid()` or a sequence, or an identity column).
+- Now: where the database makes the key and the entry does not write the key itself, a `null` key inserts the row and answers it (`{ id: '6249…', title: 'new' }`).
+  - "Makes the key" means the introspected key column has a default or is an identity column.
+  - "Does not write the key itself" means `id` is in neither `columns` nor `insert`.
+  - Like an absent key, it is then refused with 400 `scope_denied` for a caller whose policy grants update but not insert.
+  - Anywhere else a `null` key answers exactly as before: no default and no identity, or an entry that writes `id: { $context: 'id' }` itself. An absent key or `''` inserts, as before.
+  - Introspection now gives an identity column a `defaultValue`: `GENERATED ALWAYS AS IDENTITY` or `GENERATED BY DEFAULT AS IDENTITY`.
+- Who notices: a client that sends `null` as an upsert's key on a table whose key the database fills.
+- What to do: nothing. A client that sends `null` to mean "new" now gets the row it asked for. A caller that may only update gets the same refusal an absent key gets today.
+- Breaking: yes. A request that wrote nothing and answered 200 `[]` now writes a row. For an update-only caller it now answers 400 `scope_denied`.
+- Affected apps: none.
+  - relay's upserts (`apps/lab/relay/src/app/vex/tasks.entries.ts:147`, and the companies, contacts and deals entries) are sent `id: ''` for a new record (`apps/lab/relay/src/app/actions/domains/*/*.form.action.ts`), never `null`.
+  - No other lab app and no outside app has an `upsert` entry.
 
-### vex — a read's context value that does not fit its column is a 400; the error log drops bound values
-- Before: `{ fingerprint: 'tasks/byIds', context: { ids: 't1' } }` on `in: ['tasks.id', { $context: 'ids' }]`, or `{ min: 'abc' }` on an integer column, answered 500 `{ error: '22P02', message: 'malformed array literal: "t1"' }`. The server logged the whole driver error object; under PGlite that includes the SQL and every bound value (`params: [0, 'tenant-A']`), the caller's scope among them.
-- Now: the same requests answer 400 `{ error: 'invalid_request', message: 'Context value "ids" does not fit its column: malformed array literal: "t1"', details: { key: 'ids', code: '22P02' } }`; `engine.execute` throws that `VexError`. This applies only when Postgres's error names the bound parameter (`unnamed portal parameter $2 = '...'`) and that parameter is one of the statement's context values. Division by zero in a compute, numeric overflow, a bad stored value, and a wrongly typed scope value from the host stay 500, as does a write's context value that does not fit its column. `'42'` for an integer column still runs. The log line for an unexpected error is now `[vex] unhandled error <code> in: <SQL>` followed by the stack, never the error object.
-- Who notices: a client that branches on that 500 or on its code (`22P02`, `22003` and so on); anything that parses the old log line.
-- What to do: treat the 400 `invalid_request` like any other refused request. A test that expected 500 for its own wrongly typed context value expects 400.
-- Breaking: yes (a status and an error code change).
-- Affected apps: none found. No lab app's check sends a wrongly typed context value (lyceum, fable and mythos checks pass). The 500 checks in the outside apps are about other endpoints: `AnimaApp/src/dev/stripe-check.ts:129` is a Stripe webhook, and `mira/src/dev/photos-check.ts:142` is a photo upload.
+### vex — the error log no longer prints bound values
+- Before: the handler logged the whole error object for an unexpected error. Under PGlite that object holds the SQL and every bound value (`params: [0, 'tenant-A']`), the caller's scope among them.
+- Now: the log line is `[vex] unhandled error <code> in: <SQL>` followed by the stack, and never the error object.
+  - The SQL text appears only where the driver's error carries it. PGlite's does; node-postgres's does not, so on node-postgres the line has the code, message and stack.
+  - What the caller receives is unchanged. A context value that does not fit its column is still a 500 with Postgres's code, for example 500 `22P02` for `{ ids: 't1' }` on an `in` list.
+- Who notices: anything that parses the old log line.
+- What to do: nothing.
+- Breaking: no.
+- Not built: the proposal's 400 `invalid_request` for a caller's wrongly typed value. vex cannot tell a value the request sent from one the host added to the context. For example, mythos adds `today: deps.today` to every request's context (`apps/lab/mythos/src/api/routes.ts:27`) before `engine.execute`. A wrongly typed `today` would have been answered as the caller's 400. As built in the first round, mythos's `POST` would have moved from 500 (`apps/lab/mythos/src/api/routes.ts:77`) to 400 (its `VexError` branch, line 72). It keeps the 500.
 
 ### vex — `mergeScopePolicies` keeps `public` and `write`
-- Before: `mergeScopePolicies([{ default: 'deny', entities: { countries: { public: true } } }])` gave `{ entities: {} }`: the public table was refused. A `write` list was dropped: `{ read: [], write: [tenant], update: [] }` merged to `{ read: [], update: [] }`, which is updates across tenants (wider than the policy given to the merge), and a `write`-only entity lost every write phase.
-- Now: `public` merges to all four phases with no rule (`{ read: [], insert: [], update: [], delete: [] }`). `write` is added to insert, update and delete (its `match` rules only, for delete), as `createScopePolicy` does: that example merges to `{ read: [], insert: [tenant], update: [tenant], delete: [tenant] }`. A `deny` still grants nothing, so another role's grant stands. Two rule sets with the same number of matches are still not combined, and `default: 'allow'` is still not carried over.
-- Who notices: only code that merges hand-written policies. Wider: a `public` table, and the write phases of a `write`-only entity, are now granted. Narrower: `{ write: [tenant], update: [] }` now updates only the tenant's rows; an update across tenants that worked through the old merge matches no row and answers `[]`.
-- What to do: nothing for policies made by `createScopePolicy` (moss's are), which merge exactly as before. If a hand-written policy relied on the old merge, write the merged rules out by hand.
+- Before:
+  - `mergeScopePolicies([{ default: 'deny', entities: { countries: { public: true } } }])` gave `{ entities: {} }`, so the public table was refused.
+  - A `write` list was dropped. `{ read: [], write: [tenant], update: [] }` merged to `{ read: [], update: [] }`, which allows updates across tenants: wider than the policy given to the merge.
+  - A `write`-only entity lost every write phase.
+- Now:
+  - `public` merges to all four phases with no rule: `{ read: [], insert: [], update: [], delete: [] }`.
+  - `write` is added to insert, update and delete (only its `match` rules, for delete), as `createScopePolicy` does. That example merges to `{ read: [], insert: [tenant], update: [tenant], delete: [tenant] }`.
+  - A `deny` still grants nothing, so another role's grant stands.
+  - Two rule sets with the same number of matches are still not combined, and `default: 'allow'` is still not carried over.
+- Who notices: only code that merges hand-written policies.
+  - Wider: a `public` table, and the write phases of a `write`-only entity, are now granted.
+  - Narrower: `{ write: [tenant], update: [] }` now updates only the tenant's rows. An update across tenants that worked through the old merge matches no row and answers `[]`.
+- What to do: nothing for policies made by `createScopePolicy`, which merge exactly as before; moss's are made that way. If a hand-written policy relied on the old merge, write the merged rules out by hand.
 - Breaking: yes, for hand-written policies only.
 - Affected apps: none. moss (`packages/moss/src/data/policy.ts:13`) and showroom (`apps/showroom/src/modules/charter/world/studio.ts:77`) merge only `createScopePolicy` output. No lab app and no outside app calls `mergeScopePolicies`.
 
-### vex — the "last used" stamp writes `lastUsedAt` alone
-- Before: a replay that was due a stamp wrote `{ ...entryItRead, lastUsedAt }` back through `cache.set`. A `PATCH` (unprotect) or a reseed that landed between the replay's read and its stamp was undone. The tiered cache's `set` copied its L1 entry over the shared L2, so a process holding an old L1 copy overwrote another process's change.
-- Now: `CacheBackend` has an optional `touch(key, lastUsedAt)` that writes that one field. Memory and Postgres implement it (Postgres runs `UPDATE … SET last_used_at = $2 WHERE key = $1`), and the tiered cache does when both its levels do: L1's `touch`, then L2's. The engine and the handler stamp through `touch` when the cache has it, and through `set` with the whole entry when it does not.
-- Who notices: a host that wraps a built-in cache by spreading it and overriding `set` to watch writes. The wrapper inherits `touch`, so the stamps no longer reach its `set`; every other write still does.
-- What to do: a wrapper that counts or forwards stamps also overrides `touch` (vex's own `test/cache/touch.test.ts` now does). A custom backend need not implement `touch`.
+### vex — the "last used" stamp writes `lastUsedAt` alone, where the cache has `touch`
+- Before: a replay that was due a stamp wrote `{ ...entryItRead, lastUsedAt }` back through `cache.set`.
+  - A `PATCH` (unprotect) or a reseed that landed between the replay's read and its stamp was undone.
+  - The tiered cache's `set` copied its L1 entry over the shared L2. So a process holding an old L1 copy overwrote another process's change.
+- Now: `CacheBackend` has an optional `touch(key, lastUsedAt)` that writes that one field.
+  - Memory and Postgres implement it. Postgres runs `UPDATE … SET last_used_at = $2 WHERE key = $1`.
+  - The tiered cache implements it when both its levels do: L1's `touch`, then L2's.
+  - The engine and the handler stamp through `touch` when the cache they are given has it. Otherwise they stamp through `set` with the whole entry, as before, and the race stays.
+- Who notices: a host that wraps a built-in cache by spreading it and overriding `set`. relay's `unstamped` (`apps/lab/relay/src/server/runtime.ts:18`) is such a wrapper: it spreads `createPostgresCache` and overrides `set` to drop the schema stamp. A wrapper like that inherits `touch`, so the stamps go through `touch` and never reach its `set`. Every other write still does.
+- What to do: a wrapper that must see the stamps overrides `touch` too; vex's own `test/cache/touch.test.ts` does. A custom backend need not implement `touch`.
 - Breaking: yes, for such a wrapper only.
-- Affected apps: none change behaviour. lyceum's runtimes build a tiered cache (`apps/lab/lyceum/src/server/postgres-runtime.ts:17`, `apps/lab/lyceum/src/server/runtime.ts:20`), but moss wraps every cache in its `createEntryCache` (`packages/moss/src/data/engine.ts:24`), which has no `touch`. So every moss app (lyceum, AnimaApp, anima-finance, mira) still stamps through `set`, as before. mythos and fable use `createPostgresCache` directly (`apps/lab/mythos/src/vex/engine.ts:18`, `apps/lab/fable/src/vex/runtime.ts:24`) and now stamp through its `touch`; their checks pass.
+- Affected apps: none change behaviour, and the race stays open in every moss app.
+  - moss wraps every cache it is given in `createEntryCache` (`packages/moss/src/data/engine.ts:42-55`), which has no `touch`. So every moss app still stamps through `set` and keeps the race this fixes: lyceum's tiered cache (`apps/lab/lyceum/src/server/postgres-runtime.ts:17`, `apps/lab/lyceum/src/server/runtime.ts:20`), relay's `unstamped`, and the Postgres caches of AnimaApp, anima-finance and mira.
+  - That stays so until moss passes `touch` through. That is an owner decision, not built here.
+  - mythos and fable hand `createPostgresCache` to vex directly (`apps/lab/mythos/src/vex/engine.ts:18`, `apps/lab/fable/src/vex/runtime.ts:24`). They now stamp through its `touch`, and their checks pass.
