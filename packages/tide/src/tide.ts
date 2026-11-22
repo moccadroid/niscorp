@@ -108,6 +108,7 @@ export const createTide = (config: TideConfig): Tide => {
       tokens += 1;
       return `tok_${tokens.toString(36)}`;
     },
+    deferred: new Map(),
   };
 
   const everLoaded = new Set<string>();

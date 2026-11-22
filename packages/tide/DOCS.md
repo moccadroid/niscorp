@@ -584,7 +584,7 @@ logs at whatever grain it wants.
 | `run.created` | `run` | a run opened |
 | `run.settled` | `run` | its last task settled, or it fanned out to no tasks — once per run, not again after a `retry` |
 | `run.skipped` | `reflexId`, `reason` | overlap, or a fan-out tide refused |
-| `run.deferred` | `reflexId`, `runId`, `reason` | a fan-out failed in a host seam; retried next `advance` |
+| `run.deferred` | `reflexId`, `runId`, `reason` | a fan-out failed in a host seam; retried after the reflex's retry wait |
 | `task.done` / `task.failed` | `task` | an attempt recorded a terminal outcome |
 | `task.retrying` | `task`, `nextAt` | an attempt threw or timed out with retries left |
 | `task.reclaimed` | `task` | a lapsed lease was taken back |
@@ -905,7 +905,12 @@ A `TideError` is tide's own refusal — a duplicate unit key, a missing `select`
 seam — which means the reflex is wrong and will be wrong again next `advance`, so the
 run is `skipped` with a note. Anything else came out of a host seam: a
 selection, a transform, a database. That is a bad minute, not a bad reflex, so
-the run stays `pending` and is tried again on the next `advance` — a row past
-its due time that a query can see. Skipping it instead would
+the run stays `pending` and is tried again after a wait — a row past its due
+time that a query can see. The wait is the reflex's own `policy.retry`: `baseMs`,
+growing by `backoff` over the first `max` deferrals and then staying that long
+(with the defaults 60 s, 120 s, 240 s, 240 s …); `max` does not end the run. While
+a run waits, the pending runs behind it fan out. The engine keeps the waits in
+memory: after a restart each deferred run is tried once at once, then waits
+again, and two instances each keep their own. Skipping it instead would
 lose it for good: runs are idempotent on `(reflexId, cause)`, so the occurrence
 cannot open a second run.

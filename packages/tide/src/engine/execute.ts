@@ -22,7 +22,7 @@ const raceTimeout = async (work: Promise<unknown>, timeoutMs: number): Promise<u
   }
 };
 
-const backoffFor = (attempt: number, base: number, kind: 'fixed' | 'exponential'): number =>
+export const backoffFor = (attempt: number, base: number, kind: 'fixed' | 'exponential'): number =>
   kind === 'fixed' ? base : base * Math.pow(2, Math.max(0, attempt - 1));
 
 const claimTasks = async (deps: EngineDeps, now: number, limit: number, token: string): Promise<readonly Task[]> => {

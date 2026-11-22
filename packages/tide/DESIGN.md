@@ -466,7 +466,11 @@ The requirements doc calls this "the part that must not be hand-waved." In order
   `TideError` is tide's own refusal — a duplicate unit key, a missing `select` seam —
   so the reflex is wrong and will be wrong again next time: the run is `skipped`, with
   a note. Anything else came out of a host seam, and the run stays `pending` to be
-  retried, which is a row past its due time that a query can see. **⟲** Every throw
+  retried after the reflex's retry wait, which is a row past its due time that a query
+  can see. **⟲** It was retried on every `advance`, read oldest first: a page of runs
+  whose database was down filled every pass, and no run behind them fanned out. The
+  wait is pacing only, so it lives in the engine's memory, not a column: a restart
+  costs one early attempt per deferred run, and loses nothing. **⟲** Every throw
   used to skip; because runs are idempotent on `(reflexId, cause)`, the occurrence
   could never re-materialize, so one unreachable database destroyed that night's
   billing run permanently — and since `skipped` is not `settled`, everything waiting on

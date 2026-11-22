@@ -467,6 +467,38 @@ describe('fan-out failure', () => {
     expect((await tide.ledger.runs())).toHaveLength(1);
   });
 
+  it('runs whose fan-out keeps failing wait their turn, and a healthy run behind them fans out', async () => {
+    let selects = 0;
+    const broken: ReflexInput = { id: 'broken', intent: 'x', on: { manual: {} }, select: { query: {}, mode: 'batch' }, effect: { name: 'work' }, policy: { overlap: 'allow' } };
+    const healthy: ReflexInput = { id: 'healthy', intent: 'x', on: { manual: {} }, effect: { name: 'work' } };
+    const select: SelectFn = () => {
+      selects += 1;
+      throw new Error('ECONNREFUSED');
+    };
+    const { tide, store } = await harness([broken, healthy], { work: { run: () => null } }, { select });
+    for (let n = 0; n < 3; n += 1) await tide.fire('broken', { now: T0 });
+    await tide.advance({ now: T0, limit: 3 });
+    await tide.fire('healthy', { now: T0 + 1_000 });
+    for (let n = 0; n < 5; n += 1) await tide.advance({ now: T0 + 1_000, limit: 3 });
+
+    expect((await tide.ledger.runs({ reflexId: 'healthy' }))[0]?.state).toBe('settled');
+    expect(selects).toBe(3);
+
+    await tide.advance({ now: T0 + 60_000, limit: 3 });
+    expect(selects).toBe(6);
+    await tide.advance({ now: T0 + 120_000, limit: 3 });
+    expect(selects).toBe(6);
+    await tide.advance({ now: T0 + 180_000, limit: 3 });
+    expect(selects).toBe(9);
+
+    const restarted = createTide({ store, transform: testTransform, select, effects: { work: { run: () => null } } });
+    await restarted.load([broken, healthy], { at: T0 });
+    await restarted.advance({ now: T0 + 181_000, limit: 3 });
+    await restarted.advance({ now: T0 + 182_000, limit: 3 });
+    expect(selects).toBe(12);
+    expect((await tide.ledger.runs({ reflexId: 'broken' })).map((run) => run.state)).toEqual(['pending', 'pending', 'pending']);
+  });
+
   it('still refuses a malformed reflex loudly', async () => {
     const select: SelectFn = () => [{ id: 'same' }, { id: 'same' }];
     const { tide } = await harness([reflex], { bill: { run: () => ({ ok: true }) } }, { select });
