@@ -8,7 +8,7 @@ import type { Atomically, Client, TidePool } from './pool';
 import { SQL_TABLE, rowToEntity, snake, toColumn } from './rows';
 import { TIDE_SEQUENCE } from './tables';
 
-// Not time and a counter: two processes on one database mint ids at the same instant.
+// Random: two processes on one database mint ids at the same instant.
 const mintId = (): string => crypto.randomUUID();
 
 export type TideStoreOptions = {
