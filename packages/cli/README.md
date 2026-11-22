@@ -449,11 +449,11 @@ process.exit(
 ```
 
 It prints one `[pass]` or `[fail]` line per rule and answers the exit code, 0
-or 1. It fails when:
+or 1. It fails on these spellings, and only these:
 
 | Rule | It fails on |
 |---|---|
-| `style` (rule 16) | in `src/`: an `as` or `<T>` assertion other than `as const`, a non-null `!`, a `function` declaration, a class, an enum, `any`, a default export. `.d.ts` files are not read |
+| `style` (rule 16) | in `src/`: an `as` or `<T>` assertion other than `as const` or `<const>`, a non-null `!`, a `function` declaration, a class, an enum, `any`, a default export. `.d.ts` files are not read |
 | `formatting` (rule 9) | `Intl.` or a `.toLocale…()` call in `src/`, but `src/dev/` |
 | `roles` (rule 11) | `session.roles` or `principal.roles` in `src/server/` |
 | `files` (rule 9a) | `FileReader` or a `readAs…` call in `src/ui/` |
@@ -463,6 +463,29 @@ or 1. It fails when:
 
 Each is read off the syntax tree, so a word in a comment or a string is never a
 finding.
+
+The same reaches spelt another way are **reported, not failed**. A second
+reading asks the compiler what each name refers to, and prints an `[info]` line
+with the file, the line and the rule for each one the table misses:
+
+| Rule | Reported, whatever the spelling |
+|---|---|
+| `formatting` | any use of the global `Intl`: `const { NumberFormat } = Intl`, `new globalThis.Intl.DateTimeFormat()` |
+| `roles` | a `roles` declared in `@niscorp/moss`'s types, read with a dot, `['roles']` or destructuring: `const { roles } = session` |
+| `address` | any value of the browser's `Location` type (`const { pathname } = window.location`), and `pushState`/`replaceState` on a `History` |
+| `dom` | `querySelector` and its kin on a value of type `Document`: `window['document'].querySelector(…)` |
+| `data` | a function of `src/app/` reached through a namespace import (`helpers.wordsOf(1)`), a re-export (`export { wordsOf } from '../app/helpers'`) or a dynamic import |
+
+```
+[info] rule 9: src/server/when.ts:1 Intl, the global one — another spelling of what the rule fails on; reported, not failed
+```
+
+Such a line is left out when the table already fails the same rule for the same
+name in that file, and when `allow` names that file for that rule (an
+allowance still has to allow something the table fails, or it fails as
+allowing nothing). It never changes the exit code: an app that passes keeps
+passing. If the second reading cannot run, one `[info]` line says so, and the
+exit code is the table's.
 
 `allow` names, per rule, the files that may do what the rule refuses, each with
 why: the file that finds the app's day, the identity seam that reads roles, a
@@ -479,8 +502,8 @@ against how often they replay vex, how many reads word their rows with a Prism
 `mapping`, and the `refresh: 'reactive'` reads no action replays by name.
 
 It reads the source with the app's own TypeScript, 6.x, found from `root`, and
-the app as its `tsconfig.json` there says. On lyceum it takes under three
-seconds.
+the app as its `tsconfig.json` there says. The second reading adds a second or
+two on lyceum.
 
 ## `nisc migrate`
 

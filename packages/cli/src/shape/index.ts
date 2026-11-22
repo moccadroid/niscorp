@@ -1,9 +1,12 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { appDataFindings } from './app-data';
+import type * as TS from 'typescript';
+import { appDataFindings, programOf } from './app-data';
+import { referenceFindings } from './references';
 import { sourceFindings } from './source';
 import type { Finding } from './source';
 import { loadTypeScript } from './typescript';
+import type { TypeScript } from './typescript';
 
 export type ShapeRule = 'style' | 'formatting' | 'roles' | 'files' | 'address' | 'dom' | 'data';
 
@@ -42,6 +45,18 @@ const replayOf = (endpoint: Record<string, unknown>): { fingerprint?: string } |
   return typeof fingerprint === 'string' ? { fingerprint } : {};
 };
 
+const messageOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));
+
+const readSource = (root: string): { ts: TypeScript; program: TS.Program; findings: Finding[] } | string => {
+  try {
+    const ts = loadTypeScript(root);
+    const program = programOf(ts, root);
+    return { ts, program, findings: [...sourceFindings(ts, root), ...appDataFindings(ts, root, program)] };
+  } catch (error) {
+    return messageOf(error);
+  }
+};
+
 export const runShapeCheck = (config: ShapeCheckConfig): number => {
   const log = config.log ?? ((line: string) => console.log(line));
   let failures = 0;
@@ -54,20 +69,34 @@ export const runShapeCheck = (config: ShapeCheckConfig): number => {
     return failures === 0 ? 0 : 1;
   };
 
-  let findings: Finding[];
-  try {
-    const ts = loadTypeScript(config.root);
-    findings = [...sourceFindings(ts, config.root), ...appDataFindings(ts, config.root)];
-  } catch (error) {
-    check('the source is read', false, [error instanceof Error ? error.message : String(error)]);
+  const read = readSource(config.root);
+  if (typeof read === 'string') {
+    check('the source is read', false, [read]);
     return done();
   }
+  const { findings } = read;
 
   const allow = config.allow ?? {};
   for (const [rule, what] of RULES) {
     const allowed = allow[rule] ?? {};
     const left = findings.filter((finding) => finding.rule === rule && allowed[finding.file] === undefined);
     check(what, left.length === 0, left.map((finding) => `${finding.file}:${finding.line} ${finding.what}`));
+  }
+  try {
+    const failed = new Set(findings.map((finding) => `${finding.rule} ${finding.file} ${finding.name}`));
+    const shown = new Set<string>();
+    const others = referenceFindings(read.ts, config.root, read.program).filter((finding) => {
+      const key = `${finding.rule} ${finding.file} ${finding.name}`;
+      if (failed.has(key) || allow[finding.rule]?.[finding.file] !== undefined || shown.has(`${key} ${finding.line}`)) return false;
+      shown.add(`${key} ${finding.line}`);
+      return true;
+    });
+    const ruleOf = new Map(RULES.map(([rule, what]) => [rule, what.split(':')[0] ?? what]));
+    for (const finding of others) {
+      log(`[info] ${ruleOf.get(finding.rule) ?? finding.rule}: ${finding.file}:${finding.line} ${finding.what} — another spelling of what the rule fails on; reported, not failed`);
+    }
+  } catch (error) {
+    log(`[info] what names refer to could not be read, so other spellings are not reported: ${messageOf(error)}`);
   }
   const idle = RULES.flatMap(([rule]) =>
     Object.entries(allow[rule] ?? {}).flatMap(([file, reason]) => {
