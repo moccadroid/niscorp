@@ -36,46 +36,53 @@ export const createRevalidation = (config: Pick<SocketConfig, 'session' | 'reval
   // A connection whose question is still out is not asked again: a verifier that never answers is asked once for each.
   const asking = new Set<Connection>();
 
-  const question = async (connection: Connection, credential: { token: string; principal: string }): Promise<void> => {
-    asking.add(connection);
+  type Presenting = { connection: Connection; principal: string };
+
+  const question = async (token: string, presenting: readonly Presenting[]): Promise<void> => {
+    for (const { connection } of presenting) asking.add(connection);
     try {
-      const resolved = await config.session(credential.token);
-      if (resolved !== credential.principal && live.has(connection)) expire(connection);
+      const resolved = await config.session(token);
+      for (const { connection, principal } of presenting) if (resolved !== principal && live.has(connection)) expire(connection);
     } finally {
-      asking.delete(connection);
+      for (const { connection } of presenting) asking.delete(connection);
     }
   };
 
-  // A pass waits for an answer until the next pass is due. One that comes later is acted on when it comes.
-  const answeredInTime = async (asked: Promise<void>): Promise<boolean> => {
+  // A pass asks about every token at once, one question for each, and waits for the answers until the next pass is due.
+  // One that comes later is acted on when it comes.
+  const revalidate = async (): Promise<void> => {
+    const byToken = new Map<string, Presenting[]>();
+    let asked = 0;
+    for (const [connection, credential] of live) {
+      if (credential === null || asking.has(connection)) continue;
+      asked += 1;
+      byToken.set(credential.token, [...(byToken.get(credential.token) ?? []), { connection, principal: credential.principal }]);
+    }
     let due: ReturnType<typeof setTimeout> | undefined;
     const passDue = new Promise<false>((resolve) => {
       due = setTimeout(() => resolve(false), revalidateMs);
       due.unref?.();
     });
+    const unanswered: unknown[] = [];
     try {
-      return await Promise.race([asked.then(() => true), passDue]);
+      await Promise.all(
+        [...byToken].map(async ([token, presenting]) => {
+          const answer = question(token, presenting);
+          try {
+            if (!(await Promise.race([answer.then(() => true), passDue]))) {
+              answer.catch((error: unknown) =>
+                console.error('[moss/socket] the session verifier could not be asked about a connection after its pass went on. It stays open and is asked again:', error),
+              );
+            }
+          } catch (error) {
+            // An unreachable verifier is not evidence that a session ended: the
+            // connection stays, and is asked about again next pass.
+            unanswered.push(...presenting.map(() => error));
+          }
+        }),
+      );
     } finally {
       clearTimeout(due);
-    }
-  };
-
-  const revalidate = async (): Promise<void> => {
-    let asked = 0;
-    const unanswered: unknown[] = [];
-    for (const [connection, credential] of [...live]) {
-      if (credential === null || asking.has(connection)) continue;
-      asked += 1;
-      const answer = question(connection, credential);
-      try {
-        if (!(await answeredInTime(answer))) {
-          answer.catch((error: unknown) => console.error('[moss/socket] the session verifier could not be asked about a connection after its pass went on. It stays open and is asked again:', error));
-        }
-      } catch (error) {
-        // An unreachable verifier is not evidence that a session ended: the
-        // connection stays, and is asked about again next pass.
-        unanswered.push(error);
-      }
     }
     if (unanswered.length > 0) {
       console.error(`[moss/socket] the session verifier could not be asked about ${unanswered.length} of ${asked} connection(s). They stay open and are asked again:`, unanswered[0]);
@@ -83,8 +90,12 @@ export const createRevalidation = (config: Pick<SocketConfig, 'session' | 'reval
   };
 
   let passing = false;
+  let dueWhilePassing = false;
   const pass = async (): Promise<void> => {
-    if (passing) return;
+    if (passing) {
+      dueWhilePassing = true;
+      return;
+    }
     passing = true;
     try {
       await revalidate();
@@ -92,6 +103,10 @@ export const createRevalidation = (config: Pick<SocketConfig, 'session' | 'reval
       console.error('[moss/socket] a revalidation pass failed, and the next one starts over:', error);
     } finally {
       passing = false;
+      if (dueWhilePassing && sweeper !== undefined) {
+        dueWhilePassing = false;
+        void pass();
+      }
     }
   };
 

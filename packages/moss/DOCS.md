@@ -2215,13 +2215,18 @@ server.nudge('usr_ada', 'notes-changed');
     outage. Only an explicit `null` (or a changed principal) closes. That it
     threw is logged, once for a pass: how many connections could not be asked
     about, and the first error.
-  - One pass at a time: a pass asks about every connection in turn, and one
-    that is due while another is still asking is skipped. A slow verifier is
-    not asked more the slower it gets. A pass waits for an answer until the
-    next pass is due, then goes on to the next connection; an answer that comes
-    later is acted on when it comes (a `null` closes), and that connection is
-    not asked again until it has come. A verifier that never answers for one
-    token leaves that one connection unchecked, and every other is still asked.
+  - One pass at a time: a pass asks the verifier once for each token, every
+    token at the same moment, so connections that present one token share one
+    call, and a revoked token's socket closes within `sessionRevalidateMs`
+    however many connections there are. A verifier with a strict limit on
+    calls at once sees them all together at the start of each pass. A pass
+    waits for the answers until the next pass is due; an answer that comes
+    later is acted on when it comes (a `null` closes), and those connections
+    are not asked about again until it has come. A pass that came due while
+    another was still waiting starts as soon as that one ends. A slow verifier
+    is not asked more the slower it gets. A verifier that never answers for one
+    token leaves only that token's connections unchecked, and every other is
+    still asked.
   - Without this the socket was the asymmetry: the HTTP surfaces re-ask on
     every request, so an expired credential left the socket open and rendering
     while every endpoint the server shell called came back 401 — a live

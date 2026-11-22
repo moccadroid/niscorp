@@ -569,6 +569,45 @@ describe('socket — revalidating a live connection', () => {
     }
   });
 
+  it('a revoked session closes within the clock however many connections there are', async () => {
+    vi.useFakeTimers();
+    try {
+      const revoked = new Set<string>();
+      let admitted = false;
+      const session: SocketConfig['session'] = (token) => {
+        const principal = revoked.has(token) ? null : `usr_${token}`;
+        return admitted ? new Promise<string | null>((answer) => setTimeout(() => answer(principal), 20)) : principal;
+      };
+      const accept = createSocket(ctxWith({ session, revalidateMs: 500 }));
+      const connections = Array.from({ length: 200 }, () => new FakeConnection());
+      for (const [i, conn] of connections.entries()) await accept(SOCKET, conn.offering(`t${i}`));
+      admitted = true;
+      revoked.add('t199');
+
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(connections[199]?.closed?.code).toBe(CLOSE_INVALID_TOKEN);
+      expect(connections[0]?.closed).toBeUndefined();
+      accept.stop();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('connections that present one token are one question in a pass', async () => {
+    vi.useFakeTimers();
+    try {
+      const auth = expiring();
+      const accept = createSocket(ctxWith({ session: auth.verify, revalidateMs: 1000 }));
+      for (let i = 0; i < 3; i++) await accept(SOCKET, new FakeConnection().offering('good'));
+      const before = auth.asked();
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(auth.asked() - before).toBe(1);
+      accept.stop();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('a question the verifier never answers keeps only its own connection unchecked: the others are still asked, and closed when they expire', async () => {
     vi.useFakeTimers();
     const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
