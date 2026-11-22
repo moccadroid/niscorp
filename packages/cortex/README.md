@@ -317,7 +317,9 @@ const orchestrator = defineAgent({
 
 The child's envelope maps to the tool result (`data` if present, else
 `response`; override with `select`), and its events nest in the
-parent stream.
+parent stream. The child runs on the delegating call's `ctx.signal`:
+it stops when the parent run is aborted or when the delegation passes
+its time limit (`timeoutMs`, 300 s by default).
 
 A tool that runs an agent itself gets the same nesting from the
 context `execute` is handed: `agent.run(input, { onEvent:
@@ -362,6 +364,14 @@ type CortexError = {
 
 Tool failures are **observations**, not exceptions — the model sees
 them and decides; the run fails only on structural conditions.
+
+A tool call that passes its time limit (`timeoutMs`, 30 s by default)
+ends in an `error` observation, `tool <id> timed out after <n>ms`,
+and its `ctx.signal` aborts, with an `AbortError` as when the run is
+aborted. A tool that hands `ctx.signal` to what it starts — a fetch,
+a delegated agent — stops there; a tool that ignores it runs on, and
+what it returns is dropped. Each call has its own `ctx.signal`: once
+the call has ended, it no longer aborts with the run.
 
 A tool's `input` schema validates; it does not convert. It does two
 jobs: the model is sent its JSON Schema, taken from the schema's

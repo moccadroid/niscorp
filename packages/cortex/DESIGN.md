@@ -239,7 +239,7 @@ step:
     → tool-call-delta events → output-delta / output-partial for respond args
   for each tool call, in order:
     tool gates (allow / deny / ask)               — BEFORE execution
-    execute (Zod-validated input, timeout)
+    execute (Zod-validated input; past timeoutMs the call's ctx.signal aborts)
     onToolResult hooks (replace / redact / truncate)
     append tool result message; emit tool-end observation
   respond call → validate envelope → end (or correction + continue)
@@ -256,6 +256,9 @@ Rules the loop lives by:
   future knob (§12).
 - **Tool failures are observations, not exceptions.** A failed or
   denied call becomes an error result the model sees and reacts to.
+  A call past its `timeoutMs` is one: the model is told it timed out,
+  and the call's own `ctx.signal` aborts so the tool stops rather
+  than finish unseen.
   The run only fails on structural conditions (stop limits, model
   call failure, abort, retries exhausted).
 - **A tool's `input` is enforced; its `output` is a type.** The input
@@ -504,7 +507,8 @@ const asToolDef = manifold.asTool('vex.query', { description });
 - `asTool(agent, { description?, select? })` wraps an agent as an
   ordinary `ToolDefinition`. Default result mapping: envelope `data`
   if present, else `response`; `select` overrides. Child events
-  forward (§7).
+  forward (§7). The child runs on the call's `ctx.signal`, so it stops
+  at the delegation's `timeoutMs` (300 s by default).
 - Duplicate ids throw at registration. Registration is a Map insert;
   there is no `start`/`stop`/`drain`.
 
