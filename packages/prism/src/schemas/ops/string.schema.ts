@@ -73,7 +73,7 @@ export const SplitNodeSchema = z
     $split: z
       .object({
         value: z.lazy(node).describe('String to split.'),
-        sep: z.string().describe('Separator to split on.'),
+        sep: z.string().describe('Separator to split on. "" splits into characters.'),
       })
       .strict(),
   })

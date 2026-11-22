@@ -63,5 +63,5 @@ export type TypeNode = z.infer<typeof TypeNodeSchema>;
 export const LengthNodeSchema = z
   .object({ $length: z.lazy(node).describe('Array or string to measure.') })
   .strict()
-  .describe('Return the length of an array or string.');
+  .describe('Return the length of an array or string. A string counts UTF-16 units, as a zod `.max()` counts it: the length of "👍🏽" is 4.');
 export type LengthNode = z.infer<typeof LengthNodeSchema>;

@@ -91,6 +91,36 @@ describe('$slice', () => {
   });
   it('slices strings', () => {
     expect(evaluate({ $slice: { from: { $ref: '$.text' }, start: 0, end: 5 } }, source)).toBe('hello');
+  });});
+
+describe('text is never cut inside a character', () => {
+  const slice = (text: string, start?: number, end?: number): unknown =>
+    evaluate({ $slice: { from: { $ref: '$.t' }, ...(start === undefined ? {} : { start }), ...(end === undefined ? {} : { end }) } }, { t: text });
+
+  it('a cut between the two halves of a character moves to its near side', () => {
+    expect(slice('Hey 👍 there', 0, 5)).toBe('Hey ');
+    expect(slice('Hey 👍 there', 5)).toBe(' there');
+    expect(slice('Hey 👍 there', -7)).toBe(' there');
+    expect(slice('Hey 👍 there', 4, 6)).toBe('👍');
+    expect(evaluate({ $take: { from: { $ref: '$.t' }, count: 1 } }, { t: '👍' })).toBe('');
+    expect(evaluate({ $drop: { from: { $ref: '$.t' }, count: 1 } }, { t: '👍x' })).toBe('x');
+  });
+
+  it('a cut anywhere else is where it was', () => {
+    expect(slice('abcd', 1, 3)).toBe('bc');
+    expect(slice('abcd', -2)).toBe('cd');
+    expect(slice('abcd', 3, 1)).toBe('');
+    expect(slice('abcd', 0, 99)).toBe('abcd');
+    expect(slice('👍👍', 2)).toBe('👍');
+  });
+
+  it('$split with an empty separator splits into characters', () => {
+    expect(evaluate({ $split: { value: { $ref: '$.t' }, sep: '' } }, { t: 'a👍' })).toEqual(['a', '👍']);
+    expect(evaluate({ $split: { value: { $ref: '$.t' }, sep: ',' } }, { t: 'a,👍' })).toEqual(['a', '👍']);
+  });
+
+  it('$length counts UTF-16 units, as zod does', () => {
+    expect(evaluate({ $length: { $ref: '$.t' } }, { t: '👍🏽' })).toBe(4);
   });
 });
 

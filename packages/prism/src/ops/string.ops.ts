@@ -84,7 +84,7 @@ export const opUpper = (node: UpperNode, context: EvalContext, evaluate: Evaluat
 export const opSplit = (node: SplitNode, context: EvalContext, evaluate: EvaluateFn): JsonValue => {
   const value = evaluate(node.$split.value, context);
   if (typeof value !== 'string') return refuseType({ node, op: '$split', field: 'value', needs: 'text', got: value, written: node.$split.value });
-  return value.split(node.$split.sep);
+  return node.$split.sep === '' ? Array.from(value) : value.split(node.$split.sep);
 };
 
 export const opReplace = (node: ReplaceNode, context: EvalContext, evaluate: EvaluateFn): JsonValue => {
