@@ -162,6 +162,7 @@ export const runLoop = async <TData, TDeps>(
     agentPath: cfg.agentPath,
     signal,
     forward: cfg.forwardEvent,
+    forwardApprovals: cfg.approvals.forwardTo,
   });
 
   const appendToolMessage = (call: NormalizedCall, content: string): void => {

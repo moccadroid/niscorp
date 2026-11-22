@@ -339,11 +339,30 @@ parent stream. The child runs on the delegating call's `ctx.signal`:
 it stops when the parent run is aborted or when the delegation passes
 its time limit (`timeoutMs`, 300 s by default).
 
+An approval the child asks is answered through the parent's handle:
+`run.approve(id)` or `run.deny(id)` on the parent, with the id of
+the nested `approval-required` event, reaches the child, at any depth.
+An answer through the child's own handle (the manifold's `onRun`)
+works too; the first answer counts. This lasts while the parent runs:
+the parent's snapshot carries no nested approval, so it does not
+survive a reload. A delegated agent runs under its own `policy` and
+`toolGates` and, through `manifold.asTool`, the manifold's `gates`;
+not the parent run's `gates`.
+
 A tool that runs an agent itself gets the same nesting from the
 context `execute` is handed: `agent.run(input, { onEvent:
 ctx.forward, agentPath: ctx.agentPath })`. `forward` puts the child's
 events on the parent's stream, and the child appends its own id to
 the path it is given.
+
+To answer its approvals through the parent's handle as well, pass
+the child's handle on and stop when it is done:
+
+```ts
+const handle = agent.run(input, { onEvent: ctx.forward, agentPath: ctx.agentPath, signal: ctx.signal });
+const stopForwarding = ctx.forwardApprovals?.(handle);
+const result = await handle.result.finally(() => stopForwarding?.());
+```
 
 ---
 

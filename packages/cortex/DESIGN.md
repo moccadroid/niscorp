@@ -416,7 +416,10 @@ type StopCondition = (s: RunProgress) => StopVerdict;   // { stop: StopReason; m
   it; the pending call blocks (tools are sequential, so
   one pending approval at a time). `run.approve(id, { args? })` —
   approve, optionally with edited args — or `run.deny(id, reason)`.
-  An id the handle did not ask under is ignored.
+  An id the handle did not ask under goes to the runs its tools
+  started and passed on with `ctx.forwardApprovals` (`asTool` and
+  `manifold.asTool` do), so a parent's handle answers an approval asked
+  at any depth; an id nobody asked under is ignored.
   `run.snapshot()` serializes the suspended run (messages, pending
   call, usage); `resumeRun(agent, snapshot, opts)` restores it — so
   approvals survive reloads and restarts. A resumed run **re-asks**:

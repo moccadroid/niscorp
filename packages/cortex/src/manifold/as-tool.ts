@@ -38,7 +38,8 @@ export const buildAgentTool = <TData>(core: AgentToolCore<TData>): ToolDefinitio
         agentPath: ctx.agentPath,
         onEvent: ctx.forward,
       });
-      const result = await handle.result;
+      const stopForwarding = ctx.forwardApprovals?.(handle);
+      const result = await handle.result.finally(() => stopForwarding?.());
       if (!result.ok) return `error: ${result.error.message}`;
       if (core.select) return core.select(result.output);
       return result.output.data !== undefined ? result.output.data : (result.output.response ?? '');

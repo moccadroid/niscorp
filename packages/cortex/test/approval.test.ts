@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { z } from 'zod';
 import {
+  asTool,
   defineAgent,
   defineTool,
   resumeRun,
@@ -320,5 +321,86 @@ describe('policy.approvalTimeoutMs after the ask is over', () => {
     const result = await run.result;
     expect(result.ok ? undefined : result.error.code).toBe('aborted');
     expect(vi.getTimerCount()).toBe(0);
+  });
+});
+
+describe('an approval asked inside a delegated agent', () => {
+  const deleter = (deleted: string[]) =>
+    defineTool({
+      id: 'delete_file',
+      name: 'delete_file',
+      description: 'Deletes a file.',
+      input: z.object({ path: z.string() }),
+      execute: ({ path }) => {
+        deleted.push(path);
+        return 'deleted';
+      },
+    });
+  const cleaner = (deleted: string[]) =>
+    defineAgent({
+      id: 'cleaner',
+      description: 'Deletes files.',
+      instructions: 'Delete what you are asked to.',
+      tools: [deleter(deleted)],
+      policy: { tools: { requireApproval: ['delete_file'] } },
+    });
+  const childScript = () => [
+    { toolCalls: [{ id: 'd1', name: 'delete_file', args: { path: 'old.log' } }] },
+    { toolCalls: [{ id: 'd2', name: 'respond', args: { response: 'deleted old.log' } }] },
+  ];
+  const parentScript = () => [
+    { toolCalls: [{ id: 'p1', name: 'cleaner', args: { input: 'delete old.log' } }] },
+    { toolCalls: [{ id: 'p2', name: 'respond', args: { response: 'Done.' } }] },
+  ];
+
+  it('is answered through the parent run\'s handle', async () => {
+    const deleted: string[] = [];
+    const llm = stubSignal(parentScript());
+    const parent = defineAgent({ id: 'boss', instructions: 'Delegate.', tools: [asTool(cleaner(deleted), { llm: stubSignal(childScript()), timeoutMs: 1_000 })] });
+    const asked: ReadonlyArray<string>[] = [];
+    const run = parent.run('go', {
+      llm,
+      onEvent: (event) => {
+        if (event.type === 'approval-required') {
+          asked.push(event.agentPath);
+          run.approve(event.approval.id);
+        }
+      },
+    });
+
+    const result = await run.result;
+    expect(result.ok).toBe(true);
+    expect(asked).toEqual([['boss', 'cleaner']]);
+    expect(deleted).toEqual(['old.log']);
+    expect(llm.requests[1]?.messages.find((m) => m.role === 'tool')?.content).toBe('deleted old.log');
+  });
+
+  it('is answered through the parent when a tool runs the agent itself and forwards its approvals', async () => {
+    const deleted: string[] = [];
+    const childLlm = stubSignal(childScript());
+    const agent = cleaner(deleted);
+    const runCleaner = defineTool({
+      id: 'cleaner',
+      name: 'cleaner',
+      description: 'Deletes files.',
+      timeoutMs: 1_000,
+      input: z.object({ input: z.string() }),
+      execute: async ({ input }, ctx) => {
+        const handle = agent.run(input, { llm: childLlm, signal: ctx.signal, agentPath: ctx.agentPath, onEvent: ctx.forward });
+        const stopForwarding = ctx.forwardApprovals?.(handle);
+        const result = await handle.result.finally(() => stopForwarding?.());
+        return result.ok ? result.output.response : 'failed';
+      },
+    });
+    const parent = defineAgent({ id: 'boss', instructions: 'Delegate.', tools: [runCleaner] });
+    const run = parent.run('go', {
+      llm: stubSignal(parentScript()),
+      onEvent: (event) => {
+        if (event.type === 'approval-required') run.approve(event.approval.id);
+      },
+    });
+
+    expect((await run.result).ok).toBe(true);
+    expect(deleted).toEqual(['old.log']);
   });
 });
