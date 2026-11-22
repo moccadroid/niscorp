@@ -1770,12 +1770,11 @@ policy. Any method other than `GET`/`POST`/`PATCH`/`DELETE` answers 405.
   principal → 403 `scope_denied`. 500s are the host's faults: `missing_scope`
   (key names stay in the log), an entry demanding a reach with no
   `policyForReach`, a mutation fingerprint on a handler with no `mutations`
-  configured, and unexpected errors — among them a database error the
-  caller's own value did not cause (division by zero in a compute, numeric
-  overflow, a bad stored value), and a write's context value that
-  does not fit its column. A read's context value that does not fit is a 400
-  `invalid_request` naming the key. The log line of an unexpected error carries
-  its code, message, SQL text and stack, never the statement's bound values.
+  configured, and unexpected errors, a context value that does not fit its
+  column among them. The log line of an unexpected error carries its code,
+  message and stack, and the SQL text where the driver's error carries it
+  (PGlite's does, node-postgres's does not); never the error object, which can
+  hold the statement's bound values.
 - **`PATCH`** with `{ fingerprint, protected }` → flip the protection bit.
   **`DELETE`** with `{ fingerprint }` → evict (a protected entry, read or mutation,
   is refused with 409 `fingerprint_protected`). Both are refused with 403 `locked` on a
@@ -1881,7 +1880,7 @@ handlers recognise both.
 
 | Code | Meaning |
 |------|---------|
-| `invalid_request` | The request failed Zod validation, or a read's context value does not fit the column it is bound to (Postgres names that bound parameter, e.g. `{ ids: 't1' }` on an `in` list): `details: { key, code }`, with the SQLSTATE in `code` |
+| `invalid_request` | The request failed Zod validation |
 | `invalid_dsl` | The analyzer rejected the resolved query (cartesian product, nesting, etc.) |
 | `missing_scope` | A `$scope` slot the host did not fill. The host's fault, not the request's: the HTTP handler answers 500 and keeps the key names in its log |
 | `scope_denied` | An entity is denied by the scope policy (`VexScopeError`). `err.entity` names the entity |

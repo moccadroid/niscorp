@@ -1,4 +1,4 @@
-import type { CompiledQuery, Row, DatabaseAdapter, BoundParams } from '../adapters/adapter.types.js';
+import type { CompiledQuery, Row, DatabaseAdapter } from '../adapters/adapter.types.js';
 import type { ContextMeta } from '../schemas/request.schema.js';
 import { resolveParams } from '../utils/context.js';
 import { VexError } from '../errors.js';
@@ -16,26 +16,7 @@ export const executeQuery = async (
     scope,
     embed,
   );
-  return runCompiled(adapter, compiled, boundParams);
-};
-
-// Postgres's error context for a value that does not fit its parameter: `unnamed portal parameter $2 = '...'`.
-const BOUND_PARAMETER = /portal (?:"[^"]*" )?parameter \$(\d+)/;
-
-const callerValueError = (err: unknown, compiled: CompiledQuery): VexError | undefined => {
-  const { where, code, message } = (err ?? {}) as { where?: unknown; code?: unknown; message?: unknown };
-  const at = typeof where === 'string' ? BOUND_PARAMETER.exec(where) : null;
-  const slot = at === null ? undefined : compiled.paramSlots[Number(at[1]) - 1];
-  if (slot?.kind !== 'context') return undefined;
-  return new VexError('invalid_request', `Context value "${slot.key}" does not fit its column: ${String(message)}`, { key: slot.key, code });
-};
-
-export const runCompiled = async (adapter: DatabaseAdapter, compiled: CompiledQuery, params: BoundParams): Promise<Row[]> => {
-  try {
-    return await adapter.execute(compiled, params);
-  } catch (err) {
-    throw callerValueError(err, compiled) ?? err;
-  }
+  return adapter.execute(compiled, boundParams);
 };
 
 export const buildContextContract = (

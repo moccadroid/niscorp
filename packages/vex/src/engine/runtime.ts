@@ -14,7 +14,7 @@ import { checkScope, scopeResolved, canReadTable } from '../scope/apply.js';
 import { behaviorColumns, scopeBindings } from '../scope/grants.js';
 import { resolve } from './resolver.js';
 import { analyze } from './analyzer.js';
-import { executeQuery, buildContextContract, findMissingContext, requireScope, runCompiled } from './executor.js';
+import { executeQuery, buildContextContract, findMissingContext, requireScope } from './executor.js';
 import { pruneOptional, presenceOf, presenceSignature, optionalKeysOf } from './optional.js';
 import { createMemoryCache } from '../cache/memory.js';
 import { computeSchemaFingerprint, computeRequestHash, computePolicyKey, mintFingerprint } from '../cache/hash.js';
@@ -563,7 +563,7 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
       // The compiled SQL and its bound values: scope is inside both, so two
       // callers share rows exactly when they would get the same rows.
       const key = canonicalHash([compiled.sql, params]);
-      const source: RowsSource = { tables: [...discoverEntities(shaped)], fetch: () => runCompiled(adapter, compiled, params) };
+      const source: RowsSource = { tables: [...discoverEntities(shaped)], fetch: () => adapter.execute(compiled, params) };
       const execStart = Date.now();
       const rows = await live.read(key, source);
       const executionMs = Date.now() - execStart;
