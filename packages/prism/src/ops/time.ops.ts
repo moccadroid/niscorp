@@ -14,6 +14,13 @@ dayjs.extend(utc);
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 const isDateOnly = (value: JsonValue): boolean => typeof value === 'string' && DATE_ONLY.test(value);
 
+// The machine's clock zone and its Intl data differ from one machine to the
+// next: an op that reads them refuses to be worked out ahead of time, and the
+// optimizer keeps it as an op, to be answered where it runs.
+export const notAheadOfTime = (context: EvalContext): void => {
+  if (context.folding === true) throw new Error('answered where it runs');
+};
+
 const ISO_FIELDS = /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2}))?)?/;
 const daysIn = (year: number, month: number): number => new Date(Date.UTC(year, month, 0)).getUTCDate();
 
@@ -39,6 +46,7 @@ const parseDate = (value: JsonValue, node: object, op: string, field: string, wr
 };
 
 export const opDate = (node: DateNode, context: EvalContext, evaluate: EvaluateFn): JsonValue => {
+  notAheadOfTime(context);
   const value = evaluate(node.$date.value, context);
   const d = parseDate(value, node, '$date', 'value', node.$date.value, '$date');
   const instance = node.$date.utc ? d.utc() : d;
@@ -47,6 +55,7 @@ export const opDate = (node: DateNode, context: EvalContext, evaluate: EvaluateF
 };
 
 export const opDateAdd = (node: DateAddNode, context: EvalContext, evaluate: EvaluateFn): JsonValue => {
+  notAheadOfTime(context);
   const value = evaluate(node.$dateAdd.date, context);
   const d = parseDate(value, node, '$dateAdd', 'date', node.$dateAdd.date, '$dateAdd');
   const moved = d.add(node.$dateAdd.amount, node.$dateAdd.unit);
@@ -54,6 +63,7 @@ export const opDateAdd = (node: DateAddNode, context: EvalContext, evaluate: Eva
 };
 
 export const opDateDiff = (node: DateDiffNode, context: EvalContext, evaluate: EvaluateFn): JsonValue => {
+  notAheadOfTime(context);
   const from = evaluate(node.$dateDiff.from, context);
   const to = evaluate(node.$dateDiff.to, context);
   const fromDate = parseDate(from, node, '$dateDiff', 'from', node.$dateDiff.from, '$dateDiff.from');

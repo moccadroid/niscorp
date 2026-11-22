@@ -224,7 +224,7 @@ const optimizeNode = (
     });
     if (allFoldable) {
       // Budgeted like any evaluation: a literal subtree can blow up too.
-      const emptyCtx: EvalContext = { source: {}, vars: {}, budget: createBudget() };
+      const emptyCtx: EvalContext = { source: {}, vars: {}, budget: createBudget(), folding: true };
       try {
         const folded = handler(optimized, emptyCtx, evaluate);
         const replacement: Record<string, unknown> = { $const: folded };

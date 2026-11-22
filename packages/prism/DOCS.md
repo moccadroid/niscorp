@@ -602,6 +602,8 @@ Powered by [dayjs](https://day.js.org/). Date values can be ISO 8601 strings or 
 
 An ISO date or time with a field out of range — `2026-02-30`, `2026-13-01`, `2026-02-29` in a common year, `T25:00`, a minute or second of `60` — is refused with `E_DATE_INVALID` by `$date`, `$dateAdd`, `$dateDiff` and `$localeDate`, instead of rolling over into a later date. `24:00:00` is read as ISO allows it, as the next midnight. Text that is not ISO-shaped (`"3/4/26"`, `"14 Mar 26"`, an RFC 2822 date) is read as the platform reads it, as before.
 
+**Worked out where it runs.** `$date`, `$dateAdd`, `$dateDiff`, `$localeDate`, `$localeMoney` and `$localeNumber` read the machine's clock zone or its `Intl` data, so neither `compile` nor a kept `evaluate` works them out ahead of time, even when every input is written in the config: a compiled IR keeps them as ops, and `execute` answers them on the machine it runs on, as `evaluate` there does.
+
 A date and time with no zone (`2026-01-01T09:00`) is read in the time zone of the machine that runs Prism: `$date` answers `2026-01-01T08:00:00.000Z` on a server in Vienna and `2026-01-01T17:00:00.000Z` in Los Angeles. A `format` without `utc: true` prints in that zone too: `2026-01-01T09:00Z` with `"format": "HH:mm"` is `10:00` in Vienna and `01:00` in Los Angeles. For the same answer on every server, write the zone into the value (`Z` or `+01:00`) and pass `utc: true` when formatting.
 
 ### `$date` — Format a date
@@ -711,7 +713,8 @@ fallback is the author's to write: for a zone that may be `null`,
 refused). A bad date is refused (`E_DATE_INVALID`) before the zone is looked
 at. A config with a bound zone compiles once: its fingerprint does not depend
 on the zone, and `execute` reads the zone from each source it is run on. A
-written zone is folded at compile time as before.
+written zone is kept for the run too, as every date and locale op is (see
+"Worked out where it runs" under Time Operations).
 
 **A locale, written or read, is a tag `Intl` can read.** One that is not text,
 or text `Intl` cannot read as a locale tag (`"en_GB"`, `"not a locale!"`), is
@@ -821,6 +824,8 @@ const result2 = execute(ir, source2); // Each op's handler already attached
 ```
 
 The IR is JSON-serializable — store it in a database, cache in Redis, send over a wire.
+
+The date and locale ops stay ops in the IR, even on written values: an IR compiled in Vienna and executed in Los Angeles answers in Los Angeles's zone, as `evaluate` there does. An IR stored by an earlier release keeps whatever it worked out then until it is compiled again.
 
 **A constant in an answer is frozen.** Every `execute` of an IR hands out the IR's own constants: a `$const` that is a list or an object, and anything the compiler worked out ahead of time because it did not depend on the source (`{ "$split": { "value": "a,b", "sep": "," } }` is a constant list). They are frozen, all the way down, so one caller cannot change what the next is given: `answer.tags.push(x)` on a list that came from `{ "$const": [] }` throws a `TypeError`. To change an answer, copy the part first (`[...answer.tags, x]`). Everything built for the call — a template's object, a `$map`'s list — is the caller's own. `evaluate` does not freeze: what it answers may be changed.
 

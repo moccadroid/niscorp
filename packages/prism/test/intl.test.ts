@@ -206,9 +206,10 @@ describe('$localeDate with a zone and a locale read from the source', () => {
     expect(() => execute(stored, { stamp, zone: 'Mars/Olympus', locale: 'en-GB' })).toThrow(PrismError);
   });
 
-  it('folds a written zone as before, and keeps a bound one for the run', async () => {
+  it('keeps a written zone and a bound one for the run: the words are the Intl data of the machine that runs it', async () => {
     const written = await compile({ when: { $localeDate: { value: stamp, locale: 'en-GB', options: { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Vienna' } } } });
-    expect(written.core).toEqual({ when: { $const: '23:30' } });
+    expect(written.meta.stats.optimizations.constantsFolded).toBe(0);
+    expect(execute(written, {})).toEqual({ when: '23:30' });
     // Value and locale written, so only the bound zone keeps it from folding.
     const bound = await compile({ when: { $localeDate: { value: stamp, locale: 'en-GB', options: { hour: '2-digit', minute: '2-digit', timeZone: { $ref: '$.zone' } } } } });
     expect(bound.meta.stats.optimizations.constantsFolded).toBe(0);
