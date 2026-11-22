@@ -1,5 +1,136 @@
 # @niscorp/nisc
 
+## 0.11.0
+
+### Minor Changes
+
+- 87fc927: BREAKING — approved by moccadroid (owner), 2026-11-22: every @niscorp package in this release moves one minor version together; read `UPGRADING.md` and do its "Do these before you upgrade" list before moving.
+
+  `UPGRADING.md` says, package by package, what an app sees change in this release and what to do before upgrading.
+
+### Patch Changes
+
+- 145b5af: Rule 16 in `AGENTS.md` names `<const>` beside `as const` as the one assertion allowed, as the shape check now reads it.
+- 7842b56: `CHANGING_A_PACKAGE.md` says which packages `check:modules` covers: moss, cli and create-nisc.
+  `STYLE_GUIDE.md` and `REVIEW.md` are reworded in places; no rule changes.
+  `AGENTS.md`'s app layout says every `nisc` command reads `nisc.config.ts`, not only the ones that draw pages.
+  `AGENTS.md` and `CHANGING_A_PACKAGE.md` name `STYLE_GUIDE.md` as the file beside them, true in the repository and in `node_modules`. `AGENTS.md` names the write verbs (`todos.write.update`, not `todos.update`), says how Prism and a binding each index a list, names the app's own boot where it named `createAppShell(deps)`, which no package exports, and says what vex's `seedCache` does not do for a degrade app; its worked example shows a refused write.
+- b18f9d3: `AGENTS.md` reads as short numbered points instead of long paragraphs, its worked example now obeys every rule it states, and the commands it names are the ones an app actually has. The part for whoever changes a package is now `CHANGING_A_PACKAGE.md`, beside it (moss's `DESIGN.md` points there).
+- Updated dependencies [092b5f1]
+- Updated dependencies [c9158e2]
+- Updated dependencies [74a9a7a]
+- Updated dependencies [16f8bf2]
+- Updated dependencies [f4341b9]
+- Updated dependencies [6b9b449]
+- Updated dependencies [13465d1]
+- Updated dependencies [7842b56]
+- Updated dependencies [a8a9684]
+- Updated dependencies [48138de]
+- Updated dependencies [da3037e]
+- Updated dependencies [e957628]
+- Updated dependencies [c30562a]
+- Updated dependencies [efd2368]
+- Updated dependencies [ca26810]
+- Updated dependencies [800a541]
+- Updated dependencies [9c5367b]
+- Updated dependencies [322f241]
+- Updated dependencies [1135474]
+- Updated dependencies [17614f1]
+- Updated dependencies [16ed5d1]
+- Updated dependencies [92e5048]
+- Updated dependencies [5ba5973]
+- Updated dependencies [4b55797]
+- Updated dependencies [8d3d2c6]
+- Updated dependencies [e11c912]
+- Updated dependencies [7692665]
+- Updated dependencies [be6cc14]
+- Updated dependencies [d3fadac]
+- Updated dependencies [adba9b1]
+- Updated dependencies [29e51ec]
+- Updated dependencies [23c4613]
+- Updated dependencies [1e228d3]
+- Updated dependencies [4b7d4a4]
+- Updated dependencies [bf72478]
+- Updated dependencies [e1db181]
+- Updated dependencies [241bd4d]
+- Updated dependencies [9f8e4b5]
+- Updated dependencies [1b615d6]
+- Updated dependencies [e7edd95]
+- Updated dependencies [0a46ff6]
+- Updated dependencies [59f314a]
+- Updated dependencies [281108e]
+- Updated dependencies [b233463]
+- Updated dependencies [e2b9595]
+- Updated dependencies [7aef6a7]
+- Updated dependencies [79cf65c]
+- Updated dependencies [e828562]
+- Updated dependencies [6b01a50]
+- Updated dependencies [6eef458]
+- Updated dependencies [a41edf9]
+- Updated dependencies [eb4ffb9]
+- Updated dependencies [ae647e8]
+- Updated dependencies [2effb54]
+- Updated dependencies [bd996ea]
+- Updated dependencies [180787b]
+- Updated dependencies [d53910e]
+- Updated dependencies [276f457]
+- Updated dependencies [413afbd]
+- Updated dependencies [1f6d37d]
+- Updated dependencies [d77baf9]
+- Updated dependencies [3f92c52]
+- Updated dependencies [841c010]
+- Updated dependencies [d93170b]
+- Updated dependencies [b18f9d3]
+- Updated dependencies [d85bab1]
+- Updated dependencies [aeaf803]
+- Updated dependencies [2b174f8]
+- Updated dependencies [df79faf]
+- Updated dependencies [133c0ee]
+- Updated dependencies [543f79d]
+- Updated dependencies [4f89d7d]
+- Updated dependencies [d951434]
+- Updated dependencies [b210b56]
+- Updated dependencies [f61ffdd]
+- Updated dependencies [88f93c0]
+- Updated dependencies [c5aea8b]
+- Updated dependencies [9899bd7]
+- Updated dependencies [61b15e4]
+- Updated dependencies [7e8f6d4]
+- Updated dependencies [5c52ef5]
+- Updated dependencies [66eb934]
+- Updated dependencies [909ae6b]
+- Updated dependencies [5eb6e6c]
+- Updated dependencies [1c2b7ce]
+- Updated dependencies [069efde]
+- Updated dependencies [85f1536]
+- Updated dependencies [d7f10ac]
+- Updated dependencies [8bf0c30]
+- Updated dependencies [9e5c5e3]
+- Updated dependencies [8b4d6cd]
+- Updated dependencies [4c6300e]
+- Updated dependencies [be6e7af]
+- Updated dependencies [b1e314e]
+- Updated dependencies [d8dc7d9]
+- Updated dependencies [b2b2d8d]
+- Updated dependencies [f995714]
+- Updated dependencies [df44b8e]
+- Updated dependencies [a002748]
+- Updated dependencies [2233113]
+- Updated dependencies [04f5821]
+  - @niscorp/charter@0.2.0
+  - @niscorp/cli@0.10.0
+  - @niscorp/cortex@0.2.0
+  - @niscorp/haptic@0.3.0
+  - @niscorp/loom@0.6.0
+  - @niscorp/moss@0.10.0
+  - @niscorp/nova@0.6.0
+  - @niscorp/prism@0.4.0
+  - @niscorp/signal@0.2.0
+  - @niscorp/solid@0.2.0
+  - @niscorp/strata@0.2.0
+  - @niscorp/tide@0.2.0
+  - @niscorp/vex@0.5.0
+
 ## 0.10.0
 
 ### Minor Changes

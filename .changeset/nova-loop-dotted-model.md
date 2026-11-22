@@ -1,7 +1,0 @@
----
-"@niscorp/nova": minor
----
-
-BREAKING — approved by moccadroid (owner), 2026-11-22: nothing unless a layout inside a loop writes through `model: '$.<as>.…'`, `'$.items'` or `'$.index'` and relied on the write landing on a root key of that name.
-
-Inside a loop, a `model` written with `$.` writes where it reads: `model: '$.line.qty'` (with `as: 'line'`) writes the row it shows (`lines.0.qty`), where it wrote a root `line.qty` that no field shows. `model: '$.index'` binds nothing, as `model: '$index'` already did, where it wrote a root `index` while showing the loop index. A nested loop over `$.<as>.…` (`for: '$.g.items'` inside `for: '$.groups', as: 'g'`) binds its models into each group (`groups.1.items.0.v`), where every group bound `g.items.0.v`. What every layout shows is unchanged.

@@ -1,5 +1,109 @@
 # @niscorp/loom
 
+## 0.6.0
+
+### Minor Changes
+
+- 17614f1: BREAKING — approved by moccadroid (owner), 2026-11-22: nothing unless a host relied on an emptied number box writing `null` for a number whose schema does not take `null`; the key is now absent (a host that saves on change stores it as missing).
+
+  Emptying a number box leaves the number absent, so `z.number().optional()` accepts the document; it wrote `{"qty": null}`, which the schema refused. A number whose schema takes `null` (`.nullable()`) still gets `null`. `parse` marks such a field `nullable: true` (a new optional key on `FieldMeta`), `toNova` passes `nullable` and `integer` to `loom:number`, and the kit's number box steps by 1 for an integer and by any amount otherwise.
+
+- 16ed5d1: BREAKING — approved by moccadroid (owner), 2026-11-22: nothing unless a host relied on the form of an object with a key that has a dot in it (`{ "a.b": string }`); its controls showed nothing and wrote `{ a: { b: … } }`.
+
+  An object with a key that has a dot in it is edited as JSON. It compiles to the raw JSON box (`loom:raw`) bound where the object stands, so an edit writes the right keys; `createLoomEditor` wraps such a root document as it wraps a non-object root. `toNova` used directly at the root without `rootKey` keeps the old form, as there is nothing to bind the box to: pass `rootKey`.
+
+- 92e5048: BREAKING — approved by moccadroid (owner), 2026-11-22: nothing unless a host relied on the built-in select displaying its first option for an enum with no value (a test that reads the select's value, say); documents do not change.
+
+  A select whose value is none of its options shows a disabled "—" row, where it displayed the first option although the document had no value; choosing that first option then wrote nothing, as it was no change. Every real option is now a change and is written. The README note "A select has no row for "none"" is gone.
+
+- 5ba5973: BREAKING — approved by moccadroid (owner), 2026-11-22: nothing unless a host relied on a `z.literal` field compiling to a raw JSON box that starts at `null`, or reads the `Field` model `parse` exports (a literal is now `{ kind: "enum", options, default }`, where it was `{ kind: "unknown" }`).
+
+  A `z.literal` field is a select of its value (or values) and starts at the first. A plain `z.union` of literal-tagged objects used to start with `{ kind: null, radius: 0 }`, which no branch accepts; it now starts with `{ kind: "circle", radius: 0 }`.
+
+- 4b55797: BREAKING — approved by moccadroid (owner), 2026-11-22: nothing unless a host relied on a newly chosen Prism op in the editor getting its optional arguments filled in, on `includeOptional: false` or `empty` being ignored inside union branches, or on the exact `loom:field` node of an optional field (it now has a `model` and an `optional: true` prop; a host kit that registers its own `loom:field` gets them and can ignore them).
+
+  An optional field can be removed. Its `loom:field` wrapper is bound to the field's value and carries `optional: true`, and the kit's `LoomField` shows a Remove link beside the label while the field has a value; Remove writes the field back to absent, so `.optional()` accepts the document. The controls show as before, and typing into them adds the field again. `toNova`'s `includeOptional` and `empty` now apply inside union branches as well (`{ shape: { kind: "a" } }` with `includeOptional: false`, where it was `{ kind: "a", note: "" }`). In the Prism plugin a newly chosen op starts with its required arguments only — `$localeMoney`, `$localeDate` and `$round` start as `{}`, `$sortBy` as `{ as: "" }` — where it got `minorUnits: false, digits: 0`, `hour12: false, timeZone: ""` and the like, which changed what the op did; an optional argument that has a value shows a Remove link.
+
+- 7692665: BREAKING — approved by moccadroid (owner), 2026-11-22: nothing unless a host relied on a union showing its first branch for a stored value no branch recognises, or reads the `Field` model `parse` exports and relied on a branch's `key` pattern naming an optional key where the branch also has a required unique one.
+
+  A union shows the branch the value is, or shows the value as JSON. A stored value whose tag no branch has (`kind: "triangle"`) was labelled with the first branch, and editing wrote that branch's fields into it; with no fallback branch it now chooses none — the chooser shows "—" and the value is shown in the JSON editor until a branch is chosen. A structural union tells its branches apart by a key each requires, before an optional one, so `{ a: "x", t: "y" }` shows the second branch of `z.union([{ a: number, b?: number }, { a: string, note?: string, t: string }])`, not the first. A union of `z.lazy` branches is a union with a chooser, not a raw JSON box.
+
+### Patch Changes
+
+- 8d3d2c6: Compiling a schema no longer crashes on a field whose own code throws on a missing value (a `z.preprocess` that trims its input): such a field is required.
+
+  A field named `toString` or `constructor` shows its validation message; the error tree read and wrote inherited names, so the message never appeared.
+
+  `onChange` and the editor's `change` event fire once for an edit the validation answers, where they fired twice with the same values (once for the edit, once for the validation it wrote back). Every other write is one call, as before.
+
+  The README says how to use `toNova` and `attachValidation` directly with a schema that has a top-level `_errors` field: compile it with `rootKey`, as the editor does.
+
+  The kit and the reference plugins draw their colours from CSS variables (`--loom-border`, `--loom-danger` and 23 more, listed in the README), each falling back to the colour used today, so nothing looks different until a host sets one.
+
+- e11c912: Renaming a key to a name another entry has (a prism template field, a vex aggregate or compute alias) no longer deletes the other entry: what was typed stays on screen with "… is already a key" under it, and the rename is written once the name no longer clashes; "Add" in the vex aggregate and compute widgets picks a free alias; a vex compute operand can be typed as a decimal ("1." stays on screen).
+
+  The prism node chooser lists every prism op under a category, taken from prism's own example groups, so `$fill`, `$has`, `$walk`, the locale ops and others are no longer missing from it.
+
+  Two recursive documents in one plugin each render their own nested levels: a recursive template is named after its action (`loom:tree:<action id>:<n>`) instead of `loom:tree:<n>`.
+
+  A document with a top-level field named `_errors` keeps that field in the editor: it is no longer stripped, overwritten by the error tree and reported missing.
+
+  A stored document whose root is not an object (a list, a scalar, a tuple, a union) opens as it was stored even when its schema refuses it, as an object document already did; validation flags it. It used to open the schema's defaults, which a host saving on change wrote over the stored document.
+
+  `<LoomEditor>` calls the `onChange` of its latest render, not the one it mounted with.
+
+  A field with two defaults starts at the one zod applies (`.default('a').default('b')` starts at `'b'`), and a discriminated union branch whose discriminator is an enum is tagged with the first value of that enum instead of `undefined`.
+
+  `LoomEditorPlugin` is now written as `LoomPlugin` plus `components`, the same shape it had.
+
+  A stored document opens on the branch of a discriminated union whose discriminator allows its value, when that discriminator is an enum (`kind: 'box'` for `z.enum(['square', 'box'])`); a tag `Pattern` lists every allowed value in a new optional `values`. The README says a key with a dot in it is not edited correctly, which needs a change in Nova.
+
+- Updated dependencies [4b7d4a4]
+- Updated dependencies [bf72478]
+- Updated dependencies [e1db181]
+- Updated dependencies [241bd4d]
+- Updated dependencies [9f8e4b5]
+- Updated dependencies [1b615d6]
+- Updated dependencies [e7edd95]
+- Updated dependencies [0a46ff6]
+- Updated dependencies [59f314a]
+- Updated dependencies [281108e]
+- Updated dependencies [b233463]
+- Updated dependencies [e2b9595]
+- Updated dependencies [7aef6a7]
+- Updated dependencies [79cf65c]
+- Updated dependencies [e828562]
+- Updated dependencies [6b01a50]
+- Updated dependencies [6eef458]
+- Updated dependencies [a41edf9]
+- Updated dependencies [eb4ffb9]
+- Updated dependencies [ae647e8]
+- Updated dependencies [2effb54]
+- Updated dependencies [bd996ea]
+- Updated dependencies [180787b]
+- Updated dependencies [d53910e]
+- Updated dependencies [276f457]
+- Updated dependencies [413afbd]
+- Updated dependencies [1f6d37d]
+- Updated dependencies [d77baf9]
+- Updated dependencies [3f92c52]
+- Updated dependencies [841c010]
+- Updated dependencies [d93170b]
+- Updated dependencies [8b4d6cd]
+- Updated dependencies [4c6300e]
+- Updated dependencies [be6e7af]
+- Updated dependencies [b1e314e]
+- Updated dependencies [d8dc7d9]
+- Updated dependencies [b2b2d8d]
+- Updated dependencies [f995714]
+- Updated dependencies [df44b8e]
+- Updated dependencies [a002748]
+- Updated dependencies [2233113]
+- Updated dependencies [04f5821]
+  - @niscorp/nova@0.6.0
+  - @niscorp/prism@0.4.0
+  - @niscorp/vex@0.5.0
+
 ## 0.5.0
 
 ### Minor Changes

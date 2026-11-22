@@ -1,5 +1,53 @@
 # @niscorp/haptic
 
+## 0.3.0
+
+### Minor Changes
+
+- 1135474: BREAKING — approved by moccadroid (owner), 2026-11-22: nothing unless an app passes `prepareArtifact` an artifact whose `stamp` has an entry that is not a number of migrations (`{ "nisc.haptic": "v0" }`); it now throws `ArtifactError` with code `UPGRADE`, where it accepted the artifact unmigrated.
+
+  `prepareArtifact` refuses an artifact whose `stamp` entry for `nisc.haptic` or `nisc.prism` reads as no number, with `ArtifactError('UPGRADE')` and strata's sentence ("The stamp's entry for nisc.haptic is \"v0\": not a number of migrations."). It read such an entry as current and ran no migration. Stamps haptic writes are always numbers.
+
+### Patch Changes
+
+- Updated dependencies [48138de]
+- Updated dependencies [da3037e]
+- Updated dependencies [e957628]
+- Updated dependencies [c30562a]
+- Updated dependencies [efd2368]
+- Updated dependencies [ca26810]
+- Updated dependencies [800a541]
+- Updated dependencies [9c5367b]
+- Updated dependencies [322f241]
+- Updated dependencies [a41edf9]
+- Updated dependencies [eb4ffb9]
+- Updated dependencies [ae647e8]
+- Updated dependencies [2effb54]
+- Updated dependencies [bd996ea]
+- Updated dependencies [180787b]
+- Updated dependencies [d53910e]
+- Updated dependencies [276f457]
+- Updated dependencies [413afbd]
+- Updated dependencies [1f6d37d]
+- Updated dependencies [d77baf9]
+- Updated dependencies [3f92c52]
+- Updated dependencies [841c010]
+- Updated dependencies [d93170b]
+- Updated dependencies [d85bab1]
+- Updated dependencies [aeaf803]
+- Updated dependencies [2b174f8]
+- Updated dependencies [df79faf]
+- Updated dependencies [133c0ee]
+- Updated dependencies [543f79d]
+- Updated dependencies [61b15e4]
+- Updated dependencies [7e8f6d4]
+- Updated dependencies [5c52ef5]
+- Updated dependencies [66eb934]
+  - @niscorp/cortex@0.2.0
+  - @niscorp/prism@0.4.0
+  - @niscorp/signal@0.2.0
+  - @niscorp/strata@0.2.0
+
 ## 0.2.0
 
 ### Minor Changes

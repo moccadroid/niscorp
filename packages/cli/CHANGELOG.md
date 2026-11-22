@@ -1,5 +1,67 @@
 # @niscorp/cli
 
+## 0.10.0
+
+### Minor Changes
+
+- 16f8bf2: BREAKING — approved by moccadroid (owner), 2026-11-22: nothing, unless an export on Windows relied on a path such as `/a\..\..\x` writing its file outside the export's folder.
+
+  `nisc export` writes every file into a fresh folder first (`.nisc-export-<process>-<id>`: for `out/`, in `node_modules/.cache/nisc/`, where git does not look; for a folder named with `--out`, inside it), and touches the export's folder only when every file was made. A path whose file the system will not make (on Windows, `/a:b`) or whose file would land outside the export's folder (on Windows, `/a\..\..\x`) is now said — `nisc: the path "/a:b" cannot be written here (ENOENT). Nothing was written.` — with exit code 1 and the folder as it was. Before, `/a:b` emptied `out/`, wrote part of the site and ended on a raw stack; `/a\..\..\x` wrote outside the folder (with the default `out/`, into the app's own folder) and exited 0. A write that fails for another reason, such as a full disk, says `nisc: the export could not be written into <out> (ENOSPC on <file>). Nothing already in it was changed.` The default `out/` is then emptied and copied from the build, with the same files and modes; a `.nisc-export-…` folder a killed export leaves is removed by the next export.
+
+- f4341b9: BREAKING — approved by moccadroid (owner), 2026-11-22: a build step that relied on `nisc export --out <dir>` emptying that folder empties it itself before the export; the default `out/` is unchanged.
+
+  `nisc export --out <dir>` no longer empties the folder it is given. It removes only the files the previous export wrote there, recorded in `node_modules/.cache/nisc/exports.json`, then writes the new export; everything else in the folder (a `.git`, a notes file) stays and is named on one line each run. The default `out/` is emptied and written exactly as before, also when named with `--out out` or, on Windows and macOS, `--out OUT`. For a folder named with `--out`: the export is first written whole into a folder of its own inside it, so a file that cannot be made changes nothing already there; removal goes by real location, so a link in the folder is removed as a link and never written or deleted through; `--out` is also refused when where it points is the app, above it, or the build; if the record cannot be written, the export still finishes and says the next export will remove none of it. What changes for a folder named with `--out`: files an older export left there, before the record or without it (a fresh CI checkout), are named on every run instead of removed; a file another step put in the folder survives the next export; a link named with `--out` is written into, where it used to be replaced by a folder; a file at the `--out` path, or a folder with files of its own where the export writes a file, is said and nothing is written, where both used to be replaced; a kill during an export can leave a `.nisc-export-…` folder in it until the next export removes it.
+
+- 6b9b449: BREAKING — approved by moccadroid (owner), 2026-11-22: nothing, unless something relied on a repeated `immutable` answer from `nisc start` being the first answer's bytes, sent with a `content-length`.
+
+  `nisc start` no longer remembers compressed answers. It used to keep every compressed answer marked `immutable` by path and `last-modified` — not by query — so an app route answering `immutable` by `?user=` gave the second person the first person's body (`/thumb?user=bob` got Alice's thumbnail). Every answer is now compressed as it streams, as every other answer already was: the bytes a browser decodes are the same, a repeated asset answer comes without `content-length`, and it costs the compression again: about 9–11 ms for a 0.5–0.6 MB bundle and 19 ms for 2.3 MB, where answering from the remembered bytes took 0.4–0.7 ms — once per new browser, since `/assets/` files are kept a year.
+
+- a8a9684: BREAKING — approved by moccadroid (owner), 2026-11-22: nothing, unless an app's `allow.style` names a file only because of a `<const>` assertion — that allowance now fails as allowing nothing; delete it.
+
+  The shape check (`@niscorp/cli/shape`) also asks the compiler what each name refers to, and prints an `[info]` line — file, line and rule — for a reach its rules miss because it is spelt another way: `const { roles } = session`, `const { NumberFormat } = Intl`, `new globalThis.Intl.DateTimeFormat()`, `const { pathname } = window.location`, `window['document'].querySelector(…)`, and a function of `src/app/` reached through a namespace import, a re-export or a dynamic import. A name read only as a type (`import type`, `typeof`, `export type`) is not reported. Such a line is left out when a rule already fails the same name in that file, or when `allow` names that file for that rule. The exit code is unchanged: these spellings are reported, not failed, and the README now says which spellings fail. `<const>[...]` passes rule 16, as `as const` does.
+
+### Patch Changes
+
+- 13465d1: `nisc export --out` refuses a folder that is the app's, one above it, or the build, instead of deleting it.
+  `nisc start` on a port that is taken, or given a `--port` or `$PORT` that is not a port, says so in a sentence instead of crashing with Node's own error.
+  An error thrown by the app's own code (its `boot`, its config) is printed with its stack, so it says where it was thrown; the command's own refusals stay one sentence.
+- 7842b56: The command's source is made of modules (`command`, `project`, `build`, `serve`, `dev`, `migrate`, `shape`); its commands, exports and built files are the same.
+  Three printed lines are worded plainly: an own-shell export that writes nothing says `N of M paths failed a check`, the build's legend says `✗  not written: a check failed`, and the build says `public/assets/ has files of your own`. Exit codes and files are the same.
+  `nisc export` on an app behind moss names a path that could not be drawn on a line of its own, and offers `--allow-live` only for the paths that want a server; with `--allow-live` it says which paths were written as the undrawn template. Exit codes and files are the same.
+  `nisc migrate` (and `--check`, `--status`) on a runtime that says `migrations: 'apply'` prints first that its database starts empty every time, so what it applies is gone when the command ends. Everything after that line is as before.
+  `nisc start` with `PORT` set but empty says that it is read as 0, any free port; the port is the same as before.
+  `nisc start` on an app with its own shell answers an address that does not decode to a path (`/%`, `/%E0%A4%A`, one with `%00`) with a 400 `not a path`, where it answered 500.
+  `nisc build` on an app behind moss names, after the route table, what its charter does not read as written (a misspelt key such as `denny`), one line each. The exit code is the same.
+  The README says to add `@niscorp/cli` as a dependency when `nisc start` serves the app, with what `nisc.config.ts` imports.
+- Updated dependencies [be6cc14]
+- Updated dependencies [d3fadac]
+- Updated dependencies [adba9b1]
+- Updated dependencies [29e51ec]
+- Updated dependencies [23c4613]
+- Updated dependencies [1e228d3]
+- Updated dependencies [4b7d4a4]
+- Updated dependencies [bf72478]
+- Updated dependencies [e1db181]
+- Updated dependencies [241bd4d]
+- Updated dependencies [9f8e4b5]
+- Updated dependencies [1b615d6]
+- Updated dependencies [e7edd95]
+- Updated dependencies [0a46ff6]
+- Updated dependencies [59f314a]
+- Updated dependencies [281108e]
+- Updated dependencies [b233463]
+- Updated dependencies [e2b9595]
+- Updated dependencies [7aef6a7]
+- Updated dependencies [79cf65c]
+- Updated dependencies [e828562]
+- Updated dependencies [6b01a50]
+- Updated dependencies [6eef458]
+- Updated dependencies [b18f9d3]
+- Updated dependencies [8b4d6cd]
+- Updated dependencies [b1e314e]
+  - @niscorp/moss@0.10.0
+  - @niscorp/nova@0.6.0
+
 ## 0.9.1
 
 ### Patch Changes
