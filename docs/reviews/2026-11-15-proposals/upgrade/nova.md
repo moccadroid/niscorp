@@ -110,7 +110,7 @@ Each section is one change an app can see, in `@niscorp/nova`. None of them chan
 
 ### nova — in strict mode, a subscriber that throws is reported (`HANDLER_FAILED`)
 - Before: `createShell({ strict: true, onError })`, then `shell.onStateChange(() => { throw new Error('x') })` and a push: the error was caught and dropped without a trace. The same for the shell's data and endpoint listeners, handlers on its buses, and a runtime's `onDataChange`/`onStatusChange` handlers.
-- Now: in a strict shell, `onError` receives a `NovaError` with code `HANDLER_FAILED` and message `x`; the push (or write) still completes and the other handlers still run. Lax shells report nothing, as before, and a bus the app hands in (`eventBus`, `messageBus` in the shell config) is left as it is. `createEventBus`, `createMessageBus` and `createDataStore` accept an optional `{ onHandlerError }`. The exported `ErrorCodes` gains `handlerFailed`, and the `ErrorCode` type `'HANDLER_FAILED'`.
+- Now: in a strict shell, `onError` receives a `NovaError` with code `HANDLER_FAILED` and message `x`; the push (or write) still completes and the other handlers still run. Lax shells report nothing, as before, and a bus the app hands in (`eventBus`, `messageBus` in the shell config) is left as it is. The exported `ErrorCodes` gains `handlerFailed`, and the `ErrorCode` type `'HANDLER_FAILED'`.
 - Who notices: strict shells whose subscribers throw; code that switches exhaustively over `ErrorCode`.
 - An `onError` that throws (`(e) => { throw e }`) changes nothing: the throw goes no further, and the step, the push or the next handler runs as it did before this change.
 - What to do: nothing; handle the new code if `onError` switches over codes.
