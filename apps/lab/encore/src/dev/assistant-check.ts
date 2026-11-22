@@ -121,11 +121,17 @@ const main = async (): Promise<void> => {
 
   const runningWrites: number[] = [];
   let lastWritten = '';
+  const placed = new Set<string>();
   shell.onDataChange(({ instanceId, data }) => {
     const card = shell.getState().canvases['assist']?.stack.find((item) => item.id === instanceId);
     const written = JSON.stringify([data['status'], data['say'], data['answer'], data['lookups']]);
     if (card === undefined || written === lastWritten) return;
     lastWritten = written;
+    // A card is on its canvas while it mounts: its first write is the input it was placed with, not the run's.
+    if (!placed.has(instanceId)) {
+      placed.add(instanceId);
+      return;
+    }
     if (data['status'] === 'running') runningWrites.push(performance.now());
   });
   await loop?.newThread();
