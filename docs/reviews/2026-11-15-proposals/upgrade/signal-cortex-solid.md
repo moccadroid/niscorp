@@ -4,7 +4,7 @@ What an app sees after upgrading `@niscorp/signal`, `@niscorp/cortex` and `@nisc
 
 Apps checked: the lab apps in this repo (`apps/lab/*`) and, read only, `AnimaApp`, `anima-finance` and `mira`. All three outside apps are on `@niscorp/signal` 0.1.9 and `@niscorp/cortex` 0.1.6 (which brings `@niscorp/solid` 0.1.3), run Groq through cortex, and use no `onToolResult`, `resumeRun`, `asTool`, `createManifold`, `.apiKey()`, `complete()`, `stream()` or `createStream` of their own.
 
-No lab app had to change. lyceum's `check` passes and relay typechecks as they are. encore's `check` passes everywhere but its scenes-check, which stops on a prism `$join` refusal inside encore's own vex entry `impact/stageDay` (`$join.parts needs items that are text … but item 0 is a list`); that is prism, which these changes do not touch.
+No lab app had to change. lyceum's `check` passes and relay typechecks as they are. encore's `check` passes everywhere but its scenes-check, which stops on a prism `$join` refusal inside encore's own vex entry `impact/stageDay` (`$join.parts needs items that are text … but item 0 is a list`); that is prism, which these changes do not touch, and 4268d9f6 stops at the same place.
 
 ---
 
@@ -12,26 +12,26 @@ No lab app had to change. lyceum's `check` passes and relay typechecks as they a
 
 ### signal — a result says how the reply ended
 - Before: `complete()` on a reply the provider cut off (`{"items":["alpha","beta","gam` with finish reason `length`) returned `{ items: ["alpha","beta"] }`, and nothing said the reply had been cut. A `step()` result's `wire` was `{ rung: "close-truncated" }`.
-- Now: the same answer, plus `meta.finishReason: "length"`. A `step()` or `stepStream()` result rescued from a cut reply carries `wire: { rung: "close-truncated", truncated: true }`. Every `complete()` and `stream()` result has `meta.finishReason` (the last reply's: `stop`, `length`, `content_filter`, `tool_calls`, …).
+- Now: the same answer, plus `meta.finishReason: "length"`. A `step()` or `stepStream()` result rescued from a cut reply carries `wire: { rung: "close-truncated", truncated: true }`. Every `complete()` and `stream()` result has `meta.finishReason` (the last reply's: `stop`, `length`, `content_filter`, `tool_calls`, …). It is `error_recovered` when the last reply was recovered from a provider's rejection: that value is signal's own, not a provider's. An output rescued from an attempt a rejection carried cut short (a Groq `failed_generation` with its JSON open) is marked `wire.truncated` too.
 - Who notices: code that compares a whole `meta` or `wire` object for equality.
 - What to do: nothing. To act on a cut reply, read `meta.finishReason` or `wire.truncated`.
 - Breaking: no (new fields).
 
 ### signal — refusing a cut-off reply is an opt-in, `refuseCutOff`
 - Before: a cut reply whose JSON could be closed was always accepted as far as it was written.
-- Now: the same by default. With `createSignal(provider, { refuseCutOff: true })`, `complete()` and `stream()` treat a reply cut off (`length` or `content_filter`) while its JSON was still open as a failed attempt and retry it, sending the model `the reply was cut off (finish reason "length") before its JSON closed. It began: …`. A caller's own loop sets `output.refuseCutOff: true` on `step()` and gets `outcome: { kind: 'failed', truncated: true, evidence }`. A reply that ended with `stop`, or whose JSON closed before the cut prose, is never refused.
+- Now: the same by default. With `createSignal(provider, { refuseCutOff: true })`, `complete()` and `stream()` treat a reply cut off (`length` or `content_filter`) while its JSON was still open, and an output attempt a provider's rejection carried cut short (a Groq `failed_generation` from `json_validate_failed`, or a call to the exit tool), as a failed attempt and retry it, sending the model `the reply was cut off (finish reason "length") before its JSON closed. It began: …`. A caller's own loop sets `output.refuseCutOff: true` on `step()` and gets `outcome: { kind: 'failed', truncated: true, evidence }`. A reply that ended with `stop`, or whose JSON closed before the cut prose, is never refused.
 - Who notices: nobody until they set the option.
 - What to do: nothing. Set `refuseCutOff: true` where cut data must not pass.
 - Breaking: no.
 
 ### signal — a Groq tool call cut inside its arguments is not run
 - Before: Groq rejected a tool call with `tool_use_failed` and its attempt `{"name":"transfer","arguments":{"to":"acct-1","amount":10` (the model was writing 1000). signal closed it and ran `transfer({ to: "acct-1", amount: 10 })`.
-- Now: the arguments go on as the text they are, the tool's input check fails, the model is told `error: input_invalid: …` and calls again. An attempt missing only its outer `}` (`{"name":"transfer","arguments":{"to":"acct-1","amount":1000}`) runs as before, with 1000.
+- Now: the arguments go on as the text they are, the tool's input check fails, the model is told `error: input_invalid: …` and calls again. An attempt whose arguments are whole runs as before, with 1000: one missing only its outer `}` (`{"name":"transfer","arguments":{"to":"acct-1","amount":1000}`), or cut in a key or value after the arguments (`…"amount":1000},"` or `…"amount":1000},"id":"call_1`).
 - Who notices: any app that runs tools on Groq through signal or cortex (the `failed-generation` strategy is on by default for `'groq'`), in the rare turn where Groq cuts the attempt inside the arguments. That turn now costs one more model call instead of running the tool with cut arguments.
 - What to do: nothing.
 - Breaking: yes (pending consolidation).
 - Affected apps: no code changes anywhere; the turns above behave differently.
-  - lab: lyceum (`apps/lab/lyceum/src/server/assistant/orchestrator.ts:21`, `src/server/screens/agent.ts:126`, `src/server/querying.ts:39`), encore (`apps/lab/encore/src/server/agent/llm.ts:43`), relay (`apps/lab/relay/src/server/llm/groq.ts:29`).
+  - lab: lyceum (`apps/lab/lyceum/src/server/assistant/orchestrator.ts:21`, `src/server/screens/agent.ts:126`, `src/server/querying.ts:39`), encore (`apps/lab/encore/src/server/agent/llm.ts:43`), relay (`apps/lab/relay/src/server/llm/groq.ts:29`), atrium (`apps/lab/atrium/src/server/assistant/llm.ts:48`, when its provider is `'groq'`).
   - outside: mira (`src/server/models/index.ts:42`), AnimaApp (`src/server/models/index.ts:17`), anima-finance (`src/server/models/index.ts:14`).
 
 ### signal — two tool calls streamed at one index stay two calls
@@ -64,7 +64,7 @@ No lab app had to change. lyceum's `check` passes and relay typechecks as they a
 
 ### cortex — `output.refuseCutOff` on an agent
 - Before: an `emit` agent whose reply was cut at `{"data":{"picks":["a","b","c` (finish `length`) returned `ok` with `{ picks: ["a","b"] }`.
-- Now: the same by default. With `output: { schema, refuseCutOff: true }` the run corrects the model (a `retry` event of kind `termination` with the evidence) and returns the whole data from the next reply. An older signal ignores the option.
+- Now: the same by default. With `output: { schema, refuseCutOff: true }` the run corrects the model (a `retry` event of kind `termination` with the evidence) and returns the whole data from the next reply. The same holds for an attempt a Groq rejection carried cut short (`{"name":"respond","arguments":{"data":{"picks":["a","b","c`): with the option it is retried (a `retry` of kind `provider`), without it it is accepted as `{ picks: ["a","b"] }` as before. An older signal ignores the option.
 - Who notices: nobody until they set it.
 - What to do: nothing.
 - Breaking: no.
@@ -92,10 +92,11 @@ No lab app had to change. lyceum's `check` passes and relay typechecks as they a
 - Affected apps: none. No lab or outside app uses `asTool`, `createManifold` or runs an agent inside a tool.
 
 ### cortex — a resumed run first runs the calls its last step left unanswered
-- Before: a run aborted between two calls of one step (`c1` answered, `c2` not) left a transcript ending `assistant(c1, c2) tool[c1]`. `resumeRun` sent that to the provider (OpenAI answers it with a 400) and `c2` never ran.
+- Before: a run aborted between two calls of one step (`c1` answered, `c2` not) left a transcript ending `assistant(c1, c2) tool[c1]`. `resumeRun` sent that to the provider and `c2` never ran: OpenAI refuses such a transcript, and Groq takes it (200) and the model goes on without `c2`'s result.
 - Now: `resumeRun` runs `c2` first, through its gates, approvals and hooks, then calls the model with `… tool[c1] tool[c2]`. A resume from a pending approval is unchanged, and a fresh `agent.run()` given a transcript that ends in a call runs nothing before the model.
-- Who notices: an app that resumes snapshots of runs aborted mid-step.
-- What to do: nothing.
+- Also: any call of the last step with no tool message runs, so a call that was still running when the snapshot was taken runs a second time. A tool `pay` that calls `run.snapshot()` while it executes ran once before (`[1]`, then nothing on resume) and now runs again on resume (`[1, 1]`).
+- Who notices: an app that resumes snapshots of runs aborted mid-step, and one that takes a snapshot while a tool is running.
+- What to do: take the snapshot after the call's `tool-end` (or between steps), or make the tool safe to run twice (idempotent).
 - Breaking: yes (pending consolidation).
 - Affected apps: none. No lab or outside app calls `resumeRun`.
 
@@ -132,20 +133,21 @@ No lab app had to change. lyceum's `check` passes and relay typechecks as they a
 
 ### solid — no `initial` needed for schemas like `.min(1)`
 - Before: `createStream({ schema })` without `initial` threw `[solid] cannot derive valid base…` for a schema with `.min(1)`, `.positive()`, `array().min(1)`, an email, url or uuid format, a `z.record` or a `z.lazy`. A root of `z.any()` or a `.nullable()` object made `write('{…')` throw a `TypeError`. cortex makes its partial stream without `initial`, so an agent with such a data schema emitted no `output-partial` at all.
-- Now: the derived starting value is used when every value in it is of a kind the schema takes; constraints are checked when a field finishes. The reply's root becomes the value of a `z.any()` or nullable root. cortex emits `output-partial` events for those agents (their values can fail the schema until the run ends, as partials always could).
+- Now: the derived starting value is used when every value in it is of a kind the schema takes (a literal or enum field: one of its values); no constraint is asked of it. A `strict` stream started so checks what `final()` would resolve with against the whole schema: `{"t":""}` for `.min(1)`, `{"n":-1}` or `{}` (leaving the starting 0) for `.positive()` make `final()` reject, with an `onError` of phase `finalize`, where construction threw before. Constraints (`.min(1)`, `.positive()`, a format, `.refine`) are checked in two places only. With `constraints: 'finalize'`, each field when it finishes. And in `strict` mode with no `initial`, when the derived starting value fails the schema: the value `final()` would resolve with (at the root's close or on `close()`) is checked whole, and one the schema refuses fails the stream. Otherwise they are not checked, and in `recover` mode `final()` can resolve with a value the schema refuses (`{"t":""}` for `t: z.string().min(1)`); under `constraints: 'finalize'` such a value is reported with `onError`, and it stays. The reply's root becomes the value of a `z.any()` or nullable root. cortex emits `output-partial` events for those agents (their values can fail the schema until the run ends, as partials always could).
 - Who notices: a cortex app with `output-partial` listeners and such a data schema; solid code that relied on the construction error.
 - What to do: nothing. A listener that cannot take partials filters them, as for any other agent.
 - Breaking: yes (pending consolidation), for the new events.
+- cortex: carries its own changeset for this (agents now stream `output-partial` events for these data schemas, and further for fields that take any value).
 - Affected apps (measured with cortex's partial tracker over the apps' real output schemas):
   - lab relay: the screen-builder's `AnswerSchema` goes from 0 to 27 `output-partial` events per answer; they are forwarded into relay's ray run stream. Nothing reads them today, so nothing shows differently; the run handle keeps the extra events.
-  - lab lyceum: the nova layout agent goes from 0 to 20 per answer; nothing reads them.
+  - lab lyceum: the nova layout agent goes from 0 to 20 per answer; nothing reads them. (Measured on a layout nova takes, `{component:"Stack", children:[…]}`. A reply that is no layout, such as one written with `type` for `component`, now stops its partials where the union's object closes, with an error.)
   - lab encore: 24 and 14, unchanged.
   - outside apps: no listener is affected (see the previous section for mira's).
 
 ### solid — a union's field is checked against every variant
 - Before: with `w: z.discriminatedUnion('kind', [{ kind: 'text', value: z.string() }, { kind: 'count', value: z.number() }])`, `{"w":{"kind":"count","value":5}}` lost the 5 in `recover` and failed a valid reply in `strict`.
-- Now: `{ w: { kind: 'count', value: 5 } }`. A field takes the kinds of every variant that has it and passes finalize if any variant accepts it. Fields typed alike in every variant behave as before.
-- Who notices: unions whose variants type one field differently.
+- Now: `{ w: { kind: 'count', value: 5 } }`. A field takes the kinds of every variant that has it and passes finalize if any variant accepts it. Fields typed alike in every variant behave as before. So that a field cannot take one variant's kind under another variant's discriminator, an object or list a union decides is checked when it closes: it must fit one variant, by the kinds of its fields and the values of its literal and enum fields. `{"w":{"kind":"text","value":5}}`, or `{"a":1,"b":"x"}` against the union of `{ a: string, b: string }` and `{ a: number, c: number }`, still fails a strict stream; in `recover` it is now reported (`onError`, `phase: 'finalize'`, `expected: 'a variant of the union'`) and the value stays in `current()`, where before the field's value was dropped silently.
+- Who notices: unions whose variants type one field differently; in `recover`, a listener of `onError` sees the new report. Through cortex, such a report ends the run's partials, as any solid error does.
 - What to do: nothing.
 - Breaking: yes (pending consolidation).
 - Affected apps: mira's card union (`src/server/compose/reply.schema.ts:43`) types `input` alike in both variants apart from nullishness; its partials are covered by the "any value" section above. No lab app streams such a union.
