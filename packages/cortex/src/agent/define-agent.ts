@@ -18,6 +18,7 @@ export type OutputConfig<TData> = {
   forceTool?: boolean;
   doc?: 'auto' | 'off' | string;
   validate?: OutputValidator<TData>;
+  refuseCutOff?: boolean;
 };
 
 export type AgentConfig<TData, TDeps> = {

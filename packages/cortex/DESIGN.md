@@ -611,6 +611,7 @@ DEFAULT_STOP_CONDITIONS   // [stepCount(20), outputRetries(3)]
     forceTool?: boolean,              // toolChoice:'required' hardening
     doc?: 'auto' | 'off' | string,    // schema docs injection, default 'auto'
     validate?: (out) => { ok: true } | { retry: string } | Promise<…>,
+    refuseCutOff?: boolean,           // a reply the provider cut off with its JSON open is retried, not closed
   },
   toolGates?, onToolResult?, prepareStep?, stopWhen?, policy?,
 }

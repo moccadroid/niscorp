@@ -79,6 +79,7 @@ export type LoopConfig<TData, TDeps> = {
   partials: PartialTracker;
   state: LoopState;
   resumePending?: PendingApproval;
+  refuseCutOff?: boolean;
 };
 
 const isEmptyObject = (value: unknown): boolean =>
@@ -459,6 +460,7 @@ export const runLoop = async <TData, TDeps>(
       output: {
         accept: cfg.accept,
         ...(cfg.resolved.outputToolName !== undefined && { outputTool: cfg.resolved.outputToolName }),
+        ...(cfg.refuseCutOff === true && { refuseCutOff: true }),
       },
     };
     const stepOutcome = await oneStep(llm, request);
