@@ -304,7 +304,9 @@ A run aborted between the calls of one step leaves calls with no
 answer and no pending approval. Resumed, it first runs those calls,
 through their gates, approvals and hooks, and then calls the model.
 A fresh `agent.run()` given a transcript that ends in a call runs
-nothing before the model.
+nothing before the model. A call still running when the snapshot was
+taken has no answer yet either, so it runs again on resume: take the
+snapshot after its `tool-end`, or make the tool safe to run twice.
 A snapshot that cannot be resumed — no `messages` list, or a
 `pending` without its `call` or its `remaining` list — makes
 `resumeRun` throw `[cortex:config] snapshot cannot be resumed: …`,
