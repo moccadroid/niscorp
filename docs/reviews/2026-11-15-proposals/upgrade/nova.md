@@ -50,15 +50,15 @@ Each section is one change an app can see, in `@niscorp/nova`. None of them chan
 - Who notices: an app that hands `NovaShell`/`NovaCanvas` its own registry with its own versions of those names and no `CanvasSlot`: it now sees its own components where it saw React's.
 - What to do: nothing, unless the app wanted React's defaults over its own: then register React's (`registerNovaReactComponents(registry)`) itself.
 - Breaking: yes
-- Affected apps: none found. The only `NovaShell` users, `apps/lab/fable/src/app.tsx:4` and the create-nisc React template's `with/page/src/ui/screen.tsx:5`, hand registries that have `CanvasSlot`. mythos's registry has no `CanvasSlot` (`apps/lab/mythos/src/ui/registry.ts:9`) but renders through `NovaShellProvider` and `RenderTree`, not `NovaShell`/`NovaCanvas`.
+- Affected: loom's `LoomEditor` (`packages/loom/src/react/editor/loom-editor.tsx:52`) hands `NovaShell` a registry with no `CanvasSlot`, so a plugin's own `Text`, `Stack`, `Input` and the other default names are now kept where React's replaced them; no app uses `LoomEditor`. Apps: none found. The only `NovaShell` users in apps, `apps/lab/fable/src/app.tsx:4` and the create-nisc React template's `with/page/src/ui/screen.tsx:5`, hand registries that have `CanvasSlot`. mythos's registry has no `CanvasSlot` (`apps/lab/mythos/src/ui/registry.ts:9`) but renders through `NovaShellProvider` and `RenderTree`, not `NovaShell`/`NovaCanvas`.
 
 ### nova — inside a loop, `model: '$.<as>.x'` writes the row it shows
 - Before: in `{ for: '$.lines', as: 'line', do: { component: 'Input', model: '$.line.qty' } }` the field showed the row's `qty` but typing wrote `data.line.qty`, a root key no field shows. `model: '$.index'` showed the loop index and wrote a root `index`.
 - Now: `model: '$.line.qty'` writes `lines.0.qty` (its model path is `lines.0.qty`); `model: '$.index'` binds nothing (no `model` on the node), as `model: '$index'` already did. Any other `$.name` in a loop still binds the root. What every layout shows is unchanged.
-- Who notices: a layout in a loop that writes through `$.<as>`, `$.items` or `$.index`.
+- Who notices: a layout in a loop that writes through `$.<as>`, `$.items` or `$.index`. Nested loops move too: an inner `for: '$.g.items'` inside `for: '$.groups', as: 'g'` gave a model inside it the path `g.items.0.v` in every group; now `groups.0.items.0.v` and `groups.1.items.0.v`.
 - What to do: nothing.
 - Breaking: yes (where the write lands)
-- Affected apps: none found. Loop models in the lab apps, the templates, AnimaApp, anima-finance and mira use the `$part.answer` / `$field.value` form, not `$.<as>`.
+- Affected apps: none found. Loop models in the lab apps, the templates, AnimaApp, anima-finance and mira use the `$part.answer` / `$field.value` form, not `$.<as>`, and no app nests a loop over `$.<as>.…` (AnimaApp `field.action.ts:162` loops at the root).
 
 ### nova — `for` and `model` written as one `{{…}}` keep their binding
 - Before: `model: '{{$.q}}'` bound nothing, so typing changed nothing; `for: '{{$.lines}}'` iterated, but every `model` inside it lost its binding.
