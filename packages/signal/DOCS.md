@@ -256,7 +256,7 @@ The low-level primitives `complete()` and `stream()` are built on: one model cal
 - **`wire`** — `rung` names what produced the accepted output: `parse` for content that was valid JSON as it arrived, `call-args` for a call's arguments, otherwise the repair it took. `recovered` is set when the result was recovered from a provider rejection. `truncated: true` means the accepted output was rescued from a reply the provider cut off (`length` or `content_filter`) while its JSON was still open: it may be missing what the model had not written yet.
 - **`reasoning`** — on `step()`, the model's thinking from the reply (`reasoning` or `reasoning_content`), never part of `content`. `step()` does not ask for it, so it is there only when the provider sends it unasked.
 - **`reasoning` events** — the model's thinking, never part of `content`. Only a provider that streams its reasoning produces them; on Groq and OpenRouter Signal asks for it only when `reasoningEffort` is set.
-- **`tool_call_delta` events** — each carries one fragment of a call's arguments (`argsText`) for the call at `index`. The assembled calls are in the `done` event's `toolCalls`.
+- **`tool_call_delta` events** — each carries one fragment of a call's arguments (`argsText`) for the call at `index`. A call keeps the provider's index; a piece that names a new id at an index another call already has starts a new call, numbered with the next index no call has (pieces `a` and `b` at index 0, then `c` at 1, are calls `a`@0, `b`@1, `c`@2). The assembled calls are in the `done` event's `toolCalls`.
 
 ### `resolveTransport(spec, capabilities)`
 

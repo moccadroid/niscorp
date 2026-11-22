@@ -12,21 +12,27 @@ export type ExecuteStepStreamConfig = {
   streamOptions?: StreamOptions;
 };
 
-type AssembledToolCall = { id: string; name: string; args: string };
+type AssembledToolCall = { id: string; name: string; args: string; index: number };
 
-
+// Some providers repeat an index for parallel calls: a piece naming an id other than that of the
+// call open at its index starts the next call, under an index no earlier call has.
 const assembleToolCall = (
-  map: Map<number, AssembledToolCall>,
+  open: Map<number, AssembledToolCall>,
+  calls: AssembledToolCall[],
   delta: Extract<ProviderStreamDelta, { type: 'tool_call' }>,
-): void => {
-  let tc = map.get(delta.index);
-  if (!tc) {
-    tc = { id: delta.id ?? '', name: delta.name ?? '', args: '' };
-    map.set(delta.index, tc);
+): AssembledToolCall => {
+  let tc = open.get(delta.index);
+  if (!tc || (delta.id && tc.id && delta.id !== tc.id)) {
+    const taken = calls.some((call) => call.index === delta.index);
+    const index = taken ? Math.max(...calls.map((call) => call.index)) + 1 : delta.index;
+    tc = { id: delta.id ?? '', name: delta.name ?? '', args: '', index };
+    open.set(delta.index, tc);
+    calls.push(tc);
   }
   if (delta.id) tc.id = delta.id;
   if (delta.name) tc.name = delta.name;
   if (delta.argsFragment) tc.args += delta.argsFragment;
+  return tc;
 };
 
 export const buildProviderRequest = (
@@ -73,7 +79,8 @@ async function* streamStep(
 
   let contentBuffer = '';
   let finishReason = 'unknown';
-  const assembledToolCalls = new Map<number, AssembledToolCall>();
+  const openToolCalls = new Map<number, AssembledToolCall>();
+  const assembledToolCalls: AssembledToolCall[] = [];
   // Replaced, not summed: a usage frame is the running total for the call, and Groq sends
   // the same frame twice on some calls.
   let totalUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0, reported: false };
@@ -107,16 +114,17 @@ async function* streamStep(
       case 'reasoning':
         yield { type: 'reasoning', text: delta.text };
         break;
-      case 'tool_call':
-        assembleToolCall(assembledToolCalls, delta);
+      case 'tool_call': {
+        const call = assembleToolCall(openToolCalls, assembledToolCalls, delta);
         yield {
           type: 'tool_call_delta',
-          index: delta.index,
+          index: call.index,
           ...(delta.id !== undefined && { id: delta.id }),
           ...(delta.name !== undefined && { name: delta.name }),
           argsText: delta.argsFragment ?? '',
         };
         break;
+      }
       case 'usage':
         totalUsage = {
           inputTokens: delta.inputTokens,
@@ -143,7 +151,7 @@ async function* streamStep(
   }
   if (abortSignal?.aborted) return;
 
-  const toolCalls: StepToolCall[] = [...assembledToolCalls.values()].map((tc) => {
+  const toolCalls: StepToolCall[] = assembledToolCalls.map((tc) => {
     let parsed: unknown = tc.args;
     if (typeof tc.args === 'string' && tc.args.length > 0) {
       try {
