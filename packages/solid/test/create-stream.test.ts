@@ -686,3 +686,39 @@ describe('createStream — one end of stream', () => {
     expect(await stream.final()).toEqual({ '': { x: 1 }, b: 2 });
   });
 });
+
+describe('createStream — a starting value without initial', () => {
+  it.each([
+    ['.min(1)', z.string().min(1), '"Hello"', 'Hello'],
+    ['an email format', z.email(), '"a@b.co"', 'a@b.co'],
+    ['.positive()', z.number().positive(), '4', 4],
+    ['a list with .min(1)', z.array(z.string()).min(1), '["a"]', ['a']],
+    ['a record', z.record(z.string(), z.number()), '{"a":1}', { a: 1 }],
+    ['a lazy schema', z.lazy(() => z.object({ label: z.string() })), '{"label":"x"}', { label: 'x' }],
+  ])('streams a field with %s', async (_name, data, json, expected) => {
+    const stream = createStream<{ data?: unknown }>({ schema: z.object({ response: z.string().nullish(), data }) });
+    stream.write(`{"response":"ok","data":${json}}`);
+    expect((await stream.final()).data).toEqual(expected);
+  });
+
+  it('takes the reply for a root that takes any value', async () => {
+    const stream = createStream({ schema: z.any() });
+    stream.write('{"a":{"b":1}}');
+    expect(await stream.final()).toEqual({ a: { b: 1 } });
+  });
+
+  it('takes the reply for a nullable object instead of throwing on write', async () => {
+    const stream = createStream({ schema: z.object({ a: z.number() }).nullable() });
+    expect(() => stream.write('{"a":1}')).not.toThrow();
+    expect(await stream.final()).toEqual({ a: 1 });
+  });
+
+  it('refuses a root of a kind the schema does not take', () => {
+    const errors: string[] = [];
+    const stream = createStream({ schema: z.object({ a: z.number() }).nullable() });
+    stream.onError((error) => errors.push(error.message));
+    stream.write('[1]');
+    expect(stream.current()).toBeNull();
+    expect(errors).toEqual(['[solid] <root>: expected object | null, got array']);
+  });
+});

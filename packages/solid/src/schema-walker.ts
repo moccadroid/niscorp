@@ -193,3 +193,20 @@ export const allowsUndefined = (schema: z.ZodType): boolean => {
   }
   return false;
 };
+
+const kindOf = (value: unknown): ValueKind => {
+  if (value === null) return 'null';
+  if (Array.isArray(value)) return 'array';
+  const type = typeof value;
+  return type === 'string' || type === 'number' || type === 'boolean' ? type : 'object';
+};
+
+// Every value in it is of a kind the schema takes at its place; a missing one is not looked at.
+export const fitsKinds = (root: z.ZodType, value: unknown, segments: readonly string[] = []): boolean => {
+  if (value === undefined) return true;
+  const info = walkSchema(root, segments);
+  if (!info) return false;
+  if (info.acceptedKinds !== 'any' && !info.acceptedKinds.has(kindOf(value))) return false;
+  if (typeof value !== 'object' || value === null) return true;
+  return Object.entries(value).every(([key, child]) => fitsKinds(root, child, [...segments, key]));
+};

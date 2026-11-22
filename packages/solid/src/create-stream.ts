@@ -5,6 +5,7 @@ import { createIncrementalParser } from './incremental-parser';
 import { createFinalizationTracker } from './finalization-tracker';
 import { createSelectedStream, createDeadStream } from './selected-stream';
 import { createValidator } from './validator';
+import { fitsKinds } from './schema-walker';
 
 export const createStream = <T>(options: CreateStreamOptions<T>): Stream<T> => {
   const base = resolveBase(options);
@@ -283,6 +284,9 @@ const resolveBase = <T>(options: CreateStreamOptions<T>): T => {
 
   const candidate = deriveDefaults(schema);
   const result = schema.safeParse(candidate);
+  // A constraint (.min(1), a format) is checked when its field finishes, not on the starting
+  // value: only the kinds of what deriveDefaults built from the schema's shape must fit.
+  if (!result.success && fitsKinds(schema, candidate)) return candidate as T;
   if (!result.success) {
     throw new Error(
       `[solid] cannot derive valid base from schema defaults. Provide an explicit initial value. Error: ${result.error.message}`,
