@@ -189,6 +189,7 @@ export const createTide = (config: TideConfig): Tide => {
     // Identity, cause and depth come from the second argument, never from the
     // fact: the fact is what a webhook body parses into, so whoever talks to
     // the host could choose them. A `cause` inside the fact is discarded.
+    if (result.data.kind === 'run') throw new TideError('invalid_fact', 'a run fact is minted by tide when a run settles; it is not ingested');
     if (!watchable(result.data)) return undefined;
     const admission = await admitFact(config.store, { ...result.data, cause: options?.cause, depth: options?.depth ?? 0, as: options?.as }, deps.maxChainFacts);
     announceFact(deps.emit, admission);

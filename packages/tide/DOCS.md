@@ -408,7 +408,8 @@ ingest(fact: FactInput, options?: { as?: string; cause?: string; depth?: number 
 One write. Undefined means a `dedupeKey` collision — a refusal, not an error,
 announced as `fact.deduped` so a repeat is never mistaken for silence — or,
 under `storeUnwatchedWrites: false`, a write nothing watches, dropped silently.
-A fact that does not parse throws `invalid_fact`.
+A fact that does not parse throws `invalid_fact`, and so does a `run` fact: tide
+mints one when a run settles, and one ingested would forge that settlement.
 Matching happens in `advance`, against whatever is loaded when the fact comes
 due, which is what lets a delayed fact meet the reflexes of the day it fires.
 
@@ -419,8 +420,8 @@ signal. It is a second argument rather than a field on the fact because the
 fact shape is what a webhook body parses into: an identity a caller can choose
 is not an identity.
 
-The rule is strict — a fact with no identity reaches only reflexes with no
-identity. A single-tenant host names no `as` anywhere and is unaffected;
+The rule is strict, and a `manual` fact keeps it too — a fact with no identity
+reaches only reflexes with no identity. A single-tenant host names no `as` anywhere and is unaffected;
 a multi-tenant host that forgets one gets silence rather than a leak. An event
 that genuinely concerns every tenant is ingested once per tenant, by the only
 party that can know which those are.
@@ -478,8 +479,9 @@ What is loaded now, as parsed.
 ```typescript
 fire(reflexId, { now, input?, by? }): Promise<Fact | undefined>
 ```
-Sugar over `ingest`: mints a `manual` fact aimed at one reflex, with `input` as
-its `payload` and `by` (default `'operator'`) recorded. Works on a
+Sugar over `ingest`: mints a `manual` fact aimed at one reflex, under that
+reflex's own `as`, with `input` as its `payload` and `by` (default `'operator'`)
+recorded. Works on a
 **disarmed** reflex — arming gates triggers, not people. Throws
 `unknown_reflex` when the reflex is not loaded.
 
@@ -880,7 +882,7 @@ if (result.ok && isDraft(result.output.data)) {
 | Code | Raised when |
 |---|---|
 | `invalid_reflex` | a reflex failed `ReflexSchema` — including `when` on a non-fact trigger and `each` with no `unitKey` |
-| `invalid_fact` | a fact failed `FactInputSchema`, or a handler emitted one that did, or emitted a kind other than `write` / `signal` |
+| `invalid_fact` | a fact failed `FactInputSchema`, or `ingest` was given a `run` fact, or a handler emitted one that did not parse, or emitted a kind other than `write` / `signal` |
 | `duplicate_reflex` | two reflexes share an id |
 | `unknown_reflex` | `fire`/`preview` named a reflex that is not loaded, or `load` found a reflex watching the run of one that is not there |
 | `unguarded_cycle` | `load` found a loop on which no reflex has a `select` or a `when` |

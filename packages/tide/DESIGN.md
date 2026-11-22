@@ -592,7 +592,10 @@ rationalisation on top, and it failed open.
 
 **Identity equality** stops a fact crossing between tenants at every door —
 ingest (the bridge stamps `as` from the WRITE's own scope, mapped by the
-app's naming rule), fire, emit, and run-settlement. And within one tenant, a
+app's naming rule), fire, emit, and run-settlement. A `manual` fact passes the
+identity check before it skips enablement and arming: ⟲ it skipped both, so a
+manual fact ingested as one tenant ran another tenant's reflex, disabled or not.
+And `ingest` refuses a `run` fact: only the settler mints one. Within one tenant, a
 write fact is a STREAM: every reflex watching the entity hears the same fact,
 which is what makes "welcome them" and "tell the desk" two reflexes instead
 of one with two jobs.

@@ -389,6 +389,27 @@ describe('the tenant boundary, door by door', () => {
     expect(reached(calls, 'signal')).toEqual([]);
   });
 
+  it('...and a manual fact ingested as one identity runs no reflex of another, disabled or not', async () => {
+    const refund: ReflexInput = { id: 'northrock:refund', intent: 'x', on: { manual: {} }, as: OTHER, enabled: false, effect: { name: 'seen', input: { by: 'northrock', door: 'manual' } } };
+    const { tide, calls } = await harness([...both, refund], effects({ run: () => ({}) }));
+    await tide.ingest({ kind: 'manual', target: 'northrock:refund', at: T0 }, { as: MINE });
+    await tide.ingest({ kind: 'manual', target: 'northrock:refund', at: T0 });
+    for (let n = 0; n < 3; n += 1) await tide.advance({ now: T0 + n });
+    expect(reached(calls, 'manual')).toEqual([]);
+
+    await tide.fire('northrock:refund', { now: T0 + 10 });
+    for (let n = 0; n < 3; n += 1) await tide.advance({ now: T0 + 10 + n });
+    expect(reached(calls, 'manual')).toEqual(['northrock']);
+  });
+
+  it('...and a run fact is not ingested: only a settled run mints one', async () => {
+    const { tide, calls } = await harness(both, effects({ run: () => ({}) }));
+    const forged = tide.ingest({ kind: 'run', reflex: 'lumen:source', runId: 'run_forged', stats: { total: 1, done: 1, failed: 0 }, at: T0 }, { as: MINE });
+    await expect(forged).rejects.toMatchObject({ code: 'invalid_fact' });
+    for (let n = 0; n < 3; n += 1) await tide.advance({ now: T0 + n });
+    expect(reached(calls, 'run')).toEqual([]);
+  });
+
   it('door 3 — a handler’s `emit` reaches only its own tenant', async () => {
     const { tide, calls } = await harness(
       both,
