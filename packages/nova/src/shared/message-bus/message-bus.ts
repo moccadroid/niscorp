@@ -1,7 +1,7 @@
-import type { Unsubscribe } from '../common';
+import type { HandlerErrorConfig, Unsubscribe } from '../common';
 import type { ChannelHandler, MessageBus } from './types';
 
-export const createMessageBus = (): MessageBus => {
+export const createMessageBus = (config: HandlerErrorConfig = {}): MessageBus => {
   const handlers = new Map<string, ChannelHandler[]>();
 
   const dispatch = (channel: string, payload: unknown, from: string | undefined, cause?: unknown): void => {
@@ -10,7 +10,9 @@ export const createMessageBus = (): MessageBus => {
     for (const handler of list.slice()) {
       try {
         handler(payload, from, cause);
-      } catch {}
+      } catch (err) {
+        config.onHandlerError?.(err);
+      }
     }
   };
 

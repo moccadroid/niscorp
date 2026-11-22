@@ -105,3 +105,11 @@ Each section is one change an app can see, in `@niscorp/nova`. None of them chan
 - What to do: nothing.
 - Breaking: yes
 - Affected apps: none found. The phrasebooks in the repo (`apps/lab/lyra/src/db/phrases.de.ts`, `src/db/seed/phrases.ts`, `apps/lab/encore/src/app/rail-phrases.ts`) contain none of those sequences; AnimaApp, anima-finance and mira have no phrasebook found.
+
+### nova — in strict mode, a subscriber that throws is reported (`HANDLER_FAILED`)
+- Before: `createShell({ strict: true, onError })`, then `shell.onStateChange(() => { throw new Error('x') })` and a push: the error was caught and dropped without a trace. The same for the shell's data and endpoint listeners, handlers on its buses, and a runtime's `onDataChange`/`onStatusChange` handlers.
+- Now: in a strict shell, `onError` receives a `NovaError` with code `HANDLER_FAILED` and message `x`; the push (or write) still completes and the other handlers still run. Lax shells report nothing, as before, and a bus the app hands in (`eventBus`, `messageBus` in the shell config) is left as it is. `createEventBus`, `createMessageBus` and `createDataStore` accept an optional `{ onHandlerError }`. The exported `ErrorCodes` gains `handlerFailed`, and the `ErrorCode` type `'HANDLER_FAILED'`.
+- Who notices: strict shells whose subscribers throw; code that switches exhaustively over `ErrorCode`.
+- What to do: nothing; handle the new code if `onError` switches over codes.
+- Breaking: yes (strict shells only)
+- Affected apps: none. No shell in the lab apps, the templates, moss, AnimaApp, anima-finance or mira is strict (see the `ENDPOINT_FAILED` section).

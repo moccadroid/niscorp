@@ -562,6 +562,8 @@ A runaway trigger chain is reported as a plain `NovaError` with code `RUNAWAY_CH
 
 In strict mode, a `call` outside a lifecycle hook that fails with no `onError` steps and no `errorTarget` to take it, or that names an endpoint the action does not have with no `onError` steps, is reported to `onError` as a plain `NovaError` with code `ENDPOINT_FAILED` (`endpoint 'save' failed: disk full`, `unknown endpoint: svae`). Nothing is thrown. In lax mode such a call stays silent.
 
+In strict mode, a subscriber that throws (a runtime's `onDataChange` or `onStatusChange` handler, a shell's state, data or endpoint listener, a handler on a bus the shell created) is reported to `onError` as a plain `NovaError` with code `HANDLER_FAILED` and the thrown message. It is still caught: the other handlers run.
+
 `DefinitionValidationError` always throws, from `createShell` / `registerAction`. `UnknownActionError` and `UnknownFragmentError` always throw from a direct `shell.push` / `shell.replace`; raised by a navigation step inside a trigger they route to `onError`. Lifecycle failures route to `onError`, and in strict mode also surface on the next shell call.
 
 ---

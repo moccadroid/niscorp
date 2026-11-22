@@ -145,6 +145,14 @@ Trigger configs with a `message` field bind to this bus.
 The two buses are **independent**. The previous `msg:<channel>` prefix
 bridge through the event bus is gone.
 
+A handler that throws never breaks a bus or a store: the event bus, the
+message bus and the data store catch it and go on to the next handler.
+`createEventBus`, `createMessageBus` and `createDataStore` take an optional
+`{ onHandlerError }` that is handed what was caught. A strict shell wires it
+to its `onError` (code `HANDLER_FAILED`) for the buses it creates itself,
+its telemetry, and each runtime's data store and status subscribers; a bus
+the app hands in is left as it is, and a lax shell reports nothing.
+
 ### `shared/ids.ts`, `shared/common.ts`
 
 `createIdFactory(prefix)` for instance/shell ids; small type guards
