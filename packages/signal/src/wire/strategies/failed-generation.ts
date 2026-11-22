@@ -1,4 +1,4 @@
-import { closeTruncated, isTruncatedJson, openDepth } from '../repair';
+import { closeTruncated, isTruncatedJson, openContainers } from '../repair';
 import { SignalError } from '../../errors';
 import type { Rejection } from '../../types';
 import type { ErrorWireStrategy } from './index';
@@ -36,9 +36,9 @@ const asCallShape = (value: unknown): CallShape | undefined => {
   return { name, args, argsText: JSON.stringify(args) };
 };
 
-// Only the wrapper `{"name", "arguments"}` may be left open. Arguments that had to be closed were
-// cut, and go on as the text they are, which no tool's input takes.
-const argumentsWereCut = (raw: string): boolean => openDepth(raw) > 1;
+// Only the wrapper `{"name", "arguments"}` may be left open, a key or value after the arguments cut.
+// Arguments that had to be closed were cut, and go on as the text they are, which no tool's input takes.
+const argumentsWereCut = (raw: string): boolean => openContainers(raw) > 1;
 
 const argumentsText = (raw: string): string => {
   const key = /"arguments"\s*:\s*/.exec(raw);

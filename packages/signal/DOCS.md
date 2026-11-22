@@ -651,7 +651,7 @@ Groq is fast and cheap but has quirks:
 
 - **No native tools + structured output together.** With tools set, Signal sends no `response_format` there; the schema rides a system message and is validated client-side.
 - **`json_validate_failed` errors.** Groq sometimes returns the model's failed output in the error. Signal extracts and recovers from this.
-- **A tool call cut off in the rejection.** A rejected tool call whose attempt is missing only its outer `}` runs as written. One cut inside its arguments (`{"name":"transfer","arguments":{"to":"acct-1","amount":10`) is not run: its arguments go on as the text they are, so the tool's input check fails and the model is told `input_invalid` and calls again.
+- **A tool call cut off in the rejection.** A rejected tool call whose arguments are whole runs as written: its attempt is missing only its outer `}`, or is cut in a key or value after the arguments. One cut inside its arguments (`{"name":"transfer","arguments":{"to":"acct-1","amount":10`) is not run: its arguments go on as the text they are, so the tool's input check fails and the model is told `input_invalid` and calls again.
 - **Model-dependent capabilities.** What each Groq model does (json_schema, nested tool args, reasoning efforts) is its own row in the model registry, measured by the probe.
 - **Tool args are validated server-side.** So `respond` params would enforce nothing on Groq, and `auto` resolves every agent there to `emit`.
 

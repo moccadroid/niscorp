@@ -107,9 +107,13 @@ describe('a Groq tool call rejected with its attempt', () => {
     expect(fake.requests()).toBe(2);
   });
 
-  it('runs when only the outer brace is missing', async () => {
+  it.each([
+    ['only the outer brace is missing', '{"name":"transfer","arguments":{"to":"acct-1","amount":1000}'],
+    ['the cut is in a key after the arguments', '{"name":"transfer","arguments":{"to":"acct-1","amount":1000},"'],
+    ['the cut is in a value after the arguments', '{"name":"transfer","arguments":{"to":"acct-1","amount":1000},"id":"call_1'],
+  ])('runs when %s', async (_case, attempt) => {
     const seen: unknown[] = [];
-    const fake = sdkOverFetch(rejected('{"name":"transfer","arguments":{"to":"acct-1","amount":1000}'));
+    const fake = sdkOverFetch(rejected(attempt));
     await createSignal('groq', { apiKey: 'k', client: fake.client }).tools([transfer(seen)]).complete('pay 1000');
     expect(seen).toEqual([{ to: 'acct-1', amount: 1000 }]);
     expect(fake.requests()).toBe(2);
