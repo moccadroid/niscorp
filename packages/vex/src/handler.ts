@@ -4,7 +4,7 @@ import type { ScopePolicy, ScopeValues } from './scope/scope.types.js';
 import type { DatabaseSchema, EntitySchema } from './schemas/database.schema.js';
 import { QueryRequestSchema, dropNullIntentAndFingerprint } from './schemas/request.schema.js';
 import { QuerySchema } from './schemas/query.schema.js';
-import { isEntryFresh, isTouchDue, fireAndForget } from './cache/util.js';
+import { isEntryFresh, isTouchDue, fireAndForget, touchEntry } from './cache/util.js';
 import { computeSchemaFingerprint } from './cache/hash.js';
 import { executeWrites, writeGateOf } from './mutations/engine.js';
 import type { MutationClient, WriteResult } from './mutations/engine.js';
@@ -414,7 +414,7 @@ const runQuery = async (
           }
         }
         const now = Date.now();
-        if (isTouchDue(entry, now)) fireAndForget(engine.cache.set(parsed.data.fingerprint, { ...entry, lastUsedAt: now }));
+        if (isTouchDue(entry, now)) fireAndForget(touchEntry(engine.cache, parsed.data.fingerprint, entry, now));
         if (probe !== undefined) probe.rows = rows.length;
         return { status: 200, body: { result: rows.length === 1 ? rows[0] : rows } };
       }

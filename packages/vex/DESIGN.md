@@ -275,7 +275,9 @@ Identity is the **fingerprint** (see Cache v2 below). The supporting hashes:
   validate-on-write and evict-on-read), and tiered (`createTieredCache`, L1 +
   L2 read-through/write-through with `full`/`lazy`/`partial` warm-up). Every
   backend implements the same `CacheBackend` contract; `init`/`entries` are
-  optional capabilities used for warm-up and the discovery overview.
+  optional capabilities used for warm-up and the discovery overview, and
+  `touch` stamps `lastUsedAt` alone, so a replay's stamp never writes back an
+  entry another writer changed after the replay read it.
 - **Validation** (`validateEntry`) guards every write and every promotion into
   memory, so a corrupt or schema-drifted row can never poison the cache. It
   returns `null` for a valid entry and the reason, as a string, for any other.

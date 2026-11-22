@@ -1,4 +1,4 @@
-import type { CacheEntry } from './cache.types.js';
+import type { CacheBackend, CacheEntry } from './cache.types.js';
 
 export const fireAndForget = (p: Promise<unknown>, onError?: (err: unknown) => void): void => {
   void p.catch((err) => {
@@ -11,6 +11,9 @@ export const TOUCH_EVERY_MS = 60_000;
 
 export const isTouchDue = (entry: CacheEntry, now: number): boolean =>
   entry.lastUsedAt === undefined || now - entry.lastUsedAt >= TOUCH_EVERY_MS;
+
+export const touchEntry = (cache: CacheBackend, key: string, entry: CacheEntry, now: number): Promise<void> =>
+  cache.touch !== undefined ? cache.touch(key, now) : cache.set(key, { ...entry, lastUsedAt: now });
 
 export const isEntryFresh = (entry: CacheEntry, currentFingerprint?: string): boolean => {
   const expired = entry.expiresAt !== undefined && entry.expiresAt <= Date.now();

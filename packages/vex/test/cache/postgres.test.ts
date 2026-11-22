@@ -319,6 +319,18 @@ describe('createPostgresCache — the table, through the ledger', () => {
     if (migration !== undefined) expect(await checksumOf(migration)).toBe('c2c5ca08a6a53b1de69f70c4cc36ec8b3910aee5f1145b99deb30191d225bf24');
   });
 
+  it('touch writes last_used_at and leaves the rest of the row as stored', async () => {
+    const pool = createPglitePool(new PGlite());
+    const cache = createPostgresCache({ pool });
+    await cache.init();
+    await cache.set('k', { kind: 'ok', dsl: { from: ['users'], fields: ['users.id'] }, createdAt: Date.now(), protected: true });
+    await pool.query(`UPDATE vex_cache SET protected = false WHERE key = 'k'`);
+    await cache.touch?.('k', 5_000);
+    const stored = await cache.get('k');
+    expect(stored?.protected).toBeUndefined();
+    expect(stored?.lastUsedAt).toBe(5_000);
+  });
+
   it('a cache under another name is its own sequence', () => {
     const pool = createPglitePool(new PGlite());
     expect(createPostgresCache({ pool }).sequence.id).toBe('nisc.vex.cache');

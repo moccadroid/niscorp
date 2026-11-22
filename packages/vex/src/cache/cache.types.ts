@@ -58,4 +58,6 @@ export type CacheBackend = {
   init?: () => Promise<void>;
   sequence?: Sequence;
   entries?: () => Promise<Array<{ key: string; entry: CacheEntry }>>;
+  // Writes `lastUsedAt` alone. Without it, a replay stamps by writing back the whole entry it read.
+  touch?: (key: string, lastUsedAt: number) => Promise<void>;
 };

@@ -1339,7 +1339,13 @@ are not asking the same thing).
 
 ### Lifetime and protection
 
-- A replay stamps `lastUsedAt` (at most once a minute per entry);
+- A replay stamps `lastUsedAt` (at most once a minute per entry). It calls the
+  backend's optional `touch(key, lastUsedAt)`, which writes that field alone, so
+  a `PATCH` or a reseed landing between the replay's read and its stamp is kept.
+  The memory, Postgres and tiered caches have it (the tiered one when both its
+  levels do). A backend without it is stamped through `set` with the whole entry
+  the replay read; so is a wrapper that spreads a built-in cache and overrides
+  only `set`, which therefore no longer sees the stamps.
   `sweepCache(cache, { maxIdleMs })` evicts entries idle past the limit,
   skipping protected ones, and returns how many it evicted. Alive = used.
   Nothing in vex calls it: a host runs it at startup or on a timer.
