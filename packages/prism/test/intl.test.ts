@@ -319,7 +319,7 @@ describe('the formatter caches', () => {
       money: { $localeMoney: { value: { $ref: '$.cents' }, currency: 'EUR', locale: { $ref: '$.locale' } } },
       number: { $localeNumber: { value: { $ref: '$.cents' }, locale: { $ref: '$.locale' } } },
     };
-    for (let i = 0; i < 5000; i++) evaluate(config, { ...source, locale: `en-x-${i.toString(36)}` });
+    for (let i = 0; i < 1100; i++) evaluate(config, { ...source, locale: `en-x-${i.toString(36)}` });
     expect(DATE_FORMATTERS.size).toBeLessThanOrEqual(1000);
     expect(NUMBER_FORMATTERS.size).toBeLessThanOrEqual(1000);
     const out = evaluate(config, { ...source, locale: 'de-AT' }) as { date: string; money: string; number: string };

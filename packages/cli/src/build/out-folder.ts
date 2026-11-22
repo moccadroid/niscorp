@@ -32,12 +32,22 @@ export const realOf = (path: string): string => {
   }
 };
 
-const lstatOf = (path: string): Stats | undefined => lstatSync(path, { throwIfNoEntry: false });
+// A path through a file is answered ENOTDIR on Linux and macOS, ENOENT on Windows: either way nothing is there.
+const absentThroughAFile = <T>(read: () => T): T | undefined => {
+  try {
+    return read();
+  } catch (error) {
+    if (codeOf(error) === 'ENOTDIR') return undefined;
+    throw error;
+  }
+};
+
+const lstatOf = (path: string): Stats | undefined => absentThroughAFile(() => lstatSync(path, { throwIfNoEntry: false }));
 
 // The same entry, by the system's own id when both exist (a link is not followed, case is as the system treats it).
 export const isDefaultOut = (out: string, root: string): boolean => {
   const defaultOut = join(root, 'out');
-  const [given, own] = [lstatSync(out, { bigint: true, throwIfNoEntry: false }), lstatSync(defaultOut, { bigint: true, throwIfNoEntry: false })];
+  const [given, own] = [out, defaultOut].map((path) => absentThroughAFile(() => lstatSync(path, { bigint: true, throwIfNoEntry: false })));
   if (given !== undefined && own !== undefined && given.ino !== 0n) return given.dev === own.dev && given.ino === own.ino;
   const locationOf = (path: string): string => join(realOf(dirname(path)), basename(path));
   const [location, defaultLocation] = [locationOf(out), locationOf(defaultOut)];

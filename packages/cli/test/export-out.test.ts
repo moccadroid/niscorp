@@ -344,7 +344,8 @@ export const project = { ...base, paths: () => ${JSON.stringify(paths)} };
 
   it.runIf(process.platform !== 'win32')('a write that fails for another reason than the path is said as such, not blamed on the path', () => {
     mkdirSync(join(app, 'built', 'locked'));
-    chmodSync(join(app, 'built', 'locked'), 0o555);
+    writeFileSync(join(app, 'built', 'locked', 'index.html'), 'the build’s own');
+    chmodSync(join(app, 'built', 'locked', 'index.html'), 0o444);
     withPaths(['/', '/locked']);
     const { code, out: said } = exportTo();
     expect(said).toContain(`nisc: the export could not be written into ${join(app, 'out')} (EACCES on `);
