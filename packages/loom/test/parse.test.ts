@@ -251,3 +251,17 @@ describe('parse — which key tells a union branch apart', () => {
     expect(strings.kind === 'union' ? strings.variants.map((variant) => variant.pattern.kind) : []).toEqual(['type', 'key']);
   });
 });
+
+describe('parse — a literal', () => {
+  it('is a select of its values that starts at the first', () => {
+    expect(parse(z.literal('circle'))).toEqual({ kind: 'enum', options: [{ value: 'circle', label: 'circle' }], default: 'circle' });
+    expect(parse(z.literal([1, 2]))).toEqual({ kind: 'enum', options: [{ value: 1, label: '1' }, { value: 2, label: '2' }], default: 1 });
+  });
+
+  it('starts a plain union of literal-tagged objects at a document its first branch accepts', () => {
+    const schema = z.union([z.object({ kind: z.literal('circle'), radius: z.number() }), z.object({ kind: z.literal('square'), side: z.number() })]);
+    const document = buildDocument(parse(schema), {});
+    expect(document).toEqual({ kind: 'circle', radius: 0 });
+    expect(schema.safeParse(document).success).toBe(true);
+  });
+});

@@ -137,6 +137,10 @@ const parseByType: Record<string, (schema: ZodType, walk: Walk) => Field> = {
   number: (schema) => (isInteger(schema) ? { kind: 'number', integer: true } : { kind: 'number' }),
   boolean: () => ({ kind: 'boolean' }),
   enum: (schema) => ({ kind: 'enum', options: enumOptions(schema) }),
+  literal: (schema) => {
+    const values = defOf(schema).values ?? [];
+    return { kind: 'enum', options: values.map((value) => ({ value, label: String(value) })), default: values[0] };
+  },
   object: (schema, walk) => {
     const def = defOf(schema);
     walk.stack.add(def);

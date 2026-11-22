@@ -51,8 +51,8 @@ const { action, layouts } = toNova(parse(schema));
 ```
 
 A new document starts from each field's empty value: `''`, `0`, `false`, `[]`,
-the schema's default where it has one, and `null` for a kind Loom does not
-model. A required enum with no default is left out. These can fail the schema
+the schema's default where it has one, a literal's own value, and `null` for a
+kind Loom does not model. A required enum with no default is left out. These can fail the schema
 (`''` is not an email, `0` is not `min(1)`, `null` is not a record), and
 optional fields get them too. `toNova(model, { empty, includeOptional })`
 changes both, in every branch of a union too: `empty` supplies a kind's

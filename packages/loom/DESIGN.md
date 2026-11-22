@@ -34,7 +34,9 @@ Zod schema  ──parse──▶  Field model (IR)  ──toNova──▶  { act
 (the IR — intermediate representation). Zod has many ways to express the same
 shape; `parse` collapses those into one tagged union so every later stage can
 dispatch on a single `kind`. The kinds are: `string`, `number`, `boolean`,
-`enum`, `object`, `array`, `tuple`, `union`, `self`, and `unknown`.
+`enum`, `object`, `array`, `tuple`, `union`, `self`, and `unknown`. A
+`z.literal` is an `enum` of its values whose `default` is the first, so it
+starts at its value.
 
 This model is pure data. It knows nothing about Nova. It is *what Loom edits*,
 described independently of how it is rendered.
@@ -150,7 +152,7 @@ so the forms of one editor, which share a layout store, never share a template.
 This covers recursion through a list. A self-reference that is not inside an
 array (`next: z.lazy(() => Stop).optional()`) has no list write to grow by: it
 compiles to `loom:raw`, a raw JSON box, as does every kind outside the model
-(records, literals, dates, transforms, intersections, a union no pattern tells
+(records, dates, transforms, intersections, a union no pattern tells
 apart).
 
 ### Custom widgets
