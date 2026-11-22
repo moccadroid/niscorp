@@ -70,10 +70,10 @@ Each section is one change an app can see, in `@niscorp/nova`. None of them chan
 ### nova — `'$CAD only'` renders as text
 - Before: any string starting with `$` and a letter was read as a path: `children: '$CAD only'` rendered empty, and it never reached the phrasebook.
 - Now: a `$` name followed by more words is text: `'$CAD only'` renders `$CAD only`, and with a phrasebook it is looked up and reported to `onPhraseMiss` when missing. Unchanged: `'$'` alone is the innermost scope, `'$USD'` is a path (empty when there is no `USD`), `'$item.größe'` and `'$item.name '` resolve as before.
-- Who notices: layouts with such text; an `onPhraseMiss` handler hears of it.
+- Who notices: layouts with such text; an `onPhraseMiss` handler hears of it. Also a condition written as a `$` name and more words: `{ if: '$count > 0', then: THEN, else: ELSE }` with `count: 0` rendered ELSE (the string was read as a path that does not exist) and now renders THEN (the string is text, which is truthy); a step value `{ $if: '$count > 0', … }` the same. Neither ever compared anything: write the comparison with `{ $prism: … }`.
 - What to do: nothing; add a translation if the phrasebook reports it.
 - Breaking: yes
-- Affected apps: none found. No layout string in the lab apps, the templates, AnimaApp, anima-finance or mira starts with `$`, a name and more words, and no app found sets `onPhraseMiss`.
+- Affected apps: none found. No layout string or condition in the lab apps, the templates, moss, loom, AnimaApp, anima-finance or mira starts with `$`, a name and more words, and no app found sets `onPhraseMiss`.
 
 ### nova — in strict mode, a failed call nothing takes is reported (`ENDPOINT_FAILED`)
 - Before: a trigger with `{ call: 'save' }`, where `save` fails, no `onError` steps and no `errorTarget`, went nowhere, even with `strict: true`; `{ call: 'svae' }` (no such endpoint) went nowhere too.
