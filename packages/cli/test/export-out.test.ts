@@ -1,5 +1,5 @@
-import { spawnSync } from 'node:child_process';
-import { chmodSync, cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
+import { spawn, spawnSync } from 'node:child_process';
+import { chmodSync, cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, watch, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -340,5 +340,35 @@ export const project = { ...base, paths: () => ${JSON.stringify(paths)} };
     }
     expect(readdirSync(app).sort()).toEqual(['built', 'nisc.config.ts', 'node_modules', 'package.json']);
     expect(readdirSync(site)).toEqual([]);
+  }, SLOW);
+
+  it.runIf(process.platform !== 'win32')('a write that fails for another reason than the path is said as such, not blamed on the path', () => {
+    mkdirSync(join(app, 'built', 'locked'));
+    chmodSync(join(app, 'built', 'locked'), 0o555);
+    withPaths(['/', '/locked']);
+    const { code, out: said } = exportTo();
+    expect(said).toContain(`nisc: the export could not be written into ${join(app, 'out')} (EACCES on `);
+    expect(said).not.toContain('cannot be written here');
+    expect(code).toBe(1);
+  }, SLOW);
+
+  it('an export killed while its fresh folder is being written leaves nothing in the app’s folder, and the next export removes what it left', async () => {
+    mkdirSync(join(app, 'built', 'many'));
+    for (let file = 0; file < 3000; file += 1) writeFileSync(join(app, 'built', 'many', `${file}.txt`), 'x'.repeat(2000));
+    const cache = join(app, 'node_modules', '.cache', 'nisc');
+    mkdirSync(cache, { recursive: true });
+    const child = spawn(process.execPath, [...NISC, 'export', '--skip-bundle', '--root', app], { stdio: 'ignore' });
+    const ended = new Promise((done) => child.once('exit', done));
+    const watchers = [app, cache].map((folder) =>
+      watch(folder, (_event, name) => {
+        if (typeof name === 'string' && name.startsWith('.nisc-export-')) child.kill('SIGKILL');
+      }),
+    );
+    await ended;
+    for (const watcher of watchers) watcher.close();
+    expect(readdirSync(app).filter((name) => name.startsWith('.nisc-export-'))).toEqual([]);
+    expect(exportTo().code).toBe(0);
+    expect(readdirSync(cache).filter((name) => name.startsWith('.nisc-export-'))).toEqual([]);
+    expect(existsSync(join(app, 'out', 'many', '2999.txt'))).toBe(true);
   }, SLOW);
 });

@@ -8,7 +8,7 @@ import { isDefaultOut, isWithin, realOf, writeDefaultFolder, writeNamedFolder } 
 const write = (options: CommandOptions, project: NiscProject, out: string, routes: readonly { path: string; html: string }[]): void => {
   const dist = distOf(options.root, project);
   const isDefault = isDefaultOut(out, options.root);
-  if (isDefault) writeDefaultFolder(out, dist, routes);
+  if (isDefault) writeDefaultFolder(options.root, out, dist, routes);
   const said = isDefault ? [] : writeNamedFolder(options.root, out, dist, routes);
   say(options)('');
   say(options)(`nisc: ${routes.length} paths written to ${out}`);

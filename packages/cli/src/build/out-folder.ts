@@ -133,8 +133,10 @@ const place = (from: string, to: string): void => {
   renameSync(from, to);
 };
 
+const cacheOf = (root: string): string => join(realOf(root), 'node_modules', '.cache', 'nisc');
+
 const replaceWritten = (root: string, out: string, folder: string, stage: string): string[] => {
-  const file = join(realOf(root), 'node_modules', '.cache', 'nisc', 'exports.json');
+  const file = join(cacheOf(root), 'exports.json');
   const record = recordIn(file);
   const recorded: unknown = Reflect.get(record, folder);
   const listed = (Array.isArray(recorded) ? recorded : []).flatMap((entry: unknown) => (typeof entry === 'string' ? [entry] : []));
@@ -168,18 +170,24 @@ const replaceWritten = (root: string, out: string, folder: string, stage: string
   ];
 };
 
+// What the system answers when it will not make a file of that name, there.
+const PATH_REFUSALS = new Set(['ENOENT', 'EINVAL', 'ENAMETOOLONG', 'EEXIST', 'ENOTDIR', 'EISDIR']);
+
 const cannotWrite = (path: string, why: string): Error => new Error(`nisc: the path "${path}" cannot be written here (${why}). Nothing was written.`);
+
+const notWritten = (out: string, error: unknown): Error => new Error(`nisc: the export could not be written into ${out} (${describe(error)}). Nothing already in it was changed.`);
 
 // The export whole, in a fresh folder inside `parent`: what the system cannot make fails there, before anything already in `out` is touched.
 const stageExport = (parent: string, out: string, dist: string, routes: readonly { path: string; html: string }[]): string => {
-  removeEndedStages(parent);
   const stage = join(parent, `${STAGE}${process.pid}-${randomUUID()}`);
   try {
     try {
+      mkdirSync(parent, { recursive: true });
+      removeEndedStages(parent);
       mkdirSync(stage);
       cpSync(dist, stage, { recursive: true });
     } catch (error) {
-      throw new Error(`nisc: the export could not be written into ${out} (${describe(error)}). Nothing already in it was changed.`);
+      throw notWritten(out, error);
     }
     for (const route of routes) {
       const file = join(stage, fileOf(route.path));
@@ -189,19 +197,19 @@ const stageExport = (parent: string, out: string, dist: string, routes: readonly
         writeFileSync(file, route.html);
       } catch (error) {
         const code = codeOf(error);
-        throw cannotWrite(route.path, typeof code === 'string' ? code : describe(error));
+        throw typeof code === 'string' && PATH_REFUSALS.has(code) ? cannotWrite(route.path, code) : notWritten(out, error);
       }
     }
     return stage;
   } catch (error) {
-    rmSync(stage, { recursive: true, force: true });
+    rmSync(stage, { recursive: true, force: true, maxRetries: 3 });
     throw error;
   }
 };
 
-// Made whole beside it first, then written as it always was, so its modes and what it ends up holding are unchanged.
-export const writeDefaultFolder = (out: string, dist: string, routes: readonly { path: string; html: string }[]): void => {
-  rmSync(stageExport(dirname(out), out, dist, routes), { recursive: true });
+// The fresh folder sits beside the export record, under node_modules, which git does not track. It only shows that every file can be made: out/ is emptied and copied from the build.
+export const writeDefaultFolder = (root: string, out: string, dist: string, routes: readonly { path: string; html: string }[]): void => {
+  rmSync(stageExport(cacheOf(root), out, dist, routes), { recursive: true, force: true, maxRetries: 3 });
   rmSync(out, { recursive: true, force: true });
   cpSync(dist, out, { recursive: true });
   writeRoutes(out, routes);

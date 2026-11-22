@@ -272,8 +272,9 @@ bundle, and one `index.html` per path — `/` at the top, `/about` at
 `about/index.html` — which is what any static host serves for that path.
 
 Every export is first written whole into a fresh folder of its own,
-`.nisc-export-<process>-<id>`: beside `out/` (in the app's folder), or inside
-a folder named with `--out`. Only when every file was made there is anything
+`.nisc-export-<process>-<id>`: for `out/`, in `node_modules/.cache/nisc/` under
+the app's folder, where git does not look; for a folder named with `--out`,
+inside that folder. Only when every file was made there is anything
 already in the export's folder touched. A path whose file the system will not
 make (on Windows, `/a:b`), or whose file would land outside the export's folder
 (on Windows, `/a\..\..\x`), is said, and nothing is written (exit code 1):
@@ -287,8 +288,9 @@ as `/about.` or `/con`, export as any other. A `.nisc-export-…` folder that an
 ended export left (a kill, a Ctrl+C) is removed by the next export that makes
 its fresh folder in the same place. It is never part of what is written.
 
-**The default folder, `out/`**, is then emptied and written as it always was:
-the fresh folder only checked that every file can be made, and is removed.
+**The default folder, `out/`**, is then emptied, and the build and the pages
+are copied into it; the fresh folder only shows that every file can be made,
+and is removed.
 `--out out`, the full path to it, or on Windows and macOS another spelling of
 it such as `--out OUT` is the same folder; a link to it is not.
 
@@ -330,7 +332,7 @@ the folder survives the next export.
 inside the build: each is refused before anything is drawn (exit code 1). For a
 folder named with `--out`, that is checked as written and where it really
 points. A file at a path named with `--out` (other than `out`, which is
-replaced as before) is said and left as it is, and nothing is written (exit
+replaced) is said and left as it is, and nothing is written (exit
 code 1).
 
 A file is **only ever the page as nobody sees it**. No credential reaches a
