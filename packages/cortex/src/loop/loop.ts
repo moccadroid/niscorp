@@ -34,6 +34,8 @@ import { newApprovalId } from '../utils/id';
 
 export type NormalizedCall = { id: string; toolId: string; args: unknown };
 
+type ExecutedObservation = Extract<ToolObservation, { kind: 'result' | 'error' }>;
+
 export type PendingApproval = {
   approvalId: string;
   call: NormalizedCall;
@@ -79,6 +81,8 @@ export type LoopConfig<TData, TDeps> = {
   partials: PartialTracker;
   state: LoopState;
   resumePending?: PendingApproval;
+  resumed?: boolean;
+  refuseCutOff?: boolean;
 };
 
 const isEmptyObject = (value: unknown): boolean =>
@@ -92,6 +96,30 @@ const stringify = (value: unknown): string => {
   } catch {
     return String(value);
   }
+};
+
+const argsFromText = (text: string): unknown => {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
+  }
+};
+
+// The calls of the transcript's last step that no tool message answers: a run aborted between
+// the calls of one step leaves them, and a provider refuses a transcript that ends so.
+const unansweredCalls = (messages: ReadonlyArray<Message>): NormalizedCall[] => {
+  const answered = new Set<string>();
+  let at = messages.length - 1;
+  for (let message = messages[at]; message?.role === 'tool'; message = messages[at]) {
+    answered.add(message.toolCallId);
+    at -= 1;
+  }
+  const step = messages[at];
+  if (step?.role !== 'assistant' || step.toolCalls === undefined) return [];
+  return step.toolCalls
+    .filter((call) => !answered.has(call.id))
+    .map((call) => ({ id: call.id, toolId: call.name, args: argsFromText(call.args) }));
 };
 
 export const buildToolDescriptor = (tool: ToolDefinition): StepToolDescriptor => ({
@@ -159,6 +187,7 @@ export const runLoop = async <TData, TDeps>(
     agentPath: cfg.agentPath,
     signal,
     forward: cfg.forwardEvent,
+    forwardApprovals: cfg.approvals.forwardTo,
   });
 
   const appendToolMessage = (call: NormalizedCall, content: string): void => {
@@ -276,6 +305,15 @@ export const runLoop = async <TData, TDeps>(
     }
 
     const started = Date.now();
+    const errorObservation = (cause: unknown): ExecutedObservation => ({
+      kind: 'error',
+      callId: call.id,
+      toolId,
+      args: parsedArgs.data,
+      error: cause instanceof Error ? cause.message : String(cause),
+      durationMs: Date.now() - started,
+    });
+    let observation: ExecutedObservation;
     try {
       const timeoutMs = tool.config.timeoutMs ?? DEFAULT_TOOL_TIMEOUT_MS;
       const value = await withTimeout((signal) => tool.config.execute(parsedArgs.data, toolContext(signal)), {
@@ -283,37 +321,24 @@ export const runLoop = async <TData, TDeps>(
         label: `tool ${toolId}`,
         run: cfg.abort,
       });
-      let observation: ToolObservation = {
-        kind: 'result',
-        callId: call.id,
-        toolId,
-        args: parsedArgs.data,
-        result: value,
-        durationMs: Date.now() - started,
-      };
+      observation = { kind: 'result', callId: call.id, toolId, args: parsedArgs.data, result: value, durationMs: Date.now() - started };
+    } catch (cause) {
+      observation = errorObservation(cause);
+    }
+    try {
       for (const hook of cfg.resultHooks) {
         const outcome = await hook(observation, runCtx());
         if (outcome && outcome.result !== undefined) {
-          observation = { ...observation, result: outcome.result };
+          observation =
+            observation.kind === 'error'
+              ? { ...observation, error: stringify(outcome.result) }
+              : { ...observation, result: outcome.result };
         }
       }
-      const finalResult = observation.kind === 'result' ? observation.result : undefined;
-      record(call, observation, stringify(finalResult));
     } catch (cause) {
-      const message = cause instanceof Error ? cause.message : String(cause);
-      record(
-        call,
-        {
-          kind: 'error',
-          callId: call.id,
-          toolId,
-          args: parsedArgs.data,
-          error: message,
-          durationMs: Date.now() - started,
-        },
-        `error: ${message}`,
-      );
+      observation = errorObservation(cause);
     }
+    record(call, observation, observation.kind === 'error' ? `error: ${observation.error}` : stringify(observation.result));
     return undefined;
   };
 
@@ -413,8 +438,13 @@ export const runLoop = async <TData, TDeps>(
 
   // The pending call goes through its gates again, so a resumed run asks for
   // the approval again, under a new id.
-  if (cfg.resumePending) {
-    const structural = await processBatch([cfg.resumePending.call, ...cfg.resumePending.remaining]);
+  const resumedCalls = cfg.resumePending
+    ? [cfg.resumePending.call, ...cfg.resumePending.remaining]
+    : cfg.resumed === true
+      ? unansweredCalls(s.messages)
+      : [];
+  if (resumedCalls.length > 0) {
+    const structural = await processBatch(resumedCalls);
     if (structural) return structural;
   }
 
@@ -459,6 +489,7 @@ export const runLoop = async <TData, TDeps>(
       output: {
         accept: cfg.accept,
         ...(cfg.resolved.outputToolName !== undefined && { outputTool: cfg.resolved.outputToolName }),
+        ...(cfg.refuseCutOff === true && { refuseCutOff: true }),
       },
     };
     const stepOutcome = await oneStep(llm, request);

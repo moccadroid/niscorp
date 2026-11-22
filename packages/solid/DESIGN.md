@@ -22,7 +22,7 @@ The streamed JSON is not the state. The state is a valid object that exists from
 const stream = createStream({ schema, initial });
 ```
 
-`initial` is validated against the Zod schema at construction. Every `current()` call returns an object — before, during, and after streaming — and a value of the wrong JSON kind is never written into it (see "The always-valid invariant" for where that check applies). The incoming JSON progressively overwrites fields in this object as they're parsed; an object the reply creates (a list row, an object where `initial` has `null` or nothing, a record entry) starts empty and fills in key by key.
+`initial` is validated against the Zod schema at construction. Without it, the starting value is derived from the schema (`''`, `0`, `false`, `[]`, a default, or nothing for a field it cannot derive). It is used when it passes the schema, or when every value in it is of a kind the schema takes at its place: a constraint such as `.min(1)`, `.positive()` or an email format is not asked of the starting value. Otherwise construction throws. Constraints (`.min(1)`, `.positive()`, a format, `.refine`) are checked in two places only. With `constraints: 'finalize'`, each field when it finishes. And in `strict` mode with no `initial`, when the derived starting value fails the schema: the value `final()` would resolve with (at the root's close or on `close()`) is checked whole, and one the schema refuses fails the stream. Otherwise they are not checked, and in `recover` mode `final()` can resolve with a value the schema refuses (`{"t":""}` for `t: z.string().min(1)`); under `constraints: 'finalize'` such a value is reported with `onError`, and it stays. When the starting value is no object or list (`z.any()`, a `.nullable()` object), the reply's first `{` or `[` is kind-checked as the root and becomes it. Every `current()` call returns an object — before, during, and after streaming — and a value of the wrong JSON kind is never written into it (see "The always-valid invariant" for where that check applies). The incoming JSON progressively overwrites fields in this object as they're parsed; an object the reply creates (a list row, an object where `initial` has `null` or nothing, a record entry) starts empty and fills in key by key.
 
 This means consumers can render and act on the state immediately. There is no "waiting for valid JSON" phase.
 
@@ -131,7 +131,7 @@ write(chunk)
 
 **How:** The parser calls `setValue(valueBuffer)` on every non-escape character while inside a string. The dirty tracking and snapshot machinery handle the rest.
 
-A number is shown as read so far, as a string is: `{"price":19` then `99}` shows 19, then 1999.
+A number is shown as read so far, as a string is: `{"price":19` then `99}` shows 19, then 1999. Text that a JSON number can still grow from (`19.`, `-`, `1e`) is read as `Number()` reads it; text that never can (`Infinity`, `0x1F`, `+5`, `.5`) is dropped, with no error, and the field keeps what it had.
 
 ### 5. Skip-if-unchanged for setValue
 
@@ -152,6 +152,8 @@ A number is shown as read so far, as a string is: `{"price":19` then `99}` shows
 **Assumption:** Producers emit keys in a deliberate order. LLM structured output does this naturally — the model writes fields left to right. Consumers should place immediately useful fields first (UI/render → text → reasoning → metadata).
 
 **Implementation:** The finalization tracker keeps, for each container, its keys in order and how many leading keys are already final. When a new key enters or the container closes, the keys not yet final are finalized. Only that container's direct children are walked: a child container finalized its own children when it closed. The validator remembers how far it has checked each container's keys, so with `constraints: 'finalize'` each field is checked once.
+
+The root is final when its count of open containers returns to 0. A key `""` gives its value the root's path, so a closing at path `""` is not enough: `{"":{"x":1},"b":2}` resolves `final()` at the last `}`, with `b` in it.
 
 ### 7. Events decouple parsing from finalization
 
@@ -242,7 +244,7 @@ Three modes govern what happens on a kind violation:
 
 - **`trust`** — no validation. Today's pre-invariant behavior. Included as a debug escape hatch; discouraged in production.
 - **`recover`** (default) — the bad value is skipped, the prior valid value stays in place, an error is emitted via `onError`, and the stream continues. One hallucinated field doesn't tank the rest of the response.
-- **`strict`** — the bad value is skipped, an error is emitted once, the stream enters a terminal failed state. `current()` freezes at the last valid snapshot, further writes are no-ops, `final()` rejects. For when rendering wrong is worse than rendering nothing.
+- **`strict`** — the bad value is skipped, an error is emitted once, the stream enters a terminal failed state. `current()` freezes at the last valid snapshot, further writes are no-ops, `final()` rejects, and so does every selection's `final()` not resolved yet, asked before or after the failure. A `final()` that resolved before the failure (the root closed, then text after it failed) keeps its value. For when rendering wrong is worse than rendering nothing.
 
 A constraint violation (phase 2) is found after the value has been written, so it is never skipped: in `recover` the value stays in `current()` and `final()` and the error is emitted; in `strict` the stream fails the same way, frozen with the violating value in it. `trust` runs neither phase.
 
@@ -262,11 +264,13 @@ A constraint violation (phase 2) is found after the value has been written, so i
 - `ZodArray` → `element`
 - `ZodTuple` → `items[idx]` or `rest`
 - `ZodRecord` → `valueType`
-- `ZodUnion` → first variant that accepts the segment
+- `ZodUnion` (discriminated too) → every variant that has the segment: the field takes the kinds of all of them, and passes finalize if any of them accepts its value. So that a field cannot take one variant's kind under another variant's discriminator, an object or list a union decides is checked when it closes: it must fit one variant, by the kinds of its fields and the values of its literal and enum fields (constraints are left to `constraints: 'finalize'`, whose safeParse covers this). One that fits none is an `onError` (`phase: 'finalize'`, `expected: 'a variant of the union'`) in `recover`, where the value stays, and fails the stream in `strict`. `{"w":{"kind":"text","value":5}}` against the union of `{kind:'text', value: string}` and `{kind:'count', value: number}` is such an object.
 - `ZodOptional` / `ZodNullable` / `ZodDefault` → unwrap and recurse
 - `ZodLiteral`, `ZodEnum`, `ZodString/Number/Boolean/Null` → leaf kinds
 - Discriminated unions → object kind; full narrowing deferred to finalize
-- `ZodLazy` / `ZodIntersection` / `ZodPipeline` / `ZodAny` / `ZodUnknown` → accept-any (kind check skipped; finalize still runs if enabled)
+- `ZodLazy` / `ZodPipe` → stepped through to reach a field: the lazy's own schema, the pipe's input side. A recursive schema is checked at every level.
+- `ZodIntersection` / `ZodAny` / `ZodUnknown`, and a lazy or a pipe that is itself the value → accept-any (kind check skipped; finalize still runs if enabled). Every value below an accept-any schema is taken too.
+- String formats (`z.email()`, `z.url()`, `z.uuid()`, `z.iso.*`) → string, as `z.string()`
 
 The walker caches nothing; the lookup is O(depth) per value. For typical schemas (depth 3–5), that's a few property accesses per write.
 

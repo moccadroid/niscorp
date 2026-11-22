@@ -90,6 +90,7 @@ export type SignalMeta = {
   durationMs: number;
   retries: number;
   toolCalls: ToolCallRecord[];
+  finishReason?: string;
   provider: {
     raw: unknown;
     errors: ProviderError[];
@@ -133,6 +134,7 @@ export type StepOutcome =
 
 export type WireReport = {
   rung?: string;
+  truncated?: boolean;
   recovered?: { strategy: string; name?: string; truncated: boolean };
   notes?: string[];
 };
@@ -154,7 +156,7 @@ export type StepRequest = {
   messages: ReadonlyArray<StepInputMessage>;
   tools?: ReadonlyArray<StepToolDescriptor>;
   toolChoice?: 'auto' | 'none' | 'required' | { name: string };
-  output?: { accept: z.ZodType; outputTool?: string };
+  output?: { accept: z.ZodType; outputTool?: string; refuseCutOff?: boolean };
   responseFormat?: ResponseFormat;
   options?: SignalOptions;
 };

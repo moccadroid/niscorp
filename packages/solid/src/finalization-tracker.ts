@@ -14,6 +14,8 @@ type Container = { keys: string[]; indexOf: Map<string, number>; settled: number
 export const createFinalizationTracker = (): FinalizationTracker => {
   const finalized = new Set<string>();
   let isRootFinal = false;
+  // Counted, not read from the path: under a key "" a container has the root's path.
+  let openContainers = 0;
 
   const containers = new Map<string, Container>();
 
@@ -46,6 +48,7 @@ export const createFinalizationTracker = (): FinalizationTracker => {
       switch (event.type) {
         case 'enterObject':
         case 'enterArray': {
+          openContainers += 1;
           if (!containers.has(event.path)) {
             containers.set(event.path, { keys: [], indexOf: new Map(), settled: 0 });
           }
@@ -63,9 +66,8 @@ export const createFinalizationTracker = (): FinalizationTracker => {
         case 'leaveObject':
         case 'leaveArray': {
           settle(event.path);
-          if (event.path === '') {
-            isRootFinal = true;
-          }
+          openContainers -= 1;
+          if (openContainers === 0) isRootFinal = true;
           break;
         }
 

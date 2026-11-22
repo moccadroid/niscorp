@@ -1,4 +1,4 @@
-import { closeTruncated, isTruncatedJson } from '../repair';
+import { closeTruncated, isTruncatedJson, openContainers } from '../repair';
 import { SignalError } from '../../errors';
 import type { Rejection } from '../../types';
 import type { ErrorWireStrategy } from './index';
@@ -36,6 +36,15 @@ const asCallShape = (value: unknown): CallShape | undefined => {
   return { name, args, argsText: JSON.stringify(args) };
 };
 
+// Only the wrapper `{"name", "arguments"}` may be left open, a key or value after the arguments cut.
+// Arguments that had to be closed were cut, and go on as the text they are, which no tool's input takes.
+const argumentsWereCut = (raw: string): boolean => openContainers(raw) > 1;
+
+const argumentsText = (raw: string): string => {
+  const key = /"arguments"\s*:\s*/.exec(raw);
+  return key === null ? raw : raw.slice(key.index + key[0].length);
+};
+
 const recover = (error: unknown): Rejection | undefined => {
   const raw = failedGenerationOf(unwrap(error));
   // Groq sends some rejections with no attempt. Empty, not undefined: undefined would
@@ -53,6 +62,7 @@ const recover = (error: unknown): Rejection | undefined => {
     if (closed !== undefined) {
       try {
         const call = asCallShape(JSON.parse(closed));
+        if (call && argumentsWereCut(raw)) return { name: call.name, argsText: argumentsText(raw), truncated };
         if (call) return { name: call.name, ...(call.args !== undefined && { args: call.args }), argsText: call.argsText, truncated };
       } catch {}
     }

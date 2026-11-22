@@ -5,6 +5,7 @@ import {
   type ToolConfigParsed,
 } from '../schemas/tool-config.schema';
 import type { CortexEvent } from '../events/types';
+import type { ApprovalAnswers } from '../gates/approval';
 
 export type ToolContext = {
   runId: string;
@@ -12,6 +13,7 @@ export type ToolContext = {
   agentPath: ReadonlyArray<string>;
   signal: AbortSignal;
   forward: (event: CortexEvent) => void;
+  forwardApprovals?: (run: ApprovalAnswers) => () => void;
 };
 
 export type ToolConfig<TInput = unknown, TOutput = unknown> = ToolConfigInput & {

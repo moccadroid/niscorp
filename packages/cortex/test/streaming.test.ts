@@ -119,3 +119,27 @@ describe('streaming — text strategy', () => {
     expect(retries[0]?.type === 'retry' && retries[0].kind).toBe('termination');
   });
 });
+
+describe('streaming — partials for a schema with constraints or recursion', () => {
+  type Node = { label: string; children: Node[] };
+  const NodeSchema: z.ZodType<Node> = z.lazy(() => z.object({ label: z.string(), children: z.array(NodeSchema) }));
+
+  it.each([
+    ['a .min(1) field', z.object({ title: z.string().min(1) }), { title: 'Weekly report' }],
+    ['a recursive schema', NodeSchema, { label: 'a', children: [{ label: 'b', children: [] }] }],
+  ])('streams output-partial events for %s, the last carrying the data', async (_name, schema, data) => {
+    const agent = defineAgent<unknown>({ id: 'streamy', instructions: 'respond', output: { schema, strategy: 'emit' } });
+    const llm = stubSignal([{ text: [JSON.stringify({ response: 'done', data })] }]);
+    const partials: unknown[] = [];
+    const result = await agent.run('go', {
+      llm,
+      onEvent: (event) => {
+        if (event.type === 'output-partial') partials.push(event.output);
+      },
+    }).result;
+
+    expect(result.ok && result.output.data).toEqual(data);
+    expect(partials.length).toBeGreaterThan(0);
+    expect(partials.at(-1)).toMatchObject({ data });
+  });
+});

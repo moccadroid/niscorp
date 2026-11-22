@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { z } from 'zod';
 import {
+  asTool,
   defineAgent,
   defineTool,
   resumeRun,
@@ -320,5 +321,163 @@ describe('policy.approvalTimeoutMs after the ask is over', () => {
     const result = await run.result;
     expect(result.ok ? undefined : result.error.code).toBe('aborted');
     expect(vi.getTimerCount()).toBe(0);
+  });
+});
+
+describe('an approval asked inside a delegated agent', () => {
+  const deleter = (deleted: string[]) =>
+    defineTool({
+      id: 'delete_file',
+      name: 'delete_file',
+      description: 'Deletes a file.',
+      input: z.object({ path: z.string() }),
+      execute: ({ path }) => {
+        deleted.push(path);
+        return 'deleted';
+      },
+    });
+  const cleaner = (deleted: string[]) =>
+    defineAgent({
+      id: 'cleaner',
+      description: 'Deletes files.',
+      instructions: 'Delete what you are asked to.',
+      tools: [deleter(deleted)],
+      policy: { tools: { requireApproval: ['delete_file'] } },
+    });
+  const childScript = () => [
+    { toolCalls: [{ id: 'd1', name: 'delete_file', args: { path: 'old.log' } }] },
+    { toolCalls: [{ id: 'd2', name: 'respond', args: { response: 'deleted old.log' } }] },
+  ];
+  const parentScript = () => [
+    { toolCalls: [{ id: 'p1', name: 'cleaner', args: { input: 'delete old.log' } }] },
+    { toolCalls: [{ id: 'p2', name: 'respond', args: { response: 'Done.' } }] },
+  ];
+
+  it('is answered through the parent run\'s handle', async () => {
+    const deleted: string[] = [];
+    const llm = stubSignal(parentScript());
+    const parent = defineAgent({ id: 'boss', instructions: 'Delegate.', tools: [asTool(cleaner(deleted), { llm: stubSignal(childScript()), timeoutMs: 1_000 })] });
+    const asked: ReadonlyArray<string>[] = [];
+    const run = parent.run('go', {
+      llm,
+      onEvent: (event) => {
+        if (event.type === 'approval-required') {
+          asked.push(event.agentPath);
+          run.approve(event.approval.id);
+        }
+      },
+    });
+
+    const result = await run.result;
+    expect(result.ok).toBe(true);
+    expect(asked).toEqual([['boss', 'cleaner']]);
+    expect(deleted).toEqual(['old.log']);
+    expect(llm.requests[1]?.messages.find((m) => m.role === 'tool')?.content).toBe('deleted old.log');
+  });
+
+  it('is answered through the parent when a tool runs the agent itself and forwards its approvals', async () => {
+    const deleted: string[] = [];
+    const childLlm = stubSignal(childScript());
+    const agent = cleaner(deleted);
+    const runCleaner = defineTool({
+      id: 'cleaner',
+      name: 'cleaner',
+      description: 'Deletes files.',
+      timeoutMs: 1_000,
+      input: z.object({ input: z.string() }),
+      execute: async ({ input }, ctx) => {
+        const handle = agent.run(input, { llm: childLlm, signal: ctx.signal, agentPath: ctx.agentPath, onEvent: ctx.forward });
+        const stopForwarding = ctx.forwardApprovals?.(handle);
+        const result = await handle.result.finally(() => stopForwarding?.());
+        return result.ok ? result.output.response : 'failed';
+      },
+    });
+    const parent = defineAgent({ id: 'boss', instructions: 'Delegate.', tools: [runCleaner] });
+    const run = parent.run('go', {
+      llm: stubSignal(parentScript()),
+      onEvent: (event) => {
+        if (event.type === 'approval-required') run.approve(event.approval.id);
+      },
+    });
+
+    expect((await run.result).ok).toBe(true);
+    expect(deleted).toEqual(['old.log']);
+  });
+});
+
+describe('a run aborted between two calls of one step', () => {
+  const counter = (executed: number[], onFirst: () => void) =>
+    defineTool({
+      id: 'count',
+      name: 'count',
+      description: 'Counts.',
+      input: z.object({ n: z.number() }),
+      execute: ({ n }) => {
+        executed.push(n);
+        if (n === 1) onFirst();
+        return `counted ${n}`;
+      },
+    });
+  const twoCalls = { toolCalls: [{ id: 'c1', name: 'count', args: { n: 1 } }, { id: 'c2', name: 'count', args: { n: 2 } }] };
+  const answer = { toolCalls: [{ id: 'r', name: 'respond', args: { response: 'done' } }] };
+
+  it('runs the call left without an answer when it is resumed, before the model is called', async () => {
+    const executed: number[] = [];
+    const controller = new AbortController();
+    const agent = defineAgent({ id: 'counter', instructions: 'Count.', tools: [counter(executed, () => controller.abort())] });
+    const first = agent.run('go', { llm: stubSignal([twoCalls]), signal: controller.signal });
+    expect((await first.result).ok).toBe(false);
+    const snapshot: RunSnapshot = JSON.parse(JSON.stringify(first.snapshot()));
+    expect(snapshot.pending).toBeUndefined();
+
+    const llm = stubSignal([answer]);
+    const result = await resumeRun(agent, snapshot, { llm }).result;
+
+    expect(result.ok).toBe(true);
+    expect(executed).toEqual([1, 2]);
+    const sent = llm.requests[0]?.messages ?? [];
+    expect(sent.slice(-3).map((m) => (m.role === 'tool' ? `tool:${m.toolCallId}` : m.role))).toEqual(['assistant', 'tool:c1', 'tool:c2']);
+  });
+
+  it('is not what a fresh run does with a transcript that ends in a call', async () => {
+    const executed: number[] = [];
+    const agent = defineAgent({ id: 'counter', instructions: 'Count.', tools: [counter(executed, () => undefined)] });
+    const input = [
+      { role: 'user' as const, content: 'count' },
+      { role: 'assistant' as const, content: '', toolCalls: [{ id: 'c1', name: 'count', args: '{"n":1}' }] },
+    ];
+    const result = await agent.run(input, { llm: stubSignal([answer]) }).result;
+    expect(result.ok).toBe(true);
+    expect(executed).toEqual([]);
+  });
+});
+
+describe('resumeRun given a snapshot', () => {
+  const agent = defineAgent({ id: 'careful', instructions: 'Answer.' });
+  const base = (): RunSnapshot => ({
+    version: 1,
+    runId: 'run-1',
+    agentId: 'careful',
+    input: 'go',
+    messages: [{ role: 'user', content: 'go' }],
+    steps: 0,
+    usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0, reported: true },
+    outputRetries: 0,
+    elapsedMs: 0,
+  });
+  const answer = () => stubSignal([{ toolCalls: [{ id: 'r', name: 'respond', args: { response: 'done' } }] }]);
+
+  it('throws, naming what is wrong, when it could not be resumed', () => {
+    const noRemaining = JSON.parse(JSON.stringify({ ...base(), pending: { approvalId: 'a', reason: 'r', call: { id: 'c1', toolId: 'echo', args: {} } } }));
+    expect(() => resumeRun(agent, noRemaining, { llm: answer() })).toThrow(
+      /^\[cortex:config\] snapshot cannot be resumed: pending\.remaining: /,
+    );
+    const noMessages = JSON.parse(JSON.stringify({ ...base(), messages: undefined }));
+    expect(() => resumeRun(agent, noMessages, { llm: answer() })).toThrow(/^\[cortex:config\] snapshot cannot be resumed: messages: /);
+  });
+
+  it('resumes with null in its optional fields, as before', async () => {
+    const withNulls = JSON.parse(JSON.stringify({ ...base(), pending: null, steps: null }));
+    expect((await resumeRun(agent, withNulls, { llm: answer() }).result).ok).toBe(true);
   });
 });

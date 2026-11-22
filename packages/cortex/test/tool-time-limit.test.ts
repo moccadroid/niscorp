@@ -117,7 +117,7 @@ describe('a tool call past its time limit', () => {
     const result = await run.result;
 
     expect(result.ok).toBe(true);
-    expect(listenerCounts).toEqual(Array.from({ length: 15 }, () => 0));
+    expect(listenerCounts).toEqual(Array.from({ length: 30 }, () => 0));
     expect(vi.getTimerCount()).toBe(0);
   });
 });

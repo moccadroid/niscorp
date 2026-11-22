@@ -808,3 +808,132 @@ describe('a key with a dot in it', () => {
     expect(errorsFor('index.ts')[0]).toBe('finalize files.index.ts');
   });
 });
+
+describe('a field whose schema takes any value', () => {
+  it.each([
+    ['z.any()', z.object({ x: z.any() }), { x: null }, '{"x":{"b":[1,2]}}', { x: { b: [1, 2] } }],
+    ['z.unknown()', z.object({ x: z.unknown() }), { x: null }, '{"x":[{"c":true}]}', { x: [{ c: true }] }],
+    ['z.lazy()', z.object({ n: z.lazy(() => z.object({ a: z.number() })) }), { n: { a: 0 } }, '{"n":{"a":5}}', { n: { a: 5 } }],
+    ['a pipe', z.object({ p: z.object({ a: z.number() }).pipe(z.object({ a: z.number() })) }), { p: { a: 0 } }, '{"p":{"a":1}}', { p: { a: 1 } }],
+    ['an intersection', z.object({ i: z.intersection(z.object({ a: z.number() }), z.object({ b: z.number() })) }), { i: { a: 0, b: 0 } }, '{"i":{"a":1,"b":2}}', { i: { a: 1, b: 2 } }],
+  ])('keeps what is inside %s, with no error', async (_name, schema, initial, text, expected) => {
+    for (const mode of ['recover', 'strict'] as const) {
+      const errors: string[] = [];
+      const stream = createStream<unknown>({ schema, initial, mode });
+      stream.onError((error) => errors.push(error.message));
+      stream.write(text);
+      stream.close();
+      expect(await stream.final()).toEqual(expected);
+      expect(errors).toEqual([]);
+    }
+  });
+
+  it('keeps every level of a recursive schema', async () => {
+    type Node = { label: string; children: Node[] };
+    const NodeSchema: z.ZodType<Node> = z.lazy(() => z.object({ label: z.string(), children: z.array(NodeSchema) }));
+    const stream = createStream<{ root: Node }>({ schema: z.object({ root: NodeSchema }), initial: { root: { label: '', children: [] } } });
+    const tree = { root: { label: 'a', children: [{ label: 'b', children: [{ label: 'c', children: [] }] }] } };
+    stream.write(JSON.stringify(tree));
+    expect(await stream.final()).toEqual(tree);
+  });
+
+  it('still refuses a key a lazy object does not have', () => {
+    const errors: string[] = [];
+    const stream = createStream<unknown>({ schema: z.object({ n: z.lazy(() => z.object({ a: z.number() })) }), initial: { n: { a: 0 } } });
+    stream.onError((error) => errors.push(error.expected));
+    stream.write('{"n":{"zzz":5}}');
+    expect(errors).toEqual(['<unknown path>']);
+  });
+});
+
+describe('a string format field', () => {
+  it('refuses a list, as a z.string() field does', () => {
+    const errors: string[] = [];
+    const stream = createStream<{ to?: string }>({ schema: z.object({ to: z.email().optional() }), initial: {} });
+    stream.onError((error) => errors.push(error.expected));
+    stream.write('{"to":[1]}');
+    expect(stream.current()).toEqual({});
+    expect(errors).toEqual(['string']);
+  });
+
+  it('fails a strict stream given a number', async () => {
+    const stream = createStream<{ to?: string }>({ schema: z.object({ to: z.email().optional() }), initial: {}, mode: 'strict' });
+    stream.write('{"to":5}');
+    await expect(stream.final()).rejects.toThrow('[solid] stream failed validation');
+  });
+});
+
+describe('a field of a union', () => {
+  const Widget = z.object({
+    w: z.discriminatedUnion('kind', [
+      z.object({ kind: z.literal('text'), value: z.string() }),
+      z.object({ kind: z.literal('count'), value: z.number() }),
+    ]),
+  });
+
+  it('keeps a value of the kind a later variant takes, in strict mode', async () => {
+    const stream = createStream({ schema: Widget, initial: { w: { kind: 'text' as const, value: '' } }, mode: 'strict' });
+    stream.write('{"w":{"kind":"count","value":5}}');
+    expect(await stream.final()).toEqual({ w: { kind: 'count', value: 5 } });
+  });
+
+  it('keeps it in recover mode, with no error', () => {
+    const errors: string[] = [];
+    const stream = createStream({ schema: Widget, initial: { w: { kind: 'text' as const, value: '' } } });
+    stream.onError((error) => errors.push(error.message));
+    stream.write('{"w":{"kind":"count","value":5}}');
+    expect(stream.current()).toEqual({ w: { kind: 'count', value: 5 } });
+    expect(errors).toEqual([]);
+  });
+
+  it('refuses a kind no variant takes, and reports the object it leaves behind', () => {
+    const errors: string[] = [];
+    const stream = createStream({ schema: Widget, initial: { w: { kind: 'text' as const, value: '' } } });
+    stream.onError((error) => errors.push(error.expected));
+    stream.write('{"w":{"kind":"count","value":[5]}}');
+    expect(errors).toEqual(['string | number', 'a variant of the union']);
+  });
+
+  it('passes the finalize check when any variant takes the value', () => {
+    const errors: string[] = [];
+    const schema = z.object({ u: z.union([z.object({ n: z.number().max(1) }), z.object({ n: z.number().min(10) })]) });
+    const stream = createStream({ schema, initial: { u: { n: 0 } }, constraints: 'finalize' });
+    stream.onError((error) => errors.push(`${error.path}: ${error.message}`));
+    stream.write('{"u":{"n":12}}');
+    stream.close();
+    expect(errors).toEqual([]);
+  });
+});
+
+describe('a union object that no variant takes', () => {
+  const Widget = z.object({
+    w: z.discriminatedUnion('kind', [
+      z.object({ kind: z.literal('text'), value: z.string() }),
+      z.object({ kind: z.literal('count'), value: z.number() }),
+    ]),
+  });
+  const Pair = z.union([z.object({ a: z.string(), b: z.string() }), z.object({ a: z.number(), c: z.number() })]);
+
+  it('fails a strict stream when it closes', async () => {
+    const widget = createStream({ schema: Widget, initial: { w: { kind: 'text' as const, value: '' } }, mode: 'strict' });
+    widget.write('{"w":{"kind":"text","value":5}}');
+    await expect(widget.final()).rejects.toThrow('[solid] stream failed validation');
+
+    const pair = createStream({ schema: Pair, initial: { a: '', b: '' }, mode: 'strict' });
+    pair.write('{"a":1,"b":"x"}');
+    await expect(pair.final()).rejects.toThrow('[solid] stream failed validation');
+  });
+
+  it('is reported in recover mode when it closes', () => {
+    const errors: string[] = [];
+    const widget = createStream({ schema: Widget, initial: { w: { kind: 'text' as const, value: '' } } });
+    widget.onError((error) => errors.push(`${error.path}: ${error.message}`));
+    widget.write('{"w":{"kind":"text","value":5}}');
+    expect(errors).toEqual(['w: [solid] w: matches no variant of the union']);
+
+    const pair = createStream({ schema: Pair, initial: { a: '', b: '' } });
+    pair.onError((error) => errors.push(`${error.path}: ${error.message}`));
+    pair.write('{"a":1,"b":"x"}');
+    expect(errors.at(-1)).toBe(': [solid] <root>: matches no variant of the union');
+  });
+});

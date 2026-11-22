@@ -110,6 +110,15 @@ output: {
 }
 ```
 
+A reply the provider cut off (finish reason `length` or
+`content_filter`) with its JSON still open is closed at its last whole
+value and checked as any other, as is an attempt a Groq rejection
+(`failed_generation`) carried cut short. With `output.refuseCutOff: true` it is
+refused instead, and the run corrects the model as for a reply with no
+envelope (a `retry` event of kind `termination`, or `provider` for a
+rejection). An older
+`@niscorp/signal`, without `refuseCutOff`, ignores the option.
+
 ---
 
 ## defineAgent
@@ -250,6 +259,17 @@ a tool error the model reacts to; the run continues. They run in
 order — the `policy` gate, the agent's `toolGates`, the manifold's
 `gates`, the run's `gates` — and the first deny ends the chain.
 
+`onToolResult` hooks run **after** every call that was executed,
+whether it returned, threw or passed its time limit, in order — the
+agent's, then the run's. A hook that returns `{ result }` replaces
+what the model and `tool-end` get: on an `error` observation it
+replaces the error text, so `(o) => ({ result: '[redacted]' })` turns
+`connect failed: postgres://admin:hunter2@…` into `error: [redacted]`.
+A hook that throws turns the call into an error carrying the hook's
+message. A hook that should touch results only checks
+`observation.kind`. Hooks do not run for a denied call, an unknown
+tool, or arguments that failed the tool's input check.
+
 ```ts
 type GateDecision =
   | { allow: true; args?: unknown }   // optionally rewrite args
@@ -280,6 +300,18 @@ ask under it, and `approve` or `deny` with it does nothing.
 The resumed run keeps the snapshot's run id, transcript, step and
 output-retry counts, usage and elapsed time, so `stepCount`, `tokens`,
 `duration` and `outputRetries` count on from there.
+A run aborted between the calls of one step leaves calls with no
+answer and no pending approval. Resumed, it first runs those calls,
+through their gates, approvals and hooks, and then calls the model.
+A fresh `agent.run()` given a transcript that ends in a call runs
+nothing before the model. A call still running when the snapshot was
+taken has no answer yet either, so it runs again on resume: take the
+snapshot after its `tool-end`, or make the tool safe to run twice.
+A snapshot that cannot be resumed — no `messages` list, or a
+`pending` without its `call` or its `remaining` list — makes
+`resumeRun` throw `[cortex:config] snapshot cannot be resumed: …`,
+naming what is wrong. Everything else is read as before: a missing or
+`null` count starts at 0, and a `null` `pending` means none.
 `policy.approvalTimeoutMs` turns an unanswered ask into a denial
 (an observation, not a run failure). The denial's `reason` is
 `approval timeout`.
@@ -321,11 +353,30 @@ parent stream. The child runs on the delegating call's `ctx.signal`:
 it stops when the parent run is aborted or when the delegation passes
 its time limit (`timeoutMs`, 300 s by default).
 
+An approval the child asks is answered through the parent's handle:
+`run.approve(id)` or `run.deny(id)` on the parent, with the id of
+the nested `approval-required` event, reaches the child, at any depth.
+An answer through the child's own handle (the manifold's `onRun`)
+works too; the first answer counts. This lasts while the parent runs:
+the parent's snapshot carries no nested approval, so it does not
+survive a reload. A delegated agent runs under its own `policy` and
+`toolGates` and, through `manifold.asTool`, the manifold's `gates`;
+not the parent run's `gates`.
+
 A tool that runs an agent itself gets the same nesting from the
 context `execute` is handed: `agent.run(input, { onEvent:
 ctx.forward, agentPath: ctx.agentPath })`. `forward` puts the child's
 events on the parent's stream, and the child appends its own id to
 the path it is given.
+
+To answer its approvals through the parent's handle as well, pass
+the child's handle on and stop when it is done:
+
+```ts
+const handle = agent.run(input, { onEvent: ctx.forward, agentPath: ctx.agentPath, signal: ctx.signal });
+const stopForwarding = ctx.forwardApprovals?.(handle);
+const result = await handle.result.finally(() => stopForwarding?.());
+```
 
 ---
 
@@ -350,7 +401,8 @@ Anything you can't explain in the preview, the model can't either.
 Programmer errors throw at definition or registration time, or from
 `run()` when they depend on the run's options: no `llm`, a tool id
 or name used twice across the agent's and the run's tools, a tool
-named `respond`. Runtime conditions return:
+named `respond`. `resumeRun` throws for a snapshot of another agent
+or one it cannot resume. Runtime conditions return:
 
 ```ts
 type CortexError = {

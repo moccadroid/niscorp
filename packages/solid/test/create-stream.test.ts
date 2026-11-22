@@ -630,7 +630,7 @@ describe('createStream — a listener that throws', () => {
 });
 
 describe('createStream — a key that is the empty string', () => {
-  it('finalizes selections under it, and beside it, when they finalize today', () => {
+  it('does not end the stream where its object closes: a key beside it finalizes with its value', () => {
     const stream = createStream({ schema: z.any(), initial: {}, mode: 'trust' });
     const log: string[] = [];
     let written = 0;
@@ -642,6 +642,141 @@ describe('createStream — a key that is the empty string', () => {
       stream.write(char);
     }
     stream.close();
-    expect(log).toEqual(['.x.y=1@16', '.x={"y":1}@17', 'x=undefined@17', 'x.y=undefined@17', 'b=undefined@17']);
+    expect(log).toEqual(['.x.y=1@16', 'x=undefined@17', 'b=2@28', '.x={"y":1}@30', 'x.y=undefined@30']);
+  });
+});
+
+describe('createStream — one end of stream', () => {
+  const settled = <T>(promise: Promise<T>): Promise<string> =>
+    Promise.race([promise.then(() => 'resolved', () => 'rejected'), new Promise<string>((resolve) => setTimeout(() => resolve('pending'), 20))]);
+  const schema = z.object({ title: z.string(), items: z.array(z.string()), count: z.number() });
+  const initial = { title: '', items: [], count: 0 };
+
+  it('a strict failure rejects a selection awaited before it, and one asked after it', async () => {
+    const stream = createStream({ schema, initial, mode: 'strict' });
+    stream.write('{"title":"Hi","items":["a"');
+    const before = stream.select('items').final();
+    stream.write(',2]');
+    expect(await settled(before)).toBe('rejected');
+    await expect(before).rejects.toThrow('[solid] stream failed validation');
+    await expect(stream.select('count').final()).rejects.toThrow('[solid] stream failed validation');
+  });
+
+  it('a selection that resolved before a strict failure keeps its value', async () => {
+    const stream = createStream({ schema, initial, mode: 'strict' });
+    stream.write('{"title":"Hi","items":["a"');
+    expect(await stream.select('title').final()).toBe('Hi');
+    stream.write(',2]');
+    expect(await stream.select('title').final()).toBe('Hi');
+  });
+
+  it('final() keeps the value it resolved with when text after the root fails a strict stream', async () => {
+    const stream = createStream({ schema, initial, mode: 'strict' });
+    stream.write('{"title":"Hi","items":["a"],"count":2}');
+    const first = await stream.final();
+    stream.write('\n\nWant "more"?');
+    expect(await stream.final()).toEqual(first);
+  });
+
+  it('a root key "" whose value is an object does not end the stream', async () => {
+    const stream = createStream({ schema: z.record(z.string(), z.any()), initial: {}, mode: 'trust' });
+    stream.write('{"":{"x":1}');
+    expect(await settled(stream.final())).toBe('pending');
+    stream.write(',"b":2}');
+    expect(await stream.final()).toEqual({ '': { x: 1 }, b: 2 });
+  });
+});
+
+describe('createStream — a starting value without initial', () => {
+  it.each([
+    ['.min(1)', z.string().min(1), '"Hello"', 'Hello'],
+    ['an email format', z.email(), '"a@b.co"', 'a@b.co'],
+    ['.positive()', z.number().positive(), '4', 4],
+    ['a list with .min(1)', z.array(z.string()).min(1), '["a"]', ['a']],
+    ['a record', z.record(z.string(), z.number()), '{"a":1}', { a: 1 }],
+    ['a lazy schema', z.lazy(() => z.object({ label: z.string() })), '{"label":"x"}', { label: 'x' }],
+  ])('streams a field with %s', async (_name, data, json, expected) => {
+    const stream = createStream<{ data?: unknown }>({ schema: z.object({ response: z.string().nullish(), data }) });
+    stream.write(`{"response":"ok","data":${json}}`);
+    expect((await stream.final()).data).toEqual(expected);
+  });
+
+  it('takes the reply for a root that takes any value', async () => {
+    const stream = createStream({ schema: z.any() });
+    stream.write('{"a":{"b":1}}');
+    expect(await stream.final()).toEqual({ a: { b: 1 } });
+  });
+
+  it('takes the reply for a nullable object instead of throwing on write', async () => {
+    const stream = createStream({ schema: z.object({ a: z.number() }).nullable() });
+    expect(() => stream.write('{"a":1}')).not.toThrow();
+    expect(await stream.final()).toEqual({ a: 1 });
+  });
+
+  it('refuses a root of a kind the schema does not take', () => {
+    const errors: string[] = [];
+    const stream = createStream({ schema: z.object({ a: z.number() }).nullable() });
+    stream.onError((error) => errors.push(error.message));
+    stream.write('[1]');
+    expect(stream.current()).toBeNull();
+    expect(errors).toEqual(['[solid] <root>: expected object | null, got array']);
+  });
+});
+
+describe('createStream — numbers', () => {
+  const Numbers = z.object({ a: z.number(), b: z.number(), c: z.number(), d: z.number() });
+
+  it('does not read Infinity, 0x1F, +5 or .5 as numbers, in any mode', () => {
+    for (const mode of ['trust', 'recover', 'strict'] as const) {
+      const stream = createStream({ schema: Numbers, initial: { a: 0, b: 0, c: 0, d: 0 }, mode });
+      stream.write('{"a":Infinity,"b":0x1F,"c":+5,"d":.5}');
+      expect(stream.current()).toEqual({ a: 0, b: 0, c: 0, d: 0 });
+    }
+  });
+
+  it('shows a number a chunk ends inside as before', () => {
+    const cases: Array<[string, string, number[]]> = [
+      ['{"price":19.', '99}', [0, 19, 19.99]],
+      ['{"price":-', '5}', [0, -5]],
+      ['{"price":1e', '3}', [0, 1000]],
+      ['{"price":1.5e-', '2}', [0, 0.015]],
+      ['{"price":0.', '5}', [0, 0.5]],
+    ];
+    for (const [first, second, seen] of cases) {
+      const stream = createStream({ schema: z.object({ price: z.number() }), initial: { price: 0 } });
+      const prices: number[] = [];
+      stream.on((value) => prices.push(value.price));
+      stream.write(first);
+      stream.write(second);
+      expect(prices).toEqual(seen);
+    }
+  });
+});
+
+describe('createStream — strict without initial', () => {
+  it.each([
+    ['an empty string for .min(1)', z.object({ t: z.string().min(1) }), '{"t":""}'],
+    ['-1 for .positive()', z.object({ n: z.number().positive() }), '{"n":-1}'],
+    ['the starting 0 left for .positive()', z.object({ n: z.number().positive() }), '{}'],
+  ])('rejects final() with %s', async (_name, schema, reply) => {
+    const errors: string[] = [];
+    const stream = createStream<unknown>({ schema, mode: 'strict' });
+    stream.onError((error) => errors.push(error.phase));
+    stream.write(reply);
+    await expect(stream.final()).rejects.toThrow('[solid] stream failed validation');
+    expect(errors).toEqual(['finalize']);
+  });
+
+  it('resolves a reply its schema takes', async () => {
+    const stream = createStream<unknown>({ schema: z.object({ t: z.string().min(1), n: z.number().positive() }), mode: 'strict' });
+    stream.write('{"t":"x","n":2}');
+    expect(await stream.final()).toEqual({ t: 'x', n: 2 });
+  });
+
+  it('checks the value close() resolves with too', async () => {
+    const stream = createStream<unknown>({ schema: z.object({ t: z.string().min(1) }), mode: 'strict' });
+    stream.write('{"t":"');
+    stream.close();
+    await expect(stream.final()).rejects.toThrow('[solid] stream failed validation');
   });
 });

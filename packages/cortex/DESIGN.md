@@ -240,7 +240,7 @@ step:
   for each tool call, in order:
     tool gates (allow / deny / ask)               — BEFORE execution
     execute (Zod-validated input; past timeoutMs the call's ctx.signal aborts)
-    onToolResult hooks (replace / redact / truncate)
+    onToolResult hooks (replace / redact / truncate), after a result, an error or a timeout
     append tool result message; emit tool-end observation
   respond call → validate envelope → end (or correction + continue)
 ```
@@ -416,7 +416,10 @@ type StopCondition = (s: RunProgress) => StopVerdict;   // { stop: StopReason; m
   it; the pending call blocks (tools are sequential, so
   one pending approval at a time). `run.approve(id, { args? })` —
   approve, optionally with edited args — or `run.deny(id, reason)`.
-  An id the handle did not ask under is ignored.
+  An id the handle did not ask under goes to the runs its tools
+  started and passed on with `ctx.forwardApprovals` (`asTool` and
+  `manifold.asTool` do), so a parent's handle answers an approval asked
+  at any depth; an id nobody asked under is ignored.
   `run.snapshot()` serializes the suspended run (messages, pending
   call, usage); `resumeRun(agent, snapshot, opts)` restores it — so
   approvals survive reloads and restarts. A resumed run **re-asks**:
@@ -425,6 +428,10 @@ type StopCondition = (s: RunProgress) => StopVerdict;   // { stop: StopReason; m
   one the resumed handle answers to. `snapshot.pending.approvalId`
   names the ask of the run the snapshot came from, not the resumed
   one's.
+  A snapshot with no pending approval whose last step has calls no
+  tool message answers (the run was aborted between them, or the snapshot was taken while one ran) resumes by
+  running those calls first; a fresh run never runs calls from its
+  input.
 - **Output validation** closes the generate→verify loop in-run:
 
   ```ts
@@ -611,6 +618,7 @@ DEFAULT_STOP_CONDITIONS   // [stepCount(20), outputRetries(3)]
     forceTool?: boolean,              // toolChoice:'required' hardening
     doc?: 'auto' | 'off' | string,    // schema docs injection, default 'auto'
     validate?: (out) => { ok: true } | { retry: string } | Promise<…>,
+    refuseCutOff?: boolean,           // a reply the provider cut off with its JSON open is retried, not closed
   },
   toolGates?, onToolResult?, prepareStep?, stopWhen?, policy?,
 }

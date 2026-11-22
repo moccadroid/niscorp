@@ -3,6 +3,8 @@ import type { ChatAdapter, ProviderStreamDelta, StepStreamEvent } from '../src/t
 import { executeStepStream } from '../src/stream/execute-step-stream';
 import { createOpenAICompatibleAdapter } from '../src/adapters/openai-compatible.adapter';
 import { chatProviderEntry } from '../src/registry';
+import { createSignal } from '../src/signal';
+import { sdkOverFetch, toolCallChunk, finishChunk } from './sdk-over-fetch';
 
 const lastOf = <T>(items: readonly T[]): T => {
   const item = items[items.length - 1];
@@ -370,5 +372,31 @@ describe('stepStream — the provider stream is closed as `for await` closes it'
     await steps.next();
     await expect(steps.throw(new Error('stop reading'))).rejects.toThrow('stop reading');
     expect(closed).toEqual(['closed']);
+  });
+});
+
+describe('stepStream — two calls the provider sends at one index', () => {
+  it('stay two calls, each numbered with an index no other call has', async () => {
+    const fake = sdkOverFetch([{
+      chunks: [
+        toolCallChunk(0, { id: 'a', name: 'add', args: '{"a":1}' }),
+        toolCallChunk(0, { id: 'b', name: 'mul', args: '{"b":2}' }),
+        toolCallChunk(1, { id: 'c', name: 'sub', args: '{"c":' }),
+        toolCallChunk(1, { args: '3}' }),
+        finishChunk('tool_calls'),
+      ],
+    }]);
+    const llm = createSignal({ baseUrl: 'http://fake.local/v1', apiKey: 'k', model: 'm', capabilities: { nativeTools: true } }, { client: fake.client });
+    const events = await collect(llm.stepStream({
+      messages: [{ role: 'user', content: 'go' }],
+      tools: ['add', 'mul', 'sub'].map((name) => ({ name, description: name, parameters: { type: 'object' } })),
+    }));
+    expect(events.flatMap((e) => (e.type === 'tool_call_delta' ? [`${e.id ?? '-'}@${e.index}`] : []))).toEqual(['a@0', 'b@1', 'c@2', '-@2']);
+    const done = lastOf(events);
+    expect(done.type === 'done' && done.result.toolCalls).toEqual([
+      { id: 'a', name: 'add', args: { a: 1 } },
+      { id: 'b', name: 'mul', args: { b: 2 } },
+      { id: 'c', name: 'sub', args: { c: 3 } },
+    ]);
   });
 });

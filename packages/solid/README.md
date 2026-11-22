@@ -11,7 +11,7 @@ Solid takes a different approach:
 - **Incremental parser** — processes only new characters. No re-scanning.
 - **Structural sharing** — snapshots reuse unchanged subtree references. No deep cloning.
 - **Reference equality** — change detection is `===`, not deep comparison. O(1).
-- **Always-valid invariant** — the parser kind-checks every value against the schema at the moment its type is known, so a value of the wrong JSON kind is never written into `current()`, whatever the LLM sends. (`trust` mode switches the check off, and a field whose schema is `z.lazy`, an intersection or a pipe is not kind-checked.)
+- **Always-valid invariant** — the parser kind-checks every value against the schema at the moment its type is known, so a value of the wrong JSON kind is never written into `current()`, whatever the LLM sends. (`trust` mode switches the check off. A field whose schema takes any value — `z.any()`, `z.unknown()`, an intersection — is not kind-checked, and neither is anything inside it; the fields of a `z.lazy` or a pipe are checked against the schema it stands for. A string format such as `z.email()` takes only strings. A field of a union takes what any variant that has it takes; when the union's object closes it must fit one variant, or it is reported in `recover` and fails the stream in `strict`.)
 
 The result: linear scaling, about 3x faster than naive repair+parse on a 10 KB payload (table below), a clean subscription API that tells you exactly when each subtree finalizes, and a structural contract that holds even when the model hallucinates the wrong type for a field.
 
@@ -114,7 +114,7 @@ This runs the sub-schema `safeParse` at the exact moment each field closes in th
 
 2. **Incremental parsing** — each `write(chunk)` feeds characters into a state machine that tracks JSON structure, extracts values, and emits structural events. No `JSON.parse`, no buffer re-scanning. What is written should be the JSON value and nothing else. A code fence around it is ignored, and so is text with no double quote, bracket or brace in it. A `"` in text before the JSON is read as a string where the root belongs: an `onError` (`[solid] <root>: expected object, got string`) in `recover`, a failed stream in `strict`. A bracket or brace in text before the JSON is read as the root itself: the stream ends there, on the initial value or, in `strict`, sometimes as a failure.
 
-   A string is shown as read so far, and a number is too: `{"price":19` then `99}` shows 19, then 1999.
+   A string is shown as read so far, and a number is too: `{"price":19` then `99}` shows 19, then 1999. Only JSON numbers are read: `Infinity`, `0x1F`, `+5` and `.5` are dropped, and the field keeps what it had.
 
 3. **Value-open validation** — the moment the parser detects a value's JSON kind (`{`, `[`, `"`, digit, `t`/`f`/`n`), it checks it against the schema. If the kind doesn't match (string where number expected, array where object lives), the parser enters **skip-mode** — consuming the entire bad subtree without writing, dirtying, or emitting anything. The prior valid value stays in place.
 
@@ -142,7 +142,9 @@ This runs the sub-schema `safeParse` at the exact moment each field closes in th
 ```typescript
 import { createStream } from '@niscorp/solid';
 
-// Create a stream with schema + optional initial value + validation opts
+// Create a stream with schema + optional initial value + validation opts.
+// Without initial, the starting value is derived from the schema; a constraint such as
+// .min(1) is not asked of it. In strict mode, final() then rejects a value the schema refuses.
 const stream = createStream({
   schema,
   initial?,
@@ -165,8 +167,8 @@ stream.destroy(): void
 // Read current merged state (values kind-checked against the schema; see Validation modes)
 stream.current(): T
 
-// Promise that resolves when root JSON object closes.
-// Rejects if the stream entered strict failure.
+// Promise that resolves when root JSON object closes, or on close().
+// Rejects if the stream entered strict failure before that; once resolved, it keeps its value.
 stream.final(): Promise<T>
 
 // Subscribe — fires immediately with current value, then on each change
@@ -184,7 +186,7 @@ stream.onError(listener: (err: StreamError) => void): () => void
 stream.select<P>(path: string): Stream<P>
 ```
 
-`select()` streams are cached by path — `select('widget')` always returns the same instance. A selection's `write()` and `close()` do nothing: feed the root. Selected streams use reference equality for change detection, so `select('widget.title').on(...)` only fires when the title actually changes, not when sibling fields update.
+`select()` streams are cached by path — `select('widget')` always returns the same instance. A selection's `write()` and `close()` do nothing: feed the root. A selection's `final()` resolves when its path finishes; after a strict failure, one not yet resolved rejects with the root's error, unless the root had resolved first. Selected streams use reference equality for change detection, so `select('widget.title').on(...)` only fires when the title actually changes, not when sibling fields update.
 
 A path separates keys with dots, so `select()` cannot reach a key that has a dot in it (`"index.ts"`). The stream itself keeps such a key and checks it against the schema; an error's `path` joins the keys with dots as given.
 

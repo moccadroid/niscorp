@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { z } from 'zod';
 import { createSignal, SignalError } from '../src';
 import { sdkOverFetch } from './sdk-over-fetch';
@@ -223,5 +223,32 @@ describe('step() returns the reasoning a provider sends', () => {
 
   it('and has no `reasoning` when the provider sent none', async () => {
     expect(await step({})).not.toHaveProperty('reasoning');
+  });
+});
+
+describe('.apiKey() on a custom provider with its own key', () => {
+  const sentKeys: string[] = [];
+  beforeEach(() => {
+    sentKeys.length = 0;
+    vi.stubGlobal('fetch', async (_url: unknown, init?: { headers?: HeadersInit }) => {
+      sentKeys.push(new Headers(init?.headers).get('authorization') ?? '');
+      const body = { id: 'x', object: 'chat.completion', created: 0, model: 'm', choices: [{ index: 0, message: { role: 'assistant', content: 'ok' }, finish_reason: 'stop' }] };
+      return new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } });
+    });
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  const provider = { baseUrl: 'http://fake.local/v1', apiKey: 'provider-key', model: 'm' };
+  const request = { messages: [{ role: 'user' as const, content: 'x' }] };
+
+  it('sends the key it was given', async () => {
+    await createSignal(provider).apiKey('override-key').step(request);
+    expect(sentKeys).toEqual(['Bearer override-key']);
+  });
+
+  it('sends the provider\'s key when no override was given, also beside a key passed at creation', async () => {
+    await createSignal(provider).step(request);
+    await createSignal(provider, { apiKey: 'config-key' }).step(request);
+    expect(sentKeys).toEqual(['Bearer provider-key', 'Bearer provider-key']);
   });
 });

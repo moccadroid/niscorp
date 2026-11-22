@@ -86,6 +86,7 @@ type Frame = { type: 'obj' | 'arr'; expectingValue: boolean };
 
 type Scan = {
   openAtEnd: number;
+  openContainers: number;
   boundary?: { end: number; closers: string };
 };
 
@@ -188,7 +189,7 @@ const scan = (text: string): Scan | undefined => {
   }
   if (!inString) endLiteral(text.length);
   if (!started) return undefined;
-  return { openAtEnd: stack.length + (inString ? 1 : 0), ...(boundary && { boundary }) };
+  return { openAtEnd: stack.length + (inString ? 1 : 0), openContainers: stack.length, ...(boundary && { boundary }) };
 };
 
 // The torn tail is dropped, not closed: a clipped string that validates would be invented
@@ -201,6 +202,11 @@ export const closeTruncated = (content: string): string | undefined => {
   if (!result?.boundary || result.openAtEnd === 0) return undefined;
   const candidate = cleaned.slice(0, result.boundary.end) + result.boundary.closers;
   return tryParse(candidate).ok ? candidate : undefined;
+};
+
+export const openContainers = (content: string): number => {
+  const cleaned = content.replace(INVISIBLES, '').trim();
+  return tryParse(cleaned).ok ? 0 : (scan(cleaned)?.openContainers ?? 0);
 };
 
 export const isTruncatedJson = (content: string): boolean => {

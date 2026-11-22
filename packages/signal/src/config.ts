@@ -11,6 +11,7 @@ export type SignalConfig = {
   readonly schema?: ZodType;
   readonly tools?: Tool[];
   readonly retries?: number;
+  readonly refuseCutOff?: boolean;
   readonly options?: SignalOptions;
   readonly onRetry?: (error: Error, attempt: number) => void;
   readonly onToolCall?: (name: string, args: unknown) => void;

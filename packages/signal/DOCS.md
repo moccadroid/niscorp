@@ -138,7 +138,7 @@ signal.retries(3)
 ```
 
 ### `.apiKey(key)`
-Override the API key.
+Override the API key. On a custom provider it also replaces the provider's own `apiKey`, so the key given here is the one sent. An `apiKey` passed beside a custom provider at creation (`createSignal(custom, { apiKey })`) is used only when the provider has none.
 ```typescript
 signal.apiKey('gsk_...')
 ```
@@ -248,14 +248,15 @@ The low-level primitives `complete()` and `stream()` are built on: one model cal
 - **`tools`** — each is `{ name, description, parameters }`; `parameters` is the JSON Schema of the tool's input (`z.toJSONSchema()` of a Zod schema).
 - **`output.accept`** — gates and does not transform: `outcome.value` is the accepted candidate itself, not the schema's parsed output, so a transform or a default in the schema is not applied.
 - **`output.outputTool`** — the name of an exit tool. A call to it is routed as output, never as a tool call.
+- **`output.refuseCutOff`** — when `true`, a reply the provider ended with `length` or `content_filter` while its JSON was still open, or an output attempt a provider's rejection carried cut short, is a `failed` outcome with `truncated: true` and the evidence `the reply was cut off (finish reason "length") before its JSON closed. It began: …`, instead of being closed and accepted. A reply that ended with `stop`, or whose JSON closed before the cut, is never refused. Default `false`.
 - **`responseFormat`** — passed to the provider as given. `step()` does not check it against the capabilities: with `tools` on a model without `toolsWithStructuredOutput`, the provider rejects the request.
 - **`toolCalls`** — a call's `args` is the parsed JSON value, or the provider's string when it does not parse. It is not checked against the tool's `parameters`.
 - **`usage`** — `reported: false` means the provider sent no usage and the numbers are an estimate (about 4 characters per token). A stream does not reliably carry its usage.
 - **`outcome`** — also present, without `output.accept`, on a result recovered from a provider rejection.
-- **`wire`** — `rung` names what produced the accepted output: `parse` for content that was valid JSON as it arrived, `call-args` for a call's arguments, otherwise the repair it took. `recovered` is set when the result was recovered from a provider rejection.
+- **`wire`** — `rung` names what produced the accepted output: `parse` for content that was valid JSON as it arrived, `call-args` for a call's arguments, otherwise the repair it took. `recovered` is set when the result was recovered from a provider rejection. `truncated: true` means the accepted output was rescued from a reply the provider cut off (`length` or `content_filter`) while its JSON was still open: it may be missing what the model had not written yet.
 - **`reasoning`** — on `step()`, the model's thinking from the reply (`reasoning` or `reasoning_content`), never part of `content`. `step()` does not ask for it, so it is there only when the provider sends it unasked.
 - **`reasoning` events** — the model's thinking, never part of `content`. Only a provider that streams its reasoning produces them; on Groq and OpenRouter Signal asks for it only when `reasoningEffort` is set.
-- **`tool_call_delta` events** — each carries one fragment of a call's arguments (`argsText`) for the call at `index`. The assembled calls are in the `done` event's `toolCalls`.
+- **`tool_call_delta` events** — each carries one fragment of a call's arguments (`argsText`) for the call at `index`. A call keeps the provider's index; a piece that names a new id at an index another call already has starts a new call, numbered with the next index no call has (pieces `a` and `b` at index 0, then `c` at 1, are calls `a`@0, `b`@1, `c`@2). The assembled calls are in the `done` event's `toolCalls`.
 
 ### `resolveTransport(spec, capabilities)`
 
@@ -318,6 +319,7 @@ type SignalMeta = {
   durationMs: number;               // wall clock time
   retries: number;                  // validation retries that occurred
   toolCalls: ToolCallRecord[];      // tools called, args, results, timing
+  finishReason?: string;            // how the last reply ended: the provider's `stop`, `length`, `content_filter`, `tool_calls`, …; signal's `error_recovered` when it was recovered from a rejection
   provider: {
     raw: unknown;                   // null: these calls read the reply as a stream, which leaves no body to keep (an array, one entry per call, when the run took several)
     errors: ProviderError[];        // currently always empty
@@ -360,6 +362,18 @@ const { response } = await createSignal('groq')
 5. On failure: the evidence is sent back to the model as a correction message
 6. Retries up to `retries` times (default: 2), then fails with `E_VALIDATION_FAILED`
 7. Returns typed, validated result
+
+### Cut-off replies
+
+A reply the provider ended early (`length`, or `content_filter`) while its JSON was still open is closed at its last whole value and accepted when that passes the schema: `{"items":["alpha","beta","gam` gives `{ items: ["alpha","beta"] }`. The same goes for an attempt a provider's rejection carried cut short (a Groq `failed_generation` with its JSON still open, `json_validate_failed` or a call to the exit tool). `meta.finishReason` says how the last reply ended (`error_recovered` when it was recovered from a rejection; that is signal's, not a provider's), and a `step()` result carries `wire.truncated: true`.
+
+To retry such a reply instead, set `refuseCutOff`:
+
+```typescript
+const signal = createSignal('groq', { refuseCutOff: true }).schema(Items);
+```
+
+The cut reply then counts as a failed attempt: the model is sent the evidence and tries again, within `retries`. A reply that ended with `stop`, or whose JSON closed before the cut, is never refused. A caller's own loop sets `output.refuseCutOff` on `step()`.
 
 ---
 
@@ -613,7 +627,7 @@ All errors are `SignalError` instances with a `.code` and optional `.context`:
 | `E_MISSING_SDK` | Provider SDK not installed |
 | `E_VALIDATION_FAILED` | Response failed Zod validation after all retries; a `decide()` answer failed its gate; a `reasoningEffort` the model does not take; an unknown `wire` strategy id (`context.wire`) |
 | `E_MAX_ITERATIONS` | The tool loop did not finish within its turn limit |
-| `E_PROVIDER_ERROR` | Provider API error (rate limit, server error, a refused `embed()`, etc.); tools on a provider without `nativeTools`; an adapter that is not implemented |
+| `E_PROVIDER_ERROR` | Provider API error (rate limit, server error, a refused `embed()`, etc.); tools on a provider without `nativeTools`; an adapter that is not implemented; with no schema, a reply the provider rejected that nothing could be recovered from, such as a Groq call to an undeclared tool (`Provider rejected the reply: …`, the provider's error in `context.raw`) |
 | `E_MAX_RETRIES`, `E_TOOL_NOT_FOUND`, `E_TOOL_EXECUTION`, `E_TOOL_VALIDATION` | Declared in `ErrorCode`, not currently thrown — tool failures go back to the model as tool results, and exhausted retries are `E_VALIDATION_FAILED` |
 | `E_VERB_NOT_SUPPORTED` | A chat verb was called on a decision provider |
 
@@ -637,6 +651,7 @@ Groq is fast and cheap but has quirks:
 
 - **No native tools + structured output together.** With tools set, Signal sends no `response_format` there; the schema rides a system message and is validated client-side.
 - **`json_validate_failed` errors.** Groq sometimes returns the model's failed output in the error. Signal extracts and recovers from this.
+- **A tool call cut off in the rejection.** A rejected tool call whose arguments are whole runs as written: its attempt is missing only its outer `}`, or is cut in a key or value after the arguments. One cut inside its arguments (`{"name":"transfer","arguments":{"to":"acct-1","amount":10`) is not run: its arguments go on as the text they are, so the tool's input check fails and the model is told `input_invalid` and calls again.
 - **Model-dependent capabilities.** What each Groq model does (json_schema, nested tool args, reasoning efforts) is its own row in the model registry, measured by the probe.
 - **Tool args are validated server-side.** So `respond` params would enforce nothing on Groq, and `auto` resolves every agent there to `emit`.
 

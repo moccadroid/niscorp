@@ -23,7 +23,9 @@ export const createIncrementalParser = (
   opts: IncrementalParserOptions = {},
 ): IncrementalParser => {
   const valueOpenHook = opts.valueOpenHook;
-  const root = structuredClone(base);
+  let root = structuredClone(base);
+  // The reply opened the root over a starting value that is no object or list.
+  let isRootNew = false;
 
   const containerStack: unknown[] = [];
   const containerTypeStack: ('object' | 'array')[] = [];
@@ -104,6 +106,11 @@ export const createIncrementalParser = (
 
   const enterContainer = (type: 'object' | 'array'): void => {
     if (containerStack.length === 0) {
+      if (!isContainer(root)) {
+        root = type === 'object' ? {} : [];
+        isRootNew = true;
+        isDirty = true;
+      }
       containerStack.push(root);
       containerTypeStack.push(type);
       return;
@@ -300,7 +307,7 @@ export const createIncrementalParser = (
             hasUnpoppedValue = true;
           }
           const path = currentPath();
-          if (!isRoot && !checkValueOpen('object')) {
+          if ((!isRoot || !isContainer(root)) && !checkValueOpen('object')) {
             enterSkipObject();
             afterColon = false;
             expectingValue = false;
@@ -340,7 +347,7 @@ export const createIncrementalParser = (
             hasUnpoppedValue = true;
           }
           const arrPath = currentPath();
-          if (!isRootArr && !checkValueOpen('array')) {
+          if ((!isRootArr || !isContainer(root)) && !checkValueOpen('array')) {
             enterSkipArray();
             afterColon = false;
             expectingValue = false;
@@ -464,7 +471,8 @@ export const createIncrementalParser = (
   const snapshot = <T>(previous: T): SnapshotResult<T> => {
     if (!isDirty) return { changed: false };
 
-    const value = shareStructure(root, previous, '') as T;
+    const value = (isRootNew ? detachValue(root) : shareStructure(root, previous, '')) as T;
+    isRootNew = false;
     dirtyParents.clear();
     isDirty = false;
     return { changed: true, value };
@@ -527,6 +535,8 @@ export const createIncrementalParser = (
   return { write, snapshot };
 };
 
+const isContainer = (value: unknown): boolean => typeof value === 'object' && value !== null;
+
 const unescapeChar = (ch: string): string => {
   switch (ch) {
     case '"': return '"';
@@ -548,10 +558,15 @@ const isLiteralChar = (ch: string): boolean =>
 
 type LiteralResult = { ok: true; value: unknown } | { ok: false };
 
+// Text a JSON number can still grow from (`19.`, `-`, `1e`): a chunk can end inside a number.
+// Infinity, 0x1F, +5 and .5 never become one.
+const JSON_NUMBER_SO_FAR = /^-?$|^-?(0|[1-9][0-9]*)(\.[0-9]*)?([eE][+-]?[0-9]*)?$/;
+
 const parseLiteral = (buf: string): LiteralResult => {
   if (buf === 'true') return { ok: true, value: true };
   if (buf === 'false') return { ok: true, value: false };
   if (buf === 'null') return { ok: true, value: null };
+  if (!JSON_NUMBER_SO_FAR.test(buf)) return { ok: false };
   const num = Number(buf);
   if (!Number.isNaN(num)) return { ok: true, value: num };
   return { ok: false };

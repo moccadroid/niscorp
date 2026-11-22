@@ -285,6 +285,7 @@ const createSignalFromConfig = <T = string>(config: SignalConfig): Signal<T> => 
         ...(request.output && { accept: request.output.accept }),
         ...(request.output?.outputTool !== undefined && { outputTool: request.output.outputTool }),
         responseStrategies: responseStrategies(wireStrategies),
+        refuseCutOff: request.output?.refuseCutOff,
       });
       return recoveredStepResult(recovered, routed, error, providerRequest.messages);
     }
@@ -316,6 +317,8 @@ const createSignalFromConfig = <T = string>(config: SignalConfig): Signal<T> => 
       accept: request.output.accept,
       ...(request.output.outputTool !== undefined && { outputTool: request.output.outputTool }),
       responseStrategies: responseStrategies(wireStrategies),
+      finishReason: result.finishReason,
+      refuseCutOff: request.output.refuseCutOff,
     });
     return { ...result, outcome: routed.outcome, wire: routed.wire };
   };
@@ -342,6 +345,8 @@ const createSignalFromConfig = <T = string>(config: SignalConfig): Signal<T> => 
               accept: request.output.accept,
               ...(request.output.outputTool !== undefined && { outputTool: request.output.outputTool }),
               responseStrategies: responseStrategies(wireStrategies),
+              finishReason: event.result.finishReason,
+              refuseCutOff: request.output.refuseCutOff,
             });
             yield { type: 'done', result: { ...event.result, outcome: routed.outcome, wire: routed.wire } };
             continue;
@@ -358,6 +363,7 @@ const createSignalFromConfig = <T = string>(config: SignalConfig): Signal<T> => 
           ...(request.output && { accept: request.output.accept }),
           ...(request.output?.outputTool !== undefined && { outputTool: request.output.outputTool }),
           responseStrategies: responseStrategies(wireStrategies),
+          refuseCutOff: request.output?.refuseCutOff,
         });
         yield { type: 'done', result: recoveredStepResult(recovered, routed, error, request.messages) };
       }
@@ -430,7 +436,7 @@ const createSignalFromConfig = <T = string>(config: SignalConfig): Signal<T> => 
   };
 
   return {
-    apiKey: (key) => fork({ apiKey: key }),
+    apiKey: (key) => fork(typeof config.provider === 'string' ? { apiKey: key } : { apiKey: key, provider: { ...config.provider, apiKey: key } }),
     model: (m) => fork({ model: m }),
     systemPrompt: (prompt) => fork({ systemPrompt: prompt }),
     history: (msgs) => fork({ history: msgs }),
@@ -468,6 +474,7 @@ const createSignalFromConfig = <T = string>(config: SignalConfig): Signal<T> => 
           schema: config.schema,
           tools: config.tools,
           retries: config.retries ?? 2,
+          refuseCutOff: config.refuseCutOff,
           options: config.options,
           onRetry: config.onRetry,
           onToolCall: config.onToolCall,
@@ -482,6 +489,7 @@ const createSignalFromConfig = <T = string>(config: SignalConfig): Signal<T> => 
           schema: config.schema,
           tools: config.tools,
           retries: config.retries ?? 2,
+          refuseCutOff: config.refuseCutOff,
           options: config.options,
           streamOptions,
           onRetry: config.onRetry,
