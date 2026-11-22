@@ -81,3 +81,11 @@ Each section is one change an app can see, in `@niscorp/nova`. None of them chan
 - What to do: nothing; handle the new code if `onError` switches over codes.
 - Breaking: yes (strict shells only)
 - Affected apps: none. No `createShell` in the lab apps, the templates, moss, AnimaApp, anima-finance or mira passes `strict: true` (fable `src/shell.ts:16`, mythos `create-shell.ts:35`, relay `src/screen-builder/mount.ts:58`, the classic template's `with/page/src/boot.ts:12`, moss `src/shells/build.ts:187`, anima-finance `src/dev/start-check.ts:174`), and moss has no strict option.
+
+### nova — a plain-text HTTP error body reaches `errorTarget.data`
+- Before: an HTTP endpoint with `errorTarget: 'err'` whose server answered `503` with the text `Service down for maintenance` wrote `err = { status: 503, message: 'HTTP 503' }`: reading the body as JSON used it up, so the text was lost.
+- Now: `err = { status: 503, message: 'HTTP 503', data: 'Service down for maintenance' }`, and `@error.data` in `onError` steps carries the text. The message is unchanged. A JSON error body is read as before. The type `FetchResponse` gains an optional `clone?: () => FetchResponse`; a real `Response` has it. A fetch that returns objects without `clone`, or a reply whose body the host already read (moss's internal wire), behaves exactly as before.
+- Who notices: layouts or steps that read `errorTarget.data` / `@error.data` for servers that answer errors in plain text, or that show the whole error object.
+- What to do: nothing.
+- Breaking: yes (a field is present where it was missing)
+- Affected apps: none found. No layout or step reads `@error.data` in the lab apps, the templates, AnimaApp, anima-finance or mira. The lab apps' 120 HTTP endpoints with `errorTarget` talk to servers that answer errors as JSON `{ message }` (for example `apps/lab/atrium/src/server/boot.ts:60-79`, `apps/lab/mythos/src/api/routes.ts:45-75`); AnimaApp's plain-text error routes (`src/server/media/index.ts:317`) have no nova endpoint with `errorTarget`.

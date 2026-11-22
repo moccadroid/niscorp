@@ -514,7 +514,7 @@ onError: [
 Fields available on `@error`:
 - `message: string`
 - `status: number` (HTTP status, or 0 for network/function errors)
-- `data: unknown` (the response body if any)
+- `data: unknown` (the response body if any: parsed JSON, or the text of a body that is not JSON when the response offers `clone()`, as a real `Response` does; without `clone`, or when the host already read the body, a non-JSON body leaves `data` empty)
 - `timedOut?: boolean` (true if no reply arrived within the endpoint's wait)
 
 A call aborted by an unmount is silent: `onError` does not run, `errorTarget` is not written, and nothing is reported to telemetry.

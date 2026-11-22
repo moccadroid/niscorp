@@ -34,15 +34,22 @@ const defaultFetch: FetchFn = () => {
   throw new Error('No fetch implementation provided to action runtime');
 };
 
-const tryParseJson = async (response: {
-  json: () => Promise<unknown>;
-  text: () => Promise<string>;
-}): Promise<unknown> => {
+// A body the host already read cannot be copied; the reply is then read without the copy.
+const cloneOf = (response: FetchResponse): FetchResponse | undefined => {
+  try {
+    return response.clone?.();
+  } catch {
+    return undefined;
+  }
+};
+
+const tryParseJson = async (response: FetchResponse): Promise<unknown> => {
+  const copy = cloneOf(response);
   try {
     return await response.json();
   } catch {
     try {
-      return await response.text();
+      return await (copy ?? response).text();
     } catch {
       return undefined;
     }
