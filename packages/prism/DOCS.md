@@ -764,7 +764,7 @@ Empty array → `0`.
 { "$min": { "over": { "$ref": "$.prices" } } }
 { "$max": { "over": { "$ref": "$.scores" } } }
 ```
-Empty array → `null`.
+Empty array → `null`. A `null` item is skipped wherever it is: `[3, null, 1]` and `[null, 3, 1]` both give `1`, and a list of nulls gives `null`. Each item costs 9 steps of `maxSteps`.
 
 ### `$pluck` — Extract a field from each element
 ```json
