@@ -1,19 +1,14 @@
-import { cpSync, rmSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { distOf, loadProject, say } from '../project';
 import type { CommandOptions, NiscProject } from '../project';
 import { build } from './build';
 import type { BuildResult } from './build';
-import { isDefaultOut, isWithin, realOf, writeNamedFolder, writeRoutes } from './out-folder';
+import { isDefaultOut, isWithin, realOf, writeDefaultFolder, writeNamedFolder } from './out-folder';
 
 const write = (options: CommandOptions, project: NiscProject, out: string, routes: readonly { path: string; html: string }[]): void => {
   const dist = distOf(options.root, project);
   const isDefault = isDefaultOut(out, options.root);
-  if (isDefault) {
-    rmSync(out, { recursive: true, force: true });
-    cpSync(dist, out, { recursive: true });
-    writeRoutes(out, routes);
-  }
+  if (isDefault) writeDefaultFolder(options.root, out, dist, routes);
   const said = isDefault ? [] : writeNamedFolder(options.root, out, dist, routes);
   say(options)('');
   say(options)(`nisc: ${routes.length} paths written to ${out}`);

@@ -34,6 +34,9 @@ export const project: NiscMossProject = {
   },
   routes: (server) => {
     server.get('/hello', (c) => c.text('hello'));
+    server.get('/thumb', (c) =>
+      c.text(`thumbnail of ${c.req.query('user') ?? ''} ${'pixels '.repeat(500)}`, 200, { 'cache-control': 'public, max-age=31536000, immutable' }),
+    );
   },
   draw: () => '<p>drawn</p>',
   dist: 'built',

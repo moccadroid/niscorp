@@ -170,49 +170,6 @@ describe('withCompression — how an answer travels', () => {
     expect(arrived[0]?.text).toContain('piece 1');
     expect(arrived[0]?.sentByThen).toBeLessThan(5);
   });
-
-  it('an answer that will never change is compressed once', async () => {
-    let letGo = 0;
-    const asset: SiteHandler = () =>
-      new Response(
-        new ReadableStream<Uint8Array>({
-          start: (controller) => {
-            controller.enqueue(new TextEncoder().encode(LONG));
-            controller.close();
-          },
-          cancel: () => {
-            letGo += 1;
-          },
-        }),
-        { headers: { 'content-type': 'text/javascript', 'cache-control': 'public, max-age=31536000, immutable', 'last-modified': WHEN } },
-      );
-    const handler = withCompression(asset);
-
-    const first = await handler(get('/assets/index-AbC12345.js', BROWSER));
-    expect(first.headers.has('content-length')).toBe(false);
-    const firstBytes = await bytesOf(first);
-    expect(brotliDecompressSync(firstBytes).toString()).toBe(LONG);
-
-    const second = await handler(get('/assets/index-AbC12345.js', BROWSER));
-    expect(second.headers.get('content-encoding')).toBe('br');
-    expect(second.headers.get('content-length')).toBe(String(firstBytes.length));
-    expect((await bytesOf(second)).equals(firstBytes)).toBe(true);
-
-    const gz = await handler(get('/assets/index-AbC12345.js', { 'accept-encoding': 'gzip' }));
-    expect(gz.headers.has('content-length')).toBe(false);
-    expect(gunzipSync(await bytesOf(gz)).toString()).toBe(LONG);
-    expect(letGo).toBe(1);
-  });
-
-  it('…and only once it has gone out whole: an answer cut short is not remembered', async () => {
-    const asset: SiteHandler = () => new Response(LONG, { headers: { 'content-type': 'text/javascript', 'cache-control': 'public, max-age=31536000, immutable' } });
-    const handler = withCompression(asset);
-    const cut = await handler(get('/assets/index-AbC12345.js', BROWSER));
-    await cut.body?.cancel();
-    const next = await handler(get('/assets/index-AbC12345.js', BROWSER));
-    expect(next.headers.has('content-length')).toBe(false);
-    expect(brotliDecompressSync(await bytesOf(next)).toString()).toBe(LONG);
-  });
 });
 
 describe('withCompression — an answer that does not finish', () => {

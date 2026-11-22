@@ -5,9 +5,9 @@ import type { Finding } from './source';
 import type { TypeScript } from './typescript';
 
 // The manifest's factory takes the server's code seams and answers the manifest: setup, not code in the artifact tree.
-const MANIFEST = /^(Promise<)?NiscApp>?$/;
+export const MANIFEST = /^(Promise<)?NiscApp>?$/;
 
-const programOf = (ts: TypeScript, root: string): TS.Program => {
+export const programOf = (ts: TypeScript, root: string): TS.Program => {
   const config = ts.findConfigFile(root, ts.sys.fileExists, 'tsconfig.json');
   if (config === undefined || !resolve(config).startsWith(resolve(root))) throw new Error(`the shape check reads the app as its tsconfig.json says, and ${root} has none.`);
   const parsed = ts.getParsedCommandLineOfConfigFile(config, {}, { ...ts.sys, onUnRecoverableConfigFileDiagnostic: () => undefined });
@@ -23,8 +23,7 @@ const importedNames = (ts: TypeScript, clause: TS.ImportClause | undefined): TS.
 };
 
 // What code outside src/app calls of it, read by the compiler under the app's own tsconfig, so a path alias counts.
-export const appDataFindings = (ts: TypeScript, root: string): Finding[] => {
-  const program = programOf(ts, root);
+export const appDataFindings = (ts: TypeScript, root: string, program: TS.Program): Finding[] => {
   const checker = program.getTypeChecker();
   const options = program.getCompilerOptions();
   return program.getSourceFiles().flatMap((source) => {
@@ -40,7 +39,9 @@ export const appDataFindings = (ts: TypeScript, root: string): Finding[] => {
         const calls = checker.getTypeAtLocation(name).getCallSignatures();
         if (calls.length === 0 || calls.every((call) => MANIFEST.test(checker.typeToString(call.getReturnType())))) return [];
         const line = source.getLineAndCharacterOfPosition(name.getStart(source)).line + 1;
-        return [{ rule: 'data' as const, file, line, what: `${name.text}, a function of ${from}` }];
+        const symbol = checker.getSymbolAtLocation(name);
+        const declared = symbol !== undefined && (symbol.flags & ts.SymbolFlags.Alias) !== 0 ? checker.getAliasedSymbol(symbol).getName() : name.text;
+        return [{ rule: 'data' as const, file, line, name: declared, what: `${name.text}, a function of ${from}` }];
       });
     });
   });

@@ -291,7 +291,7 @@ Pick per need; every piece works standalone. Nova is the only mandatory one for 
 - It is written for the packages, so its "custom error classes for domain errors" does **not** apply here: an app declares no classes at all and throws plain `Error`.
 - "Package prompts serve every app" binds packages, not apps: an app's prompts may be about the app. What an app measures against a package's agent is fixed in that package only in general form (see that section).
 
-Zero-tolerance: `any`, type assertions (`as` — `as const` excepted), non-null `!`, `enum`, classes, default exports, `function` declarations. In an app, the shape check reads these by the compiler (see "Verification"). Deps via `pnpm add` only. Files: `kebab-case.role.ts`.
+Zero-tolerance: `any`, type assertions (`as` and `<T>` — `as const` and `<const>` excepted), non-null `!`, `enum`, classes, default exports, `function` declarations. In an app, the shape check reads these by the compiler (see "Verification"). Deps via `pnpm add` only. Files: `kebab-case.role.ts`.
 
 Declared exception: a file that must match an external module's shape (a shim) may break these rules — it says why in a header comment, and reviewers honor it.
 

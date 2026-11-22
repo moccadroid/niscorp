@@ -271,19 +271,34 @@ makes does.
 bundle, and one `index.html` per path — `/` at the top, `/about` at
 `about/index.html` — which is what any static host serves for that path.
 
-**The default folder, `out/`**, is emptied before anything is written to it.
+Every export is first written whole into a fresh folder of its own,
+`.nisc-export-<process>-<id>`: for `out/`, in `node_modules/.cache/nisc/` under
+the app's folder, where git does not look; for a folder named with `--out`,
+inside that folder. Only when every file was made there is anything
+already in the export's folder touched. A path whose file the system will not
+make (on Windows, `/a:b`), or whose file would land outside the export's folder
+(on Windows, `/a\..\..\x`), is said, and nothing is written (exit code 1):
+
+```
+nisc: the path "/a:b" cannot be written here (ENOENT). Nothing was written.
+```
+
+Which names are refused is the system's own answer: names Windows accepts, such
+as `/about.` or `/con`, export as any other. A `.nisc-export-…` folder that an
+ended export left (a kill, a Ctrl+C) is removed by the next export that makes
+its fresh folder in the same place. It is never part of what is written.
+
+**The default folder, `out/`**, is then emptied, and the build and the pages
+are copied into it; the fresh folder only shows that every file can be made,
+and is removed.
 `--out out`, the full path to it, or on Windows and macOS another spelling of
 it such as `--out OUT` is the same folder; a link to it is not.
 
 **A folder named with `--out`** loses only the files the previous export wrote
 there. A link named with `--out` is followed: the export goes into the folder
-it points to.
+it points to. If a file cannot be made, nothing already in the folder is
+changed; a folder that did not exist has been made, and is left empty.
 
-- The export is first written whole into a folder of its own inside it
-  (`.nisc-export-<process>-<id>`). Only when every file was made is anything
-  already there touched. If a file cannot be made, nothing already in the
-  folder is changed; a folder that did not exist has been made, and is left
-  empty.
 - What each export writes there is recorded in
   `node_modules/.cache/nisc/exports.json` under the app's root, keyed by the
   folder's real location: outside the folder, so nothing published lists the
@@ -297,8 +312,6 @@ it points to.
   system will not let go of, another export into the same folder at the same
   time), the command says how many of its files are in place, and exits 1:
   export again to finish.
-- A `.nisc-export-…` folder that an ended export left (a kill, a Ctrl+C) is
-  removed by the next export into that folder. Until then it is in the folder.
 - Everything else in the folder stays, and every export names it on one line,
   the first five and how many more:
 
@@ -319,7 +332,7 @@ the folder survives the next export.
 inside the build: each is refused before anything is drawn (exit code 1). For a
 folder named with `--out`, that is checked as written and where it really
 points. A file at a path named with `--out` (other than `out`, which is
-replaced as before) is said and left as it is, and nothing is written (exit
+replaced) is said and left as it is, and nothing is written (exit
 code 1).
 
 A file is **only ever the page as nobody sees it**. No credential reaches a
@@ -438,11 +451,11 @@ process.exit(
 ```
 
 It prints one `[pass]` or `[fail]` line per rule and answers the exit code, 0
-or 1. It fails when:
+or 1. It fails on these spellings, and only these:
 
 | Rule | It fails on |
 |---|---|
-| `style` (rule 16) | in `src/`: an `as` or `<T>` assertion other than `as const`, a non-null `!`, a `function` declaration, a class, an enum, `any`, a default export. `.d.ts` files are not read |
+| `style` (rule 16) | in `src/`: an `as` or `<T>` assertion other than `as const` or `<const>`, a non-null `!`, a `function` declaration, a class, an enum, `any`, a default export. `.d.ts` files are not read |
 | `formatting` (rule 9) | `Intl.` or a `.toLocale…()` call in `src/`, but `src/dev/` |
 | `roles` (rule 11) | `session.roles` or `principal.roles` in `src/server/` |
 | `files` (rule 9a) | `FileReader` or a `readAs…` call in `src/ui/` |
@@ -452,6 +465,31 @@ or 1. It fails when:
 
 Each is read off the syntax tree, so a word in a comment or a string is never a
 finding.
+
+The same reaches spelt another way are **reported, not failed**. A second
+reading asks the compiler what each name refers to, and prints an `[info]` line
+with the file, the line and the rule for each one the table misses:
+
+| Rule | Reported, whatever the spelling |
+|---|---|
+| `formatting` | any use of the global `Intl`: `const { NumberFormat } = Intl`, `new globalThis.Intl.DateTimeFormat()` |
+| `roles` | a `roles` declared in `@niscorp/moss`'s types, read with a dot, `['roles']` or destructuring: `const { roles } = session` |
+| `address` | any value of the browser's `Location` type (`const { pathname } = window.location`), and `pushState`/`replaceState` on a `History` |
+| `dom` | `querySelector` and its kin on a value of type `Document`: `window['document'].querySelector(…)` |
+| `data` | a function of `src/app/` reached through a namespace import (`helpers.wordsOf(1)`), a re-export (`export { wordsOf } from '../app/helpers'`) or a dynamic import |
+
+```
+[info] rule 9: src/server/when.ts:1 Intl, the global one — another spelling of what the rule fails on; reported, not failed
+```
+
+A name read only as a type (`import type { wordsOf }`, `typeof wordsOf`,
+`export type { wordsOf }`) reaches nothing, and is not reported. Such a line is
+left out when the table already fails the same rule for the same name in that
+file, and when `allow` names that file for that rule (an
+allowance still has to allow something the table fails, or it fails as
+allowing nothing). It never changes the exit code: an app that passes keeps
+passing. If the second reading cannot run, one `[info]` line says so, and the
+exit code is the table's.
 
 `allow` names, per rule, the files that may do what the rule refuses, each with
 why: the file that finds the app's day, the identity seam that reads roles, a
@@ -468,8 +506,8 @@ against how often they replay vex, how many reads word their rows with a Prism
 `mapping`, and the `refresh: 'reactive'` reads no action replays by name.
 
 It reads the source with the app's own TypeScript, 6.x, found from `root`, and
-the app as its `tsconfig.json` there says. On lyceum it takes under three
-seconds.
+the app as its `tsconfig.json` there says. The second reading adds a second or
+two on lyceum.
 
 ## `nisc migrate`
 

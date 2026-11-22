@@ -1,5 +1,5 @@
-import { spawnSync } from 'node:child_process';
-import { chmodSync, cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
+import { spawn, spawnSync } from 'node:child_process';
+import { chmodSync, cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, watch, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -278,5 +278,97 @@ describe('nisc export --out — the default folder is emptied; a named one loses
     for (const name of ['about.', 'about ', 'con']) expect(readdirSync(join(site, name))).toEqual(['index.html']);
     expect(said).not.toContain('not written by this export');
     expect(said).not.toContain('not removed');
+  }, SLOW);
+});
+
+describe('nisc export — every file is made in a fresh folder before any folder is touched', () => {
+  const withPaths = (paths: readonly string[]): void => {
+    writeFileSync(
+      join(app, 'nisc.config.ts'),
+      `import { project as base } from ${JSON.stringify(pathToFileURL(join(OWN_SHELL, 'nisc.config.ts')).href)};
+export const project = { ...base, paths: () => ${JSON.stringify(paths)} };
+`,
+    );
+  };
+  const filesIn = (folder: string): string[] => (existsSync(folder) ? readdirSync(folder, { recursive: true, encoding: 'utf8' }).sort() : []);
+
+  it.runIf(process.platform === 'win32')('a path the system cannot make is said, and neither out/ nor a named folder is touched', () => {
+    expect(exportTo().code).toBe(0);
+    const site = join(scratch, 'site');
+    expect(exportTo(site).code).toBe(0);
+    writeFileSync(join(site, 'notes.txt'), 'mine');
+    const [before, siteBefore] = [filesIn(join(app, 'out')), filesIn(site)];
+    withPaths(['/', '/a:b']);
+    for (const out of [undefined, site]) {
+      const { code, out: said } = exportTo(out);
+      expect(said).toContain('nisc: the path "/a:b" cannot be written here (ENOENT). Nothing was written.');
+      expect(said).not.toContain('    at ');
+      expect(code).toBe(1);
+    }
+    expect(filesIn(join(app, 'out'))).toEqual(before);
+    expect(filesIn(site)).toEqual(siteBefore);
+    expect(readdirSync(app).sort()).toEqual(['built', 'nisc.config.ts', 'node_modules', 'out', 'package.json']);
+  }, SLOW);
+
+  it.runIf(process.platform === 'win32')('a path whose file would land outside the export is refused, and nothing is written anywhere', () => {
+    withPaths(['/', '/z\\..\\..\\escape']);
+    const site = join(scratch, 'site', 'sub');
+    for (const out of [undefined, site]) {
+      const { code, out: said } = exportTo(out);
+      expect(said).toContain('nisc: the path "/z\\..\\..\\escape" cannot be written here (its file would be outside');
+      expect(code).toBe(1);
+    }
+    expect(existsSync(join(app, 'out'))).toBe(false);
+    expect(existsSync(join(app, 'escape'))).toBe(false);
+    expect(filesIn(join(scratch, 'site'))).toEqual(['sub']);
+    expect(readdirSync(scratch).sort()).toEqual(['app', 'site']);
+  }, SLOW);
+
+  it.runIf(process.platform !== 'win32')('a name the system accepts is written as today: /a:b is a:b/index.html', () => {
+    withPaths(['/', '/a:b']);
+    expect(exportTo().code).toBe(0);
+    expect(readdirSync(join(app, 'out', 'a:b'))).toEqual(['index.html']);
+  }, SLOW);
+
+  it('a failed export leaves no fresh folder behind, in the app or in the named folder', () => {
+    withPaths(['/', '/a', '/a/index.html']);
+    const site = join(scratch, 'site');
+    for (const out of [undefined, site]) {
+      const { code, out: said } = exportTo(out);
+      expect(said).toMatch(/nisc: the path "\/a(\/index\.html)?" cannot be written here \(E[A-Z]+\)\. Nothing was written\./);
+      expect(code).toBe(1);
+    }
+    expect(readdirSync(app).sort()).toEqual(['built', 'nisc.config.ts', 'node_modules', 'package.json']);
+    expect(readdirSync(site)).toEqual([]);
+  }, SLOW);
+
+  it.runIf(process.platform !== 'win32')('a write that fails for another reason than the path is said as such, not blamed on the path', () => {
+    mkdirSync(join(app, 'built', 'locked'));
+    chmodSync(join(app, 'built', 'locked'), 0o555);
+    withPaths(['/', '/locked']);
+    const { code, out: said } = exportTo();
+    expect(said).toContain(`nisc: the export could not be written into ${join(app, 'out')} (EACCES on `);
+    expect(said).not.toContain('cannot be written here');
+    expect(code).toBe(1);
+  }, SLOW);
+
+  it('an export killed while its fresh folder is being written leaves nothing in the app’s folder, and the next export removes what it left', async () => {
+    mkdirSync(join(app, 'built', 'many'));
+    for (let file = 0; file < 3000; file += 1) writeFileSync(join(app, 'built', 'many', `${file}.txt`), 'x'.repeat(2000));
+    const cache = join(app, 'node_modules', '.cache', 'nisc');
+    mkdirSync(cache, { recursive: true });
+    const child = spawn(process.execPath, [...NISC, 'export', '--skip-bundle', '--root', app], { stdio: 'ignore' });
+    const ended = new Promise((done) => child.once('exit', done));
+    const watchers = [app, cache].map((folder) =>
+      watch(folder, (_event, name) => {
+        if (typeof name === 'string' && name.startsWith('.nisc-export-')) child.kill('SIGKILL');
+      }),
+    );
+    await ended;
+    for (const watcher of watchers) watcher.close();
+    expect(readdirSync(app).filter((name) => name.startsWith('.nisc-export-'))).toEqual([]);
+    expect(exportTo().code).toBe(0);
+    expect(readdirSync(cache).filter((name) => name.startsWith('.nisc-export-'))).toEqual([]);
+    expect(existsSync(join(app, 'out', 'many', '2999.txt'))).toBe(true);
   }, SLOW);
 });

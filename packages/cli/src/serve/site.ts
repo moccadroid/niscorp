@@ -59,10 +59,9 @@ const compressorFor = (encoding: Encoding): BrotliCompress | Gzip =>
     ? createBrotliCompress({ flush: constants.BROTLI_OPERATION_FLUSH, params: { [constants.BROTLI_PARAM_QUALITY]: BROTLI_QUALITY } })
     : createGzip({ flush: constants.Z_SYNC_FLUSH });
 
-const compressedBody = (source: ReadableStream<Uint8Array>, encoding: Encoding, whole?: (bytes: Buffer<ArrayBuffer>) => void): ReadableStream<Uint8Array> => {
+const compressedBody = (source: ReadableStream<Uint8Array>, encoding: Encoding): ReadableStream<Uint8Array> => {
   const reader = source.getReader();
   const compressor = compressorFor(encoding);
-  const pieces: Buffer[] = [];
   let isLetGo = false;
   let finished: () => void = () => undefined;
   const ended = new Promise<void>((done) => {
@@ -71,15 +70,10 @@ const compressedBody = (source: ReadableStream<Uint8Array>, encoding: Encoding, 
   return new ReadableStream<Uint8Array>({
     start: (controller) => {
       compressor.on('data', (piece: Buffer) => {
-        if (isLetGo) return;
-        if (whole !== undefined) pieces.push(piece);
-        controller.enqueue(piece);
+        if (!isLetGo) controller.enqueue(piece);
       });
       compressor.on('end', () => {
-        if (!isLetGo) {
-          whole?.(Buffer.concat(pieces));
-          controller.close();
-        }
+        if (!isLetGo) controller.close();
         finished();
       });
       compressor.on('error', (error) => {
@@ -108,11 +102,9 @@ const compressedBody = (source: ReadableStream<Uint8Array>, encoding: Encoding, 
   });
 };
 
-export const withCompression = <Rest extends readonly unknown[]>(handler: SiteHandler<Rest>, options: SiteOptions = {}): SiteHandler<Rest> => {
-  // No eviction: only an answer that says it will never change is remembered,
-  // which is bounded by what the built folder has under assets/.
-  const remembered = new Map<string, Buffer<ArrayBuffer>>();
-  return async (request, ...rest) => {
+export const withCompression =
+  <Rest extends readonly unknown[]>(handler: SiteHandler<Rest>, options: SiteOptions = {}): SiteHandler<Rest> =>
+  async (request, ...rest) => {
     const response = await handler(request, ...rest);
     if (request.method !== 'GET' || response.status !== 200 || response.body === null) return response;
     const path = new URL(request.url).pathname;
@@ -136,15 +128,8 @@ export const withCompression = <Rest extends readonly unknown[]>(handler: SiteHa
     const etag = headers.get('etag');
     if (etag !== null && !etag.startsWith('W/')) headers.set('etag', `W/${etag}`);
 
-    if (!/\bimmutable\b/i.test(headers.get('cache-control') ?? '')) return new Response(compressedBody(response.body, encoding), { status: 200, headers });
-    const key = `${encoding} ${path} ${headers.get('last-modified') ?? ''}`;
-    const known = remembered.get(key);
-    if (known === undefined) return new Response(compressedBody(response.body, encoding, (bytes) => remembered.set(key, bytes)), { status: 200, headers });
-    await response.body.cancel();
-    headers.set('content-length', String(known.length));
-    return new Response(known, { status: 200, headers });
+    return new Response(compressedBody(response.body, encoding), { status: 200, headers });
   };
-};
 
 export const siteHandler = <Rest extends readonly unknown[]>(handler: SiteHandler<Rest>, options: SiteOptions = {}): SiteHandler<Rest> =>
   withCompression(withCaching(handler, options), options);

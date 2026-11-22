@@ -125,6 +125,79 @@ describe('runShapeCheck — what the shape of an app’s source says', () => {
     expect(lines).toContain('[info] reactive reads no action replays by name: rows/live');
   });
 
+  it('"<const>" is "as const" written the other way, and passes rule 16', () => {
+    const { code, lines } = run({ 'src/lib/names.ts': "export const names = <const>['a', 'b'];" });
+    expect(lines.filter((line) => line.startsWith('[fail]'))).toEqual([]);
+    expect(code).toBe(0);
+  });
+
+  describe('what a name refers to: other spellings of a reach are reported, never failed', () => {
+    const DOM = { ...TSCONFIG, compilerOptions: { ...TSCONFIG.compilerOptions, lib: ['ES2022', 'DOM'] } };
+    const SPELLINGS: Record<string, string> = {
+      'tsconfig.json': JSON.stringify(DOM),
+      'node_modules/@niscorp/moss/package.json': '{ "name": "@niscorp/moss", "types": "index.d.ts" }',
+      'node_modules/@niscorp/moss/index.d.ts': 'export type FunctionSession = { roles: readonly string[]; principal: string };\n',
+      'src/app/helpers.ts': 'export const wordsOf = (n: number): string => String(n);\n',
+      'src/server/destructured.ts': "import type { FunctionSession } from '@niscorp/moss';\nexport const who = (session: FunctionSession) => { const { roles } = session; return roles; };\n",
+      'src/server/taken.ts': 'const { NumberFormat } = Intl;\nexport const n = new NumberFormat().format(1);\n',
+      'src/server/global.ts': 'export const d = new globalThis.Intl.DateTimeFormat().format(new Date());\n',
+      'src/ui/where.ts': 'const { pathname } = window.location;\nexport const here = pathname;\n',
+      'src/ui/found.ts': "export const found = window['document'].querySelector('.x');\n",
+      'src/server/namespace.ts': "import * as helpers from '../app/helpers';\nexport const said = helpers.wordsOf(1);\n",
+      'src/server/passed.ts': "export { wordsOf } from '../app/helpers';\n",
+      'src/server/later.ts': "export const later = async () => {\n  const { wordsOf } = await import('../app/helpers');\n  return wordsOf(2);\n};\n",
+    };
+    const infoOf = (lines: readonly string[]): string[] => lines.filter((line) => line.startsWith('[info]') && line.includes('another spelling'));
+
+    it('the eight spellings the rules miss are each one [info] line at their file and line, and the exit code is 0', () => {
+      const { code, lines } = run(SPELLINGS);
+      const info = infoOf(lines);
+      for (const at of [
+        'rule 11: src/server/destructured.ts:2 roles',
+        'rule 9: src/server/taken.ts:1 Intl',
+        'rule 9: src/server/global.ts:1 Intl',
+        'rule 4: src/ui/where.ts:1 location',
+        'rule 2: src/ui/found.ts:1 querySelector',
+        'src/app is data: src/server/namespace.ts:2 wordsOf',
+        'src/app is data: src/server/passed.ts:1 wordsOf',
+        'src/app is data: src/server/later.ts:2 wordsOf',
+      ]) {
+        expect(info.filter((line) => line.includes(at))).toHaveLength(1);
+      }
+      expect(info).toHaveLength(8);
+      expect(lines.filter((line) => line.startsWith('[fail]'))).toEqual([]);
+      expect(code).toBe(0);
+    });
+
+    it('a file the app allows a rule is not reported for it', () => {
+      const info = infoOf(run(SPELLINGS, { allow: { formatting: { 'src/server/global.ts': 'the studio’s day' } } }).lines);
+      expect(info.some((line) => line.includes('src/server/global.ts'))).toBe(false);
+      expect(info.some((line) => line.includes('src/server/taken.ts'))).toBe(true);
+    });
+
+    it('a type-only reference to a function of src/app is not a reach, and is not reported', () => {
+      const { code, lines } = run({
+        ...SPELLINGS,
+        'src/server/typed.ts': "import type { wordsOf } from '../app/helpers';\nexport type Words = typeof wordsOf;\n",
+        'src/server/typed-one.ts': "import { type wordsOf as w } from '../app/helpers';\nexport type Words = typeof w;\n",
+        'src/server/typed-out.ts': "export type { wordsOf } from '../app/helpers';\n",
+      });
+      expect(infoOf(lines).some((line) => line.includes('src/server/typed'))).toBe(false);
+      expect(code).toBe(0);
+    });
+
+    it('a name the rules already fail in that file is not reported again', () => {
+      const { failed, lines } = run({
+        ...SPELLINGS,
+        'src/server/named.ts': "import * as helpers from '../app/helpers';\nimport { wordsOf } from '../app/helpers';\nexport const said = [wordsOf(1), helpers.wordsOf(2)];\n",
+        'src/server/both.ts': "const { NumberFormat } = Intl;\nexport const n = [new NumberFormat().format(1), new Intl.PluralRules().select(1)];\n",
+      });
+      expect(failed('src/app is data')).toContain('src/server/named.ts:2 wordsOf');
+      expect(failed('rule 9:')).toContain('src/server/both.ts:2 Intl.PluralRules');
+      expect(infoOf(lines).some((line) => line.includes('src/server/named.ts') || line.includes('src/server/both.ts'))).toBe(false);
+    });
+  });
+
   it('an app without a tsconfig.json is told so, and fails', () => {
     const lines: string[] = [];
     const root = appOf({});
