@@ -1211,7 +1211,9 @@ must match that rule too. An update that would move a row out is refused before
 anything is written: 400 `scope_denied`, naming the rule and the column (`the
 new "tasks.project_id" is not one of the scope's "projectIds"`); in a batch,
 the whole batch is refused. An `onConflict` update leaves such a row as it is
-and answers no row for it, as for a conflicting row outside the rules. A column
+and answers no row for it, as for a conflicting row outside the rules; a host
+with `default: 'allow'` and only update rules on a table gets this check on
+its `onConflict … set` too. A column
 a `set` rule stamps is the policy's own value and is not checked. To let a write
 move a row out of its own rules — handing a task over by setting `owner_id`
 under an `owner_id = me` rule — set `mutations: { …, checkMovedRows: false }`
