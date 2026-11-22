@@ -102,4 +102,21 @@ describe("a handler with no policy of its own lists under the engine's", () => {
     expect(body.entities.map((e) => e.name)).toEqual(['notes']);
     restricted.rows.stop();
   });
+
+  it('lists a write by the policy the write runs under', async () => {
+    const own = createMemoryCache();
+    const readOnly: ScopePolicy = { default: 'deny', entities: { notes: { read: [] } } };
+    const writes: ScopePolicy = { default: 'deny', entities: { notes: { read: [], write: [] } } };
+    await seedCache(own, [
+      { fingerprint: 'notes', shape: [{ id: '' }], dsl: { from: ['notes'], fields: ['notes.id'] } },
+      { fingerprint: 'notes/rename', mutation: { op: 'update', table: 'notes', set: { title: { $context: 'title' } }, where: { eq: ['notes.id', { $context: 'id' }] } } },
+    ]);
+    const restricted = createQueryEngine({ adapter: createPostgresAdapter({ pool: createPglitePool(db) }), cache: own, scope: readOnly });
+    await restricted.introspect();
+    const config = { engine: restricted, locked: true, mutations: { client: db, policy: writes } };
+    expect((await handleDiscovery(config)).fingerprints.map((f) => f.fingerprint)).toEqual(['notes', 'notes/rename']);
+    expect(await handleQuery(config, { fingerprint: 'notes/rename', context: { id: 'n1', title: 'renamed' } }, {})).toMatchObject({ status: 200 });
+    expect((await handleDiscovery({ engine: restricted })).fingerprints.map((f) => f.fingerprint)).toEqual(['notes']);
+    restricted.rows.stop();
+  });
 });

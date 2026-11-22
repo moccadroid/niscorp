@@ -1742,9 +1742,12 @@ policy. Any method other than `GET`/`POST`/`PATCH`/`DELETE` answers 405.
   shape|effect }]` — `context` is the derived, typed input signature; `effect`
   summarizes a write), and the full DSL JSON Schema. A client or agent can read
   this to learn how to call the resource — and exactly what each fingerprint
-  takes. Entities and entries the endpoint's policy cannot touch are not
-  listed: the per-request policy when there is one, otherwise the engine's
-  (`createQueryEngine({ scope })`), the policy a query there runs under.
+  takes. Each is listed only where the policy it runs under lets it run.
+  Entities and read entries go by the policy a query there runs under: the
+  per-request policy when there is one, otherwise the engine's
+  (`createQueryEngine({ scope })`). A write entry goes by the policy its write
+  runs under, `mutations.policy` (the per-request policy on an adapter with
+  `getPolicy`).
 - **`POST`** → runs a query OR replays a write, one body shape. A
   `fingerprint` naming a `kind: 'mutation'` entry dispatches to the write
   pipeline (when `mutations` is configured); anything else is the read path

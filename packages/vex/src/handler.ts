@@ -171,20 +171,28 @@ const tablesRead = (dsl: Query): string[] | undefined => {
   }
 };
 
-const entryVisible = (policy: ScopePolicy, entry: CacheEntry): boolean => {
-  if (entry.kind === 'ok') return tablesRead(entry.dsl)?.every((t) => canReadTable(policy, t)) ?? false;
-  if (entry.kind === 'mutation') return mutationEffect(entry.mutation).every((e) => canWriteTable(policy, e.table, e.op));
+type ListingPolicies = { read: ScopePolicy | undefined; write: ScopePolicy | undefined };
+
+const entryVisible = (policies: ListingPolicies, entry: CacheEntry): boolean => {
+  if (entry.kind === 'ok') {
+    const { read } = policies;
+    return read === undefined || (tablesRead(entry.dsl)?.every((t) => canReadTable(read, t)) ?? false);
+  }
+  if (entry.kind === 'mutation') {
+    const { write } = policies;
+    return write === undefined || mutationEffect(entry.mutation).every((e) => canWriteTable(write, e.table, e.op));
+  }
   return false;
 };
 
-const listFingerprints = async (engine: QueryEngine, policy?: ScopePolicy): Promise<DiscoveryFingerprint[]> => {
+const listFingerprints = async (engine: QueryEngine, policies: ListingPolicies): Promise<DiscoveryFingerprint[]> => {
   if (engine.cache.entries === undefined) return [];
   const schema = engine.getSchema();
   const current = schema !== undefined ? computeSchemaFingerprint(schema) : undefined;
   const rows = await engine.cache.entries();
   return rows
     .filter(({ key, entry }) => (entry.kind === 'ok' || entry.kind === 'mutation') && !key.startsWith('neg:'))
-    .filter(({ entry }) => policy === undefined || entryVisible(policy, entry))
+    .filter(({ entry }) => entryVisible(policies, entry))
     .map(({ key, entry }) => ({
       fingerprint: key,
       kind: entry.kind === 'mutation' ? ('mutation' as const) : ('query' as const),
@@ -213,7 +221,8 @@ export const handleDiscovery = async (config: VexHandlerConfig): Promise<Discove
   const filtered = filterSchema(engine.getSchema(), entityFilter).filter(
     (e) => scopePolicy === undefined || canReadTable(scopePolicy, e.name),
   );
-  const fingerprints = await listFingerprints(engine, scopePolicy);
+  // Each entry is judged by the policy it runs under; a write runs under `mutations.policy`.
+  const fingerprints = await listFingerprints(engine, { read: scopePolicy, write: config.mutations?.policy ?? scopePolicy });
   const protectedCount = fingerprints.filter((f) => f.protected).length;
 
   return {
