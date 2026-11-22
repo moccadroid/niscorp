@@ -125,6 +125,10 @@ A phrase (`isPhrase`) is a non-blank string that is not a binding and holds at
 least one letter. Only a phrase is harvested, looked up in the book or reported
 as a miss: `12`, `100%` and `—` never are.
 
+A phrase with spaces around it (`'Total '`) is looked up as itself first and
+then trimmed; a translation found for the trimmed text goes in between the same
+spaces, as written: `$$`, `$&` or `$1` in a translation render as they are.
+
 ## Counted phrases
 
 A dictionary can hold "Standing". It can never hold "12 of 20" — two numbers

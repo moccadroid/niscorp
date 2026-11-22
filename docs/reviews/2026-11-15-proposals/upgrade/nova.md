@@ -97,3 +97,11 @@ Each section is one change an app can see, in `@niscorp/nova`. None of them chan
 - What to do: nothing.
 - Breaking: yes
 - Affected apps: four lab apps call such endpoints repeatedly, and each gets the intended result (a stale error no longer shows): `apps/lab/atrium/src/admin/app/actions/catalog.action.ts:19` and `entries.action.ts:15` (load on every filter change), `apps/lab/lyceum/src/app/actions/screens/screens.ts:90` (`type` on every keystroke), `apps/lab/encore/src/app/actions/live/move-impact.action.ts:35-49` (four endpoints re-read on each draft move). AnimaApp, anima-finance and mira: none found.
+
+### nova — translations go in as written
+- Before: on text with spaces around it (`'Price in dollars '`), a translation was put in with `String.replace`, which reads `$$`, `$&`, `` $` ``, `$'` and `$1` as patterns: `'Preis in US$$'` rendered `Preis in US$ `.
+- Now: it renders `Preis in US$$ `, as the same translation already did on text without spaces.
+- Who notices: phrasebooks with those sequences in a translation.
+- What to do: nothing.
+- Breaking: yes
+- Affected apps: none found. The phrasebooks in the repo (`apps/lab/lyra/src/db/phrases.de.ts`, `src/db/seed/phrases.ts`, `apps/lab/encore/src/app/rail-phrases.ts`) contain none of those sequences; AnimaApp, anima-finance and mira have no phrasebook found.
