@@ -33,3 +33,11 @@ Each section is one change an app can see, in `@niscorp/nova`. None of them chan
 - What to do: nothing.
 - Breaking: yes (what the slot shows changes; nobody wants the old text)
 - Affected apps: none found. No action definition in the lab apps, the templates, AnimaApp, anima-finance or mira has a string `layout`; stored layouts are used through `{ ref }` nodes (`apps/lab/encore/src/app/app.ts:37`, `apps/lab/lyceum/src/app/app.ts:39`). moss accepts string layouts (`packages/moss/src/shells/host-state.ts:21`, `src/artifactory/generated.ts:67`), so a model-made action pushed with a fragment gets the new behaviour.
+
+### nova — the DOM and TTY kits register `CanvasSlot`
+- Before: `createShell({ canvases: [{ id: 'main', initial: 'hello' }], registry: ttyKit() })` (or the DOM kit), as the README shows, drew `!! COMPONENT_NOT_FOUND: Component not found in registry: CanvasSlot`.
+- Now: the default shell layout draws (`Hello`). `defaultRegistry().list()` of the DOM and TTY kits names `CanvasSlot` too, as the React and Vue kits' lists already did. The Ink kit is unchanged.
+- Who notices: code that builds a component list (for a model, say) from the DOM or TTY kit's `registry.list()`.
+- What to do: nothing.
+- Breaking: yes (the list has one more name)
+- Affected apps: none found. `defaultRegistry()` of these kits is used in `apps/lab/relay/src/console.ts:21`, `apps/lab/relay/src/dev/devtools-check.ts:37` and moss's terminals (`packages/moss/src/terminal/dom/index.ts:25`, `dom/server.ts:16`, `tty/index.ts:47`); none calls `.list()`. The `.list()` calls in the apps (`apps/lab/relay/src/app/app.ts:50`, the model-first template's `src/dev/artifacts-check.ts:54`, AnimaApp `src/dev/artifacts-check.ts:63`, anima-finance `src/dev/artifacts-check.ts:50`, mira `src/dev/artifacts-check.ts:45`) are on the apps' own React registries.

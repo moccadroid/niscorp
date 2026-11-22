@@ -42,11 +42,11 @@ the registry lacks draws a `COMPONENT_NOT_FOUND` marker.
 | kit                                                     | components                                                                                                          |
 | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
 | `adapters/react/components`, `adapters/vue/components` | Stack, Text, Input, Button, Box, Panel, JsonTree, CanvasSlot, ActionSlot (9)                                       |
-| `adapters/dom/components`                               | Box, Row, Stack, Grid, Text, Button, Input, Textarea, Checkbox, Table, Panel, JsonTree, ActionSlot; Select (an Input), Switch (a Checkbox) |
+| `adapters/dom/components`                               | Box, Row, Stack, Grid, Text, Button, Input, Textarea, Checkbox, Table, Panel, JsonTree, CanvasSlot, ActionSlot; Select (an Input), Switch (a Checkbox) |
 | `adapters/tty/components`                               | the DOM kit's names plus Badge                                                                                      |
-| `adapters/ink`                                          | the TTY kit's names, with Textarea an Input                                                                         |
+| `adapters/ink`                                          | the TTY kit's names but CanvasSlot, with Textarea an Input                                                          |
 
-The DOM and TTY walkers draw a `CanvasSlot` themselves.
+The DOM and TTY walkers draw a `CanvasSlot` themselves; their kits register the name so the renderer accepts it, and either kit works as the shell's registry.
 [ADAPTER.md](ADAPTER.md) is the whole contract; the terminal adapters' APIs
 are in [TERMINAL_DOCS.md](TERMINAL_DOCS.md); a Svelte or react-native
 adapter is a sibling folder, built the way the Vue one is.
