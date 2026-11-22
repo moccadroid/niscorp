@@ -451,14 +451,16 @@ const compileMutation = (m: ResolvedMutation, schema: DatabaseSchema, pinned: re
   return finish(`DELETE FROM ${tableSql(m.table, schema.namespace)} WHERE ${where}`);
 };
 
-const keyMadeByDatabase = (table: string, key: string, schema: DatabaseSchema): boolean =>
-  findEntity(table, schema)?.fields.find((f) => f.name === key)?.defaultValue !== undefined;
+const keyMadeByDatabase = (m: Extract<Mutation, { op: 'upsert' }>, schema: DatabaseSchema): boolean =>
+  !(m.key in m.columns) &&
+  !(m.key in (m.insert ?? {})) &&
+  findEntity(m.table, schema)?.fields.find((f) => f.name === m.key)?.defaultValue !== undefined;
 
 const SUGAR: { [K in Mutation['op']]?: (m: Extract<Mutation, { op: K }>, context: Record<string, unknown>, schema: DatabaseSchema) => CoreMutation } = {
-  // Where the database cannot make the key, inserting on a null one would break its NOT NULL.
+  // Where the database does not make the key, inserting on a null one would break its NOT NULL.
   upsert: (m, context, schema) => {
     const value = context[m.key];
-    const keyed = value !== undefined && value !== '' && (value !== null || !keyMadeByDatabase(m.table, m.key, schema));
+    const keyed = value !== undefined && value !== '' && (value !== null || !keyMadeByDatabase(m, schema));
     return keyed
       ? { op: 'update', table: m.table, set: m.columns, where: { eq: [`${m.table}.${m.key}`, { $context: m.key }] } }
       : { op: 'insert', table: m.table, values: { ...m.columns, ...m.insert } };
