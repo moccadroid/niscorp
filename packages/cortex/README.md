@@ -303,6 +303,11 @@ answer and no pending approval. Resumed, it first runs those calls,
 through their gates, approvals and hooks, and then calls the model.
 A fresh `agent.run()` given a transcript that ends in a call runs
 nothing before the model.
+A snapshot that cannot be resumed — no `messages` list, or a
+`pending` without its `call` or its `remaining` list — makes
+`resumeRun` throw `[cortex:config] snapshot cannot be resumed: …`,
+naming what is wrong. Everything else is read as before: a missing or
+`null` count starts at 0, and a `null` `pending` means none.
 `policy.approvalTimeoutMs` turns an unanswered ask into a denial
 (an observation, not a run failure). The denial's `reason` is
 `approval timeout`.
@@ -392,7 +397,8 @@ Anything you can't explain in the preview, the model can't either.
 Programmer errors throw at definition or registration time, or from
 `run()` when they depend on the run's options: no `llm`, a tool id
 or name used twice across the agent's and the run's tools, a tool
-named `respond`. Runtime conditions return:
+named `respond`. `resumeRun` throws for a snapshot of another agent
+or one it cannot resume. Runtime conditions return:
 
 ```ts
 type CortexError = {

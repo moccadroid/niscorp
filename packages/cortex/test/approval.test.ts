@@ -451,3 +451,33 @@ describe('a run aborted between two calls of one step', () => {
     expect(executed).toEqual([]);
   });
 });
+
+describe('resumeRun given a snapshot', () => {
+  const agent = defineAgent({ id: 'careful', instructions: 'Answer.' });
+  const base = (): RunSnapshot => ({
+    version: 1,
+    runId: 'run-1',
+    agentId: 'careful',
+    input: 'go',
+    messages: [{ role: 'user', content: 'go' }],
+    steps: 0,
+    usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0, reported: true },
+    outputRetries: 0,
+    elapsedMs: 0,
+  });
+  const answer = () => stubSignal([{ toolCalls: [{ id: 'r', name: 'respond', args: { response: 'done' } }] }]);
+
+  it('throws, naming what is wrong, when it could not be resumed', () => {
+    const noRemaining = JSON.parse(JSON.stringify({ ...base(), pending: { approvalId: 'a', reason: 'r', call: { id: 'c1', toolId: 'echo', args: {} } } }));
+    expect(() => resumeRun(agent, noRemaining, { llm: answer() })).toThrow(
+      /^\[cortex:config\] snapshot cannot be resumed: pending\.remaining: /,
+    );
+    const noMessages = JSON.parse(JSON.stringify({ ...base(), messages: undefined }));
+    expect(() => resumeRun(agent, noMessages, { llm: answer() })).toThrow(/^\[cortex:config\] snapshot cannot be resumed: messages: /);
+  });
+
+  it('resumes with null in its optional fields, as before', async () => {
+    const withNulls = JSON.parse(JSON.stringify({ ...base(), pending: null, steps: null }));
+    expect((await resumeRun(agent, withNulls, { llm: answer() }).result).ok).toBe(true);
+  });
+});

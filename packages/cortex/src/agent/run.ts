@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import type { Message } from '@niscorp/signal';
 import {
   EMPTY_USAGE,
@@ -236,6 +237,13 @@ export const createRun = <TData, TDeps>(
   options: RunOptions<TDeps> | undefined,
 ): RunHandle<TData> => wireRun({ definition, input, options, runId: newRunId() });
 
+// Only what a resumed run would crash without: the rest it reads loosely, so every snapshot that resumed still does.
+const ResumedCallSchema = z.looseObject({ id: z.string(), toolId: z.string() });
+const ResumableSnapshotSchema = z.looseObject({
+  messages: z.array(z.looseObject({})),
+  pending: z.looseObject({ call: ResumedCallSchema, remaining: z.array(ResumedCallSchema) }).nullish(),
+});
+
 export const resumeRun = <TData, TDeps>(
   definition: AgentDefinition<TData, TDeps>,
   snapshot: RunSnapshot,
@@ -243,6 +251,10 @@ export const resumeRun = <TData, TDeps>(
 ): RunHandle<TData> => {
   if (snapshot.agentId !== definition.agentId) {
     throwConfig(`snapshot belongs to agent "${snapshot.agentId}", not "${definition.agentId}"`);
+  }
+  const resumable = ResumableSnapshotSchema.safeParse(snapshot);
+  if (!resumable.success) {
+    throwConfig(`snapshot cannot be resumed: ${resumable.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('; ')}`);
   }
   return wireRun({
     definition,
