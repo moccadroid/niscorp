@@ -62,7 +62,9 @@ which writes the field back to absent; its controls stay, and typing into them
 adds it again. A field is optional when its schema accepts a missing
 value; one whose own code throws on a missing value (a `z.preprocess` that trims
 its input) is required. An emptied number box leaves the number absent, or
-`null` where the schema takes `null`.
+`null` where the schema takes `null`. An enum with no `.default()` starts with no
+value in the document, and its select shows a disabled "—" until an option is
+chosen.
 
 The other options: `value` is the document to edit, used as given in place of
 that starting document. `id` is the id of the action `toNova` returns (default
@@ -109,7 +111,7 @@ import { prism } from '@niscorp/loom/plugins/prism/react';
 - To switch to a different artifact, give the element a new React `key`.
   `plugins` and `artifact` are read once, when the element mounts.
 
-Three things are worth knowing before you rely on them:
+Two things are worth knowing before you rely on them:
 
 - **Messages follow edits.** The inline messages and the Validations pane show
   what the schema said after the last edit. They are empty until the first one,
@@ -117,9 +119,6 @@ Three things are worth knowing before you rely on them:
   `path`) is shown nowhere, and a problem in a list row shows in the Validations
   pane only. They are not the verdict on a document; the schema is
   ([DESIGN.md](./DESIGN.md), "Validation").
-- **A select has no row for "none".** An enum with no `.default()` starts with no
-  value in the document, and the select displays its first option all the same.
-  Give the enum a `.default()` and the two start out agreeing.
 - **A key with a dot in it is not edited correctly.** Nova reads a binding
   path by splitting it at each `.`, so a field such as `"a.b"` is bound as `b`
   inside `a`: the control shows nothing and an edit writes to the wrong place.

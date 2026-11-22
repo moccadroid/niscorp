@@ -63,8 +63,16 @@ export const LoomSelect: NovaComponent<{
     const chosen = (options ?? []).find((option) => String(option.value) === text);
     set(chosen === undefined ? text : chosen.value);
   };
+  // With no value among the options, a disabled "—" row is shown, so every real
+  // option is a change and choosing the first one writes it.
+  const hasValue = (options ?? []).some((option) => option.value === value);
   return (
-    <select value={String(value ?? '')} onChange={(event) => choose(event.target.value)} style={inputStyle}>
+    <select value={hasValue ? String(value) : ''} onChange={(event) => choose(event.target.value)} style={inputStyle}>
+      {hasValue ? null : (
+        <option value="" disabled>
+          —
+        </option>
+      )}
       {(options ?? []).map((option) => (
         <option key={String(option.value)} value={String(option.value)}>
           {option.label}
