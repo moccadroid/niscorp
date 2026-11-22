@@ -5,19 +5,30 @@ export type ValueKind = 'string' | 'number' | 'boolean' | 'null' | 'object' | 'a
 export type SchemaInfo = {
   acceptedKinds: ReadonlySet<ValueKind> | 'any';
   subSchema: z.ZodType | null;
+  alternatives?: readonly z.ZodType[];
 };
 
 const ANY_INFO: SchemaInfo = { acceptedKinds: 'any', subSchema: null };
 
 export const walkSchema = (root: z.ZodType, segments: readonly string[]): SchemaInfo | null => {
-  let current: z.ZodType = root;
+  let current: readonly z.ZodType[] = [root];
   for (const segment of segments) {
-    const next = stepInto(current, segment);
-    // Below a schema that takes any value, every value is taken.
-    if (!next) return inspectSchema(enter(current)).acceptedKinds === 'any' ? ANY_INFO : null;
+    const next = current.flatMap((schema) => stepInto(schema, segment));
+    if (next.length === 0) {
+      // Below a schema that takes any value, every value is taken.
+      return current.some((schema) => inspectSchema(enter(schema)).acceptedKinds === 'any') ? ANY_INFO : null;
+    }
     current = next;
   }
-  return inspectSchema(current);
+  const [first, ...others] = current;
+  if (first === undefined) return null;
+  if (others.length === 0) return inspectSchema(first);
+  const kinds = new Set<ValueKind>();
+  for (const info of current.map(inspectSchema)) {
+    if (info.acceptedKinds === 'any') return { acceptedKinds: 'any', subSchema: first, alternatives: current };
+    for (const kind of info.acceptedKinds) kinds.add(kind);
+  }
+  return { acceptedKinds: kinds, subSchema: first, alternatives: current };
 };
 
 // What streamed JSON is read against: a lazy schema's own schema, a pipe's input side.
@@ -31,9 +42,18 @@ const enter = (schema: z.ZodType): z.ZodType => {
   return s;
 };
 
-const stepInto = (schema: z.ZodType, segment: string): z.ZodType | null => {
+// Into every variant of a union that has the segment.
+const stepInto = (schema: z.ZodType, segment: string): z.ZodType[] => {
   const s = enter(schema);
+  if (s instanceof z.ZodUnion) {
+    const options = (s._zod.def.options ?? []) as z.ZodType[];
+    return options.flatMap((option) => stepInto(option, segment));
+  }
+  const next = stepIntoMember(s, segment);
+  return next ? [next] : [];
+};
 
+const stepIntoMember = (s: z.ZodType, segment: string): z.ZodType | null => {
   if (s instanceof z.ZodObject) {
     const shape = s.shape as Record<string, z.ZodType>;
     return shape[segment] ?? null;
@@ -55,24 +75,6 @@ const stepInto = (schema: z.ZodType, segment: string): z.ZodType | null => {
 
   if (s instanceof z.ZodRecord) {
     return (s._zod.def.valueType as z.ZodType | undefined) ?? null;
-  }
-
-  if (s instanceof z.ZodUnion) {
-    const options = (s._zod.def.options ?? []) as z.ZodType[];
-    for (const opt of options) {
-      const next = stepInto(opt, segment);
-      if (next) return next;
-    }
-    return null;
-  }
-
-  if (isDiscriminatedUnion(s)) {
-    const options = getDiscriminatedUnionOptions(s);
-    for (const opt of options) {
-      const next = stepInto(opt, segment);
-      if (next) return next;
-    }
-    return null;
   }
 
   return null;
@@ -148,9 +150,6 @@ const isDiscriminatedUnion = (schema: z.ZodType): boolean => {
   const def = (schema as DiscriminatedUnionLike)._zod?.def;
   return def?.type === 'discriminatedUnion' || def?.type === 'discriminated_union';
 };
-
-const getDiscriminatedUnionOptions = (schema: z.ZodType): z.ZodType[] =>
-  ((schema as DiscriminatedUnionLike)._zod.def.options ?? []) as z.ZodType[];
 
 const literalToKind = (v: unknown): ValueKind => {
   if (v === null) return 'null';

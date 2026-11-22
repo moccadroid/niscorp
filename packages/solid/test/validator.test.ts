@@ -862,3 +862,45 @@ describe('a string format field', () => {
     await expect(stream.final()).rejects.toThrow('[solid] stream failed validation');
   });
 });
+
+describe('a field of a union', () => {
+  const Widget = z.object({
+    w: z.discriminatedUnion('kind', [
+      z.object({ kind: z.literal('text'), value: z.string() }),
+      z.object({ kind: z.literal('count'), value: z.number() }),
+    ]),
+  });
+
+  it('keeps a value of the kind a later variant takes, in strict mode', async () => {
+    const stream = createStream({ schema: Widget, initial: { w: { kind: 'text' as const, value: '' } }, mode: 'strict' });
+    stream.write('{"w":{"kind":"count","value":5}}');
+    expect(await stream.final()).toEqual({ w: { kind: 'count', value: 5 } });
+  });
+
+  it('keeps it in recover mode, with no error', () => {
+    const errors: string[] = [];
+    const stream = createStream({ schema: Widget, initial: { w: { kind: 'text' as const, value: '' } } });
+    stream.onError((error) => errors.push(error.message));
+    stream.write('{"w":{"kind":"count","value":5}}');
+    expect(stream.current()).toEqual({ w: { kind: 'count', value: 5 } });
+    expect(errors).toEqual([]);
+  });
+
+  it('refuses a kind no variant takes', () => {
+    const errors: string[] = [];
+    const stream = createStream({ schema: Widget, initial: { w: { kind: 'text' as const, value: '' } } });
+    stream.onError((error) => errors.push(error.expected));
+    stream.write('{"w":{"kind":"count","value":[5]}}');
+    expect(errors).toEqual(['string | number']);
+  });
+
+  it('passes the finalize check when any variant takes the value', () => {
+    const errors: string[] = [];
+    const schema = z.object({ u: z.union([z.object({ n: z.number().max(1) }), z.object({ n: z.number().min(10) })]) });
+    const stream = createStream({ schema, initial: { u: { n: 0 } }, constraints: 'finalize' });
+    stream.onError((error) => errors.push(`${error.path}: ${error.message}`));
+    stream.write('{"u":{"n":12}}');
+    stream.close();
+    expect(errors).toEqual([]);
+  });
+});

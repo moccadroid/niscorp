@@ -81,6 +81,7 @@ export const createValidator = (deps: ValidatorDeps): Validator => {
     const value = getByPath(getRoot(), segments);
     if (value === undefined) return;
 
+    if (info.alternatives?.some((alternative) => alternative.safeParse(value).success)) return;
     const result = info.subSchema.safeParse(value);
     if (result.success) return;
 

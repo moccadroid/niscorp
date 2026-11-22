@@ -264,7 +264,7 @@ A constraint violation (phase 2) is found after the value has been written, so i
 - `ZodArray` → `element`
 - `ZodTuple` → `items[idx]` or `rest`
 - `ZodRecord` → `valueType`
-- `ZodUnion` → first variant that accepts the segment
+- `ZodUnion` (discriminated too) → every variant that has the segment: the field takes the kinds of all of them, and passes finalize if any of them accepts its value
 - `ZodOptional` / `ZodNullable` / `ZodDefault` → unwrap and recurse
 - `ZodLiteral`, `ZodEnum`, `ZodString/Number/Boolean/Null` → leaf kinds
 - Discriminated unions → object kind; full narrowing deferred to finalize
