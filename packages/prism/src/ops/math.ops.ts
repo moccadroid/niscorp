@@ -21,25 +21,28 @@ const requireNumbers = (node: object, pair: [unknown, unknown], context: EvalCon
 const refuseZero = (node: object, op: string): never =>
   failAt(`Division by zero: the second value of ${op} is 0.`, ErrorCode.DIVISION_BY_ZERO, { op }, { node, op, field: '1', form: false });
 
+const finite = (result: number, node: object, op: string): number =>
+  Number.isFinite(result) ? result : failAt(`${op} gave ${result}, which is not a JSON number.`, ErrorCode.TYPE, { op }, { node, op, form: false });
+
 export const opAdd = (node: AddNode, context: EvalContext, evaluate: EvaluateFn): JsonValue => {
   const [a, b] = requireNumbers(node, node.$add, context, evaluate, '$add');
-  return a + b;
+  return finite(a + b, node, '$add');
 };
 
 export const opSub = (node: SubNode, context: EvalContext, evaluate: EvaluateFn): JsonValue => {
   const [a, b] = requireNumbers(node, node.$sub, context, evaluate, '$sub');
-  return a - b;
+  return finite(a - b, node, '$sub');
 };
 
 export const opMul = (node: MulNode, context: EvalContext, evaluate: EvaluateFn): JsonValue => {
   const [a, b] = requireNumbers(node, node.$mul, context, evaluate, '$mul');
-  return a * b;
+  return finite(a * b, node, '$mul');
 };
 
 export const opDiv = (node: DivNode, context: EvalContext, evaluate: EvaluateFn): JsonValue => {
   const [a, b] = requireNumbers(node, node.$div, context, evaluate, '$div');
   if (b === 0) return refuseZero(node, '$div');
-  return a / b;
+  return finite(a / b, node, '$div');
 };
 
 // The remainder with the sign of the divisor, not of the dividend as `%` gives it.

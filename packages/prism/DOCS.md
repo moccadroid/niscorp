@@ -230,7 +230,7 @@ Source: `{ "tags": ["a", "b", "a", "c", "b"] }` → `["a", "b", "c"]`
 
 ## Math Operations
 
-`$add`, `$sub`, `$mul`, `$div` and `$mod` take a `[left, right]` pair. Both operands are evaluated and must be numbers. `$round` and `$toNumber` take an object.
+`$add`, `$sub`, `$mul`, `$div` and `$mod` take a `[left, right]` pair. Both operands are evaluated and must be numbers. An answer past what a JSON number can be (`{ "$mul": [1e308, 10] }`) is refused with `E_TYPE`, not handed out as `Infinity`. `$round` and `$toNumber` take an object.
 
 ### `$add`
 ```json

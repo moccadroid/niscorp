@@ -136,3 +136,24 @@ describe('type errors', () => {
     expect(() => evaluate({ $add: [{ $const: 'a' }, { $const: 1 }] }, source)).toThrow();
   });
 });
+
+describe('a math answer is a JSON number', () => {
+  const codeOf = (config: object, src: object): string | undefined => {
+    try {
+      evaluate(config as never, src);
+    } catch (error) {
+      return error instanceof PrismError ? error.code : String(error);
+    }
+    return undefined;
+  };
+  it('a sum, difference, product or quotient past what a number can be is refused', () => {
+    expect(codeOf({ $mul: [{ $ref: '$.a' }, 10] }, { a: 1e308 })).toBe('E_TYPE');
+    expect(codeOf({ $div: [{ $ref: '$.a' }, { $ref: '$.b' }] }, { a: 1, b: 5e-324 })).toBe('E_TYPE');
+    expect(codeOf({ $add: [{ $ref: '$.a' }, { $ref: '$.a' }] }, { a: 1e308 })).toBe('E_TYPE');
+    expect(codeOf({ $sub: [{ $ref: '$.a' }, { $ref: '$.a' }] }, { a: -1e308 })).toBe(undefined);
+    expect(codeOf({ $sub: [{ $ref: '$.a' }, 1e308] }, { a: -1e308 })).toBe('E_TYPE');
+  });
+  it('the refusal says which op gave what', () => {
+    expect(() => evaluate({ $mul: [{ $ref: '$.a' }, 10] }, { a: 1e308 })).toThrow(/\$mul gave Infinity, which is not a JSON number/);
+  });
+});
