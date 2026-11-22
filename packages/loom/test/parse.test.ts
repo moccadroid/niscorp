@@ -265,3 +265,14 @@ describe('parse — a literal', () => {
     expect(schema.safeParse(document).success).toBe(true);
   });
 });
+
+describe('parse — a schema that takes null', () => {
+  it('marks the field nullable, through any wrapper', () => {
+    const ir = parse(z.object({ a: z.number().nullable(), b: z.number().nullable().optional(), c: z.number().optional() }));
+    expect(ir.kind === 'object' ? ir.fields.map((field) => [field.key, field.field.nullable]) : []).toEqual([
+      ['a', true],
+      ['b', true],
+      ['c', undefined],
+    ]);
+  });
+});

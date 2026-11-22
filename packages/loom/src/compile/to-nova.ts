@@ -84,7 +84,7 @@ const stringBuild: Build<'string'> = (field, loc) =>
   control(Roles.text, loc.expr, field.format !== undefined ? { format: field.format } : {});
 
 const numberBuild: Build<'number'> = (field, loc) =>
-  control(Roles.number, loc.expr, field.integer ? { integer: true } : {});
+  control(Roles.number, loc.expr, { ...(field.integer ? { integer: true } : {}), ...(field.nullable ? { nullable: true } : {}) });
 
 const booleanBuild: Build<'boolean'> = (_field, loc) => control(Roles.checkbox, loc.expr);
 

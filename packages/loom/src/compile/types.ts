@@ -6,7 +6,7 @@ export type Pattern =
   | { kind: 'type'; type: string }
   | { kind: 'fallback' };
 export type Variant = { label: string; field: Field; pattern: Pattern };
-export type FieldMeta = { title?: string; description?: string; default?: unknown };
+export type FieldMeta = { title?: string; description?: string; default?: unknown; nullable?: true };
 
 type Of<Body> = Body & FieldMeta;
 

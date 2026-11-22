@@ -494,3 +494,28 @@ describe('LoomEditor — a stored value no union branch recognises', () => {
     expect(select instanceof HTMLSelectElement ? select.selectedOptions[0]?.textContent : undefined).toBe('t');
   });
 });
+
+describe('LoomForm — clearing a number', () => {
+  it('leaves a number the schema does not take null for absent', () => {
+    const onChange = vi.fn();
+    render(<LoomForm schema={z.object({ qty: z.number().optional() })} onChange={onChange} />);
+    fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '' } });
+    const cleared = onChange.mock.lastCall?.[0];
+    expect(cleared).toEqual({});
+    expect(z.object({ qty: z.number().optional() }).safeParse(cleared).success).toBe(true);
+  });
+
+  it('writes null where the schema takes null', () => {
+    const onChange = vi.fn();
+    render(<LoomForm schema={z.object({ qty: z.number().nullable() })} onChange={onChange} />);
+    fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '' } });
+    expect(onChange).toHaveBeenLastCalledWith({ qty: null });
+  });
+
+  it('an integer steps by one, any other number by any amount', () => {
+    render(<LoomForm schema={z.object({ qty: z.number().int(), price: z.number() })} />);
+    const [qty, price] = screen.getAllByRole('spinbutton');
+    expect(qty?.getAttribute('step')).toBe('1');
+    expect(price?.getAttribute('step')).toBe('any');
+  });
+});

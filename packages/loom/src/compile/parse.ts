@@ -191,11 +191,13 @@ const resolveLazy = (lazy: ZodType): ZodType | undefined => {
   return resolved;
 };
 
-const unwrap = (schema: ZodType): { core: ZodType; default?: unknown } => {
+const unwrap = (schema: ZodType): { core: ZodType; default?: unknown; nullable?: true } => {
   let core = schema;
   let fallback: unknown;
+  let nullable = false;
   let def = defOf(core);
   while (WRAPPERS.has(def.type) || def.type === 'lazy') {
+    if (def.type === 'nullable') nullable = true;
     const inner = def.type === 'lazy' ? resolveLazy(core) : def.innerType;
     if (inner === undefined) break;
     // The outermost default is the one zod applies.
@@ -203,7 +205,7 @@ const unwrap = (schema: ZodType): { core: ZodType; default?: unknown } => {
     core = inner;
     def = defOf(core);
   }
-  return fallback !== undefined ? { core, default: fallback } : { core };
+  return { core, ...(fallback !== undefined ? { default: fallback } : {}), ...(nullable ? { nullable: true } : {}) };
 };
 
 const readMeta = (schema: ZodType): FieldMeta => {
@@ -215,14 +217,14 @@ const readMeta = (schema: ZodType): FieldMeta => {
 };
 
 const parseField = (schema: ZodType, walk: Walk): Field => {
-  const { core, default: fallback } = unwrap(schema);
+  const { core, default: fallback, nullable } = unwrap(schema);
   if (walk.stack.has(defOf(core))) {
     walk.targets.add(defOf(core));
     return { kind: 'self' };
   }
   const body = (parseByType[defOf(core).type] ?? unknownField)(core, walk);
   const meta = { ...readMeta(core), ...readMeta(schema) };
-  return { ...body, ...meta, ...(fallback !== undefined ? { default: fallback } : {}) };
+  return { ...body, ...meta, ...(fallback !== undefined ? { default: fallback } : {}), ...(nullable === true ? { nullable } : {}) };
 };
 
 export const parse = (schema: ZodType): Field =>

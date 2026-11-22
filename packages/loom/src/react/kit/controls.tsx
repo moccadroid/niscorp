@@ -23,15 +23,17 @@ export const LoomText: NovaComponent<{ value?: unknown; format?: string; placeho
   );
 };
 
-export const LoomNumber: NovaComponent<{ value?: unknown }> = ({ value, novaModel }) => {
+// Emptied, a number is absent, or null where the schema takes null.
+export const LoomNumber: NovaComponent<{ value?: unknown; integer?: boolean; nullable?: boolean }> = ({ value, integer, nullable, novaModel }) => {
   const set = useModelWrite(novaModel);
   return (
     <input
       type="number"
+      step={integer === true ? 1 : 'any'}
       value={Number.isFinite(value) ? (value as number) : ''}
       onChange={(event) => {
         const raw = event.target.value;
-        set(raw ? Number(raw) : null);
+        set(raw ? Number(raw) : nullable === true ? null : undefined);
       }}
       style={inputStyle}
     />

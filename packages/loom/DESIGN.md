@@ -36,7 +36,9 @@ shape; `parse` collapses those into one tagged union so every later stage can
 dispatch on a single `kind`. The kinds are: `string`, `number`, `boolean`,
 `enum`, `object`, `array`, `tuple`, `union`, `self`, and `unknown`. A
 `z.literal` is an `enum` of its values whose `default` is the first, so it
-starts at its value.
+starts at its value. A field whose schema takes `null` (`.nullable()`, under any
+other wrapper) carries `nullable: true`: the number control writes `null` when
+it is emptied only for such a field, and leaves any other number absent.
 
 This model is pure data. It knows nothing about Nova. It is *what Loom edits*,
 described independently of how it is rendered.

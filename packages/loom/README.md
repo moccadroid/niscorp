@@ -61,7 +61,8 @@ an optional field that has a value shows a **Remove** link beside its label,
 which writes the field back to absent; its controls stay, and typing into them
 adds it again. A field is optional when its schema accepts a missing
 value; one whose own code throws on a missing value (a `z.preprocess` that trims
-its input) is required.
+its input) is required. An emptied number box leaves the number absent, or
+`null` where the schema takes `null`.
 
 The other options: `value` is the document to edit, used as given in place of
 that starting document. `id` is the id of the action `toNova` returns (default
