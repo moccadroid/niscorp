@@ -11,8 +11,8 @@ Checked against the lab apps (`apps/lab/*`) and, read-only, AnimaApp, anima-fina
 ## prism
 
 ### prism — `$update` and `$has` read a path as `$get` does
-- Before: `$update` of `{ items: [{qty:1},{qty:2}] }` at `["items","0","qty"]` gave `{ items: { "0": { qty: 5 } } }`: the list became an object and item 2 was lost. `$update` of `{ title: "Hello" }` at `["title","en"]` gave `{ title: { en: "Hi" } }`. `$has` at `["items","0"]` over a list answered `false`.
-- Now: the first gives `{ items: [{qty:5},{qty:2}] }`; the second is `E_TYPE` ("No key "en" at title.en: the value there is text "Hello", and $update does not replace it."); `$has` answers `true`. A key on a list (`"x"`, `"01"`), a string, a number or a boolean is `E_TYPE`. A missing key or `null` on the path is still created as an object.
+- Before: `$update` of `{ items: [{qty:1},{qty:2}] }` at `["items","0","qty"]` gave `{ items: { "0": { qty: 5 } } }`: the list became an object and item 2 was lost. `$update` of `{ items: [1, 2] }` at `["items","5"]` gave `{ items: { "5": 5 } }`. `$update` of `{ title: "Hello" }` at `["title","en"]` gave `{ title: { en: "Hi" } }`. `$has` at `["items","0"]` over a list answered `false`.
+- Now: the first gives `{ items: [{qty:5},{qty:2}] }`; the second is `E_MISSING_PATH` ("No array item at items.5"), as a number index past the end always was; the third is `E_TYPE` ("No key "en" at title.en: the value there is text "Hello", and $update does not replace it."); `$has` answers `true`. A key on a list (`"x"`, `"01"`), a string, a number or a boolean is `E_TYPE`. A missing key or `null` on the path is still created as an object.
 - Who notices: a config, or a strata document step, whose `$update` path runs through a list by digit text or through a scalar. In a strata migration the document upgraded after the release gets the new shape (or the error); documents upgraded before keep the shape they got.
 - What to do: nothing, unless a config relied on the old replacement. Write the object you want with `$merge`, or test the value first with `$type`.
 - Breaking: yes
