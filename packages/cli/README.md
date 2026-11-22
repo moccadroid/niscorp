@@ -271,28 +271,36 @@ makes does.
 bundle, and one `index.html` per path — `/` at the top, `/about` at
 `about/index.html` — which is what any static host serves for that path.
 
-Every file is first written into a fresh folder (`.nisc-export-…`, in the
-app's root for `out/`, inside the folder for one named with `--out`), and
-nothing already there is touched until every file was made. If one cannot be
-made, the fresh folder is removed and nothing else was changed. (If moving the
-files in fails, say on a file the system will not let go of, the folder is left
-part-replaced and the command exits 1.)
-
-**The default folder, `out/`**, is emptied and the export put in its place. It
-is found by where it lies, so `--out out` or the full path to it is the same
-folder.
+**The default folder, `out/`**, is emptied before anything is written to it.
+`--out out`, the full path to it, or on Windows and macOS another spelling of
+it such as `--out OUT` is the same folder; a link to it is not.
 
 **A folder named with `--out`** loses only the files the previous export wrote
 there. A link named with `--out` is followed: the export goes into the folder
-it points to. The command records, for each such folder, what its last export
-wrote, in `node_modules/.cache/nisc/exports.json` under the app's root, keyed
-by the folder's real location: outside the folder, so nothing published lists
-the paths. The next export into that folder removes those files (and any
-folder that leaves empty), then writes its own. A file or link at a path where
-it writes is replaced; a folder with files of its own where it writes a file is
-said, and nothing is written (exit code 1). Everything else in the folder
-stays, and every export names it on one line, the first five and how many
-more:
+it points to.
+
+- The export is first written whole into a folder of its own inside it
+  (`.nisc-export-<process>-<id>`). Only when every file was made is anything
+  already there touched. If a file cannot be made, nothing already in the
+  folder is changed; a folder that did not exist has been made, and is left
+  empty.
+- What each export writes there is recorded in
+  `node_modules/.cache/nisc/exports.json` under the app's root, keyed by the
+  folder's real location: outside the folder, so nothing published lists the
+  paths. The record is never written through a link. If it cannot be written
+  (a read-only `node_modules`, a link on the way), the export still finishes
+  and says so on one line: the next export removes none of what this one wrote.
+- The next export removes the recorded files (and any folder that leaves
+  empty), then moves its own in. A file or link at a path where it writes is
+  replaced; a folder with files of its own where it writes a file is said, and
+  nothing is written (exit code 1). If moving the files in fails (a file the
+  system will not let go of, another export into the same folder at the same
+  time), the command says how many of its files are in place, and exits 1:
+  export again to finish.
+- A `.nisc-export-…` folder that an ended export left (a kill, a Ctrl+C) is
+  removed by the next export into that folder. Until then it is in the folder.
+- Everything else in the folder stays, and every export names it on one line,
+  the first five and how many more:
 
 ```
 nisc: left as they were in /work/site, not written by this export (2): .git/, notes.txt
@@ -308,10 +316,11 @@ deletes it, and deleting the folder once ends it. A file another step puts in
 the folder survives the next export.
 
 `--out` may not be the app's folder, a folder above it, the build, or a folder
-inside the build, as written or by real location: each is refused before
-anything is drawn (exit code 1). A file at a path named with `--out` (other
-than `out`, which is replaced as before) is said and left as it is, and nothing
-is written (exit code 1).
+inside the build: each is refused before anything is drawn (exit code 1). For a
+folder named with `--out`, that is checked as written and where it really
+points. A file at a path named with `--out` (other than `out`, which is
+replaced as before) is said and left as it is, and nothing is written (exit
+code 1).
 
 A file is **only ever the page as nobody sees it**. No credential reaches a
 build, so there is nothing to leak into one.

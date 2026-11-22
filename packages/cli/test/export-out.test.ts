@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -23,12 +23,26 @@ beforeEach(() => {
 
 afterEach(() => rmSync(scratch, { recursive: true, force: true }));
 
-const exportTo = (out: string): { code: number | null; out: string } => {
-  const result = spawnSync(process.execPath, [...NISC, 'export', '--skip-bundle', '--root', app, '--out', out], { encoding: 'utf8' });
+const exportTo = (out?: string): { code: number | null; out: string } => {
+  const result = spawnSync(process.execPath, [...NISC, 'export', '--skip-bundle', '--root', app, ...(out === undefined ? [] : ['--out', out])], { encoding: 'utf8' });
   return { code: result.status, out: `${result.stdout}\n${result.stderr}` };
 };
 
 const recordFile = (): string => join(app, 'node_modules', '.cache', 'nisc', 'exports.json');
+
+const modeOf = (path: string): number => statSync(path).mode & 0o777;
+
+const aFolderModeHere = (): number => {
+  const probe = join(scratch, 'mode-probe');
+  mkdirSync(probe, { recursive: true });
+  return modeOf(probe);
+};
+
+const deadPid = (): number => {
+  const ended = spawnSync(process.execPath, ['-e', '']);
+  expect(ended.pid).toBeGreaterThan(0);
+  return ended.pid ?? 0;
+};
 
 describe('nisc export --out — the default folder is emptied; a named one loses only what the last export wrote', () => {
   it.each([
@@ -63,6 +77,89 @@ describe('nisc export --out — the default folder is emptied; a named one loses
     expect(existsSync(join(app, 'out', 'rooms', 'index.html'))).toBe(true);
     expect(said).not.toContain('not written by this export');
     expect(existsSync(recordFile())).toBe(false);
+  }, SLOW);
+
+  it('the default folder gets the modes a folder made here gets, and nothing is left beside it', () => {
+    expect(exportTo().code).toBe(0);
+    expect(modeOf(join(app, 'out'))).toBe(aFolderModeHere());
+    expect(modeOf(join(app, 'out', 'assets'))).toBe(aFolderModeHere());
+    expect(readdirSync(app).sort()).toEqual(['built', 'nisc.config.ts', 'node_modules', 'out', 'package.json']);
+  }, SLOW);
+
+  it('a default folder that is a link to the folder above the app is replaced as before: the link goes, nothing above is touched', () => {
+    symlinkSync(scratch, join(app, 'out'), 'junction');
+    const { code } = exportTo();
+    expect(code).toBe(0);
+    expect(lstatSync(join(app, 'out')).isSymbolicLink()).toBe(false);
+    expect(existsSync(join(app, 'out', 'rooms', 'index.html'))).toBe(true);
+    expect(readdirSync(scratch).sort()).toEqual(['app']);
+  }, SLOW);
+
+  it.runIf(process.platform === 'win32' || process.platform === 'darwin')('--out OUT where the system does not tell case apart is the default folder', () => {
+    expect(exportTo().code).toBe(0);
+    writeFileSync(join(app, 'out', 'left-over.html'), 'old');
+    const { code, out: said } = exportTo('OUT');
+    expect(code).toBe(0);
+    expect(existsSync(join(app, 'out', 'left-over.html'))).toBe(false);
+    expect(said).not.toContain('not written by this export');
+    expect(existsSync(recordFile())).toBe(false);
+  }, SLOW);
+
+  it('a new folder named with --out gets the modes a folder made here gets', () => {
+    const site = join(scratch, 'site');
+    expect(exportTo(site).code).toBe(0);
+    expect(modeOf(site)).toBe(aFolderModeHere());
+    expect(modeOf(join(site, 'assets'))).toBe(aFolderModeHere());
+  }, SLOW);
+
+  it('a fresh folder an ended export left in a named folder is removed by the next export, and not named', () => {
+    const site = join(scratch, 'site');
+    const left = join(site, `.nisc-export-${deadPid()}-0`);
+    mkdirSync(join(left, 'assets'), { recursive: true });
+    writeFileSync(join(left, 'assets', 'app.js'), 'half');
+    const { code, out: said } = exportTo(site);
+    expect(code).toBe(0);
+    expect(existsSync(left)).toBe(false);
+    expect(said).not.toContain('not written by this export');
+  }, SLOW);
+
+  it('a record that cannot be written does not fail the export: it is said, and nothing of the folder is lost', () => {
+    const site = join(scratch, 'site');
+    mkdirSync(site);
+    writeFileSync(join(site, 'notes.txt'), 'mine');
+    writeFileSync(join(app, 'node_modules', '.cache'), 'a file where the cache folder goes');
+    const { code, out: said } = exportTo(site);
+    expect(code).toBe(0);
+    expect(existsSync(join(site, 'rooms', 'index.html'))).toBe(true);
+    expect(readFileSync(join(site, 'notes.txt'), 'utf8')).toBe('mine');
+    expect(said).toContain('nisc: what this export wrote could not be recorded');
+    expect(said).toContain('the next export into');
+  }, SLOW);
+
+  it('the record is never written through a link', () => {
+    const elsewhere = join(scratch, 'elsewhere');
+    mkdirSync(elsewhere);
+    symlinkSync(elsewhere, join(app, 'node_modules', '.cache'), 'junction');
+    const { code, out: said } = exportTo(join(scratch, 'site'));
+    expect(code).toBe(0);
+    expect(readdirSync(elsewhere)).toEqual([]);
+    expect(said).toContain('nisc: what this export wrote could not be recorded');
+  }, SLOW);
+
+  it.runIf(process.platform === 'win32')('a file the system will not let the export replace is said, with what is left', () => {
+    const site = join(scratch, 'site');
+    mkdirSync(site);
+    writeFileSync(join(site, 'index.html'), 'mine');
+    chmodSync(join(site, 'index.html'), 0o444);
+    try {
+      const { code, out: said } = exportTo(site);
+      expect(code).toBe(1);
+      expect(said).toContain(`nisc: the export could not be moved into ${site}`);
+      expect(said).toContain(`on ${join(site, 'index.html')}). 1 of its 4 files are in place and 3 are not; the previous export's files are removed. Export again to finish.`);
+      expect(said).not.toContain('    at ');
+    } finally {
+      chmodSync(join(site, 'index.html'), 0o666);
+    }
   }, SLOW);
 
   it('a folder named with --out keeps what the export did not write, and names it', () => {
