@@ -1,8 +1,8 @@
 import { z } from 'zod';
 import type { ZodType } from 'zod';
 import { defineAgent, type AgentDefinition, type Message } from '@niscorp/cortex';
-import { draftSchemaOf, type DraftChoice, type ReflexDraft } from '../schemas';
-import { dateProblems, whenItIs } from './dates';
+import { draftSchemaOf, isRecurring, type DraftChoice, type ReflexDraft } from '../schemas';
+import { clockDateProblems, dateProblems, whenItIs } from './dates';
 
 export type OfferedEffect = { name: string; description: string; input: ZodType };
 
@@ -96,6 +96,9 @@ export const effectProblem = (effects: readonly OfferedEffect[], reflex: Pick<Re
   return `The input for "${effect.name}" does not fit its schema — ${issues}.`;
 };
 
+const oneShotAt = (answer: ReflexAnswer): string | undefined =>
+  isDraft(answer) && 'clock' in answer.on && !isRecurring(answer.on.clock) ? answer.on.clock.at : undefined;
+
 export const createReflexAgent = (config: { effects: readonly OfferedEffect[] } & DraftChoice): AgentDefinition<ReflexAnswer> =>
   defineAgent<ReflexAnswer>({
     id: 'tide.reflex',
@@ -106,7 +109,7 @@ export const createReflexAgent = (config: { effects: readonly OfferedEffect[] } 
       schema: answerSchemaOf(config),
       validate: (envelope) => {
         const effect = isDraft(envelope.data) ? effectProblem(config.effects, envelope.data) : undefined;
-        const problems = [...(effect === undefined ? [] : [effect]), ...dateProblems(envelope.reasoning)];
+        const problems = [...(effect === undefined ? [] : [effect]), ...clockDateProblems(oneShotAt(envelope.data)), ...dateProblems(envelope.reasoning)];
         return problems.length === 0 ? { ok: true } : { retry: problems.join('\n') };
       },
     },

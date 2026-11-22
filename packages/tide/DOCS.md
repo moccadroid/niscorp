@@ -854,7 +854,9 @@ often does not. It is told to write every date it drafts or asks about with
 its weekday ("Fri 2026-11-06"), and a date its reasoning writes beside the wrong
 weekday is sent back in the same run with the weekday it is, as is a date that
 does not exist. How it words a date is its own: a draft is never sent back for
-that, so a date it writes some other way is not checked.
+that, so a date it writes some other way is not checked. The draft itself is: a
+one-shot clock whose date does not exist (`2026-02-30`, which would fire on
+2 March) is sent back too, whatever the reasoning says.
 
 ```typescript
 const agent = createReflexAgent({ effects, triggers: ['clock', 'timer'] });

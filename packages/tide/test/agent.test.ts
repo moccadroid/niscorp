@@ -212,6 +212,14 @@ describe('dates are looked up and checked, never counted', () => {
     expect(await validated(once('2026-11-06T14:30'), 'Fri 2026-11-06. Month 2026-11-01 begins it.')).toEqual({ ok: true });
   });
 
+  it('a draft whose one-shot clock names a date that does not exist is sent back, whatever the reasoning says', async () => {
+    const answer = await validated(once('2026-02-30T10:00'), 'On 30 February at ten.');
+    expect(answer).toHaveProperty('retry');
+    expect(JSON.stringify(answer)).toContain('2026-02-30 is not a date');
+    expect(await validated(once('2026-13-45T10:00'))).toHaveProperty('retry');
+    expect(await validated(once('2028-02-29T10:00'))).toEqual({ ok: true });
+  });
+
   it('a date that is none is said to be none', async () => {
     expect(JSON.stringify(await validated(once('2026-11-06T14:30'), 'Fri 2026-11-06, or Fri 2026-02-30'))).toContain('2026-02-30 is not a date');
   });

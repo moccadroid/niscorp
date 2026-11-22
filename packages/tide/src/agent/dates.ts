@@ -48,6 +48,10 @@ export const whenItIs = (now: string): string => {
   ].join('\n');
 };
 
+// A one-shot clock on a date that does not exist loads and fires on the day it runs on to, which no person meant.
+export const clockDateProblems = (at: string | undefined): string[] =>
+  at === undefined || dayOf(at) !== undefined ? [] : [`The clock's date ${at.slice(0, 10)} is not a date. Look the date up in COMING DAYS or CALENDAR.`];
+
 // A weekday, as a word or abbreviated, then a date: "Fri 2026-11-06", "Friday, 2026-11-06T14:30", "thurs 2026-11-05".
 const PAIRED = /\b(mon|tue|wed|thu|fri|sat|sun)(?:day|sday|s|nesday|rsday|rs|urday)?\.?,?\s+(\d{4}-\d{2}-\d{2})(?!\d)/gi;
 
