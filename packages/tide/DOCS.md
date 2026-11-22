@@ -185,7 +185,8 @@ for monthly, `2026-03-07` for daily/weekly, `2026` for yearly. A DST transition
 can move the instant a key fires at but cannot mint a second key or lose one.
 Day-31 clamps to month end (February bills on the 28th). An erased
 spring-forward local time shifts past the gap; an ambiguous fall-back time takes
-the first occurrence. Both match Temporal's `disambiguation: 'compatible'`.
+the first occurrence. Both match Temporal's `disambiguation: 'compatible'`, in
+every zone, those at +12 and +13 (Auckland, Chatham) included.
 
 A clock reflex with **no arming time** establishes its baseline on the first
 `advance` and mints nothing — materializing from the epoch would backfill decades.

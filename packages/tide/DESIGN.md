@@ -621,7 +621,10 @@ rather than carefully avoided. The calendar edges are decided, not discovered:
 - A local time erased by spring-forward is **shifted forward by the length of the gap**
   (Vienna 02:30 → 03:30), as Temporal's `disambiguation: 'compatible'`; a local time
   that fall-back makes ambiguous takes the **first occurrence**. The key is identical
-  either way.
+  either way. **⟲** The offset was probed half a day either side of the guess; in zones
+  at +12 and +13 a transition lies just outside that, so Auckland's 02:00 on the
+  spring-forward day fired at 01:00 and its repeated hour took the second occurrence.
+  It is probed a day either side: no zone is more than 14 h from UTC.
 - Timezone resolution uses the platform's IANA data (`Intl`), keeping the dependency
   count at zero. "03:00 in Vienna" and "03:00 in Denver" are both honest.
 

@@ -35,6 +35,15 @@ describe('zoned time', () => {
     expect(resolved).toBe(utc('2026-03-29T01:30:00Z'));
     expect(zonedParts(resolved, vienna).hour).toBe(3);
   });
+
+  it('resolves both the same way in a zone at +12 or +13', () => {
+    // 2026-09-27: Auckland springs 02:00 NZST → 03:00 NZDT; 2026-04-05 it falls back 03:00 NZDT → 02:00 NZST.
+    expect(zonedToUtc({ year: 2026, month: 9, day: 27 }, 2, 0, 'Pacific/Auckland')).toBe(utc('2026-09-26T14:00:00Z'));
+    expect(zonedToUtc({ year: 2026, month: 4, day: 5 }, 2, 30, 'Pacific/Auckland')).toBe(utc('2026-04-04T13:30:00Z'));
+    const [spring] = occurrencesBetween(daily('02:00', 'Pacific/Auckland'), utc('2026-09-26T00:00:00Z'), utc('2026-09-27T00:00:00Z'), 1);
+    expect(spring?.key).toBe('2026-09-27');
+    expect(zonedParts(spring?.at ?? 0, 'Pacific/Auckland').hour).toBe(3);
+  });
 });
 
 describe('occurrences', () => {

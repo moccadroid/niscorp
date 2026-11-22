@@ -5,7 +5,6 @@ export type LocalParts = { year: number; month: number; day: number; hour: numbe
 export type LocalDay = { year: number; month: number; day: number };
 export type Occurrence = { key: string; at: number };
 
-const HALF_DAY_MS = 43_200_000;
 const DAY_MS = 86_400_000;
 const MAX_DAYS_SCANNED = 3_700;
 
@@ -61,14 +60,15 @@ const rendersAs = (instant: number, tz: string, day: LocalDay, hour: number, min
   );
 };
 
-// The offset is probed half a day either side: across a transition that
-// yields both candidates, where a probe at the guess alone finds one.
+// The offset is probed a day either side: the instant sought lies within 14 h
+// of the guess (no zone is further from UTC), so a transition near it lies
+// between the probes and yields both candidates.
 // Ambiguous (fall back): the first occurrence. Erased (spring forward):
 // shifted forward past the gap. Both as Temporal's `disambiguation: 'compatible'`.
 export const zonedToUtc = (day: LocalDay, hour: number, minute: number, tz: string): number => {
   const guess = Date.UTC(day.year, day.month - 1, day.day, hour, minute);
-  const before = offsetAt(guess - HALF_DAY_MS, tz);
-  const after = offsetAt(guess + HALF_DAY_MS, tz);
+  const before = offsetAt(guess - DAY_MS, tz);
+  const after = offsetAt(guess + DAY_MS, tz);
   const candidates = before === after ? [guess - before] : [guess - before, guess - after];
   const valid = candidates.filter((candidate) => rendersAs(candidate, tz, day, hour, minute));
   return valid.length > 0 ? Math.min(...valid) : Math.max(...candidates);
