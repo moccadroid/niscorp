@@ -24,6 +24,7 @@ export const createStream = <T>(options: CreateStreamOptions<T>): Stream<T> => {
   const changeSubscribers = new Set<() => void>();
   const finalizeSubscribers = new Set<() => void>();
   const errorSubscribers = new Set<(error: StreamError) => void>();
+  const failSubscribers = new Set<(error: Error) => void>();
   let finalState: FinalState<T> = createPendingFinal<T>();
   const selectedStreams = new Map<string, Stream<unknown>>();
 
@@ -73,6 +74,7 @@ export const createStream = <T>(options: CreateStreamOptions<T>): Stream<T> => {
       finalState.promise.catch(() => {});
       finalState.reject(error);
     }
+    for (const sub of failSubscribers) sub(error);
   };
 
   const tracker = createFinalizationTracker();
@@ -177,6 +179,7 @@ export const createStream = <T>(options: CreateStreamOptions<T>): Stream<T> => {
     changeSubscribers.clear();
     finalizeSubscribers.clear();
     errorSubscribers.clear();
+    failSubscribers.clear();
     pendingImmediateFires.length = 0;
 
     if (!finalState.resolved) {
@@ -193,8 +196,8 @@ export const createStream = <T>(options: CreateStreamOptions<T>): Stream<T> => {
   const current = (): T => currentValue;
 
   const final = (): Promise<T> => {
-    if (isFailed && failureError) return Promise.reject(failureError);
     if (finalState.resolved) return Promise.resolve(finalState.value);
+    if (isFailed && failureError) return Promise.reject(failureError);
     return finalState.promise;
   };
 
@@ -250,6 +253,11 @@ export const createStream = <T>(options: CreateStreamOptions<T>): Stream<T> => {
       onRootError: (listener) => {
         errorSubscribers.add(listener);
         return () => { errorSubscribers.delete(listener); };
+      },
+      failure: () => failureError,
+      onRootFail: (listener) => {
+        failSubscribers.add(listener);
+        return () => { failSubscribers.delete(listener); };
       },
       resolveSubSelect: (fullPath) => select(fullPath),
       deliver,

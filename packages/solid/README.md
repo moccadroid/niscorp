@@ -165,8 +165,8 @@ stream.destroy(): void
 // Read current merged state (values kind-checked against the schema; see Validation modes)
 stream.current(): T
 
-// Promise that resolves when root JSON object closes.
-// Rejects if the stream entered strict failure.
+// Promise that resolves when root JSON object closes, or on close().
+// Rejects if the stream entered strict failure before that; once resolved, it keeps its value.
 stream.final(): Promise<T>
 
 // Subscribe — fires immediately with current value, then on each change
@@ -184,7 +184,7 @@ stream.onError(listener: (err: StreamError) => void): () => void
 stream.select<P>(path: string): Stream<P>
 ```
 
-`select()` streams are cached by path — `select('widget')` always returns the same instance. A selection's `write()` and `close()` do nothing: feed the root. Selected streams use reference equality for change detection, so `select('widget.title').on(...)` only fires when the title actually changes, not when sibling fields update.
+`select()` streams are cached by path — `select('widget')` always returns the same instance. A selection's `write()` and `close()` do nothing: feed the root. A selection's `final()` resolves when its path finishes; after a strict failure, one not yet resolved rejects with the root's error, unless the root had resolved first. Selected streams use reference equality for change detection, so `select('widget.title').on(...)` only fires when the title actually changes, not when sibling fields update.
 
 A path separates keys with dots, so `select()` cannot reach a key that has a dot in it (`"index.ts"`). The stream itself keeps such a key and checks it against the schema; an error's `path` joins the keys with dots as given.
 

@@ -153,6 +153,8 @@ A number is shown as read so far, as a string is: `{"price":19` then `99}` shows
 
 **Implementation:** The finalization tracker keeps, for each container, its keys in order and how many leading keys are already final. When a new key enters or the container closes, the keys not yet final are finalized. Only that container's direct children are walked: a child container finalized its own children when it closed. The validator remembers how far it has checked each container's keys, so with `constraints: 'finalize'` each field is checked once.
 
+The root is final when its count of open containers returns to 0. A key `""` gives its value the root's path, so a closing at path `""` is not enough: `{"":{"x":1},"b":2}` resolves `final()` at the last `}`, with `b` in it.
+
 ### 7. Events decouple parsing from finalization
 
 **Decision:** The parser emits `ParserEvent` objects that the finalization tracker consumes, rather than the tracker being embedded in the parser.
@@ -242,7 +244,7 @@ Three modes govern what happens on a kind violation:
 
 - **`trust`** — no validation. Today's pre-invariant behavior. Included as a debug escape hatch; discouraged in production.
 - **`recover`** (default) — the bad value is skipped, the prior valid value stays in place, an error is emitted via `onError`, and the stream continues. One hallucinated field doesn't tank the rest of the response.
-- **`strict`** — the bad value is skipped, an error is emitted once, the stream enters a terminal failed state. `current()` freezes at the last valid snapshot, further writes are no-ops, `final()` rejects. For when rendering wrong is worse than rendering nothing.
+- **`strict`** — the bad value is skipped, an error is emitted once, the stream enters a terminal failed state. `current()` freezes at the last valid snapshot, further writes are no-ops, `final()` rejects, and so does every selection's `final()` not resolved yet, asked before or after the failure. A `final()` that resolved before the failure (the root closed, then text after it failed) keeps its value. For when rendering wrong is worse than rendering nothing.
 
 A constraint violation (phase 2) is found after the value has been written, so it is never skipped: in `recover` the value stays in `current()` and `final()` and the error is emitted; in `strict` the stream fails the same way, frozen with the violating value in it. `trust` runs neither phase.
 

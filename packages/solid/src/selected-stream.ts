@@ -40,6 +40,13 @@ export const createSelectedStream = <P>(deps: SelectedStreamDeps): Stream<P> => 
     finalListeners.clear();
   };
 
+  const rejectFinal = (error: Error): void => {
+    if (finalState.resolved) return;
+    // Pre-caught, as on destroy: a selection nobody awaited raises no unhandled rejection.
+    finalState.promise.catch(() => {});
+    finalState.reject(error);
+  };
+
   const unsubChange = deps.onRootChange(() => {
     if (isDestroyed) return;
     const projected = project();
@@ -69,10 +76,17 @@ export const createSelectedStream = <P>(deps: SelectedStreamDeps): Stream<P> => 
     for (const listener of errorListeners) deps.deliver(() => listener(err));
   });
 
+  const unsubFail = deps.onRootFail(rejectFinal);
+
   const current = (): P => project();
 
   const final = (): Promise<P> => {
     if (finalState.resolved) return Promise.resolve(finalState.value);
+    const failure = deps.failure();
+    if (failure && !deps.hasRootFinalized()) {
+      rejectFinal(failure);
+      return Promise.reject(failure);
+    }
     if (deps.isPathFinal() || deps.isTerminal()) {
       const value = project();
       resolveFinal(value);
@@ -125,6 +139,7 @@ export const createSelectedStream = <P>(deps: SelectedStreamDeps): Stream<P> => 
     unsubChange();
     unsubFinalize();
     unsubError();
+    unsubFail();
     listeners.clear();
     finalListeners.clear();
     errorListeners.clear();
