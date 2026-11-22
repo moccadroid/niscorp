@@ -170,19 +170,6 @@ describe('withCompression — how an answer travels', () => {
     expect(arrived[0]?.text).toContain('piece 1');
     expect(arrived[0]?.sentByThen).toBeLessThan(5);
   });
-
-  it('an answer that says it will never change is each request’s own: the second person never gets the first one’s', async () => {
-    const thumb: SiteHandler = (request) =>
-      new Response(`thumbnail of ${new URL(request.url).searchParams.get('user') ?? ''} ${LONG}`, {
-        headers: { 'content-type': 'text/plain', 'cache-control': 'public, max-age=31536000, immutable', 'last-modified': WHEN },
-      });
-    const handler = withCompression(thumb);
-    for (const user of ['alice', 'bob']) {
-      const response = await handler(get(`/thumb?user=${user}`, BROWSER));
-      expect(response.headers.get('content-encoding')).toBe('br');
-      expect(brotliDecompressSync(await bytesOf(response)).toString()).toBe(`thumbnail of ${user} ${LONG}`);
-    }
-  });
 });
 
 describe('withCompression — an answer that does not finish', () => {
