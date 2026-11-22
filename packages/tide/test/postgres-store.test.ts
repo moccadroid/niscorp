@@ -73,6 +73,23 @@ describe('a serial group, claimed by two instances at once', () => {
     expect(await claimBy(other, 'other')).toHaveLength(1);
   });
 
+  it('is claimed before the other rows, as the memory store does', async () => {
+    const store = await freshStore();
+    for (const id of ['a', 'b'])
+      await store.appendIfAbsent('run', { id, reflexId: id, version: 'v', cause: `c:${id}`, state: 'fanned', depth: 0, total: 1, done: 0, failed: 0, dueAt: 0, createdAt: 0 });
+    await store.appendIfAbsent('task', { runId: 'a', reflexId: 'parallel', unit: 'a1', cause: 'c', env: {}, depth: 0, state: 'pending', attempt: 0, claimedUntil: 0, notBefore: 0, createdAt: 0 });
+    await store.appendIfAbsent('task', { runId: 'b', reflexId: 'serial', unit: 'b1', cause: 'c', env: {}, depth: 0, state: 'pending', attempt: 0, claimedUntil: 0, notBefore: 0, createdAt: 0 });
+    const claimed = await store.claim({
+      table: 'task',
+      where: { state: 'pending' },
+      order: [{ by: 'unit' }],
+      limit: 1,
+      set: { state: 'claimed', claimedUntil: 900 },
+      onePer: { column: 'reflexId', held: { state: 'claimed', claimedUntil: { gt: 100 } }, only: ['serial'] },
+    });
+    expect(claimed.map((row) => row.unit)).toEqual(['b1']);
+  });
+
   it('inside a transaction of the caller, the claim is part of it', async () => {
     const store = createTideStore((await database.emptied()).pool);
     await store.appendIfAbsent('run', { id: 'run_1', reflexId: 'serial', version: 'v_0', cause: 'occurrence:1', state: 'fanned', depth: 0, total: 1, done: 0, failed: 0, dueAt: 0, createdAt: 0 });

@@ -132,26 +132,34 @@ export const createMemoryStore = (): MemoryStore => {
     ) as TideTables[T][];
 
     const taken = new Set<string>();
-    const restricted = new Set(spec.onePer?.only ?? []);
+    const restricted = spec.onePer?.only ?? [];
     if (spec.onePer !== undefined)
       for (const row of rowsOf(spec.table))
         if (matches(row as Row, spec.onePer.held as Where<Row>)) taken.add(String((row as Row)[spec.onePer.column]));
+    const groupOf = (row: TideTables[T]): string | undefined => (spec.onePer === undefined ? undefined : String((row as Row)[spec.onePer.column]));
 
-    const claimed: TideTables[T][] = [];
+    // As the Postgres store does: the restricted groups first, one row each, in the order `only` names them;
+    // what they leave of the limit goes to the other rows. Taken strictly in order, a busy group starves them.
+    const chosen: TideTables[T][] = [];
+    for (const group of restricted) {
+      if (chosen.length >= spec.limit) break;
+      if (taken.has(group)) continue;
+      const first = candidates.find((row) => groupOf(row) === group);
+      if (first === undefined) continue;
+      taken.add(group);
+      chosen.push(first);
+    }
     for (const row of candidates) {
-      if (claimed.length >= spec.limit) break;
-      if (spec.onePer !== undefined) {
-        const group = String((row as Row)[spec.onePer.column]);
-        if (restricted.has(group)) {
-          if (taken.has(group)) continue;
-          taken.add(group);
-        }
-      }
+      if (chosen.length >= spec.limit) break;
+      const group = groupOf(row);
+      if (group === undefined || !restricted.includes(group)) chosen.push(row);
+    }
+
+    return sorted(chosen, spec.order as unknown as Order<Row> | undefined).map((row) => {
       const next = applied(row as Row, spec.set as Mutation<Row>) as TideTables[T];
       tables[spec.table].set(keyOf(spec.table, next), next);
-      claimed.push(next);
-    }
-    return claimed;
+      return next;
+    });
   };
 
   const cas = async <T extends TableName>(

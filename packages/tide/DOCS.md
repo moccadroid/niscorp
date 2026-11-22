@@ -666,7 +666,10 @@ of one operation and diverged three ways.
   per value of `column` be held at a time, counting rows that match `held`
   from an earlier claim; it applies to the values listed in `only`, and every
   other value claims freely. A value in `only` with nothing to claim takes no
-  room from the others.
+  room from the others. A store should take the values in `only` first, one row
+  each, and give what they leave of `limit` to the other rows, as both of
+  tide's stores do: taken strictly in `order`, a busy reflex outside `only` can
+  fill every claim before a serial one's row is reached.
 - **`cas`** is the fence: a timed-out attempt finishing late finds its token
   superseded and is discarded. Setting a field to `undefined` clears it.
 - **`transact`** is required. Fan-out committing with its run's transition, and
