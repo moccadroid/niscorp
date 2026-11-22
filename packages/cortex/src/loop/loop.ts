@@ -122,7 +122,7 @@ const unansweredCalls = (messages: ReadonlyArray<Message>): NormalizedCall[] => 
     .map((call) => ({ id: call.id, toolId: call.name, args: argsFromText(call.args) }));
 };
 
-export const buildToolDescriptor =(tool: ToolDefinition): StepToolDescriptor => ({
+export const buildToolDescriptor = (tool: ToolDefinition): StepToolDescriptor => ({
   name: tool.config.name,
   description: tool.config.description,
   // Converted by the schema's own zod, not by cortex's: it may come from another copy of zod.
