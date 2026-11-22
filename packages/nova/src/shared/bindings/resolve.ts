@@ -1,5 +1,5 @@
 import { evaluateSafe } from '@niscorp/prism';
-import { hasKey, isArray, isObject, ownEntry } from '../common';
+import { hasKey, isArray, isEntry, isObject, ownEntry } from '../common';
 import { getPath } from './paths';
 import type { ScopeChain } from './types';
 
@@ -56,7 +56,7 @@ export const resolvePath = (
     const head = segments[0];
     if (head === undefined) return undefined;
     for (const scope of chain) {
-      if (hasKey(scope, head)) {
+      if (isObject(scope) && isEntry(scope, head)) {
         return walkFromScopeHead(scope[head], segments.slice(1));
       }
     }
@@ -67,7 +67,7 @@ export const resolvePath = (
   const varName = segments[0];
   if (varName === undefined || varName.length === 0) return undefined;
   for (const scope of chain) {
-    if (hasKey(scope, varName)) {
+    if (isObject(scope) && isEntry(scope, varName)) {
       return walkFromScopeHead(scope[varName], segments.slice(1));
     }
   }

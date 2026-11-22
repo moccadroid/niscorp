@@ -272,6 +272,8 @@ A string starting with `$.` reads a value from the data object.
 
 The raw value is returned with its type preserved — numbers stay numbers, arrays stay arrays.
 
+A path reads what a value has, or inherits from a prototype of its own (a getter on a class the data carries, `$.person.fullName`), and never what every object inherits: `$.x.constructor`, `$.x.toString` and `$.x.__proto__` are `undefined`.
+
 **Path forms:**
 - `$.foo.bar` — start from the data root, walk `foo` then `bar`. Inside a loop, the loop's own names come first: `$.index`, `$.items` and `$.<as>` read the loop's values, not root keys of those names
 - `$foo` — read variable `foo` from the closest enclosing scope (loop variable, etc.)

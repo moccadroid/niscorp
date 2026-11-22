@@ -19,5 +19,13 @@ export const hasKey = <K extends string>(
   key: K,
 ): obj is Record<K, unknown> => isObject(obj) && key in obj;
 
+// What every object inherits from Object.prototype (toString, constructor, __proto__) is not an entry; what a record inherits from a prototype of its own is.
+export const isEntry = (record: object, name: string): boolean => {
+  for (let at: object | null = record; at !== null && at !== Object.prototype; at = Object.getPrototypeOf(at)) {
+    if (Object.hasOwn(at, name)) return true;
+  }
+  return false;
+};
+
 export const ownEntry = <T>(record: Record<string, T> | undefined, name: string): T | undefined =>
-  record !== undefined && Object.hasOwn(record, name) ? record[name] : undefined;
+  record !== undefined && isEntry(record, name) ? record[name] : undefined;

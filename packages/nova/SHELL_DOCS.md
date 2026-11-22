@@ -147,7 +147,7 @@ Reusable partial actions (`ActionFragment`s), keyed by id, referenceable from a 
 
 ### `fetch`, `transform`, and `functions`
 
-These are dependency injection points. HTTP endpoint calls use `fetch`. Endpoint `request`/`response` configs run through `transform` — an opaque `(config, source) => unknown` evaluator nova never interprets (the host typically wires Prism's `evaluate`); declaring a `request`/`response` without one is a hard error. `{ fn: '<name>' }` endpoints resolve their handler from `functions`. There is no default for any of the three: nova does not reach for the global `fetch`, and an HTTP endpoint called with none injected fails to `onError`.
+These are dependency injection points. HTTP endpoint calls use `fetch`. Endpoint `request`/`response` configs run through `transform` — an opaque `(config, source) => unknown` evaluator nova never interprets (the host typically wires Prism's `evaluate`); declaring a `request`/`response` without one is a hard error. `{ fn: '<name>' }` endpoints resolve their handler from `functions`: its own entries and what it inherits from a prototype of its own (a class instance, `Object.create(base)`), never a name every object inherits (`toString`, `constructor`). There is no default for any of the three: nova does not reach for the global `fetch`, and an HTTP endpoint called with none injected fails to `onError`.
 
 ### `endpointTimeoutMs`
 

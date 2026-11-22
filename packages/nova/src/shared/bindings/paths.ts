@@ -1,4 +1,4 @@
-import { isArray, isObject } from '../common';
+import { isArray, isEntry, isObject } from '../common';
 
 const splitPath = (path: string): string[] => {
   if (path.length === 0) return [];
@@ -54,7 +54,7 @@ export const getPath = (data: unknown, path: string): unknown => {
       return undefined;
     }
     if (isObject(current)) {
-      if (segment in current) {
+      if (isEntry(current, segment)) {
         current = current[segment];
         continue;
       }
