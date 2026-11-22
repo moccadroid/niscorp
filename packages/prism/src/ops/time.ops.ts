@@ -26,7 +26,7 @@ const daysIn = (year: number, month: number): number => new Date(Date.UTC(year, 
 
 // The platform's readers roll an out-of-range field over into the next one
 // ("2026-02-30" is March 2nd). Only ISO-shaped text names its fields plainly
-// enough to tell; any other text is read as before.
+// enough to tell, so other text is left to the platform's reader.
 export const isImpossibleDate = (text: string): boolean => {
   const fields = ISO_FIELDS.exec(text);
   if (fields === null) return false;
