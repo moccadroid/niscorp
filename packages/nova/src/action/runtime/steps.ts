@@ -8,7 +8,7 @@ import { setPath } from '@shared/bindings/paths';
 import { applyMutations } from '../mutations';
 import { isMutationStep } from '../grammar';
 import type { EndpointConfig, Mutation, ReconcileEffect, Step } from '../schemas';
-import { LifecycleError, UnknownFunctionError, type LifecycleHook, type NovaError } from '@shared/errors';
+import { ErrorCodes, LifecycleError, NovaError, UnknownFunctionError, type LifecycleHook } from '@shared/errors';
 import type {
   EndpointEventInit,
   FetchFn,
@@ -121,6 +121,7 @@ const raiseUnknown = async (
     throw new LifecycleError(message, { hook: ctx.lifecycleHook });
   }
   if (ctx.strict && strictError !== undefined) throw strictError;
+  if (ctx.strict) ctx.onError(new NovaError(ErrorCodes.endpointFailed, message, {}));
 };
 
 const runCall = async (
@@ -187,6 +188,9 @@ const runCall = async (
     throw new LifecycleError(`endpoint '${callName}' failed: ${result.error.message}`, {
       hook: ctx.lifecycleHook,
     });
+  }
+  if (ctx.strict && endpoint.errorTarget === undefined) {
+    ctx.onError(new NovaError(ErrorCodes.endpointFailed, `endpoint '${callName}' failed: ${result.error.message}`, { endpoint: callName, status: result.error.status }));
   }
 };
 

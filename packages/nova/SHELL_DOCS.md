@@ -173,7 +173,7 @@ The first two fire whenever the shell's state changes. The React adapter uses th
 
 ### `strict`
 
-When `true`, errors throw all the way up through the shell's public methods. Lifecycle errors surface on the next shell call (because they're inherently async). Use strict mode in tests and dev. Use lax mode (`false`, the default) in production where you want graceful degradation via `onError`.
+When `true`, errors throw all the way up through the shell's public methods. Lifecycle errors surface on the next shell call (because they're inherently async). A failed `call` in a trigger that nothing takes, and a subscriber that throws, are reported to `onError` in strict mode only (`ENDPOINT_FAILED`, see ACTION_DOCS "Errors"). Use strict mode in tests and dev. Use lax mode (`false`, the default) in production where you want graceful degradation via `onError`.
 
 ### `onError`
 

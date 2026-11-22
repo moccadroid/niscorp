@@ -73,3 +73,11 @@ Each section is one change an app can see, in `@niscorp/nova`. None of them chan
 - What to do: nothing; add a translation if the phrasebook reports it.
 - Breaking: yes
 - Affected apps: none found. No layout string in the lab apps, the templates, AnimaApp, anima-finance or mira starts with `$`, a name and more words, and no app found sets `onPhraseMiss`.
+
+### nova — in strict mode, a failed call nothing takes is reported (`ENDPOINT_FAILED`)
+- Before: a trigger with `{ call: 'save' }`, where `save` fails, no `onError` steps and no `errorTarget`, went nowhere, even with `strict: true`; `{ call: 'svae' }` (no such endpoint) went nowhere too.
+- Now: with `strict: true`, `onError` receives a `NovaError` with code `ENDPOINT_FAILED`: `endpoint 'save' failed: disk full`, and `unknown endpoint: svae`. Nothing is thrown. Lax mode (the default) is unchanged. The exported `ErrorCodes` gains `endpointFailed`, and the `ErrorCode` type `'ENDPOINT_FAILED'`.
+- Who notices: strict shells whose `onError` logs or shows errors; code that switches exhaustively over `ErrorCode`.
+- What to do: nothing; handle the new code if `onError` switches over codes.
+- Breaking: yes (strict shells only)
+- Affected apps: none. No `createShell` in the lab apps, the templates, moss, AnimaApp, anima-finance or mira passes `strict: true` (fable `src/shell.ts:16`, mythos `create-shell.ts:35`, relay `src/screen-builder/mount.ts:58`, the classic template's `with/page/src/boot.ts:12`, moss `src/shells/build.ts:187`, anima-finance `src/dev/start-check.ts:174`), and moss has no strict option.

@@ -12,6 +12,7 @@ export const ErrorCodes = {
   lifecycle: 'LIFECYCLE_ERROR',
   mutation: 'MUTATION_ERROR',
   runaway: 'RUNAWAY_CHAIN',
+  endpointFailed: 'ENDPOINT_FAILED',
 } as const;
 
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];
