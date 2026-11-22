@@ -71,7 +71,7 @@ export const createRevalidation = (config: Pick<SocketConfig, 'session' | 'reval
           try {
             if (!(await Promise.race([answer.then(() => true), passDue]))) {
               answer.catch((error: unknown) =>
-                console.error('[moss/socket] the session verifier could not be asked about a connection after its pass went on. It stays open and is asked again:', error),
+                console.error('[moss/socket] the session verifier could not be asked about a token after its pass went on. Its connections stay open and are asked again:', error),
               );
             }
           } catch (error) {

@@ -2217,16 +2217,20 @@ server.nudge('usr_ada', 'notes-changed');
     about, and the first error.
   - One pass at a time: a pass asks the verifier once for each token, every
     token at the same moment, so connections that present one token share one
-    call, and a revoked token's socket closes within `sessionRevalidateMs`
-    however many connections there are. A verifier with a strict limit on
-    calls at once sees them all together at the start of each pass. A pass
-    waits for the answers until the next pass is due; an answer that comes
-    later is acted on when it comes (a `null` closes), and those connections
-    are not asked about again until it has come. A pass that came due while
-    another was still waiting starts as soon as that one ends. A slow verifier
-    is not asked more the slower it gets. A verifier that never answers for one
-    token leaves only that token's connections unchecked, and every other is
-    still asked.
+    call, and a revoked token's socket closes within one `sessionRevalidateMs`
+    plus the time the verifier takes to answer, however many connections there
+    are. The most the verifier is called is once for each distinct token every
+    `sessionRevalidateMs`, and the calls of a pass arrive together at its
+    start: with 200 tokens, 200 calls at once each interval. A verifier with a
+    strict limit on calls at once queues them itself; with
+    `session: 'sessions'` they are 200 queries on the pool at once, ahead of
+    requests that arrive in that moment. A pass waits for the answers until
+    the next pass is due; an answer that comes later is acted on when it comes
+    (a `null` closes), and those connections are not asked about again until
+    it has come. A pass that came due while another was still waiting starts
+    as soon as that one ends. A slow verifier is not asked more the slower it
+    gets. A verifier that never answers for one token leaves only that token's
+    connections unchecked, and every other is still asked.
   - Without this the socket was the asymmetry: the HTTP surfaces re-ask on
     every request, so an expired credential left the socket open and rendering
     while every endpoint the server shell called came back 401 — a live
