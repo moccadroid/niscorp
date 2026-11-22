@@ -1,5 +1,25 @@
 # @niscorp/charter
 
+## 0.2.0
+
+### Minor Changes
+
+- 092b5f1: BREAKING — approved by moccadroid (owner), 2026-11-22: a charter that writes a string where a list belongs (`allow: "crm.deal.view*"`) and relied on it granting every id writes the patterns it means as a list.
+
+  A string where a charter expects a list (`allow: "crm.deal.view*"`) is read as a list of that one pattern instead of one pattern per character, so it no longer grants every id through a `*`. `verifyCharter` reports keys it does not read (a misspelt `denny` or `Deny`) and such strings as `shape` warnings. Any other value that is not a list of strings no longer crashes the verifier: it grants nothing (a warning), and in `deny` or `without`, or as a whole role that is `null`, it is a `shape` error. A `scoping` that is not a string is still handed on as written, so the role reaches no rows, and is now a `shape` warning. `*` now matches across line breaks in an id.
+
+- 74a9a7a: BREAKING — approved by moccadroid (owner), 2026-11-22: nothing unless a host resolves, without `verifyCharter`, a role that has both an `actions:` section and a top-level `deny`, and relied on that `deny` being dropped.
+
+  A role with both an `actions:` section and a top-level `deny` (`{ actions: ['crm.*'], deny: ['crm.deal.delete'] }`) now takes away what the top-level `deny` names when it is resolved, instead of granting the whole section, and a role that extends it (`c: { extends: ['p'] }`) no longer gets `crm.deal.delete` from it either. The top-level `allow` beside an `actions:` section still grants nothing. `verifyCharter` refuses such a role as before (`ambiguous-selection`), so under moss nothing changes; it now also checks that top-level `deny` like any other, so a charter already refused can report more lines for it: `dead-deny` when it matches nothing (`{ r: { actions: ['crm.*'], deny: ['hr.nothing'] } }`), `orphan` for an action it leaves no role granting, and a re-allow warning for a child that grants back what it takes away.
+
+### Patch Changes
+
+- c9158e2: A role named in `extends` or `without` by a name every object answers to (`constructor`, `toString`, `hasOwnProperty`, `__proto__`) that the charter does not define resolves as an empty role, and `verifyCharter` says so as a `shape` warning, as it does for a misspelt key.
+
+  A glob with many stars (`*a*a*a*a*a*a*a*a*a*a*b`) against a long id answers in milliseconds instead of seconds: globs are matched without a regular expression, with the same answers.
+
+  `RoleClosure` gains an optional `functions`: the functions a role is granted, listed in `verifyCharter`'s `perRole` when the functions universe is handed in. Without that universe the field is absent.
+
 ## 0.1.5
 
 ### Patch Changes

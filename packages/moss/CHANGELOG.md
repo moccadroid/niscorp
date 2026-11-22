@@ -1,5 +1,115 @@
 # @niscorp/moss
 
+## 0.10.0
+
+### Minor Changes
+
+- d3fadac: BREAKING — approved by moccadroid (owner), 2026-11-22: an app whose update hands a row over by writing a column its caller's update rule pins sets `runtime.checkMovedRows: false` to keep today's behaviour.
+
+  moss's `/api/vex` and `executeAs` now refuse an update that would move a row out of the caller's own update rule (400 `scope_denied`, nothing written), as vex does by default. An app that hands rows over that way keeps today's behaviour with `runtime.checkMovedRows: false`.
+
+- 29e51ec: BREAKING — approved by moccadroid (owner), 2026-11-22: nothing unless the app's `session` verifier relied on being called one connection at a time, or on the lower rate of calls a pass that ran over its interval used to give it.
+
+  A revoked session's socket now closes within one `sessionRevalidateMs` plus the time the verifier takes to answer, however many connections are open: each revalidation pass asks the verifier once for each token, every token at the same moment, instead of one connection after another (200 connections with a 20 ms verifier and `sessionRevalidateMs: 500` closed a revoked socket after about 6.7 seconds; now after about 520 ms). Connections that present one token share one call. The most the verifier is now called is once for each distinct token every interval, and the calls of a pass arrive together at its start. Where a pass used to take longer than the interval, that is more calls than before: in the same example about 28 calls a second, one at a time, become about 350 a second, up to 200 at once. With `session: 'sessions'` the calls are queries on the app's pool, every 60 seconds by default. A pass that comes due while the previous one is still waiting for answers starts as soon as that one ends, instead of an interval later. The log line for a verifier that could not be asked still counts connections. The log line for an answer that fails after its pass went on now reads "could not be asked about a token after its pass went on. Its connections stay open and are asked again", since it is written once for each token.
+
+- 1e228d3: BREAKING — approved by moccadroid (owner), 2026-11-22: an integration that read the visitor's `cookie`, `proxy-authorization` or `x-operator-key` at its hook, or a vendor page served through the webhook or proxy that used the app's session or browser storage, carries what it needs in the request itself.
+
+  The webhook door no longer passes the visitor's `cookie`, `proxy-authorization` or `x-operator-key` on to the integration, and what an integration answers through the webhook or the proxy is served with `x-content-type-options: nosniff` and a `content-security-policy` sandbox: a vendor's page still runs its script, submits its forms and navigates, but never as the app's own page. A vendor that read the app's cookie at its hook, or a landing page that used the app's browser storage, no longer can.
+
+- b1e314e: BREAKING — approved by moccadroid (owner), 2026-11-22: nothing unless an app relied on `session.answerIntent` replaying an entry that declares a `reach` with more rows than `/api/vex` answers the same person; such a replay now answers fewer rows or `scope_denied`.
+
+  `engine.execute` can serve a replayed entry at the `reach` it declares: pass `policyForReach`, as the handler takes it. Without it the run is as before, with one warning per entry. moss's `session.answerIntent` passes it, so a replay of an entry that declares a reach answers what `/api/vex` answers the same person: fewer rows, or `scope_denied` for roles with no such reach.
+
+### Patch Changes
+
+- be6cc14: The docs now say plainly that time the app is down counts as unused for `runtime.artifactsUnusedMs`, so a long downtime lets the boot sweep delete what nobody used since. `runtime.artifactsUnusedSinceStart: true` counts that time only since the server started; the default is unchanged.
+- adba9b1: A HEAD request through the integration proxy reaches the integration instead of answering 502. A session verifier that never answers for one socket no longer stops the re-check of every other live socket, and an answer that comes late is still acted on. The integration contract names an audience granted by a string where a list belongs. The aging sweep's timer no longer keeps the process alive. Boot prints a charter key the charter does not read (a misspelt `denny`) and a string where a list belongs.
+- 23c4613: A webhook sent chunked (`Transfer-Encoding`), or with `Expect` or `Keep-Alive`, or with an `Upgrade` header but no `Connection: upgrade`, reaches the integration's service instead of answering `502`: the door leaves those four headers behind. A request with `Connection: upgrade` and `Upgrade` is a socket upgrade and never reaches the door; one with `Connection: upgrade` alone is answered `502`, since Node's fetch refuses that header.
+
+  A dev sign-in (`/dev/as/<who>`) that a proxy on this machine, such as a tunnel, carried for an address elsewhere, or for no address (`for=unknown`), writes a line in the dev log. The sign-in is answered: nothing is refused.
+
+  A `Host` that writes out the scheme's own port (`app.example.com:443` for a page on `https://app.example.com`) no longer turns off cookie sign-in on the socket.
+
+  A server shell's endpoint that declares its own lower-case `authorization` header is now called as the session, as one spelt `Authorization` already was, instead of carrying both tokens and answering `401`.
+
+  `Authorization: bearer <token>` is read in any case of the scheme, as HTTP defines it, instead of being refused with `401`.
+
+  A principal called `toString`, `constructor`, `__proto__` or `valueOf` is no longer answered `500` on every request: the assignments are read by their own keys, so such a principal is `public` unless they name it. A socket event for a canvas called `constructor` or `toString` is dropped, as one for any canvas the shell does not have, instead of reaching every action.
+
+  In `nisc dev` (`mossDev`), what the charter does not read as written (a misspelt `denny`: the `shape` warnings of `server.charterReport()`) is shown over the page on vite's error overlay each time a browser connects. The app runs under it. While the overlay is open it covers the page, and vite turns the next live update into a full reload.
+
+  DOCS says that a channel is not a trusted lane: the person's own terminal can publish any channel with any payload into their own shell, as `deliver` does.
+
+  DOCS shows a read saved with `body: undefined`, as `SessionArtifacts.save`'s type asks, and gives the limit `runtime.artifactsUnusedMs` refuses at boot: anything under two hours or not a whole number of milliseconds.
+
+  The word "held" and its relatives leave moss's internal names, comments, test titles and DOCS/DESIGN/README. Nothing public changes: `WireTokenStore.held`, the `<session>.held` cookie and every message moss prints or throws keep their wording.
+
+- b18f9d3: `AGENTS.md` reads as short numbered points instead of long paragraphs, its worked example now obeys every rule it states, and the commands it names are the ones an app actually has. The part for whoever changes a package is now `CHANGING_A_PACKAGE.md`, beside it (moss's `DESIGN.md` points there).
+- 8b4d6cd: A write can now be told to answer only the rows the caller's read rules show: `mutations: { …, answerReadableRows: true }` on the handler and on the Hono and Express adapters, and `answerReadableRows: true` in moss's runtime for its `/api/vex` surfaces. It is off by default, and with it off a write runs and answers exactly as before.
+- Updated dependencies [092b5f1]
+- Updated dependencies [c9158e2]
+- Updated dependencies [74a9a7a]
+- Updated dependencies [4b7d4a4]
+- Updated dependencies [bf72478]
+- Updated dependencies [e1db181]
+- Updated dependencies [241bd4d]
+- Updated dependencies [9f8e4b5]
+- Updated dependencies [1b615d6]
+- Updated dependencies [e7edd95]
+- Updated dependencies [0a46ff6]
+- Updated dependencies [59f314a]
+- Updated dependencies [281108e]
+- Updated dependencies [b233463]
+- Updated dependencies [e2b9595]
+- Updated dependencies [7aef6a7]
+- Updated dependencies [79cf65c]
+- Updated dependencies [e828562]
+- Updated dependencies [6b01a50]
+- Updated dependencies [6eef458]
+- Updated dependencies [a41edf9]
+- Updated dependencies [eb4ffb9]
+- Updated dependencies [ae647e8]
+- Updated dependencies [2effb54]
+- Updated dependencies [bd996ea]
+- Updated dependencies [180787b]
+- Updated dependencies [d53910e]
+- Updated dependencies [276f457]
+- Updated dependencies [413afbd]
+- Updated dependencies [1f6d37d]
+- Updated dependencies [d77baf9]
+- Updated dependencies [3f92c52]
+- Updated dependencies [841c010]
+- Updated dependencies [d93170b]
+- Updated dependencies [61b15e4]
+- Updated dependencies [7e8f6d4]
+- Updated dependencies [5c52ef5]
+- Updated dependencies [66eb934]
+- Updated dependencies [909ae6b]
+- Updated dependencies [5eb6e6c]
+- Updated dependencies [1c2b7ce]
+- Updated dependencies [069efde]
+- Updated dependencies [85f1536]
+- Updated dependencies [d7f10ac]
+- Updated dependencies [8bf0c30]
+- Updated dependencies [9e5c5e3]
+- Updated dependencies [8b4d6cd]
+- Updated dependencies [4c6300e]
+- Updated dependencies [be6e7af]
+- Updated dependencies [b1e314e]
+- Updated dependencies [d8dc7d9]
+- Updated dependencies [b2b2d8d]
+- Updated dependencies [f995714]
+- Updated dependencies [df44b8e]
+- Updated dependencies [a002748]
+- Updated dependencies [2233113]
+- Updated dependencies [04f5821]
+  - @niscorp/charter@0.2.0
+  - @niscorp/nova@0.6.0
+  - @niscorp/prism@0.4.0
+  - @niscorp/strata@0.2.0
+  - @niscorp/tide@0.2.0
+  - @niscorp/vex@0.5.0
+
 ## 0.9.3
 
 ### Patch Changes

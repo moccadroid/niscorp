@@ -1,5 +1,74 @@
 # @niscorp/cortex
 
+## 0.2.0
+
+### Minor Changes
+
+- 48138de: BREAKING — approved by moccadroid (owner), 2026-11-22: nothing unless an app has an `onToolResult` hook that does not check `observation.kind` and relied on it running for successful calls only.
+
+  `onToolResult` hooks now run after every executed tool call, also when the tool threw or passed its time limit; before, they ran only when it returned. On an `error` observation a hook's `{ result }` replaces the error text that goes to the model and to `tool-end`: a tool that throws `connect failed: postgres://admin:hunter2@…` reached the model as written, and with a redacting hook `(o) => ({ result: '[redacted]' })` it now reaches it as `error: [redacted]`. A hook that throws makes the call an error carrying the hook's message, as for a result. A hook that returns early unless `observation.kind === 'result'` sees no difference. Hooks still do not run for a denied call, an unknown tool, or arguments that failed the input check.
+
+- da3037e: BREAKING — approved by moccadroid (owner), 2026-11-22: nothing unless an app listens to `output-partial` and relied on an agent with such a data schema sending none, or fewer.
+
+  More agents stream `output-partial` events, through the newer `@niscorp/solid` cortex uses for them. An agent whose data schema has a field with a constraint (`.min(1)`, `.positive()`, an email or url format), a `z.record` or a `z.lazy` (a recursive schema) emitted no `output-partial` for the whole run, and now emits them as the reply arrives. One with a field that takes any value (`z.record(z.string(), z.unknown())`, `z.any()`) stopped emitting at the first value nested inside that field, and now goes on to the end of the reply. A union field whose value only a later variant takes is kept in the partials instead of dropped. As before, a partial's value can fail the schema until the run ends, and the run's result is checked as before. Measured over real app schemas: a screen builder goes from 0 to 27 events per answer and a nova layout from 0 to 20; a run handle keeps the extra events until it is dropped.
+
+- e957628: BREAKING — approved by moccadroid (owner), 2026-11-22: nothing unless an app relied on `run.approve` or `run.deny` on a parent run's handle doing nothing for an approval its delegated agent asked.
+
+  An approval asked inside a delegated agent (`asTool`, `manifold.asTool`) is now answered through the parent run's handle: `run.approve(id)` or `run.deny(id)` with the id of the nested `approval-required` event reaches the child, at any depth. Before, it was ignored, and the child waited until the delegation's time limit. An answer through the child's own handle (the manifold's `onRun`) works as before; the first answer counts.
+
+  `ToolContext` has a new optional member, `forwardApprovals(handle)`, for a tool that runs an agent itself: it passes the parent's answers on to that run and returns a function that stops it. The README shows the three lines. The parent's snapshot carries no nested approval, so a nested approval does not survive a reload; a delegated agent runs under its own policy and gates, not the parent run's `gates`. The README now says both.
+
+- efd2368: BREAKING — approved by moccadroid (owner), 2026-11-22: nothing unless an app passes `resumeRun` a snapshot it cannot resume and relied on how that failed.
+
+  `resumeRun` now checks the parts of a snapshot a resumed run cannot do without, and throws `[cortex:config] snapshot cannot be resumed: <what is wrong>` when one is missing: a `messages` list, and a `pending` with its `call` and `remaining` list. Before, such a snapshot failed in different ways: a `TypeError` from `resumeRun` with no `messages`, or a run ending `unknown` with `cfg.resumePending.remaining is not iterable`. Every snapshot that resumed still does, `null` in its optional fields included (`pending: null`, `steps: null`).
+
+- ca26810: BREAKING — approved by moccadroid (owner), 2026-11-22: an app that takes `run.snapshot()` while a tool is running (from inside the tool, or from an event before its `tool-end`) and resumes that snapshot now runs that call a second time. Take the snapshot after the call's `tool-end`, or make the tool safe to run twice. Nothing else changes unless an app relied on a call left without an answer never running.
+
+  `resumeRun` now first runs the calls of the snapshot's last step that no tool message answers, through their gates, approvals and hooks, before it calls the model. A run aborted between two calls of one step (`c1` answered, `c2` not) left a transcript ending `assistant(c1, c2) tool[c1]`: resumed, it sent that to the provider and `c2` never ran: OpenAI refuses such a transcript, and Groq takes it (200) and the model goes on without `c2`'s result. Now `c2` runs and the model is sent `tool[c1] tool[c2]`. Any call of that step with no tool message runs, so a call that was still running when the snapshot was taken (a `pay` that calls `run.snapshot()` while it executes) runs again on resume. A resume from a pending approval is unchanged, and a fresh `agent.run()` given a transcript that ends in a call runs nothing before the model, as before.
+
+- 322f241: BREAKING — approved by moccadroid (owner), 2026-11-22: a tool or delegated agent that hands `ctx.signal` to work meant to outlive its time limit sets a longer `timeoutMs`, or gives that work a signal of its own.
+
+  A tool call that passes its time limit (`timeoutMs`) now has its `ctx.signal` aborted, with an `AbortError` as when the run is aborted. A tool that hands `ctx.signal` to its work stops there, instead of running on after the model was told it timed out: a `send_email` that timed out and was called again sent the email twice before, and sends it once now. A tool that ignores `ctx.signal` runs on as before.
+
+  A delegated agent (`asTool`, `manifold.asTool`) runs on the delegating call's signal, so it now stops at the delegation's time limit instead of finishing after the parent has moved on.
+
+  Each tool call gets its own `ctx.signal`. It aborts with the run while the call runs; once the call has ended, a later abort of the run no longer reaches it. Gates and `onToolResult` hooks are still handed the run's signal.
+
+### Patch Changes
+
+- c30562a: `output.refuseCutOff: true` on an agent refuses a reply the provider cut off (finish reason `length` or `content_filter`) while its JSON was still open, and an attempt a Groq rejection (`failed_generation`) carried cut short: the run corrects the model as for a reply with no envelope (a `retry` of kind `termination`, or `provider` for a rejection) instead of accepting the reply closed at its last whole value. Without the option nothing changes. It is passed on to signal's `output.refuseCutOff`; a signal without that option ignores it.
+- 800a541: A run with `transport: 'step'` that is aborted during the model call now ends with `code: 'aborted'` instead of returning the model's answer, and the call is handed the run's abort signal.
+
+  Two readers iterating `run.events` at the same time (for example the manifold's `onRun` tracer and the app's own loop) now both get every event and both end; before, one of them could wait forever.
+
+  An approval answered (or a run aborted) before `policy.approvalTimeoutMs` runs out no longer leaves its timer running, so a process does not stay alive until the timeout.
+
+  A correction sent back to the model quotes the issues word for word: `$$`, `$&` and `$'` in them were rewritten before.
+
+  The README's quick example no longer runs model-written text with `new Function`, and the docs say that a model swapped in by `prepareStep` is sent the output strategy resolved for the run's own `llm`.
+
+  A tool that takes no arguments now runs when its call arrives with no argument text, instead of failing with "arguments arrived as ONE STRING".
+
+- 9c5367b: An agent whose `output.schema` takes only strings (`z.string()`, with or without checks such as `.min()`) now gets a `data` that reads as JSON as the model wrote it (`"[1,2,3]"`); before, the run ended `stopped` after its output retries. A schema that also takes any other kind of value is handled as before.
+
+  The README says that stop conditions are checked between steps and how to bound a call's time, that under `respond` an answer written as text streams no partials, that a run handle keeps every event until it is dropped, and which wiring errors `run()` throws. DESIGN says how a step with no envelope is corrected. A tool's `name` is described as the name the model calls. The agent-tool timeout default is one constant.
+
+- Updated dependencies [d85bab1]
+- Updated dependencies [aeaf803]
+- Updated dependencies [2b174f8]
+- Updated dependencies [df79faf]
+- Updated dependencies [133c0ee]
+- Updated dependencies [543f79d]
+- Updated dependencies [4f89d7d]
+- Updated dependencies [d951434]
+- Updated dependencies [b210b56]
+- Updated dependencies [f61ffdd]
+- Updated dependencies [88f93c0]
+- Updated dependencies [c5aea8b]
+- Updated dependencies [9899bd7]
+  - @niscorp/signal@0.2.0
+  - @niscorp/solid@0.2.0
+
 ## 0.1.6
 
 ### Patch Changes

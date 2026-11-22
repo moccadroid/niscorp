@@ -1,5 +1,104 @@
 # @niscorp/prism
 
+## 0.4.0
+
+### Minor Changes
+
+- a41edf9: BREAKING — approved by moccadroid (owner), 2026-11-22: nothing unless an app compares stored fingerprints or `constantsFolded` of a config whose date or locale op has only written inputs, or relies on an IR compiled on one machine answering in that machine's zone when executed on another.
+
+  `$date`, `$dateAdd`, `$dateDiff`, `$localeDate`, `$localeMoney` and `$localeNumber` are never worked out ahead of time, by `compile` or by a kept `evaluate`, even when every input is written in the config: they read the machine's clock zone or its `Intl` data. `{"$date":{"value":"2026-01-01T09:00:00Z","format":"HH:mm"}}` compiled in Vienna was stored as `{"$const":"10:00"}` and answered `10:00` from `execute` in Los Angeles, where `evaluate` answered `01:00`; the IR now keeps the op and answers `01:00` there. A `$localeDate` with a written `timeZone` is kept as an op too (main folded it); so are `$dateDiff` between bare dates, `$localeMoney` and `$localeNumber`, which do not read the zone but do read Intl data. They answer the same text, and each call spends one more step and one Intl format for each such op. On the machine that compiles, every answer is the same. The IR's `fingerprint` and `meta.stats.optimizations.constantsFolded` change for such configs; an IR stored before keeps its folded constant until it is compiled again. The exported `EvalContext` type gains an optional `folding?: boolean`, set while the optimizer works a subtree out ahead of time (additive).
+
+- eb4ffb9: BREAKING — approved by moccadroid (owner), 2026-11-22: nothing unless a config near its `maxSteps` limit relied on passing from the second call; it is now refused on every call, as its first call already was.
+
+  A part of a config that `evaluate` works out ahead of time from the second call (when the config object is kept and its tree prepared) spends the steps working it out took, each time it is evaluated. A `$join` of 600 written parts under `maxSteps: 500` was refused on the first call and passed from the second; it is now refused on every call. `compile` and `execute` are unchanged: a compiled IR counts such a part as one step.
+
+- ae647e8: BREAKING — approved by moccadroid (owner), 2026-11-22: nothing unless a template contains `{{…}}` with a name in a script other than ASCII and relied on the braces staying in the text.
+
+  `$interpolate` fills a placeholder whose name is letters, marks, digits and `_` in any script. `"Hallo {{straße}}"` with `{ straße: "A" }` gives `"Hallo A"`, and `""` in its place when `values` lacks the key, as an ASCII name always did; the braces used to stay in the text. A name with other characters (`{{first-name}}`, `{{ name }}`) is still left as written.
+
+- 2effb54: BREAKING — approved by moccadroid (owner), 2026-11-22: nothing unless an app caught a `RangeError` or `TypeError` by its class from `$localeDate` or `$localeNumber`; such a config always failed, and now fails with a `PrismError`.
+
+  `$localeDate` and `$localeNumber` options that pass the schema but that `Intl` refuses — `dateStyle` beside `weekday`, `minDigits` above `digits` — are a `PrismError` with code `E_SCHEMA`, the op and its place in the config ("$localeDate: Intl refused its options: …"), instead of a bare `TypeError` or `RangeError`. A zone or a locale `Intl` cannot read is still `E_TYPE`, as before.
+
+- bd996ea: BREAKING — approved by moccadroid (owner), 2026-11-22: nothing unless a config handed `$localeMoney` or `$localeNumber` a list, a boolean, hex text or blank text as the amount (now `E_TYPE`), or relied on `$localeMoney` dividing by 100 for a locale `Intl` cannot read.
+
+  `$localeMoney` takes the minor-unit divisor from the currency alone, so a locale tag `Intl` cannot read no longer changes the amount: 1500 JPY with locale `en_US` prints `JPY 1500` (was `JPY 15.00`). `$localeMoney` and `$localeNumber` read `value` as `$toNumber` reads text: a number, or digits with spaces around them (`" 1999 "`). `[1999]`, `true`, `"0x10"` and `"   "` are refused with `E_TYPE`; they used to print `19,99 €`, `0,01 €`, `0,16 €` and `0,00 €`.
+
+- 180787b: BREAKING — approved by moccadroid (owner), 2026-11-22: nothing unless a config relied on an overflowing `$add`, `$sub`, `$mul`, `$div`, `$sum` or `$avg` giving `Infinity` (which JSON stores as `null`): it is now an `E_TYPE` error.
+
+  `$add`, `$sub`, `$mul` and `$div` refuse an answer that is not a JSON number. `{ "$mul": [1e308, 10] }` and `{ "$div": [1, 5e-324] }` are `E_TYPE` ("$mul gave Infinity, which is not a JSON number."), where they returned `Infinity`. `$sum`and`$avg` run as `$add`, so a sum past what a number can be is refused the same way: "$add gave Infinity, which is not a JSON number. At $sum, in the $add that $sum runs as."
+
+- d53910e: BREAKING — approved by moccadroid (owner), 2026-11-22: nothing unless a config runs `$min` or `$max` over about 111,000 items or more under the default `maxSteps`, or relies on a stored compiled fingerprint of a config that uses them: each item now costs 9 steps instead of 8, and the desugared form, so the fingerprint, changes once.
+
+  `$min` and `$max` skip a `null` item wherever it is in the list. `[3, null, 1]` gave `E_TYPE` while `[null, 3, 1]` gave `1`; both now give `1`, and a list of nulls gives `null`. Every list that had an answer has the same answer.
+
+- 276f457: BREAKING — approved by moccadroid (owner), 2026-11-22: nothing unless an app relied on the second and later calls of one config object losing a constant's `__proto__` key; they now answer as the first call does.
+
+  A `$const` whose value has a key `__proto__` keeps it as an own key on every call of a config object that is run again. From the second call (when the config's tree is kept and its constants handed out as copies), the key used to be dropped and its value became the copy's prototype, so `out.admin` read `true` through it.
+
+- 413afbd: BREAKING — approved by moccadroid (owner), 2026-11-22: nothing unless a `$replace` replacement contains `$$`, `$&`, `` $` ``, `$'` or `$<name>` and relied on JavaScript reading it as a pattern (writing `$$` to get `$`).
+
+  `$replace` writes its `replacement` as given. `"US$$5"` writes `US$$5` (was `US$5`), and `"[$&]"` writes `[$&]` (was the matched text in brackets). DOCS already said `search` is plain text; the replacement now is too.
+
+- 3f92c52: BREAKING — approved by moccadroid (owner), 2026-11-22: nothing unless a config relied on `$round` with `digits` above 0 giving the binary-product answer, or a stored number was rounded that way: the same input now rounds to a different number.
+
+  `$round` rounds a number at its decimals as they are written, not at `value × 10^digits`. With `digits: 2`: `1.1` with `"ceil"` is `1.1` (was `1.11`), `4.35` with `"floor"` is `4.35` (was `4.34`), `1.005` to the nearest is `1.01` (was `1`), `0.285` is `0.29` (was `0.28`). More digits than a number has give the number (was `NaN` for `digits: 400`, or `1e300` at 10 digits). With `digits: 0` every answer is the same as before.
+
+- 841c010: BREAKING — approved by moccadroid (owner), 2026-11-22: nothing unless a config cut or split text with emoji or other characters outside the Basic Multilingual Plane and relied on getting half a character (which Postgres jsonb refuses and a browser shows as �).
+
+  `$slice`, `$take` and `$drop` never cut text between the two halves of one character: a cut there moves to the near side of it. `start` 0, `end` 5 of `"Hey 👍 there"` is `"Hey "` (was `"Hey \ud83d"`), and `$take 1` of `"👍"` is `""`. `$split` with `sep: ""` splits into characters: `"a👍"` → `["a", "👍"]` (was three items). Indexes stay UTF-16 units, so every result that was whole text is the same. `$length` still counts UTF-16 units, as zod does, and now says so.
+
+- d93170b: BREAKING — approved by moccadroid (owner), 2026-11-22: nothing unless a config relied on `$update` turning a list or a scalar on its path into an object (also for digit text past the end of a list), or on `$has` answering `false` for digit text over a list.
+
+  `$update` and `$has` read a path as `$get` does: a number, or digit text such as `"0"` on a list, is an index. `$update` at `["items", "0", "qty"]` over a list now updates the first item; it used to replace the list with `{"0": {"qty": …}}` and lose the other items. Digit text past the end of a list (`["items", "5"]` over `[1, 2]`) is `E_MISSING_PATH`, as a number index there always was; it used to give `{"items": {"5": …}}`. `$has` with that path answers `true` where the item exists. A key on a list (`"x"`, and `"01"`, which is not index text) or on a string, number or boolean is now `E_TYPE`; it used to replace that value with a new object. A missing key or `null` on the path is still created as an object.
+
+### Patch Changes
+
+- 1f6d37d: `$fill` is measured at every level it fills: nested slots that use one slot twice are refused with `E_BUDGET` at the string limit, instead of first building text hundreds of megabytes long.
+
+  `__optional` leaves out a field whose `$get` runs into `null` or a missing key, as it already left out a `$ref` to a missing path. The error without `__optional` is unchanged (`E_TYPE`); it now carries `details.absent: true`.
+
+  The `Intl` formatter caches of `$localeDate`, `$localeMoney` and `$localeNumber` keep up to 1,000 formatters each and are emptied when full, as the path cache is; they grew with every distinct locale a process saw.
+
+  DOCS and `$walk`'s description say when a walk ends: `post` always ends; with `pre`, a walk whose every replacement again contains a node a rule matches runs until the budget stops it (`E_BUDGET`). They said it always ends.
+
+  `$reduce`'s DOCS and the descriptions of `as` and `acc` say that when the two are one name, the body sees the accumulator, not the item.
+
+- d77baf9: Prism reads and writes only the data's own keys: `$.constructor` on `{}` is a missing path instead of a JavaScript function, `$groupBy` groups under `constructor` or `toString` instead of throwing, and a key called `__proto__` in the data stays a key of the result in `$merge`, `$omit`, `$pick`, `$keyBy`, `$fromEntries` and `$renameKeys`.
+
+  `$localeDate` and `$localeNumber` refuse a locale Intl does not read (`de_AT`) with a Prism type error (`E_TYPE`) instead of a bare `RangeError`.
+
+  A source nested deeper than the call stack reaches is stopped with `E_BUDGET` instead of a bare `RangeError`.
+
+  The cache of parsed `$ref` paths keeps at most 1,000 paths; it grew with every distinct path a process saw.
+
+  A config still cannot carry a key called `__proto__`: validation drops it from a plain object, a `$const` payload, a `$with` binding or a `$renameKeys` map while `validate` answers ok. DOCS.md says so; data with such a key comes in through the source.
+
+  With `check: 'always'`, a source that contains itself is refused as not JSON (`E_TYPE`, "source.self refers back to source").
+
+- Updated dependencies [48138de]
+- Updated dependencies [da3037e]
+- Updated dependencies [e957628]
+- Updated dependencies [c30562a]
+- Updated dependencies [efd2368]
+- Updated dependencies [ca26810]
+- Updated dependencies [800a541]
+- Updated dependencies [9c5367b]
+- Updated dependencies [322f241]
+- Updated dependencies [d85bab1]
+- Updated dependencies [aeaf803]
+- Updated dependencies [2b174f8]
+- Updated dependencies [df79faf]
+- Updated dependencies [133c0ee]
+- Updated dependencies [543f79d]
+- Updated dependencies [61b15e4]
+- Updated dependencies [7e8f6d4]
+- Updated dependencies [5c52ef5]
+- Updated dependencies [66eb934]
+  - @niscorp/cortex@0.2.0
+  - @niscorp/signal@0.2.0
+  - @niscorp/strata@0.2.0
+
 ## 0.3.4
 
 ### Patch Changes

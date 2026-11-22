@@ -1,5 +1,52 @@
 # @niscorp/solid
 
+## 0.2.0
+
+### Minor Changes
+
+- 4f89d7d: BREAKING — approved by moccadroid (owner), 2026-11-22: a strict stream given a non-string for a string-format field (`z.email()`, `z.url()`, `z.uuid()`, `z.iso.*`) now fails, where it resolved; nothing else unless an app relied on what is inside a field that takes any value being dropped.
+
+  What is inside a field whose schema takes any value is now kept, as DESIGN and README say. In `recover` and `strict`, everything below `z.any()`, `z.unknown()` or an intersection was refused as `<unknown path>`: `x: z.any()` given `{"x":{"b":[1,2]}}` ended `{ x: {} }` with an error. The fields of a `z.lazy()` or a pipe are now checked against the schema it stands for (the lazy's schema, the pipe's input side), so a recursive schema keeps every level instead of nothing.
+
+  A string-format field (`z.email()`, `z.url()`, `z.uuid()`, `z.iso.*`) is now kind-checked as a string, as `z.string()` is: `{"to":[1]}` for `to: z.email()` was taken in as a list. In `recover` such a value is skipped with an error; in `strict` it fails the stream.
+
+- d951434: BREAKING — approved by moccadroid (owner), 2026-11-22: nothing unless an app relied on solid reading `Infinity`, hex (`0x1F`), a leading `+` or a leading `.` as numbers.
+
+  Only JSON numbers are read. `{"a":Infinity,"b":0x1F,"c":+5,"d":.5}` put `Infinity`, 1, 5 and 0.5 into `current()`; such text is now dropped, with no error, and each field keeps what it had. Valid JSON reads as before at every chunk boundary: `{"price":19.` then `99}` still shows 0, 19, 19.99.
+
+- b210b56: BREAKING — approved by moccadroid (owner), 2026-11-22: nothing unless an app relied on a selection's `final()` resolving with the frozen value after a strict failure, or on a root key `""` ending the stream at its object's close.
+
+  A stream now ends once:
+  - After a strict failure, a selection's `final()` that had not resolved rejects with `[solid] stream failed validation`, as the root's does: `select('items').final()` awaited before the failure never settled, and `select('count').final()` asked after it resolved with the starting value. A selection that resolved before the failure keeps its value.
+  - A `final()` that resolved keeps its value: text after the root that fails a strict stream no longer makes a later `final()` reject.
+  - A root key `""` whose value is an object no longer ends the stream at that object's `}`: `{"":{"x":1},"b":2}` resolves `final()` at the last `}`, with `b` in it, and a key beside it finalizes with its value.
+
+- c5aea8b: BREAKING — approved by moccadroid (owner), 2026-11-22: nothing unless an app relied on `createStream` throwing for such a schema, or on a cortex agent with such a data schema emitting no `output-partial` events.
+
+  `createStream` without `initial` no longer throws for a schema whose derived starting value only fails a constraint: `.min(1)`, `.positive()`, `array().min(1)`, an email, url or uuid format, a `z.record` or a `z.lazy`. The derived value is used when every value in it is of a kind (and, for a literal or enum, a value) the schema takes at its place; no constraint is asked of it. A `strict` stream started so checks the value `final()` would resolve with against the whole schema and fails when the schema refuses it: `{"t":""}` for `.min(1)`, `{"n":-1}` or a reply that leaves the starting `0` for `.positive()` reject `final()`, where construction threw before. Constraints (`.min(1)`, `.positive()`, a format, `.refine`) are checked in two places only. With `constraints: 'finalize'`, each field when it finishes. And in `strict` mode with no `initial`, when the derived starting value fails the schema: the value `final()` would resolve with (at the root's close or on `close()`) is checked whole, and one the schema refuses fails the stream. Otherwise they are not checked, and in `recover` mode `final()` can resolve with a value the schema refuses (`{"t":""}` for `t: z.string().min(1)`); under `constraints: 'finalize'` such a value is reported with `onError`, and it stays. A starting value that is no object or list (`z.any()`, a `.nullable()` object) no longer makes `write('{…')` throw a `TypeError`: the reply's root is kind-checked and becomes the value.
+
+  Through cortex, which makes its partial-output stream without `initial`, an agent whose data schema has such a field or is recursive now emits `output-partial` events, where it emitted none.
+
+- 9899bd7: BREAKING — approved by moccadroid (owner), 2026-11-22: nothing unless an app relied on a union field's value being dropped, or a strict stream failing, when the value is of a kind only a later variant takes.
+
+  A field of a union (discriminated or not) is now kind-checked against every variant that has it, and passes the finalize check when any of them accepts its value. Before, only the first variant counted: with `w: z.discriminatedUnion('kind', [{ kind: 'text', value: z.string() }, { kind: 'count', value: z.number() }])`, `{"w":{"kind":"count","value":5}}` lost the 5 in `recover` and failed a valid reply in `strict`. A field typed alike in every variant behaves as before.
+
+  So that a field cannot take one variant's kind under another variant's discriminator, an object or list a union decides is checked when it closes: it must fit one variant by the kinds of its fields and the values of its literal and enum fields. `{"w":{"kind":"text","value":5}}`, or `{"a":1,"b":"x"}` against the union of `{ a: string, b: string }` and `{ a: number, c: number }`, fails a strict stream, as it did, and in `recover` is reported with `onError` (`expected: 'a variant of the union'`) while the value stays in `current()`; before, `recover` dropped the field's value silently.
+
+### Patch Changes
+
+- f61ffdd: A key with a dot in it (`{"files":{"index.ts":…}}`) is kept and checked against the schema; before, it was dropped with an "expected <unknown path>" error, and strict mode failed the stream.
+
+  A listener that throws no longer cuts `write()` or `close()` short: the chunk is still parsed, every other listener and selection still hears of the change, and the call then throws that listener's error. Before, the rest of the chunk was lost and the stream could stop telling new listeners of changes.
+
+- 88f93c0: A long reply no longer slows a stream down as it grows: a new key or a closing bracket now finalizes only the direct children of its container, where before it walked every container seen so far. 2,000 streamed rows took tens of seconds and now take tens of milliseconds, with the same events, values and order. DESIGN's "O(events)" for finalization is now true.
+
+  A write into a long list copies the list once and rebuilds only the elements it changed: 20,000 streamed numbers take about half the time.
+
+  README and DESIGN say that a number is shown as read so far, as a string is: `{"price":19` then `99}` shows 19, then 1999.
+
+  README and DESIGN say that a selection's `write()` and `close()` do nothing: the root is fed.
+
 ## 0.1.3
 
 ### Patch Changes

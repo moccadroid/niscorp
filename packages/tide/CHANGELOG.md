@@ -1,5 +1,79 @@
 # @niscorp/tide
 
+## 0.2.0
+
+### Minor Changes
+
+- 909ae6b: BREAKING — approved by moccadroid (owner), 2026-11-22: nothing unless an app relied on the reflex agent answering a draft whose one-shot clock names a date that does not exist; such a draft now goes back to the model in the same run, which costs one more model call.
+
+  The reflex agent (`@niscorp/tide/agent`) sends back a draft whose one-shot clock names a date that does not exist (`{ clock: { at: '2026-02-30T10:00' } }`, which would fire on 2 March), for the model to correct in the same run, whatever its reasoning says. It accepted such a draft.
+
+- 5eb6e6c: BREAKING — approved by moccadroid (owner), 2026-11-22: nothing unless an app relied on a run whose fan-out failed in a host seam being tried again on the very next `advance`; it is now tried after the reflex's retry wait (with the default policy 60 s, then 120 s, then 240 s).
+
+  A run whose fan-out fails in a host seam (a database down, a broken template) stays `pending` as before, and is tried again after a wait taken from the reflex's own `policy.retry` (`baseMs`, growing by `backoff` over the first `max` deferrals, then staying that long). While it waits, the pending runs behind it fan out: a page of such runs no longer keeps every other run from fanning out. After the n-th deferral the wait is `baseMs · 2^(min(n, max) − 1)` (exponential) or `baseMs` (fixed), never more than the largest whole number of milliseconds; a large `max` makes a long wait (`max: 20` with the default `baseMs`: 364 days). The waits are kept in each engine's memory, so after a restart a deferred run is tried once at once and then waits again; a run another engine fans out or skips is forgotten on the next pass. A run whose reflex a load left out is still skipped on the next `advance`.
+
+- 1c2b7ce: BREAKING — approved by moccadroid (owner), 2026-11-22: nothing unless an app relied on the early firing time in Pacific/Auckland, Antarctica/McMurdo or Pacific/Chatham on the two transition days a year.
+
+  A clock time inside a daylight-saving transition now resolves as documented in zones at +12 and +13 too. In Pacific/Auckland and Antarctica/McMurdo, a daily 02:00 on the spring-forward day (2026-09-27) fired at 01:00, before the asked time; it fires at 03:00, past the gap. In the repeated hour in autumn it took the second occurrence; it takes the first. In Pacific/Chatham the times just before the transition moved too: on 2026-09-27, 02:00–02:30 fired an hour early, and on 2026-04-05, 02:00–02:30 an hour late; they fire on time. Occurrence keys do not change, so no run is opened twice or lost. No other zone moves.
+
+- 069efde: BREAKING — approved by moccadroid (owner), 2026-11-22: nothing unless an app relied on a `manual` fact ingested under one identity (or none) running a reflex of another identity, or on `ingest` accepting a `kind: 'run'` fact.
+
+  A `manual` fact now passes the identity check before it skips `enabled` and arming: `ingest({ kind: 'manual', target: 'b.refund' }, { as: 'tenant-a' })` no longer runs tenant B's reflex. `fire` mints the fact under the reflex's own identity, so firing by hand works as before, on a disabled reflex too.
+
+  `ingest` refuses a `run` fact with `invalid_fact`: tide mints one when a run settles, and an ingested one would forge that settlement.
+
+- 85f1536: BREAKING — approved by moccadroid (owner), 2026-11-22: nothing unless an app's tests on `createMemoryStore()` relied on which tasks a claim takes when the claim limit bites and a reflex has `order: 'serial'`.
+
+  The memory store claims the serial groups (`onePer.only`) first, one row each, and gives what they leave of the limit to the other rows, as the Postgres store does. With limit 1, a parallel task ordered first and a serial task second, it claimed the parallel one and Postgres the serial one; both now claim the serial one. Nothing changes when the limit does not bite. The docs say a host's own store should do the same.
+
+- d7f10ac: BREAKING — approved by moccadroid (owner), 2026-11-22: nothing unless an app sorted or parsed the ids of tide's Postgres rows by their old shape (`fact_mwi60d3d_1`) — including a sort on `created_at` that breaks ties on `id`: runs made in one advance share `created_at`, and UUIDs order them at random; break such ties on `due_at`.
+
+  The Postgres store mints the ids of new `fact`, `run` and `task` rows as UUIDs. They were the time and a per-process counter, so two processes on one database could mint the same id in the same millisecond, and the second write failed (`duplicate key value violates unique constraint "tide_fact_pkey"`); under moss that write fact was lost. Rows already written keep their ids; no table changes. The memory store keeps its `fact_1` ids.
+
+### Patch Changes
+
+- 8bf0c30: On the Postgres store, a fact payload, an effect input or an output that is a string which is not JSON text (`'hello'`, `'msg_8812'`) reads back as that string. It threw, and stopped `ingest`, every `advance` and the ledger reads that met it. A string that is JSON text reads back as it did.
+
+  `load` calls run one at a time, in the order they are made: two that overlapped could finish out of order and load the earlier set, bringing back a reflex the later one had taken out.
+
+  An `advance` before the first `load` no longer skips pending runs as "reflex is no longer loaded": fan-out waits until the engine's first load has finished. After it, a run whose reflex a load left out is skipped as before.
+
+  `load(reflexes, { at, resume: true })` is a new opt-in for the load a process makes when it starts: a reflex this engine has never loaded keeps its stored watermark, so its `catchUp` decides what the downtime runs and a one-shot clock due during a restart fires after it. Without `resume`, `load` re-baselines as before.
+
+  `advance` takes an optional `clock`, and the driver passes its own `now`. Given one, each task's lease starts again just before its effect, never to end before the claim's, and the effect runs only if the task is still this claim's: a task late in a slow pass, whose lease had run out and which another instance had claimed again, no longer runs twice. That is one more write per task. Without `clock`, nothing changes.
+
+  `load` warns about a one-shot clock whose date does not exist (`2026-02-30`), naming the day it fires on (2026-03-02). The reflex loads and fires as before.
+
+  The docs say that a `dedupeKey` is unique across the whole ledger and not per identity, that `duplicate_unit` is never thrown to a caller, that a spring-forward time shifts by the length of the gap, and what `sweep`'s `tasks` horizon removes.
+
+- 9e5c5e3: `load` warns about a reflex whose `timeoutMs` is not shorter than `leaseMs`, and still loads it.
+
+  A settled run is marked announced in the same transaction as the run fact that announces it, one run at a time: a failed write no longer loses the fact, the run is announced on a later advance, and the runs after it are announced meanwhile.
+
+  Facts delayed by `notBefore` no longer keep a due fact from its reflex: the matcher reads only the facts that are due.
+
+  The tasks of a reflex that is not loaded are no longer claimed, so they spend no attempt while it is away.
+
+  `ledger.facts({ reflexId })` reads only that reflex's facts instead of the whole fact table. The docs describe what `sweep` removes and drop the history they carried.
+
+  The Postgres store no longer sets aside room in a claim for every `order: 'serial'` reflex before it knows whether one has work: with as many serial reflexes as the advance's `limit`, other tasks were never claimed. Serial reflexes are still claimed first.
+
+- Updated dependencies [48138de]
+- Updated dependencies [da3037e]
+- Updated dependencies [e957628]
+- Updated dependencies [c30562a]
+- Updated dependencies [efd2368]
+- Updated dependencies [ca26810]
+- Updated dependencies [800a541]
+- Updated dependencies [9c5367b]
+- Updated dependencies [322f241]
+- Updated dependencies [61b15e4]
+- Updated dependencies [7e8f6d4]
+- Updated dependencies [5c52ef5]
+- Updated dependencies [66eb934]
+  - @niscorp/cortex@0.2.0
+  - @niscorp/strata@0.2.0
+
 ## 0.1.12
 
 ### Patch Changes

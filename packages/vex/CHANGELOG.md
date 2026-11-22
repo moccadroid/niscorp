@@ -1,5 +1,83 @@
 # @niscorp/vex
 
+## 0.5.0
+
+### Minor Changes
+
+- 4c6300e: BREAKING — approved by moccadroid (owner), 2026-11-22: nothing unless an app's discovery endpoint has an engine created with `scope` and a handler with no policy of its own (Express without `getPolicy`, Hono without `getPolicy`, or `handleDiscovery` called directly) and relied on that endpoint listing tables and entries the engine's policy refuses to run.
+
+  Discovery now lists each table and entry under the policy it runs under. Tables and read entries go by the handler's (or the request's) policy when there is one, otherwise the engine's. A write entry goes by `mutations.policy`, the policy its write runs under, when the handler has `mutations`. `QueryEngine` gains an optional read-only `scopePolicy`, the policy given to `createQueryEngine`.
+
+- b1e314e: BREAKING — approved by moccadroid (owner), 2026-11-22: nothing unless an app relied on `session.answerIntent` replaying an entry that declares a `reach` with more rows than `/api/vex` answers the same person; such a replay now answers fewer rows or `scope_denied`.
+
+  `engine.execute` can serve a replayed entry at the `reach` it declares: pass `policyForReach`, as the handler takes it. Without it the run is as before, with one warning per entry. moss's `session.answerIntent` passes it, so a replay of an entry that declares a reach answers what `/api/vex` answers the same person: fewer rows, or `scope_denied` for roles with no such reach.
+
+- b2b2d8d: BREAKING — approved by moccadroid (owner), 2026-11-22: nothing unless an app merges hand-written policies with `mergeScopePolicies` and relied on a `public` entity being refused, or on `{ write: [...], update: [] }` merging to an `update` with no rule.
+
+  `mergeScopePolicies` now reads each entity as the phases it grants. A `public` entity grants all four phases with no rule, where it was dropped and so refused. A `write` list is added to insert, update and delete, where it was dropped: `{ write: [tenant], update: [] }` merges to `update: [tenant]` (narrower than before, and as narrow as the policy itself), and a `write`-only entity gains its three write phases. Policies made by `createScopePolicy` merge exactly as before.
+
+- f995714: BREAKING — approved by moccadroid (owner), 2026-11-22: an app whose update writes a column a `match` rule pins (handing a row over, e.g. setting `owner_id` under an `owner_id = me` rule) sets `mutations: { …, checkMovedRows: false }` to keep today's behaviour.
+
+  An update can no longer move a row out of the caller's own update rules: when it writes a column a `match` rule pins (say `project_id` under `match: 'project_id', in: 'projectIds'`) to a value that rule does not allow, it is refused with 400 `scope_denied` naming the rule and the column, and nothing is written. An insert's `onConflict … set` that would move the existing row out does not move it and answers `[]` for it, not 400. A setup that hands rows over this way (setting `owner_id` under an `owner_id = me` rule) keeps today's behaviour with `mutations: { …, checkMovedRows: false }`.
+
+- a002748: BREAKING — approved by moccadroid (owner), 2026-11-22: nothing unless an app relied on a table joined to itself being filtered on one copy only, or on a semantic `$scope` text sent by the client; the server supplies that value, or the request is refused with `missing_scope`.
+
+  A table joined to itself now gets its row rules on both copies, a semantic `$scope` text comes from the server, and discovery leaves out entries whose `exists` reads a table the caller cannot read. Tables, subqueries and columns with capitals or reserved names can be read and written, and the query agent's tools accept `null` for an argument the model leaves out.
+
+- 2233113: BREAKING — approved by moccadroid (owner), 2026-11-22: nothing unless a host wraps a built-in cache by spreading it and overriding `set` to watch writes: the "last used" stamps go through the `touch` the wrapper inherits and do not reach that `set`.
+
+  The "last used" stamp a replay writes now writes `lastUsedAt` alone, through a new optional `CacheBackend.touch(key, lastUsedAt)`, wherever the cache the engine is given has `touch`. There, a `PATCH` (unprotect) or a reseed that lands between a replay's read and its stamp is kept, and a tiered cache stamps L1 and L2 without copying L1's entry over L2. The memory, Postgres and tiered caches implement `touch`; a backend without it is stamped through `set` with the whole entry, as before, and keeps the race. moss's entry cache has no `touch`, so every moss app keeps stamping through `set`.
+
+- 04f5821: BREAKING — approved by moccadroid (owner), 2026-11-22: nothing unless an app sends `null` as an `upsert` key on a table whose key column the database fills (a default or an identity column) and relied on that writing nothing and answering 200 `[]`. Such a request now inserts a row, or, for a caller whose policy grants update but not insert, answers 400 `scope_denied` as an absent key does.
+
+  An `upsert` whose key is `null` now inserts a row where the database makes the key: the introspected key column has a default (such as `gen_random_uuid()` or a sequence) or is an identity column, and the entry does not write the key itself in `columns` or `insert`. Before, it ran an update of no row and answered 200 `[]`. Anywhere else a `null` key answers as before. Introspection now gives an identity column a `defaultValue` (`GENERATED ALWAYS AS IDENTITY` or `GENERATED BY DEFAULT AS IDENTITY`), where it had none.
+
+### Patch Changes
+
+- 8b4d6cd: A write can now be told to answer only the rows the caller's read rules show: `mutations: { …, answerReadableRows: true }` on the handler and on the Hono and Express adapters, and `answerReadableRows: true` in moss's runtime for its `/api/vex` surfaces. It is off by default, and with it off a write runs and answers exactly as before.
+- be6e7af: The handler's log line for an unexpected error no longer prints the error object, which under PGlite carries the statement's bound values (the caller's scope among them). It prints the error's code, message and stack, and the SQL text where the driver's error carries it.
+- d8dc7d9: An unlocked endpoint can now refuse fingerprint management: `manageFingerprints: false` on the handler and the Hono and Express adapters answers `PATCH` and `DELETE` with 403 `locked`. It stays on by default, as before, and an adapter mounting an unlocked endpoint with it on logs one warning as it starts.
+- df44b8e: DESIGN.md's first design decision states the rule without the history of the defect it replaced.
+
+  An `exists` inside a `case` inside an aggregate (`sum`, `avg`, `min`, `max`) compiles, with the caller's row rules inside it, as it already did inside `compute`. Before, the query was refused with "An `exists` filter was not resolved".
+
+  The Express adapter takes `getPolicy(req)`, `getPolicyForReach(req, reach)` and `onExecute`, as the Hono adapter does. An entry that declares a reach is served there; before, it answered 500 on Express. Without these options the adapter behaves as before.
+
+  A request whose `intent` or `fingerprint` is `null` is read as one without that key, by `engine.execute` and by the adapters; before, it was refused as `invalid_request`. The exported schemas are unchanged.
+
+  `createPostgresAdapter` takes `qualifyTables: true`: with it, reads and mutations name every table with the adapter's `schema` (`FROM "app".tasks`), so an app need not set `search_path`. `introspect()` then reports that name as `namespace` on the `DatabaseSchema`, a new optional field left out of the schema fingerprint. Without the option nothing changes.
+
+- Updated dependencies [48138de]
+- Updated dependencies [da3037e]
+- Updated dependencies [e957628]
+- Updated dependencies [c30562a]
+- Updated dependencies [efd2368]
+- Updated dependencies [ca26810]
+- Updated dependencies [800a541]
+- Updated dependencies [9c5367b]
+- Updated dependencies [322f241]
+- Updated dependencies [a41edf9]
+- Updated dependencies [eb4ffb9]
+- Updated dependencies [ae647e8]
+- Updated dependencies [2effb54]
+- Updated dependencies [bd996ea]
+- Updated dependencies [180787b]
+- Updated dependencies [d53910e]
+- Updated dependencies [276f457]
+- Updated dependencies [413afbd]
+- Updated dependencies [1f6d37d]
+- Updated dependencies [d77baf9]
+- Updated dependencies [3f92c52]
+- Updated dependencies [841c010]
+- Updated dependencies [d93170b]
+- Updated dependencies [61b15e4]
+- Updated dependencies [7e8f6d4]
+- Updated dependencies [5c52ef5]
+- Updated dependencies [66eb934]
+  - @niscorp/cortex@0.2.0
+  - @niscorp/prism@0.4.0
+  - @niscorp/strata@0.2.0
+
 ## 0.4.5
 
 ### Patch Changes

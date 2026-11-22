@@ -1,5 +1,39 @@
 # @niscorp/strata
 
+## 0.2.0
+
+### Minor Changes
+
+- 5c52ef5: BREAKING — approved by moccadroid (owner), 2026-11-22: nothing unless an app stores documents whose stamp has an entry, for a grammar it upgrades, that is not a number (`{ "acme.kit": "v0" }`), or keeps stamps in a column that is not jsonb. `upgrader.upgrade` and `upgrader.behind` now throw `INVALID_SEQUENCE` for such an entry, where `upgrade` returned the document unmigrated and stamped current; `upgradeStore` leaves such rows as they are and names them in a new `unread` list on its report, where it skipped them silently (jsonb) or ran every migration over them again (a `text` column).
+
+  A stamp entry is read with `Number`, as the comparisons always read it, so digits in a string and `null` read as before. An entry for a grammar the upgrader was given that reads as no number is refused with `INVALID_SEQUENCE`, naming the grammar and the entry.
+
+  `upgradeStore` still locks every row in one transaction, but reads only the keys and stamps under the lock, and then each behind row's document by its key, one at a time: a store whose rows are all current loads no document. A row it cannot read — a stamp that is neither null nor a JSON object, an entry for a given grammar that is no number, or a key the driver does not hand back exactly as stored (a `timestamptz` with microseconds) — is left as it is and named in `StoreReport.unread` (`id="e"`), present only when there is one; the pass goes on. `total` is still every row of the table.
+
+- 66eb934: BREAKING — approved by moccadroid (owner), 2026-11-22: nothing unless an app runs `strata upgrade` with a `workDir` in which it keeps a `REPORT.md` or `plan.json` of its own (upgrade now exits 1 and leaves it, where it replaced and later deleted it), or relied on `strata verify` accepting a `plan.json` whose `from` differs from the committed `strata.lock.json` (it now refuses: plan again).
+
+  In a `workDir` the host names, strata treats a `REPORT.md` as its own only when it begins with `# strata upgrade` (a byte-order mark aside), and a `plan.json` only when it has a plan's shape. Given one that is not, `upgrade` leaves it as it is and exits 1 with "… is not one strata wrote — it is left as it is. Move it, or give strata a workDir of its own.", and `upgrade` and `verify` never remove it. In the default `.strata/upgrade`, which is strata's own, its files are replaced as before.
+
+  `verify` refuses a plan made from a lock other than the committed one, and so checks the untouched artifacts from the lock: an edited `plan.json` can no longer move the lock with the source never migrated. It compares stamps grammar by grammar, so grammars given in another order no longer refuse a valid plan. Two artifact ids that clean to one file name (`a/b`, `a_b`) each get an expected file of their own (`a_b.json`, `a_b~2.json`), where the second overwrote the first.
+
+### Patch Changes
+
+- 61b15e4: `prepare` refuses a sequence that is `null` with `INVALID_SEQUENCE`, as it refuses any sequence that does not parse, instead of throwing a `TypeError`.
+
+  The README says that a line beginning with `--` is left out of a migration's checksum even inside a string literal or a dollar-quoted body, so an edit to such a line is not caught.
+
+  The README lists what `INVALID_SEQUENCE` is raised for, and where.
+
+  The README says that a statement Postgres will not run inside a transaction, such as `CREATE INDEX CONCURRENTLY`, always fails its run with `STEP_FAILED`.
+
+- 7e8f6d4: `strata verify` fails, and leaves the lock where it is, when an edited artifact matches its migrated JSON but does not pass its kind's current schema.
+
+  `strata upgrade` and `strata verify` remove only the files a plan wrote (`plan.json`, `REPORT.md`, `expected/`), and a directory only once it is empty: a `workDir` that is the project itself, or lies outside it, no longer has its contents deleted, and `verify` keeps anything else in `.strata`.
+
+  The README says what to do when a migration renames the key a kind is embedded under: keep the old path in `embeds` beside the new one.
+
+  `strata.lock.json` is refused (`INVALID_SEQUENCE`, as for a lock that is not an object) when a grammar's entry is not a whole number of migrations, written as a number or as digits: `"x"`, `""`, `-1`, `null`, `true` and `1.5` no longer pass as current or re-run migrations.
+
 ## 0.1.9
 
 ### Patch Changes

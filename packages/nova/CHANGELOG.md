@@ -1,5 +1,121 @@
 # @niscorp/nova
 
+## 0.6.0
+
+### Minor Changes
+
+- 4b7d4a4: BREAKING — approved by moccadroid (owner), 2026-11-22: nothing unless an app relied on text such as `'$CAD only'` rendering empty, on such text not reaching `onPhraseMiss`, or wrote a condition that way: `{ if: '$count > 0', then, else }` (or a `$if: '$count > 0'` directive) with `count: 0` took `else` and now takes `then`, because the string is text, which is truthy.
+
+  A string that starts with `$` and a name followed by more words (`'$CAD only'`) is text: it renders as written, where it rendered empty, and, being text, is offered to the phrasebook (`onPhraseMiss` hears of it). Every path that resolved still resolves: `'$.x'` forms, `'$'` alone (the innermost scope), `'$USD'` (a path, empty when there is no `USD`), non-ASCII keys (`'$item.größe'`) and a path with trailing space. Only a data key with a space in it, read the `$name` way, is read differently.
+
+- bf72478: BREAKING — approved by moccadroid (owner), 2026-11-22: nothing unless an app relied on `errorTarget.data` (or `@error.data`) being missing for a failed HTTP reply whose body is plain text. The message is unchanged. `FetchResponse` gains an optional `clone`.
+
+  A failed HTTP reply whose body is not JSON (`new Response('Service down for maintenance', { status: 503 })`) puts that text in `errorTarget.data` and `@error.data`, where `data` was missing: nova takes a copy of the response with `clone()` before reading it as JSON. A response without `clone` (a test fake), or one whose body the host already read, is read as before.
+
+- e1db181: BREAKING — approved by moccadroid (owner), 2026-11-22: nothing unless an app relied on a fragment's slot showing the stored-layout id of the action it wraps as text.
+
+  A fragment around an action whose `layout` is a stored-layout id (`layout: 'invoice-body'`) renders the stored layout in its `{ slot: 'body' }`, where it rendered the id as text: `composeAction` fills the slot with `{ ref: 'invoice-body' }`, which the renderer resolves from the layout store. A fragment whose own layout is an id still replaces the layout composed so far. The fragment `layout` description says so.
+
+- 241bd4d: BREAKING — approved by moccadroid (owner), 2026-11-22: nothing unless an app builds a component list from the DOM or TTY kit's `registry.list()` and expects it without `CanvasSlot`.
+
+  The DOM and TTY kits' `defaultRegistry()` register `CanvasSlot`, so either kit works as the shell's registry, as the README shows: the default shell layout draws instead of `COMPONENT_NOT_FOUND: CanvasSlot`. Their walkers still draw a `CanvasSlot` themselves; the entry is there so the renderer accepts the name, as in the React and Vue kits. `registry.list()` of these two kits names one more component.
+
+- 9f8e4b5: BREAKING — approved by moccadroid (owner), 2026-11-22: nothing unless an app relied on a late failure of an older call overwriting `errorTarget` after a newer call of the same endpoint already came back.
+
+  A failed call whose newer call of the same endpoint has already come back no longer writes `errorTarget`, the same rule a late success already follows for `target`. Search "a" (slow, fails), then "ab" (fast, succeeds): the rows show "ab" and the error stays empty, where the late failure wrote it. The call's `onError` steps still run. A failure that comes back while the newer call is still on its way is written, as before.
+
+- 1b615d6: BREAKING — approved by moccadroid (owner), 2026-11-22: nothing unless a layout inside a loop writes through `model: '$.<as>.…'`, `'$.items'` or `'$.index'` and relied on the write landing on a root key of that name.
+
+  Inside a loop, a `model` written with `$.` writes where it reads: `model: '$.line.qty'` (with `as: 'line'`) writes the row it shows (`lines.0.qty`), where it wrote a root `line.qty` that no field shows. `model: '$.index'` binds nothing, as `model: '$index'` already did, where it wrote a root `index` while showing the loop index. A nested loop over `$.<as>.…` (`for: '$.g.items'` inside `for: '$.groups', as: 'g'`) binds its models into each group (`groups.1.items.0.v`), where every group bound `g.items.0.v`. What every layout shows is unchanged.
+
+- e7edd95: BREAKING — approved by moccadroid (owner), 2026-11-22: nothing unless an app reads `model.ref` from the render tree of a model-bound field that has its own `ref` inside a loop, and expects it to equal that `ref`; dispatching `ui:model` with the render tree's `model.ref`, as every kit does, keeps working.
+
+  A model-bound field with a `ref` inside a loop (`for: '$.lines', as: 'line', do: { component: 'Input', ref: 'qty', model: '$line.qty' }`) writes what is typed into its own row, where every row wrote the last one. Its render node's `model.ref` is `qty@lines.0.qty` (one per row, the same however many rows there are); its `ref` stays `qty`. Triggers on `ref: 'qty'` fire for every row and see `@event.ref` as `qty`, and a `ui:model` an app dispatches with `ref: 'qty'` still writes the last row. The longer name shows wherever a model ref is shown: adapters, devtools, the TTY command list, and the render trees moss sends to terminals.
+
+- 0a46ff6: BREAKING — approved by moccadroid (owner), 2026-11-22: nothing unless an app relied on a mount hook's navigation acting from the instance below, on `getState`/`getCanvasState` leaving out an instance whose mount hook is running (a data-change listener that looks the instance up now finds it for the input written at mount), or on the first state snapshot after a push leaving it out.
+
+  A pushed (or replacing) instance is on its canvas, with its birth, origin and key recorded, before its `mount` hook starts. A `push`, `pop` or `removeSelf` step that runs at the start of a mount hook now acts from that instance: `push` lands above it, `removeSelf` and `pop` close it. A mount hook that pushes onto another canvas fires a first state snapshot that already shows the new instance on its own canvas.
+
+  A `suspend` whose hook finishes after the action was revealed again (a push and a pop before the suspend ended) or removed no longer sets `suspended`: the action on top stays `active` and its triggers fire.
+
+- 59f314a: BREAKING — approved by moccadroid (owner), 2026-11-22: nothing unless an app computes a negative `removeAt` index on purpose and does not want `onError` called for it; the data changes exactly as before.
+
+  A `removeAt` step whose `index` is a template that resolves to a negative number (`index: '{{$.found}}'` with `found = -1`, a search's "not found") is reported to `onError` as a `NovaError` with code `MUTATION_ERROR` (`removeAt: index {{$.found}} resolved to -1, …`), in strict and lax mode, and then applied as before: `-1` still removes the last element. A literal negative `index` is a deliberate "from the end" and is not reported.
+
+  The report never changes what runs: an `onError` that throws for it does not stop the step, the push or the next handler.
+
+- 281108e: BREAKING — approved by moccadroid (owner), 2026-11-22: nothing unless an app reads `constructor`, `toString`, `__proto__` or another name every object inherits through a binding (`{{$.x.constructor}}`), which now gives `undefined`.
+
+  One rule for names a record inherits: what it inherits from a prototype of its own counts, what every object inherits from `Object.prototype` does not. A `functions`, `endpoints`, phrasebook or reconcilers object made with `Object.create(base)` or as a class instance resolves the names it inherits, as in the last release. A data path no longer reads `Object.prototype`'s members: `$.x.constructor` is `undefined` where it rendered `function Object() { [native code] }`. A getter on a class the data carries still reads, and an endpoint with `fn: 'toString'` still fails as an unknown function.
+
+- 7aef6a7: BREAKING — approved by moccadroid (owner), 2026-11-22: nothing unless an app hands `NovaShell` or `NovaCanvas` a registry with no `CanvasSlot` and relied on React's `Text`, `Stack`, `Input`, `Button`, `Box`, `Panel`, `JsonTree` or `ActionSlot` replacing its own.
+
+  `NovaShell` and `NovaCanvas`, handed a registry with no `CanvasSlot`, add only the default React components the registry does not have, and replace none it has. The Ink kit's registry keeps Ink's `Text` and gets `CanvasSlot`. A registry that has `CanvasSlot` is untouched, as before.
+
+- 79cf65c: BREAKING — approved by moccadroid (owner), 2026-11-22: nothing unless an app relied on a field with `model: '{{…}}'`, or inside a loop with `for: '{{…}}'`, writing nothing when typed into.
+
+  A `model` written as a single template (`model: '{{$.q}}'`) binds like the bare path, and a loop whose `for` is a single template (`for: '{{$.lines}}'`) keeps the bindings of the `model`s inside it: such fields write what is typed, and their render nodes carry `model` and `value`, where they bound nothing.
+
+- e828562: BREAKING — approved by moccadroid (owner), 2026-11-22: nothing unless an app runs its shell with `strict: true` and does not want `onError` called for failed calls nothing takes. Lax shells (the default) are unchanged. The exported `ErrorCode` type gains `'ENDPOINT_FAILED'`.
+
+  In strict mode, a `call` outside a lifecycle hook that fails with no `onError` steps and no `errorTarget`, or names an endpoint the action does not have with no `onError` steps, is reported to the shell's `onError` as a `NovaError` with the new code `ENDPOINT_FAILED` (`ErrorCodes.endpointFailed`). Nothing is thrown that was not thrown before; an unknown function still raises `UnknownFunctionError` in strict mode, and a lifecycle hook still raises `LifecycleError`.
+
+  The report never changes what runs: an `onError` that throws for it does not stop the step, the push or the next handler.
+
+- 6b01a50: BREAKING — approved by moccadroid (owner), 2026-11-22: nothing unless an app runs its shell with `strict: true` and does not want `onError` called for subscribers that throw. Lax shells (the default) and buses an app hands in are unchanged. The exported `ErrorCode` type gains `'HANDLER_FAILED'`.
+
+  In a strict shell, a subscriber that throws is reported to the shell's `onError` as a `NovaError` with the new code `HANDLER_FAILED` (`ErrorCodes.handlerFailed`) and the thrown message: `onStateChange`, `onDataChange` and `onEndpoint` listeners, handlers on the event and message bus the shell created itself, and each runtime's data and status subscribers. The throw is still caught, and the other handlers and the push or write that fired them go on.
+
+  The report never changes what runs: an `onError` that throws for it does not stop the step, the push or the next handler.
+
+- 6eef458: BREAKING — approved by moccadroid (owner), 2026-11-22: nothing unless an app's translations contain `$$`, `$&`, `` $` ``, `$'` or `$1` and relied on them being read as replacement patterns on text with spaces around it.
+
+  A translation applied to text with spaces around it goes in as written: "Price in dollars " with the translation "Preis in US$$" renders "Preis in US$$ ", where it rendered "Preis in US$ ". The same translation already rendered as written on text without spaces.
+
+### Patch Changes
+
+- b233463: `LayoutStore.resolveReferences` on a stored layout that refers to itself returns, leaving the inner `{ ref }` for the renderer, instead of overflowing the stack.
+
+  A canvas placed inside itself (a `CanvasSlot` naming the canvas it sits in) draws `RENDER_ERROR: canvas "<id>" is placed inside itself` where it comes back, in the TTY, DOM, React and Vue adapters, instead of overflowing the stack or running out of memory.
+
+  A `GET` endpoint with a `request` body, which fetch refuses on every call, is reported to `onError` as a `DefinitionValidationError` by `createShell` and `registerAction`; the definition still loads as before.
+
+  A bound `Input` takes `replaceDraftOnWrite: true`: while it is focused, a change of the value at its model path, other than an echo of a value it dispatched since it was focused, replaces what is typed and drops a pending debounced dispatch, in the DOM, React, Vue and Ink adapters (Ink's is not covered by a test). A write that leaves the stored value as it was changes nothing. Without the prop, a focused field keeps what is typed, as before.
+
+  Docs say what the code does: the event bus does not validate events; in lax mode `clear` on a missing or wrong-typed path removes the key; a negative `removeAt` index counts from the end; a push to an undeclared canvas creates a canvas the shell layout does not show; `removeAction` on a list canvas re-runs the mount and resume hooks of the card left last; inside a loop `$.index`, `$.items` and `$.<as>` read the loop's values, a lone `$` is the innermost scope, and `'$USD'` is a path. The endpoint example no longer sends a bearer token from action data.
+
+- e2b9595: A name every object inherits (`toString`, `constructor`, `valueOf`) is no longer found as an action, fragment, endpoint, function, phrase, slot or directive; a removeAt or move index template that is no whole number leaves the array alone and the next steps run; a stored layout that comes back to itself renders a clear `RenderError` instead of overflowing the stack. An actions or fragments map keyed by something other than the id is now reported to `onError` (the shell still loads it), and the README lists what each adapter kit ships.
+- Updated dependencies [48138de]
+- Updated dependencies [da3037e]
+- Updated dependencies [e957628]
+- Updated dependencies [c30562a]
+- Updated dependencies [efd2368]
+- Updated dependencies [ca26810]
+- Updated dependencies [800a541]
+- Updated dependencies [9c5367b]
+- Updated dependencies [322f241]
+- Updated dependencies [a41edf9]
+- Updated dependencies [eb4ffb9]
+- Updated dependencies [ae647e8]
+- Updated dependencies [2effb54]
+- Updated dependencies [bd996ea]
+- Updated dependencies [180787b]
+- Updated dependencies [d53910e]
+- Updated dependencies [276f457]
+- Updated dependencies [413afbd]
+- Updated dependencies [1f6d37d]
+- Updated dependencies [d77baf9]
+- Updated dependencies [3f92c52]
+- Updated dependencies [841c010]
+- Updated dependencies [d93170b]
+- Updated dependencies [61b15e4]
+- Updated dependencies [7e8f6d4]
+- Updated dependencies [5c52ef5]
+- Updated dependencies [66eb934]
+  - @niscorp/cortex@0.2.0
+  - @niscorp/prism@0.4.0
+  - @niscorp/strata@0.2.0
+
 ## 0.5.2
 
 ### Patch Changes
