@@ -808,3 +808,57 @@ describe('a key with a dot in it', () => {
     expect(errorsFor('index.ts')[0]).toBe('finalize files.index.ts');
   });
 });
+
+describe('a field whose schema takes any value', () => {
+  it.each([
+    ['z.any()', z.object({ x: z.any() }), { x: null }, '{"x":{"b":[1,2]}}', { x: { b: [1, 2] } }],
+    ['z.unknown()', z.object({ x: z.unknown() }), { x: null }, '{"x":[{"c":true}]}', { x: [{ c: true }] }],
+    ['z.lazy()', z.object({ n: z.lazy(() => z.object({ a: z.number() })) }), { n: { a: 0 } }, '{"n":{"a":5}}', { n: { a: 5 } }],
+    ['a pipe', z.object({ p: z.object({ a: z.number() }).pipe(z.object({ a: z.number() })) }), { p: { a: 0 } }, '{"p":{"a":1}}', { p: { a: 1 } }],
+    ['an intersection', z.object({ i: z.intersection(z.object({ a: z.number() }), z.object({ b: z.number() })) }), { i: { a: 0, b: 0 } }, '{"i":{"a":1,"b":2}}', { i: { a: 1, b: 2 } }],
+  ])('keeps what is inside %s, with no error', async (_name, schema, initial, text, expected) => {
+    for (const mode of ['recover', 'strict'] as const) {
+      const errors: string[] = [];
+      const stream = createStream<unknown>({ schema, initial, mode });
+      stream.onError((error) => errors.push(error.message));
+      stream.write(text);
+      stream.close();
+      expect(await stream.final()).toEqual(expected);
+      expect(errors).toEqual([]);
+    }
+  });
+
+  it('keeps every level of a recursive schema', async () => {
+    type Node = { label: string; children: Node[] };
+    const NodeSchema: z.ZodType<Node> = z.lazy(() => z.object({ label: z.string(), children: z.array(NodeSchema) }));
+    const stream = createStream<{ root: Node }>({ schema: z.object({ root: NodeSchema }), initial: { root: { label: '', children: [] } } });
+    const tree = { root: { label: 'a', children: [{ label: 'b', children: [{ label: 'c', children: [] }] }] } };
+    stream.write(JSON.stringify(tree));
+    expect(await stream.final()).toEqual(tree);
+  });
+
+  it('still refuses a key a lazy object does not have', () => {
+    const errors: string[] = [];
+    const stream = createStream<unknown>({ schema: z.object({ n: z.lazy(() => z.object({ a: z.number() })) }), initial: { n: { a: 0 } } });
+    stream.onError((error) => errors.push(error.expected));
+    stream.write('{"n":{"zzz":5}}');
+    expect(errors).toEqual(['<unknown path>']);
+  });
+});
+
+describe('a string format field', () => {
+  it('refuses a list, as a z.string() field does', () => {
+    const errors: string[] = [];
+    const stream = createStream<{ to?: string }>({ schema: z.object({ to: z.email().optional() }), initial: {} });
+    stream.onError((error) => errors.push(error.expected));
+    stream.write('{"to":[1]}');
+    expect(stream.current()).toEqual({});
+    expect(errors).toEqual(['string']);
+  });
+
+  it('fails a strict stream given a number', async () => {
+    const stream = createStream<{ to?: string }>({ schema: z.object({ to: z.email().optional() }), initial: {}, mode: 'strict' });
+    stream.write('{"to":5}');
+    await expect(stream.final()).rejects.toThrow('[solid] stream failed validation');
+  });
+});

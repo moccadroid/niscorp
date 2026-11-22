@@ -11,7 +11,7 @@ Solid takes a different approach:
 - **Incremental parser** — processes only new characters. No re-scanning.
 - **Structural sharing** — snapshots reuse unchanged subtree references. No deep cloning.
 - **Reference equality** — change detection is `===`, not deep comparison. O(1).
-- **Always-valid invariant** — the parser kind-checks every value against the schema at the moment its type is known, so a value of the wrong JSON kind is never written into `current()`, whatever the LLM sends. (`trust` mode switches the check off, and a field whose schema is `z.lazy`, an intersection or a pipe is not kind-checked.)
+- **Always-valid invariant** — the parser kind-checks every value against the schema at the moment its type is known, so a value of the wrong JSON kind is never written into `current()`, whatever the LLM sends. (`trust` mode switches the check off. A field whose schema takes any value — `z.any()`, `z.unknown()`, an intersection — is not kind-checked, and neither is anything inside it; the fields of a `z.lazy` or a pipe are checked against the schema it stands for. A string format such as `z.email()` takes only strings.)
 
 The result: linear scaling, about 3x faster than naive repair+parse on a 10 KB payload (table below), a clean subscription API that tells you exactly when each subtree finalizes, and a structural contract that holds even when the model hallucinates the wrong type for a field.
 

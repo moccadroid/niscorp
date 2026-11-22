@@ -268,7 +268,9 @@ A constraint violation (phase 2) is found after the value has been written, so i
 - `ZodOptional` / `ZodNullable` / `ZodDefault` → unwrap and recurse
 - `ZodLiteral`, `ZodEnum`, `ZodString/Number/Boolean/Null` → leaf kinds
 - Discriminated unions → object kind; full narrowing deferred to finalize
-- `ZodLazy` / `ZodIntersection` / `ZodPipeline` / `ZodAny` / `ZodUnknown` → accept-any (kind check skipped; finalize still runs if enabled)
+- `ZodLazy` / `ZodPipe` → stepped through to reach a field: the lazy's own schema, the pipe's input side. A recursive schema is checked at every level.
+- `ZodIntersection` / `ZodAny` / `ZodUnknown`, and a lazy or a pipe that is itself the value → accept-any (kind check skipped; finalize still runs if enabled). Every value below an accept-any schema is taken too.
+- String formats (`z.email()`, `z.url()`, `z.uuid()`, `z.iso.*`) → string, as `z.string()`
 
 The walker caches nothing; the lookup is O(depth) per value. For typical schemas (depth 3–5), that's a few property accesses per write.
 

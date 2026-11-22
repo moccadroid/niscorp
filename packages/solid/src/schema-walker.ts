@@ -10,17 +10,29 @@ export type SchemaInfo = {
 const ANY_INFO: SchemaInfo = { acceptedKinds: 'any', subSchema: null };
 
 export const walkSchema = (root: z.ZodType, segments: readonly string[]): SchemaInfo | null => {
-  let current: z.ZodType | null = root;
+  let current: z.ZodType = root;
   for (const segment of segments) {
-    if (!current) return null;
-    current = stepInto(current, segment);
+    const next = stepInto(current, segment);
+    // Below a schema that takes any value, every value is taken.
+    if (!next) return inspectSchema(enter(current)).acceptedKinds === 'any' ? ANY_INFO : null;
+    current = next;
   }
-  if (!current) return null;
   return inspectSchema(current);
 };
 
+// What streamed JSON is read against: a lazy schema's own schema, a pipe's input side.
+const enter = (schema: z.ZodType): z.ZodType => {
+  let s = unwrap(schema);
+  for (let i = 0; i < 32; i++) {
+    if (s instanceof z.ZodLazy) s = unwrap(s.unwrap() as z.ZodType);
+    else if (s instanceof z.ZodPipe) s = unwrap(s._zod.def.in as z.ZodType);
+    else return s;
+  }
+  return s;
+};
+
 const stepInto = (schema: z.ZodType, segment: string): z.ZodType | null => {
-  const s = unwrap(schema);
+  const s = enter(schema);
 
   if (s instanceof z.ZodObject) {
     const shape = s.shape as Record<string, z.ZodType>;
@@ -75,7 +87,8 @@ export const inspectSchema = (schema: z.ZodType): SchemaInfo => {
     return kinds;
   };
 
-  if (s instanceof z.ZodString) return { acceptedKinds: withNull(new Set(['string'])), subSchema: schema };
+  // z.email(), z.uuid(), z.iso.date() and the other formats are strings, not ZodString instances.
+  if (s instanceof z.ZodString || s._zod.def.type === 'string') return { acceptedKinds: withNull(new Set(['string'])), subSchema: schema };
   if (s instanceof z.ZodNumber) return { acceptedKinds: withNull(new Set(['number'])), subSchema: schema };
   if (s instanceof z.ZodBoolean) return { acceptedKinds: withNull(new Set(['boolean'])), subSchema: schema };
   if (s instanceof z.ZodNull) return { acceptedKinds: new Set(['null']), subSchema: schema };
