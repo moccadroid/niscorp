@@ -34,7 +34,9 @@ type RoleDef =
 A bare `string[]` is an actions-only role. Top-level `allow`/`deny` are sugar
 for the `actions` section — an actions-only role never names a section. Using
 both the sugar and an explicit `actions:` on one role is an error (the verifier
-catches it).
+catches it). A host that resolves such a role without verifying it gets the
+`actions:` section with the top-level `deny` taken away as well; the top-level
+`allow` grants nothing.
 
 #### `scoping` — how far a role reaches
 
