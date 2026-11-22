@@ -57,6 +57,12 @@ describe('resolution', () => {
     expect(sorted(resolveRole(G, gids, 'narrowed', 'actions'))).toEqual(['a.two']);
   });
 
+  it('a top-level deny beside an actions section still denies when nothing verified the charter; the top-level allow grants nothing', () => {
+    const crm = ['crm.contacts', 'crm.deal.view', 'crm.deal.delete', 'hr.pay'];
+    expect(sorted(resolvePrincipal({ r: { actions: ['crm.*'], deny: ['crm.deal.delete'] } }, crm, ['r']))).toEqual(['crm.contacts', 'crm.deal.view']);
+    expect(sorted(resolvePrincipal({ r: { actions: { allow: ['crm.*'], deny: ['crm.contacts'] }, allow: ['hr.*'], deny: ['crm.deal.delete'] } }, crm, ['r']))).toEqual(['crm.deal.view']);
+  });
+
   it('a principal is the union of their roles', () => {
     expect(resolvePrincipal(G, gids, ['muzzle', 'denyWins']).size).toBe(1);
   });

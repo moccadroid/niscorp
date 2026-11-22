@@ -26,11 +26,11 @@ export const normalizeRole = (
   }
   const fields = fieldsOf(def);
   const composition = { extends: listOf(fields?.get('extends')), without: listOf(fields?.get('without')) };
-  const sel =
-    section === 'actions' && fields?.has('actions') !== true
-      ? { allow: listOf(fields?.get('allow')), deny: listOf(fields?.get('deny')) }
-      : asSelection(fields?.get(section));
-  return { ...sel, ...composition };
+  if (section !== 'actions') return { ...asSelection(fields?.get(section)), ...composition };
+  if (fields?.has('actions') !== true) return { allow: listOf(fields?.get('allow')), deny: listOf(fields?.get('deny')), ...composition };
+  // The verifier refuses this pair. Resolved anyway, the top-level deny still takes away; the top-level allow would grant more, so it is not read.
+  const sel = asSelection(fields.get('actions'));
+  return { allow: sel.allow, deny: [...sel.deny, ...listOf(fields.get('deny'))], ...composition };
 };
 
 export const resolveRole = (

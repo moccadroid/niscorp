@@ -182,7 +182,10 @@ bare `string[]` is an actions-only role, and top-level `allow`/`deny` are the
 `actions:`/`data:`/`layouts:`/`functions:` selections address each universe
 directly. Having
 *both* the sugar and an explicit `actions:` on one role is the
-`ambiguous-selection` error — resolution would silently drop one.
+`ambiguous-selection` error. Resolved without the verifier, such a role reads
+the `actions:` section and takes away the top-level `deny` too; the top-level
+`allow` is dropped, since reading it would grant more than one of the two
+selections says.
 
 The `data` verb leaves mirror vex's phases: `read`, plus the three write ops
 under the `write` *namespace* — `deals.read`, `deals.write.insert`,
