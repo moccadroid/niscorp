@@ -57,13 +57,16 @@ const control = (role: Role | string, expr: string, props: Record<string, unknow
 // directive. So the data goes in as one JSON string, which the component decodes.
 const literal = (data: unknown): string | undefined => (data === undefined ? undefined : JSON.stringify(data));
 
+// An optional field is bound to its value, so the field can offer to remove it.
 const wrapField = (loc: Loc, prop: ObjectField, ctx: BuildContext): ComponentNode => {
   const error = errorBinding(loc.expr);
   return {
     component: Roles.field,
+    ...(prop.required ? {} : { model: loc.expr }),
     props: {
       label: prop.field.title ?? prop.key,
       required: prop.required,
+      ...(prop.required ? {} : { optional: true }),
       ...(error !== undefined ? { error } : {}),
       ...(prop.field.description !== undefined ? { description: prop.field.description } : {}),
     },
@@ -138,10 +141,10 @@ const childrenKey = (field: Field): string | undefined => {
   return field.fields.find((f) => f.field.kind === 'array' && f.field.item.kind === 'self')?.key;
 };
 
-const containersOf = (variants: Variant[]): Container[] =>
+const containersOf = (variants: Variant[], options: CompileOptions): Container[] =>
   variants.flatMap((variant) => {
     const key = childrenKey(variant.field);
-    return key === undefined ? [] : [{ label: variant.label, pattern: variant.pattern, defaults: variantDefaults(variant), key }];
+    return key === undefined ? [] : [{ label: variant.label, pattern: variant.pattern, defaults: variantDefaults(variant, options), key }];
   });
 
 const arrayBuild: Build<'array'> = (field, loc, ctx) => {
@@ -185,7 +188,7 @@ const buildVariant = (field: Extract<Field, { kind: 'union' }>, loc: Loc, ctx: B
         field.variants.map((variant: Variant) => ({
           label: variant.label,
           pattern: variant.pattern,
-          defaults: variantDefaults(variant),
+          defaults: variantDefaults(variant, ctx.options),
           ...(childrenKey(variant.field) !== undefined ? { childrenKey: childrenKey(variant.field) } : {}),
         })),
       ),
@@ -197,7 +200,11 @@ const variantBuild: Build<'union'> = (field, loc, ctx) => {
   if (field.recursive !== true) return buildVariant(field, loc, ctx);
   const name = ctx.name();
   const first = field.variants[0];
-  ctx.templates.push({ name, defaultChild: first !== undefined ? variantDefaults(first) : {}, containers: containersOf(field.variants) });
+  ctx.templates.push({
+    name,
+    defaultChild: first !== undefined ? variantDefaults(first, ctx.options) : {},
+    containers: containersOf(field.variants, ctx.options),
+  });
   ctx.register(name, buildVariant(field, TEMPLATE_ROOT, ctx));
   const inline = buildVariant(field, loc, ctx);
   ctx.templates.pop();

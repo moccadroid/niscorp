@@ -443,3 +443,32 @@ describe('LoomEditor — a branch whose discriminator is an enum', () => {
     expect(onChange).toHaveBeenLastCalledWith({ shape: { kind: 'box', side: 7 } });
   });
 });
+
+describe('LoomEditor — an optional field can be removed', () => {
+  it('Remove takes the field out of the document, and typing into its control writes it again', () => {
+    const schema = z.object({ email: z.string().email().optional(), name: z.string() });
+    const onChange = vi.fn();
+    render(<LoomForm schema={schema} onChange={onChange} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+    const removed = onChange.mock.lastCall?.[0];
+    expect(removed).toEqual({ name: '' });
+    expect(Object.hasOwn(Object(removed), 'email') ? Reflect.get(Object(removed), 'email') : undefined).toBeUndefined();
+    expect(schema.safeParse(removed).success).toBe(true);
+    expect(screen.queryAllByRole('button', { name: 'Remove' })).toHaveLength(0);
+    expect(screen.getAllByRole('textbox')).toHaveLength(2);
+    fireEvent.change(screen.getAllByRole('textbox')[0]!, { target: { value: 'a@b.at' } });
+    expect(onChange).toHaveBeenLastCalledWith({ name: '', email: 'a@b.at' });
+    expect(screen.getAllByRole('button', { name: 'Remove' })).toHaveLength(1);
+  });
+
+  it('a stored document without the field shows its controls and no Remove', () => {
+    render(<LoomForm schema={z.object({ email: z.string().optional(), name: z.string() })} options={{ value: { name: 'x' } }} />);
+    expect(screen.getAllByRole('textbox')).toHaveLength(2);
+    expect(screen.queryAllByRole('button', { name: 'Remove' })).toHaveLength(0);
+  });
+
+  it('a required field has no Remove', () => {
+    render(<LoomForm schema={z.object({ name: z.string() })} />);
+    expect(screen.queryAllByRole('button', { name: 'Remove' })).toHaveLength(0);
+  });
+});

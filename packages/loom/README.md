@@ -55,8 +55,11 @@ the schema's default where it has one, and `null` for a kind Loom does not
 model. A required enum with no default is left out. These can fail the schema
 (`''` is not an email, `0` is not `min(1)`, `null` is not a record), and
 optional fields get them too. `toNova(model, { empty, includeOptional })`
-changes both: `empty` supplies a kind's starting value, `includeOptional: false`
-leaves optional fields out. A field is optional when its schema accepts a missing
+changes both, in every branch of a union too: `empty` supplies a kind's
+starting value, `includeOptional: false` leaves optional fields out. In a form,
+an optional field that has a value shows a **Remove** link beside its label,
+which writes the field back to absent; its controls stay, and typing into them
+adds it again. A field is optional when its schema accepts a missing
 value; one whose own code throws on a missing value (a `z.preprocess` that trims
 its input) is required.
 
@@ -128,7 +131,9 @@ reference plugins:
 
 - `prism({ input })` — edit a [Prism](../prism) transform config; the preview
   applies it to `input` and shows the output. `schema` replaces the schema of
-  the `config` document (default: Prism's `NodeSchema`).
+  the `config` document (default: Prism's `NodeSchema`). An op chosen in the
+  editor starts with its required arguments only (`$localeMoney` starts as
+  `{}`), and an optional argument that has a value shows a Remove link.
 - `vex({ run, db })` — edit a [Vex](../vex) query; the preview runs it with `run`
   and shows the rows. Pass `db` to get column-aware field pickers. The artifact
   is `{ type: 'vex', documents: { query } }`; `schema` replaces the schema of
@@ -162,7 +167,7 @@ editor to restyle what is inside it:
 | `--loom-label` | `#374151` | field labels, panel heads |
 | `--loom-muted` | `#6b7280` | descriptions, empty previews, table heads |
 | `--loom-faint` | `#9ca3af` | a disabled menu item, op tags in the Prism chooser |
-| `--loom-accent` | `#1d4ed8` | the active op in the Prism chooser |
+| `--loom-accent` | `#1d4ed8` | the active op in the Prism chooser, a field's Remove link |
 | `--loom-accent-fill` | `#eff6ff` | behind the active op in the Prism chooser |
 | `--loom-danger` | `#dc2626` | a field's message, the required mark, a refused name or JSON |
 | `--loom-danger-text` | `#991b1b` | a preview's error |

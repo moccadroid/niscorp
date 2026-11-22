@@ -237,10 +237,10 @@ const EMPTY: Record<FieldKind, EmptyValue> = {
     }
     return document;
   },
-  union: (field) => {
+  union: (field, options) => {
     if (field.kind !== 'union') return {};
     const first = field.variants[0];
-    return first === undefined ? {} : variantDefaults(first);
+    return first === undefined ? {} : variantDefaults(first, options);
   },
 };
 
@@ -252,8 +252,8 @@ export const buildDocument = (field: Field, options: CompileOptions): unknown =>
 export const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
-export const variantDefaults = (variant: Variant): unknown => {
-  const defaults = buildDocument(variant.field, {});
+export const variantDefaults = (variant: Variant, options: CompileOptions): unknown => {
+  const defaults = buildDocument(variant.field, options);
   if (variant.pattern.kind !== 'tag') return defaults;
   return { [variant.pattern.key]: variant.pattern.value, ...(isRecord(defaults) ? defaults : {}) };
 };

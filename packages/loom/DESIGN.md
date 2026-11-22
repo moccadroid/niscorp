@@ -80,7 +80,9 @@ editor without touching the compiler.
 The vocabulary is deliberately small and stable
 ([roles.ts](./src/compile/roles.ts)): layout primitives (`box`, `group`,
 `array`, `array-item`, `variant`, `branch`), a field wrapper (`field` — label,
-description, error, required marker), controls (`text`, `number`, `checkbox`,
+description, error, required marker; an optional field's wrapper is bound to
+the field's value and carries `optional: true`, so the kit offers Remove while
+it has one), controls (`text`, `number`, `checkbox`,
 `select`, `raw`), and list actions (`append`, `row-menu`). Structural shapes
 (objects, arrays, unions) are *compositions* of these roles, not roles of their
 own. An array is a `loom:array` holding one `loom:array-item` per element and
