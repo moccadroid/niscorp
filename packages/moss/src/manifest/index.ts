@@ -33,4 +33,4 @@ export {
   withFragments,
   withVariants,
 } from './verify';
-export type { KitComponents, ManifestCandidate, ManifestReport, ShippedManifest } from './verify';
+export type { KitComponents, ManifestCandidate, ManifestReport, ShippedManifest, ViewReads } from './verify';

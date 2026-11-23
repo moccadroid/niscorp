@@ -55,6 +55,7 @@ export type QueryEngineConfig = {
     warnUnindexedFilters?: boolean;
     rejectUnindexedFilters?: boolean;
     entities?: string[];
+    views?: readonly string[];
     unsatisfiableTtlMs?: number;
     // 0: unbounded.
     statementTimeoutMs?: number;

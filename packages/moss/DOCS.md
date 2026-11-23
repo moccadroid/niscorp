@@ -55,6 +55,7 @@ type NiscApp = {
   layouts?: Record<string, LayoutVariant>;            // ring 2: variant id → { action, layout }
   behaviors?: ScopeBehaviors;                          // row-level scope semantics, per table or per profile
   entries?: readonly (SeedEntry | SeedMutation)[];     // the API surface: the reads and writes the app serves
+  views?: readonly string[];                          // the database's views read as tables, read only
   resources?: Record<string, readonly string[] | { entities: readonly string[] }>;
   shell?: ShellManifest;                              // the server shell, as data — THE APP
   pages?: Record<string, PageManifest>;               // what is drawn at a path and kept by nothing
@@ -190,6 +191,30 @@ reaction's `run` — and `features`. Absent `shell`, the app serves data only
   made of throws there. **The boot is refused** where a canvas names one the
   app does not hand over: ``shell.canvases.1.reconcile: "keyed" is not a
   reconciler the app hands over in `reconcilers` ``.
+- `views` — the names of the database's views that are read as tables, read
+  only: how a role is given some columns of a table, or rows of several, without
+  being granted the tables. The app creates each view in its own migrations, and
+  the charter grants it by its name: `public: { data: ['public_sessions.read'] }`.
+  A view is `<view>.read` in the `data` universe and nothing else, so a
+  `write` grant naming one matches nothing (the charter says so, as it says of
+  any grant that matches nothing), and a `*.read` wildcard reaches it as it
+  reaches a table. What vex does with one — a read
+  of it under the reader's row rules, every write to it refused, a reactive read
+  of it answered again when a table under it is written, no join through it — is
+  vex's ([Views](../vex/DOCS.md#views)). Absent or empty, no view is read, and the
+  app's universe and the schema fingerprint are what they were.
+  - **The boot is refused** where a name listed is not a view of the database: a
+    table, a materialized view or nothing at all (`The views listed cannot be
+    read: "nowhere" is not in the database.`); and where a view listed reads
+    anything but the app's tables, such as a table of another schema or a
+    materialized view ([Views](../vex/DOCS.md#views)).
+  - **The boot says** where a role is granted a view and is not granted a table
+    under it, so a review sees the new way to that table's rows: `[moss] public
+    reads public_sessions, a view over class_sessions, which it is not granted.`
+    It is said, not refused: that is what a view is for.
+  - `nisc migrate` reads the views the app lists, so a run that drops one is a
+    removal, refused without `--allow-removal`, as a dropped table is. One
+    dropped and made again in the same run is not.
 - `grammars` — strata sequences for documents only this app defines the shape
   of (its kit's component props, and the values of its `upgradedColumns`). See
   "Documents are read in this code's grammars" below.
@@ -1059,7 +1084,10 @@ one itself for an engine of its own (`seedCache`). Moss writes none since
 0.6.0: it keeps an app's entries in memory, so in a database only moss writes
 to, an entry first shipped since then has no copy and gets no pass either.
 
-What it answers is strata's `{ applied, plan }` plus `removed` (tables and
+The schema it reads, before the run and after it, has the views `app.views`
+lists that are there, so a view and its columns are compared as a table's are.
+
+What it answers is strata's `{ applied, plan }` plus `removed` (tables, views and
 columns the run takes away), `retyped` (columns whose type it changes, as
 `table.column (was → now)`) and `alreadyBroken`. `dryRun` does all of it and
 rolls it back.
@@ -1995,12 +2023,15 @@ app that resolves people through `identity`.
 - A layout variant a set of roles is granted (ring 2) is put in place of its
   action's layout where a shell is built, in the shell's layout store.
   Nothing answers the variants by themselves.
-- `verifyApp(app, grants)` — the check boot runs, for an app
+- `verifyApp(app, grants, views?)` — the check boot runs, for an app
   that is not booted (a check, a build step): the charter with each role's
   closure audited, every entry's reach, the layout variants. It reads `charter`,
   `actions`, `layouts`, `wearable`, `assignments`, `entries` and `behaviors`
   of what it is handed, so a check may hand it those alone. `grants` is every
-  `<table>.<verb>` the database can carry (vex's `scopeGrants(tables)`). The
+  `<table>.<verb>` the database can carry (vex's `scopeGrants(tables)`, and
+  `<view>.read` for each view the app lists). `views`, `{ name, reads }[]` with
+  `reads` vex's `view.reads`, is what the warning on a view over an ungranted
+  table reads; without it nothing is said of views. The
   report is `{ errors, said, charter }`: `errors` is `{ check, detail }[]`,
   `check` one of `'actions'` (a definition nova's schema does not read),
   `'charter'`, `'reach'` and `'variants'`; `said` is what a boot only says (a

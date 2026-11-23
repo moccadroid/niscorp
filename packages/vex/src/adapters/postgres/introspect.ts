@@ -78,15 +78,49 @@ const extractVectorDimensions = (pgType: string): number | undefined => {
   return undefined;
 };
 
+// A view is read only where it is listed: one nobody listed may have been made
+// for something else, and what it shows is not the app's to serve.
 const TABLES_QUERY = `
-  SELECT t.table_name, obj_description(cl.oid, 'pg_class') AS description
+  SELECT t.table_name, t.table_type, obj_description(cl.oid, 'pg_class') AS description
   FROM information_schema.tables t
   JOIN pg_namespace ns ON ns.nspname = t.table_schema
   JOIN pg_class cl ON cl.relname = t.table_name AND cl.relnamespace = ns.oid
   WHERE t.table_schema = $1
-    AND t.table_type = 'BASE TABLE'
+    AND (t.table_type = 'BASE TABLE' OR (t.table_type = 'VIEW' AND t.table_name::text = ANY($2::text[])))
   ORDER BY t.table_name
 `;
+
+// What each view of the schema reads, one level down: a view over a view is
+// followed to its tables in code. A relation of another schema is named with
+// its schema, so it is never taken for a table of this one.
+const VIEW_READS_QUERY = `
+  SELECT DISTINCT v.relname AS view_name,
+    CASE WHEN tns.nspname = $1 THEN t.relname::text ELSE tns.nspname || '.' || t.relname END AS read_name
+  FROM pg_class v
+  JOIN pg_namespace ns ON ns.oid = v.relnamespace
+  JOIN pg_rewrite r ON r.ev_class = v.oid
+  JOIN pg_depend d ON d.objid = r.oid AND d.classid = 'pg_rewrite'::regclass AND d.refclassid = 'pg_class'::regclass
+  JOIN pg_class t ON t.oid = d.refobjid
+  JOIN pg_namespace tns ON tns.oid = t.relnamespace
+  WHERE ns.nspname = $1
+    AND v.relkind = 'v'
+    AND t.oid <> v.oid
+  ORDER BY view_name, read_name
+`;
+
+const tablesUnder = (view: string, reads: ReadonlyMap<string, readonly string[]>): string[] => {
+  const tables = new Set<string>();
+  const seen = new Set<string>([view]);
+  const pending = [...(reads.get(view) ?? [])];
+  for (let next = pending.pop(); next !== undefined; next = pending.pop()) {
+    if (seen.has(next)) continue;
+    seen.add(next);
+    const under = reads.get(next);
+    if (under === undefined) tables.add(next);
+    else pending.push(...under);
+  }
+  return [...tables].sort();
+};
 
 const COLUMNS_QUERY = `
   SELECT
@@ -183,14 +217,22 @@ export const introspectPostgres = async (
   options?: IntrospectOptions,
 ): Promise<DatabaseSchema> => {
   const schemaName = options?.schema ?? 'public';
+  const views = [...(options?.views ?? [])];
 
-  const [tablesResult, columnsResult, keysResult, indexesResult, rowCountsResult] = await Promise.all([
-    pool.query(TABLES_QUERY, [schemaName]),
+  const [tablesResult, columnsResult, keysResult, indexesResult, rowCountsResult, viewReadsResult] = await Promise.all([
+    pool.query(TABLES_QUERY, [schemaName, views]),
     pool.query(COLUMNS_QUERY, [schemaName]),
     pool.query(CONSTRAINTS_QUERY, [schemaName]),
     pool.query(INDEXES_QUERY, [schemaName]),
     pool.query(ROW_COUNTS_QUERY, [schemaName]),
+    views.length === 0 ? { rows: [] } : pool.query(VIEW_READS_QUERY, [schemaName]),
   ]);
+
+  const viewReads = new Map<string, string[]>();
+  for (const row of viewReadsResult.rows) {
+    const view = row['view_name'] as string;
+    viewReads.set(view, [...(viewReads.get(view) ?? []), row['read_name'] as string]);
+  }
 
   type Key = {
     kind: 'p' | 'u' | 'f';
@@ -353,6 +395,7 @@ export const introspectPostgres = async (
       relations: relationsByTable.get(tableName) ?? [],
       indexes: indexesByTable.get(tableName) ?? [],
       rowCount: rowCountMap.get(tableName),
+      ...(row['table_type'] === 'VIEW' ? { view: { reads: tablesUnder(tableName, viewReads) } } : {}),
     };
   });
 

@@ -59,7 +59,8 @@ const findUnindexedFilterColumns = (resolved: ResolvedQuery): string[] => {
 
   for (const res of resolved.filter.resolvedPaths.values()) {
     const source = resolved.sources.find((s) => s.alias === res.alias);
-    if (source === undefined || source.entity === undefined) continue;
+    // A view's indexes are those of the tables under it, which vex cannot pair with its columns.
+    if (source === undefined || source.entity === undefined || source.entity.view !== undefined) continue;
 
     const isIndexed = source.entity.indexes.some((idx) =>
       idx.fields.includes(res.column),

@@ -6,6 +6,7 @@ import { evaluate } from '@niscorp/prism';
 import { PRISM_SEQUENCE } from '@niscorp/prism/migrations';
 import { VEX_SEQUENCE } from '@niscorp/vex/migrations';
 import type { TelemetrySpan } from '../runtime';
+import type { ViewReads } from '../manifest';
 
 export type EntriesAskedFirst = {
   get: (fingerprint: string, scope?: Record<string, unknown>) => Promise<CacheEntry | undefined>;
@@ -62,6 +63,7 @@ export type DataLayer = {
   adapter: DatabaseAdapter;
   schema: DatabaseSchema;
   grants: string[];
+  views: ViewReads[];
   askFirst: EntryCache['askFirst'];
 };
 
@@ -69,24 +71,35 @@ export type DataLayerDeps = {
   pool: PgPool;
   cache?: CacheBackend;
   vexConfig?: QueryEngineConfig['config'];
+  views?: readonly string[];
   upgradedColumns?: QueryEngineConfig['upgradedColumns'];
   upgrader?: ColumnUpgrader;
 };
+
+// The app's views, beside any its runtime names to vex: an app that lists none hands vex the config it was given.
+const configWithViews = (vexConfig: DataLayerDeps['vexConfig'], views: readonly string[] = []): DataLayerDeps['vexConfig'] =>
+  views.length === 0 ? vexConfig : { ...vexConfig, views: [...new Set([...(vexConfig?.views ?? []), ...views])] };
+
+// A view is only ever read: no write to it is a grant anybody can hold.
+const dataGrants = (entities: DatabaseSchema['entities']): string[] =>
+  entities.flatMap((e) => (e.view !== undefined ? [`${e.name}.read`] : scopeGrants([e.name])));
 
 export const createDataLayer = async (deps: DataLayerDeps): Promise<DataLayer> => {
   const adapter = createPostgresAdapter({ pool: deps.pool });
   const table = deps.cache ?? createPostgresCache({ pool: deps.pool });
   await table.init?.();
   const { cache, askFirst } = createEntryCache(table);
+  const config = configWithViews(deps.vexConfig, deps.views);
   const engine = createQueryEngine({
     adapter,
     cache,
-    ...(deps.vexConfig !== undefined ? { config: deps.vexConfig } : {}),
+    ...(config !== undefined ? { config } : {}),
     ...(deps.upgradedColumns !== undefined && deps.upgrader !== undefined ? { upgradedColumns: deps.upgradedColumns, upgrader: deps.upgrader } : {}),
   });
   const schema = await engine.introspect();
+  const views = schema.entities.flatMap((e) => (e.view !== undefined ? [{ name: e.name, reads: e.view.reads }] : []));
 
-  return { engine, adapter, schema, grants: scopeGrants(schema.entities.map((e) => e.name)), askFirst };
+  return { engine, adapter, schema, grants: dataGrants(schema.entities), views, askFirst };
 };
 
 export const grammarsOf = (app: { grammars?: readonly Sequence[] }): readonly Sequence[] => [

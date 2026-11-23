@@ -116,6 +116,8 @@ const assertFilterColumns = (filter: Filter, table: string, schema: DatabaseSche
 const assertWritableColumns = (m: ResolvedMutation, schema: DatabaseSchema): void => {
   const entity = findEntity(m.table, schema);
   if (entity === undefined) throw new VexError('invalid_dsl', `Unknown table "${m.table}".`);
+  // Postgres would take a write to a simple view: vex does not.
+  if (entity.view !== undefined) throw new VexError('invalid_dsl', `"${m.table}" is a view: it is read, never written.`);
   if (m.op === 'update' || m.op === 'delete') assertFilterColumns(m.where, m.table, schema, 'the WHERE');
   const known = new Set(entity.fields.map((f) => f.name));
   const cols = m.op === 'insert' || m.op === 'insertEach' ? Object.keys(m.values) : m.op === 'update' ? Object.keys(m.set) : [];

@@ -95,6 +95,8 @@ export const computeSchemaFingerprint = (schema: DatabaseSchema): string => {
         unique: i.unique,
         type: i.type,
       })),
+      // Only where there is one, so a schema with no view keeps its fingerprint.
+      ...(e.view !== undefined ? { view: { reads: [...e.view.reads].sort() } } : {}),
     })),
   };
 

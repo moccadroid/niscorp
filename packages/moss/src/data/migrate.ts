@@ -122,15 +122,17 @@ const removalsRefused = (found: { removed: readonly string[]; retyped: readonly 
 
 export const migrateTables = async (
   runtime: TablesRuntime,
-  app: Pick<NiscApp, 'entries' | 'features'>,
+  app: Pick<NiscApp, 'entries' | 'features' | 'views'>,
   options: { dryRun?: boolean; allowRemoval?: boolean } = {},
 ): Promise<TablesReport> => {
   const entries = entriesOf(app);
+  // A listed view the database lacks is not refused here: dropping one is a removal, and the run is what creates one.
+  const listed = app.views === undefined || app.views.length === 0 ? undefined : { views: app.views };
   const cache = runtime.cache ?? createPostgresCache({ pool: runtime.pool });
 
   // Read before the run, on the pool: a single-connection database (PGlite)
   // cannot answer the pool while the run's transaction is open.
-  const before = await createPostgresAdapter({ pool: runtime.pool }).introspect();
+  const before = await createPostgresAdapter({ pool: runtime.pool }).introspect(listed);
   const misfitsBefore = misfitsOf(entries, before);
   const excused = new Set<string>();
   for (const entry of entries) {
@@ -143,7 +145,7 @@ export const migrateTables = async (
     complete: true,
     ...(options.dryRun === true ? { dryRun: true } : {}),
     guard: async (tx, run) => {
-      const after = await createPostgresAdapter({ pool: { query: oneAtATime((text, values) => tx.query(text, values)) } }).introspect();
+      const after = await createPostgresAdapter({ pool: { query: oneAtATime((text, values) => tx.query(text, values)) } }).introspect(listed);
       const refused: string[] = [];
       const alreadyBroken: string[] = [];
       for (const [fingerprint, why] of misfitsOf(entries, after)) {

@@ -90,6 +90,7 @@ const fields = {
   phraseKeys: z.object({ props: strings.optional(), suffixes: strings.optional(), text: z.boolean().optional() }).strict().optional(),
   features: z.array(FeatureSchema).readonly().optional(),
   entries: EntriesSchema.readonly().optional(),
+  views: strings.optional(),
   resources: z.record(z.string(), z.union([strings, z.looseObject({ entities: strings })])).optional(),
   shell: ShellManifestSchema.optional(),
   pages: z.record(z.string(), PageManifestSchema).optional(),

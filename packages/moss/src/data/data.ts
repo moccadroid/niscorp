@@ -7,7 +7,7 @@ import type { DocumentStore } from '@niscorp/strata/postgres';
 import type { CacheBackend, CacheEntry, DatabaseAdapter, ExecuteRecord, MutationClient, PgPool, Query, QueryEngine, QueryEngineConfig, QueryResponse, ScopePolicy } from '@niscorp/vex';
 import { memoKey } from '../identity';
 import type { ResolvedIdentity } from '../identity';
-import type { NiscApp } from '../manifest';
+import type { NiscApp, ViewReads } from '../manifest';
 import { emitterOf } from '../runtime';
 import type { Telemetry } from '../runtime';
 import { createDataLayer, createGrammarUpgrader, vexRecordToSpan } from './engine';
@@ -29,6 +29,7 @@ export type DataConfig = {
   db: MutationClient;
   cache?: CacheBackend;
   vexConfig?: QueryEngineConfig['config'];
+  views?: NiscApp['views'];
   migrations?: 'apply' | 'verify';
   storesSessions: boolean;
   featureTables?: readonly FeatureTables[];
@@ -56,6 +57,7 @@ export type DataRoutesConfig<E extends Env> = {
 
 export type Data = {
   grants: readonly string[];
+  views?: readonly ViewReads[];
   grammars: Upgrader;
   askEntriesFirst: EntryCache['askFirst'];
   policyOf: (who: Caller) => ScopePolicy;
@@ -79,7 +81,7 @@ export type Data = {
 
 const callerOfRoles = (roles: readonly string[]): Caller => ({ memoKey: memoKey(roles, undefined), roles });
 
-export type PreparedEngine = Pick<Data, 'grants' | 'grammars'> & {
+export type PreparedEngine = Pick<Data, 'grants' | 'views' | 'grammars'> & {
   engine: QueryEngine;
   adapter: DatabaseAdapter;
   askFirst: EntryCache['askFirst'];
@@ -106,6 +108,7 @@ const prepareEngine = async (config: DataConfig): Promise<PreparedEngine> => {
     grammars,
     engine: layer.engine,
     grants: layer.grants,
+    views: layer.views,
     adapter: layer.adapter,
     askFirst: layer.askFirst,
     upgradeStore: async (store) => {
@@ -178,7 +181,7 @@ export const createDataWith = (
   config: Pick<DataConfig, 'db' | 'charter' | 'behaviors' | 'rowRules' | 'telemetry' | 'vexConfig' | 'featureTables' | 'upgradedColumns' | 'answerReadableRows' | 'checkMovedRows'>,
 ): Data => {
   refuseUpgradedOwnedTables(config);
-  const { grammars, engine, grants } = prepared;
+  const { grammars, engine, grants, views } = prepared;
   const governed = { charter: config.charter, behaviors: { ...config.behaviors, ...config.rowRules } };
   const policies = createPolicies({ ...governed, grants });
 
@@ -203,6 +206,7 @@ export const createDataWith = (
 
   return {
     grants,
+    views,
     grammars,
     askEntriesFirst: prepared.askFirst,
     fingerprints: async () => (await engine.cache.keys?.()) ?? [],

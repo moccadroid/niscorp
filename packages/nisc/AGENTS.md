@@ -235,11 +235,12 @@ Pick per need; every piece works standalone. Nova is the only mandatory one for 
 - Assignments (principal → roles) are app data beside it. Row-level semantics the charter can't express are `behaviors`, compiled into the policy.
 - One role name is fixed: a request with no session, and a signed-in principal with no assignment, resolve to `public`, so every charter defines it — `public: []` where it grants nothing. Boot does not check for it; without it those requests fail (`Unknown role "public"`).
 
-**10a.** The `data` universe is the INTROSPECTED database, not your schema file.
+**10a.** The `data` universe is the INTROSPECTED database, not your schema file — and the views the app lists, read only.
 
 - It has the engine's own tables too: moss's `integrations` (integration key hashes), `integration_actions`, `moss_generation`, `artifacts`, `artifact_saves`, `sessions` (session token hashes, under moss's credential), the `strata_ledger`, the vex cache.
 - A role granted a data wildcard (`*.read`) denies them explicitly: `data: { allow: ['*.read'], deny: [...] }`. Denies do not inherit, so every role that grants the wildcard denies.
 - A charter check resolves against the universe boot resolves against — the app's migrations and moss's run on a scratch database, then introspected — or it proves nothing about wildcards.
+- A view the app lists in `views` (`defineApp({ views: ['public_sessions'] })`) is `<view>.read` in the universe and nothing more: it is how a role reads some columns of a table without being granted the table. The app creates it in its migrations, over its own tables, one view per read with what it needs joined in SQL, since a view is joined to nothing; the boot refuses one over a table of another schema or a materialized view. Every write to one is refused, and a `*.read` wildcard reaches it as it reaches a table. The boot says where a role reads a view over a table it is not granted.
 
 **11.** Per-principal UI is existence or a served variant, never a conditional.
 

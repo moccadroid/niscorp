@@ -11,6 +11,8 @@ import { isBinding } from '@niscorp/nova/i18n';
 import { GENERATED_ID_PREFIX, entriesOf, keptLayoutNameRefusal, wearableOf } from './app';
 import type { LayoutVariant, NiscApp } from './app';
 
+export type ViewReads = { name: string; reads: readonly string[] };
+
 export type ManifestCandidate = {
   charter: Charter;
   actions: Readonly<Record<string, ActionDefinition>>;
@@ -24,11 +26,17 @@ export type ManifestCandidate = {
   grants: readonly string[];
   entries: readonly (SeedEntry | SeedMutation)[];
   profiles: ReadonlySet<string>;
+  views?: readonly ViewReads[];
 };
 
 export type ShippedManifest = Pick<NiscApp, 'charter' | 'actions' | 'layouts' | 'wearable' | 'assignments' | 'entries' | 'behaviors' | 'shell' | 'pages'>;
 
-export const candidateOf = (shipped: ShippedManifest, inForce: Pick<ManifestCandidate, 'actions' | 'entries'>, grants: readonly string[]): ManifestCandidate => ({
+export const candidateOf = (
+  shipped: ShippedManifest,
+  inForce: Pick<ManifestCandidate, 'actions' | 'entries'>,
+  grants: readonly string[],
+  views: readonly ViewReads[] = [],
+): ManifestCandidate => ({
   charter: shipped.charter,
   actions: inForce.actions,
   layouts: shipped.layouts ?? {},
@@ -40,6 +48,7 @@ export const candidateOf = (shipped: ShippedManifest, inForce: Pick<ManifestCand
   grants,
   entries: inForce.entries,
   profiles: scopeProfiles(shipped.behaviors ?? {}),
+  ...(views.length > 0 ? { views } : {}),
 });
 
 // Fragments in force beside the ones the shells ship: what is published for everybody.
@@ -161,6 +170,26 @@ const everyFunctionGranted = (charter: Charter): string[] =>
       : [],
   );
 
+// A view is a way to a table's rows that the table's own grant does not show: a review reads it here.
+const viewsOverUngranted = (candidate: Pick<ManifestCandidate, 'charter' | 'grants' | 'views'>): string[] => {
+  const views = candidate.views ?? [];
+  if (views.length === 0) return [];
+  return Object.keys(candidate.charter).flatMap((role) => {
+    let granted: ReadonlySet<string>;
+    try {
+      granted = resolvePrincipal(candidate.charter, candidate.grants, [role], 'data');
+    } catch {
+      // An unknown or cyclic role is the charter verifier's finding.
+      return [];
+    }
+    return views.flatMap((view) =>
+      granted.has(`${view.name}.read`)
+        ? view.reads.flatMap((table) => (granted.has(`${table}.read`) ? [] : [`${role} reads ${view.name}, a view over ${table}, which it is not granted.`]))
+        : [],
+    );
+  });
+};
+
 export type EndlessChain = { path: string; through: readonly string[] };
 
 export const endlessChains = (actions: Readonly<Record<string, ActionDefinition>>): EndlessChain[] =>
@@ -194,6 +223,7 @@ export const verifyManifest = (candidate: ManifestCandidate): ManifestReport => 
     said: [
       ...endlessChains(read.actions).map((chain) => `a chain of steps that never ends: ${chain.path} — nova stops it at its budget when it runs (RUNAWAY_CHAIN)`),
       ...everyFunctionGranted(read.charter),
+      ...viewsOverUngranted(read),
       ...charter.warnings.flatMap((warning) => (warning.rule === 'shape' ? [`charter: ${warning.detail}`] : [])),
     ],
     charter,
@@ -223,8 +253,8 @@ export const charterOverFunctions = (
   };
 };
 
-export const verifyApp = (app: ShippedManifest, grants: readonly string[]): ManifestReport =>
-  verifyManifest(candidateOf(app, { actions: app.actions, entries: entriesOf(app) }, grants));
+export const verifyApp = (app: ShippedManifest, grants: readonly string[], views: readonly ViewReads[] = []): ManifestReport =>
+  verifyManifest(candidateOf(app, { actions: app.actions, entries: entriesOf(app) }, grants, views));
 
 const HEADLINES = {
   boot: {

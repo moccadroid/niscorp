@@ -16,7 +16,7 @@ import {
   verifyManifest,
   withFragments,
 } from '../manifest';
-import type { DraftArtifact, KitComponents, ManifestCandidate, ManifestReport, SessionArtifacts, ShellManifest, ShippedManifest, WrittenFunctions } from '../manifest';
+import type { DraftArtifact, KitComponents, ManifestCandidate, ManifestReport, SessionArtifacts, ShellManifest, ShippedManifest, ViewReads, WrittenFunctions } from '../manifest';
 import type { ShellArtifacts } from './artifacts';
 import { createComponentNames, shellComponents, shellWithStoredLayouts, slottedCanvases } from './artifacts';
 import { draftSaving, laidOver } from './draft';
@@ -47,6 +47,7 @@ export type ActionLoader = () => Promise<Record<string, ActionDefinition>>;
 export type RunningManifestConfig = {
   shipped: ShippedManifest;
   grants: readonly string[];
+  views?: readonly ViewReads[];
   installedOnly?: CatalogFilter;
   pointer?: Pointer & { everyMs?: number };
   // Every shell the app has: what one of them can draw, a saved layout may name.
@@ -140,7 +141,7 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
   const usage = createUsage(config.touchEveryMs ?? TOUCH_EVERY_MS);
   let functionIds: ReadonlySet<string> | undefined;
   const candidate = (actions: Actions, listed = entries.list(), fragments = defaults.fragments): ManifestCandidate =>
-    withFragments({ ...candidateOf(shipped, { actions, entries: listed }, config.grants), ...(functionIds === undefined ? {} : { functionIds }) }, fragments);
+    withFragments({ ...candidateOf(shipped, { actions, entries: listed }, config.grants, config.views), ...(functionIds === undefined ? {} : { functionIds }) }, fragments);
 
   const own: Actions = shipped.actions;
   const loaders = new Map<string, ActionLoader>();

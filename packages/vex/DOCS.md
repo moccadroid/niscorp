@@ -15,6 +15,7 @@ In-depth usage guide for `@niscorp/vex`. For the high-level pitch see
 - [The DSL](#the-dsl)
 - [Scope policies](#scope-policies)
 - [Grants and behaviors](#grants-and-behaviors)
+- [Views](#views)
 - [Upgraded columns](#upgraded-columns)
 - [Mutations](#mutations)
 - [Caching](#caching)
@@ -174,6 +175,7 @@ type QueryEngineConfig = {
     warnUnindexedFilters?: boolean;          // default: true
     rejectUnindexedFilters?: boolean;        // default: false
     entities?: string[];                     // whitelist for introspection
+    views?: readonly string[];               // the views read as entities, read only (see Views)
     unsatisfiableTtlMs?: number;             // negative-cache TTL, default 300_000 (5 min)
     statementTimeoutMs?: number;             // how long one read may run, default 10_000 (0: unbounded)
     maxPresenceVariants?: number;            // optional-key combinations per entry before a warning, default 32
@@ -182,6 +184,8 @@ type QueryEngineConfig = {
 ```
 
 - `config.entities`, when set, restricts `introspect()` to those tables.
+- `config.views` names the database's views that are read as entities: see
+  [Views](#views). None is read unless it is listed.
 - `createPostgresAdapter({ pool, exclude })` names tables the adapter never
   reports: `introspect()` leaves them out. It is for tables the host owns that
   are not application data, such as a migration journal.
@@ -914,6 +918,59 @@ run uses the policy it returns, and `undefined` throws `scope_denied`. Without
 engine's own), whatever reach the entry declares, and logs one warning per
 fingerprint saying so.
 
+## Views
+
+A Postgres view can be read as an entity: a way to give a caller some columns
+of a table, or rows of several tables joined, without granting the tables
+themselves. A view is read only where it is listed, by name, in
+`config.views` (or `adapter.introspect({ views })`); with no list, or an
+empty one, `introspect()` answers exactly what it did before, and the schema
+fingerprint is the same. A materialized view is never read.
+
+```typescript
+const engine = createQueryEngine({ adapter, config: { views: ['public_sessions'] } });
+await engine.introspect();
+// { from: ['public_sessions'], fields: ['public_sessions.starts_on', 'public_sessions.teacher'] }
+```
+
+- **What it is.** An entity like a table, with the view's columns and their
+  types. It has no primary key, no index, no relation and no row count, and it
+  carries `view: { reads }`: the tables under it, followed through any view of
+  the schema it reads (`EntitySchema.view`). A relation of another schema is
+  named with its schema (`other.rooms`). The fingerprint counts `view` only
+  where there is one.
+- **A name that is not a view refuses.** `engine.introspect()` throws
+  `execution_error` when a listed name is a table, a materialized view or not
+  there at all. `adapter.introspect({ views })` leaves such a name out without
+  a word: a migration step compares two pictures of the schema, and a view it
+  dropped is a removal, not a fault.
+- **A view over anything but the tables vex reads refuses.** `engine.introspect()`
+  throws `execution_error` when a listed view reads a table of another schema,
+  a view of another schema, a materialized view, a sequence, or a table the
+  introspection leaves out (`entities`, `exclude`): no write vex sees would
+  answer a reactive read of it again (`"per_studio" reads "sessions_per_studio",
+  which is no table vex reads`).
+- **A table read inside a function is not seen.** Postgres records what a view
+  reads, not what a function it calls reads: a view over `SELECT * FROM
+  upcoming()` has none of the function's tables in `reads`, so a write to them
+  does not answer a reactive read of it again. Write the query in the view.
+- **Read, never written.** A simple view is one Postgres would write through;
+  vex refuses every write to one — insert, `insertEach`, update, delete and
+  upsert — before it runs: `"public_sessions" is a view: it is read, never
+  written.` `mutationMisfits` names it the same way. A `$lookup` from a view
+  inside a write is a read, and is allowed.
+- **Scope.** A view is listed in a `ScopePolicy` by its name, as a table is,
+  and its read rules (`match`) name its own columns. A grant of the view grants
+  nothing of the tables under it: that is the point of one.
+- **One view per read.** A view has no keys, so it is not joined to anything:
+  vex refuses a read that names a view and another entity it would have to join
+  it to, as it refuses any two entities with no relation. Join what the read
+  needs inside the view, in SQL.
+- **Live.** A reactive read of a view follows the tables under it: a write to
+  any of them answers it again ([Reactive reads](#reactive-reads-refresh)).
+- An index on a table under a view is not paired with the view's columns, so a
+  filter on a view's column is never said to be unindexed.
+
 ## Upgraded columns
 
 A JSON column may hold values written at an older grammar, with the stamp each
@@ -1559,7 +1616,7 @@ type `Refresh`).
   `engine.invalidate(tablesChangedBy(writes, schema))` after every committed
   mutation; for a delete, `tablesChangedBy` adds every table that references a
   deleted one. Writes vex never sees are the host's to announce with
-  `engine.invalidate`.
+  `engine.invalidate`. A read of a [view](#views) follows the tables under it.
 - **The rows cache** is per engine, in process memory, sized by
   `QueryEngineConfig.rows`:
 

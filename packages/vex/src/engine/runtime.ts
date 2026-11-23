@@ -63,6 +63,24 @@ const DEFAULT_MAX_PRESENCE_VARIANTS = 32;
 // fingerprints, the one noted first is forgotten.
 const REMEMBERED_FINGERPRINTS = 1024;
 
+// A view over anything but the tables vex reads would be answered again by no
+// write, and would show rows no grant names.
+const viewMisfits = (views: readonly string[], schema: DatabaseSchema): string[] => {
+  const tables = new Set(schema.entities.flatMap((e) => (e.view === undefined ? [e.name] : [])));
+  return views.flatMap((name) => {
+    const entity = schema.entities.find((e) => e.name === name);
+    if (entity === undefined) return [`"${name}" is not in the database`];
+    if (entity.view === undefined) return [`"${name}" is a table`];
+    return entity.view.reads.flatMap((read) => (tables.has(read) ? [] : [`"${name}" reads "${read}", which is no table vex reads`]));
+  });
+};
+
+// A write reaches a reactive read through the tables it names, and a view is
+// named by no write: the read follows the tables under it.
+const followedTables = (entities: Iterable<string>, schema: DatabaseSchema): string[] => [
+  ...new Set([...entities].flatMap((name) => [name, ...(schema.entities.find((e) => e.name === name)?.view?.reads ?? [])])),
+];
+
 const forgetOldest = (noted: Map<string, unknown> | Set<string>): void => {
   if (noted.size <= REMEMBERED_FINGERPRINTS) return;
   const oldest = noted.keys().next();
@@ -129,10 +147,16 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
   const inFlight = new Map<string, Promise<Query>>();
 
   const introspect = async (): Promise<DatabaseSchema> => {
-    const options = engineConfig.config?.entities !== undefined
-      ? { entities: engineConfig.config.entities }
-      : undefined;
+    const entities = engineConfig.config?.entities;
+    const views = engineConfig.config?.views ?? [];
+    const options = entities === undefined && views.length === 0
+      ? undefined
+      : { ...(entities !== undefined ? { entities } : {}), ...(views.length > 0 ? { views } : {}) };
     const schema = await adapter.introspect(options);
+    const notViews = viewMisfits(views, schema);
+    if (notViews.length > 0) {
+      throw new VexError('execution_error', `The views listed cannot be read: ${notViews.join('; ')}. List the views the migrations create, over tables of the schema vex reads; a materialized view is not read.`);
+    }
     const readLimit = engineConfig.config?.statementTimeoutMs ?? DEFAULT_STATEMENT_TIMEOUT_MS;
     if (adapter.limitReads !== undefined && (await adapter.limitReads(readLimit)) === 'unenforced' && readLimit > 0) {
       console.warn(`[vex] reads are not bounded: this database cannot enforce statement_timeout (${readLimit}ms asked). Fine for development; production wants Postgres.`);
@@ -563,7 +587,7 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
       // The compiled SQL and its bound values: scope is inside both, so two
       // callers share rows exactly when they would get the same rows.
       const key = canonicalHash([compiled.sql, params]);
-      const source: RowsSource = { tables: [...discoverEntities(shaped)], fetch: () => adapter.execute(compiled, params) };
+      const source: RowsSource = { tables: followedTables(discoverEntities(shaped), ensureSchema()), fetch: () => adapter.execute(compiled, params) };
       const execStart = Date.now();
       const rows = await live.read(key, source);
       const executionMs = Date.now() - execStart;

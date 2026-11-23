@@ -51,6 +51,7 @@ const buildData = (app: NiscApp, runtime: NiscRuntime): Promise<Data> =>
     db: runtime.db,
     cache: runtime.cache,
     vexConfig: runtime.vexConfig,
+    views: app.views,
     migrations: runtime.migrations,
     storesSessions: runtime.session === 'sessions',
     featureTables: featureTablesOf(app),
@@ -180,12 +181,13 @@ const assemble = async ({ app, runtime, session, revokeSessions, data }: ServerD
 export const buildRunningManifest = async (
   app: NiscApp,
   runtime: Pick<NiscRuntime, 'sessionRevalidateMs'>,
-  data: Pick<Data, 'grants' | 'dropOnChange' | 'pointer' | 'askEntriesFirst' | 'vexEntry' | 'compileQuery'>,
+  data: Pick<Data, 'grants' | 'views' | 'dropOnChange' | 'pointer' | 'askEntriesFirst' | 'vexEntry' | 'compileQuery'>,
   saved?: Pick<SavedRowsOf, 'of' | 'published'>,
 ): Promise<RunningManifest> => {
   const running = createRunningManifest({
     shipped: app,
     grants: data.grants,
+    views: data.views,
     // Polled on the clock a socket's credential is re-verified on.
     pointer: { read: data.pointer.read, move: data.pointer.move, ...(runtime.sessionRevalidateMs !== undefined ? { everyMs: runtime.sessionRevalidateMs } : {}) },
     shells: [...(app.shell !== undefined ? [app.shell] : []), ...Object.values(app.pages ?? {})],
