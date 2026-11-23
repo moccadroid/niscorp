@@ -309,7 +309,7 @@ Declared exception: a file that must match an external module's shape (a shim) m
 - The function that opens a runtime migrates nothing, seeds nothing and calls no `cache.init()`: what it changes itself is changed before the step can check it.
 - A sequence that has run on a database stays in `runtime.tables` even when nothing uses it any more — the run refuses a ledger that records a sequence nobody names (`UNKNOWN_SEQUENCE`). Its tables go by an appended migration that drops them.
 - One app per database schema: a schema has one ledger.
-- `nisc migrate` refuses a run that removes a table or column or changes a column's type unless it is given `--allow-removal`.
+- `nisc migrate` refuses a run that removes a table or column or changes a column's type unless it is given `--allow-removal`, and a run that leaves a view the app lists unreadable at boot.
 - Rows an app needs in order to start are written by a migration step, in the same transaction as its tables. A seed that runs at start is for development and demos.
 
 **18.** A grammar change is a migration.

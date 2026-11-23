@@ -232,7 +232,10 @@ reaction's `run` — and `features`. Absent `shell`, the app serves data only
     migrate` reads too: a `runtime.vexConfig` that has either refuses the boot.
   - `nisc migrate` reads the views the app lists, so a run that drops one is a
     removal, refused without `--allow-removal`, as a dropped table is. One
-    dropped and made again in the same run is not.
+    dropped and made again in the same run is not. A run that leaves a listed
+    view the boot could not read is refused, applying nothing, with the boot's
+    words (`"sized" uses table pg_catalog.pg_class, which vex does not
+    follow`).
 - `grammars` — strata sequences for documents only this app defines the shape
   of (its kit's component props, and the values of its `upgradedColumns`). See
   "Documents are read in this code's grammars" below.

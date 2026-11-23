@@ -208,6 +208,22 @@ describe('migrateTables — the step', () => {
     expect(report.retyped).toEqual(['notes.stars (integer → bigint)']);
   });
 
+  it('refuses a run that leaves a listed view the boot could not read, applying nothing', async () => {
+    const { runtimeOf, ledger } = database();
+    const app = defineApp({ ...appOf(read('notes/all', 'id', 'body'), add('body')), views: ['sized'] });
+    await migrateTables(runtimeOf(tables(NOTES)), app);
+
+    const overCatalog = { description: 'table sizes', steps: [sql('CREATE VIEW sized AS SELECT relname, reltuples FROM pg_class')] };
+    const error = await migrateTables(runtimeOf(tables(NOTES, overCatalog)), app).catch((e: unknown) => e);
+    expect(error).toMatchObject({ code: 'DOES_NOT_FIT' });
+    expect(String(error)).toContain('"sized" uses table pg_catalog.pg_class, which vex does not follow');
+    expect(await ledger()).toEqual(['walk.app/1']);
+
+    const overNotes = { description: 'note sizes', steps: [sql('CREATE VIEW sized AS SELECT id, length(body) AS size FROM notes')] };
+    await expect(migrateTables(runtimeOf(tables(NOTES, overNotes)), app)).resolves.toMatchObject({ removed: [], alreadyBroken: [] });
+    expect(await ledger()).toEqual(['walk.app/1', 'walk.app/2']);
+  });
+
   it('refuses a run that removes or retypes, unless it is allowed — naming each, applying nothing', async () => {
     const { runtimeOf, columns, ledger } = database();
     const app = appOf(read('notes/all', 'id', 'body'), add('body'));

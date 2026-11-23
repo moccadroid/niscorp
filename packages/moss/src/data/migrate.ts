@@ -1,4 +1,4 @@
-import { createPostgresAdapter, createPostgresCache, mutationMisfits, pruneOptional, resolve } from '@niscorp/vex';
+import { createPostgresAdapter, createPostgresCache, mutationMisfits, pruneOptional, resolve, viewMisfits } from '@niscorp/vex';
 import type { CacheBackend, DatabaseSchema, PgPool, SeedEntry, SeedMutation } from '@niscorp/vex';
 import { migrate, status } from '@niscorp/strata/postgres';
 import type { MigrateReport } from '@niscorp/strata/postgres';
@@ -127,6 +127,7 @@ export const migrateTables = async (
 ): Promise<TablesReport> => {
   const entries = entriesOf(app);
   // A listed view the database lacks is not refused here: dropping one is a removal, and the run is what creates one.
+  // One it leaves that the boot could not read is.
   const listed = app.views === undefined || app.views.length === 0 ? undefined : { views: app.views, viewExtensions: app.viewExtensions ?? [] };
   const cache = runtime.cache ?? createPostgresCache({ pool: runtime.pool });
 
@@ -146,7 +147,7 @@ export const migrateTables = async (
     ...(options.dryRun === true ? { dryRun: true } : {}),
     guard: async (tx, run) => {
       const after = await createPostgresAdapter({ pool: { query: oneAtATime((text, values) => tx.query(text, values)) } }).introspect(listed);
-      const refused: string[] = [];
+      const refused = viewMisfits((app.views ?? []).filter((name) => after.entities.some((e) => e.name === name)), after);
       const alreadyBroken: string[] = [];
       for (const [fingerprint, why] of misfitsOf(entries, after)) {
         if (excused.has(fingerprint)) alreadyBroken.push(`${fingerprint}: ${why}`);

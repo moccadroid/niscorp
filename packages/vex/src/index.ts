@@ -3,6 +3,7 @@ export { resolve } from './engine/resolver.js';
 export { analyze } from './engine/analyzer.js';
 export { executeQuery, buildContextContract, findMissingContext } from './engine/executor.js';
 export { pruneOptional, presenceOf, optionalKeysOf } from './engine/optional.js';
+export { viewMisfits } from './engine/views.js';
 
 export { createPostgresAdapter } from './adapters/postgres/index.js';
 export { compileFilter, compileFieldOrValue } from './adapters/postgres/operators.js';

@@ -966,7 +966,9 @@ await engine.introspect();
   uses materialized view public.sessions_per_studio, which vex does not
   follow`), or reads a table the introspection leaves out (`entities`,
   `exclude`). Either way no write vex sees would answer a reactive read of it
-  again, and moss could not say what it shows.
+  again, and moss could not say what it shows. `viewMisfits(views, schema)` is
+  that check on a picture of the schema: `[]` when every view listed can be
+  read, else why not, in these words.
 - **Functions: Postgres's own, and extensions listed.** A function is
   Postgres's own when it was there before the database was made (an object id
   below 16384), whatever schema it is in: `upper`, `now`, `coalesce`. Every
