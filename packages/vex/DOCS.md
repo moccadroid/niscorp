@@ -930,11 +930,11 @@ fingerprint is the same. A materialized view is never read.
 
 vex has to know which tables a view reads. Nobody writes a view, so a reactive
 read of one is answered again only when a table under it is written; and moss
-says, at boot, where a role reaches a table's rows through a view. Postgres
-records exactly the tables and views a view's own SQL names, and nothing of
-what a function does: so a listed view may name tables and views of the schema,
-and use no function but Postgres's own and those of an extension the app vouches
-for.
+says, at boot, where a role reaches a table's rows through a view. vex reads
+the tables and views a view's own SQL names from the query Postgres stores for
+it, and its dependency records; neither says anything of what a function does:
+so a listed view may name tables and views of the schema, and use no function
+but Postgres's own and those of an extension the app vouches for.
 
 ```typescript
 const engine = createQueryEngine({ adapter, config: { views: ['public_sessions'] } });
@@ -947,9 +947,10 @@ await engine.introspect();
   carries `view: { reads, outside? }` (`EntitySchema.view`). `reads` is the
   tables of the schema under it, by entity name, followed through any view of
   the schema it reads. `outside` is what else it uses that vex does not follow,
-  each with its kind and as Postgres names it: `table other.rooms`,
-  `materialized view public.mat`, `sequence public.counter`, `function
-  upcoming()`, `function l2_distance(vector,vector) of extension vector`. It
+  each with its kind and as Postgres names it: `table other.rooms`, `table
+  pg_catalog.pg_class`, `materialized view public.mat`, `sequence
+  public.counter`, `function upcoming()`, `function l2_distance(vector,vector)
+  of extension vector`. It
   is absent where there is nothing. Only the view's SELECT is read: a rule
   that writes elsewhere on an insert is not what it reads, and a composite
   type is a shape, not rows. The fingerprint counts `view` only where there is
@@ -979,10 +980,15 @@ await engine.introspect();
   cannot see what such a function reads: listing an extension says it reads no
   table. Do not list one that runs SQL it is handed (`dblink`, `tablefunc`'s
   `crosstab`).
-- **One hole is left: SQL handed to Postgres's own function as text.**
-  `query_to_xml('select … from secrets', …)` and its kin are Postgres's own,
-  and what the text reads is recorded nowhere. A view that hands SQL to a
-  function reads nothing vex can follow.
+- **A catalog table of Postgres's own is `outside` too.** Postgres records no
+  dependency on its own objects, so a view over `pg_class` or `pg_authid` is
+  found in its stored query, not its records: `"table_sizes" uses table
+  pg_catalog.pg_class, which vex does not follow`.
+- **One hole is left: what Postgres's own function is handed to read, as a
+  value.** `query_to_xml('select … from secrets', …)`,
+  `table_to_xml(name::regclass, …)` and their kin are Postgres's own, and what
+  the text or the name reads is recorded nowhere. A view that hands SQL or a table's name to a function reads
+  nothing vex can follow.
 - **Read, never written.** A simple view is one Postgres would write through;
   vex refuses every write to one — insert, `insertEach`, update, delete and
   upsert — before it runs: `"public_sessions" is a view: it is read, never

@@ -109,6 +109,20 @@ describe('views, read as entities where they are listed', () => {
     expect((await engineOf(db, ['dotted']).introspect()).entities.find((e) => e.name === 'dotted')?.view).toEqual({ reads: ['other.teachers'] });
   });
 
+  it('refuses a listed view over a catalog table of Postgres’s own, which Postgres records no dependency on', async () => {
+    const db = await databaseWith(`${TABLES}
+      CREATE VIEW table_sizes AS SELECT relname, reltuples FROM pg_class;
+      CREATE VIEW sessions_and_roles AS SELECT s.id, r.rolname FROM class_sessions s JOIN pg_authid r ON r.rolname = s.studio;
+    `);
+    const listed = ['table_sizes', 'sessions_and_roles'];
+    const schema = await adapterOf(db).introspect({ views: listed });
+    expect(listed.map((name) => schema.entities.find((e) => e.name === name)?.view)).toEqual([
+      { reads: [], outside: ['table pg_catalog.pg_class'] },
+      { reads: ['class_sessions'], outside: ['table pg_catalog.pg_authid'] },
+    ]);
+    await expect(engineOf(db, listed).introspect()).rejects.toThrow('"table_sizes" uses table pg_catalog.pg_class, which vex does not follow');
+  });
+
   it('refuses a listed view that uses a function but Postgres’s own, called or behind an operator, through a view it reads too', async () => {
     const db = await databaseWith(`${TABLES}${VIEWS}
       CREATE FUNCTION staff_notes() RETURNS TABLE (id text, notes text) LANGUAGE sql AS 'SELECT id, notes FROM class_sessions';

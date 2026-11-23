@@ -208,8 +208,8 @@ reaction's `run` — and `features`. Absent `shell`, the app serves data only
     table, a materialized view or nothing at all (`The views listed cannot be
     read: "nowhere" is not in the database, …`); and where a view listed uses
     anything but the app's tables and Postgres's own functions, such as a table
-    of another schema, a materialized view, or a function the app wrote or an
-    extension's ([Views](../vex/DOCS.md#views)).
+    of another schema or of Postgres's catalog, a materialized view, or a
+    function the app wrote or an extension's ([Views](../vex/DOCS.md#views)).
   - `viewExtensions` lists the extensions whose functions the views may use:
     `defineApp({ views: ['nearest_sessions'], viewExtensions: ['vector'] })`
     for pgvector's distances. It says those functions read no table, which

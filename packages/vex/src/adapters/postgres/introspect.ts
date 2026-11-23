@@ -96,7 +96,9 @@ const TABLES_QUERY = `
 // read, and any function but Postgres's own (an id below 16384, its first for
 // objects made after initdb), called or behind an operator, since what a
 // function reads Postgres does not record. An extension the caller lists is
-// trusted to read no table. A composite type is a shape, not rows.
+// trusted to read no table. A composite type is a shape, not rows. Postgres
+// records no dependency on its own objects, its catalog tables among them, so
+// relations are read from the stored query too (`:relid`), beside the records.
 const VIEW_READS_QUERY = `
   SELECT v.relname AS view_name, under.kind, under.name
   FROM pg_class v
@@ -109,8 +111,13 @@ const VIEW_READS_QUERY = `
           WHEN 'S' THEN 'sequence' WHEN 'f' THEN 'foreign table' ELSE 'relation' END) || ' ' || quote_ident(tns.nspname) || '.' || quote_ident(t.relname)
       END AS name
     FROM pg_rewrite r
-    JOIN pg_depend d ON d.objid = r.oid AND d.classid = 'pg_rewrite'::regclass AND d.refclassid = 'pg_class'::regclass
-    JOIN pg_class t ON t.oid = d.refobjid
+    CROSS JOIN LATERAL (
+      SELECT d.refobjid AS oid FROM pg_depend d
+      WHERE d.objid = r.oid AND d.classid = 'pg_rewrite'::regclass AND d.refclassid = 'pg_class'::regclass
+      UNION
+      SELECT m[1]::oid FROM regexp_matches(r.ev_action::text, ':relid ([0-9]+)', 'g') m
+    ) rel
+    JOIN pg_class t ON t.oid = rel.oid
     JOIN pg_namespace tns ON tns.oid = t.relnamespace
     WHERE r.ev_class = v.oid AND r.ev_type = '1' AND t.oid <> v.oid AND t.relkind <> 'c'
     UNION

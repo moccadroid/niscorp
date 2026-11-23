@@ -61,10 +61,17 @@ const quietly = async <T>(run: () => Promise<T>): Promise<T> => {
 };
 
 describe('migrateTables — the step', () => {
-  it("runs every owner's tables, the app's own with them — and a verifying boot then starts, with the views the app lists", async () => {
+  it("runs every owner's tables, the app's own with them — and a verifying boot then starts, with the views and extensions the app lists", async () => {
     const { runtimeOf } = database();
-    const app = defineApp({ ...appOf(read('notes/all', 'id', 'body'), add('body')), charter: { public: { actions: [], data: ['note_bodies.read'] } }, views: ['note_bodies'] });
-    const BODIES = { description: 'the bodies anybody may read', steps: [sql('CREATE VIEW note_bodies AS SELECT id, body FROM notes')] };
+    const app = defineApp({ ...appOf(read('notes/all', 'id', 'body'), add('body')), charter: { public: { actions: [], data: ['note_bodies.read'] } }, views: ['note_bodies'], viewExtensions: ['plpgsql'] });
+    const BODIES = {
+      description: 'the bodies anybody may read, through a function of an extension',
+      steps: [
+        sql("CREATE FUNCTION shout(text) RETURNS text LANGUAGE sql IMMUTABLE AS 'SELECT upper($1)'"),
+        sql('ALTER EXTENSION plpgsql ADD FUNCTION shout(text)'),
+        sql('CREATE VIEW note_bodies AS SELECT id, shout(body) AS body FROM notes'),
+      ],
+    };
 
     const unmigrated = await quietly(() => createServer(app, runtimeOf(tables(NOTES, BODIES), 'verify'))).catch((error: unknown) => error);
     expect(unmigrated).toMatchObject({ code: 'PENDING' });
@@ -83,6 +90,8 @@ describe('migrateTables — the step', () => {
     } finally {
       said.mockRestore();
     }
+    const unlisted = defineApp({ ...app, viewExtensions: [] });
+    await expect(quietly(() => createServer(unlisted, runtimeOf(tables(NOTES, BODIES), 'verify')))).rejects.toThrow('"note_bodies" uses function shout(text) of extension plpgsql');
   });
 
   it('applies a migration that leaves every entry fitting', async () => {
