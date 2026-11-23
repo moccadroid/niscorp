@@ -76,9 +76,9 @@ export type DataLayerDeps = {
   upgrader?: ColumnUpgrader;
 };
 
-// The app's views, beside any its runtime names to vex: an app that lists none hands vex the config it was given.
+// The app's `views` are the one list of them, and `nisc migrate` reads the same one.
 const configWithViews = (vexConfig: DataLayerDeps['vexConfig'], views: readonly string[] = []): DataLayerDeps['vexConfig'] =>
-  views.length === 0 ? vexConfig : { ...vexConfig, views: [...new Set([...(vexConfig?.views ?? []), ...views])] };
+  views.length === 0 && vexConfig?.views === undefined ? vexConfig : { ...vexConfig, views: [...views] };
 
 // A view is only ever read: no write to it is a grant anybody can hold.
 const dataGrants = (entities: DatabaseSchema['entities']): string[] =>

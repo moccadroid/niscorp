@@ -205,13 +205,24 @@ reaction's `run` — and `features`. Absent `shell`, the app serves data only
   app's universe and the schema fingerprint are what they were.
   - **The boot is refused** where a name listed is not a view of the database: a
     table, a materialized view or nothing at all (`The views listed cannot be
-    read: "nowhere" is not in the database.`); and where a view listed reads
+    read: "nowhere" is not in the database, …`); and where a view listed reads
     anything but the app's tables, such as a table of another schema or a
-    materialized view ([Views](../vex/DOCS.md#views)).
+    materialized view, or calls a function the app wrote
+    ([Views](../vex/DOCS.md#views)).
   - **The boot says** where a role is granted a view and is not granted a table
     under it, so a review sees the new way to that table's rows: `[moss] public
     reads public_sessions, a view over class_sessions, which it is not granted.`
-    It is said, not refused: that is what a view is for.
+    It says too where a role is granted both, the table under row rules
+    (`behaviors`, a rule set with `read` rules or named variants) and the view
+    under none: `[moss] staff reads public_sessions, a view over class_sessions,
+    without the row rules it reads class_sessions under.` Both are said, not
+    refused: that is what a view is for.
+  - A `deny` naming a view's write (`deny: ['public_sessions.write.*']`) matches
+    nothing in the universe, and the charter refuses the boot for it
+    (`dead-deny`), as it refuses any deny that matches nothing.
+  - A JSON column read through a view is upgraded where `upgradedColumns` names
+    it under the view ([Views](../vex/DOCS.md#views)).
+  - `views` is the one list of them: `runtime.vexConfig` has no `views`.
   - `nisc migrate` reads the views the app lists, so a run that drops one is a
     removal, refused without `--allow-removal`, as a dropped table is. One
     dropped and made again in the same run is not.
@@ -841,7 +852,7 @@ type NiscRuntime = {
   pool: PgPool;                    // SQL
   db: MutationClient;              // writes
   cache?: CacheBackend;            // defaults to vex's postgres cache on `pool`
-  vexConfig?: QueryEngineConfig['config'];  // the query engine's settings (limits, read timeout); default vex's own
+  vexConfig?: Omit<QueryEngineConfig['config'], 'views'>;  // the query engine's settings (limits, read timeout); default vex's own
   answerReadableRows?: boolean;    // a write on the vex surfaces answers only the rows the caller may read; default false
   checkMovedRows?: boolean;        // refuse a write that moves a row out of the caller's update rule; default true
   session: SessionVerifier | 'sessions' | 'dev-open';  // REQUIRED — no default
@@ -876,7 +887,7 @@ apply wherever that socket is attached: under `serve`, `nisc start`, the dev
 plugin (`nisc dev`), and a host of the app's own that calls
 `attachSocket(httpServer, server.socket)`. No host says them again.
 
-`vexConfig` is handed to the app's query engine. A list of tables given there
+`vexConfig` is handed to the app's query engine, with the app's `views`. A list of tables given there
 (`entities`) cuts down what that engine knows: the entries the app serves, and
 the `data` universe its charter is resolved over. It says nothing about moss's
 own reads and writes. The generation counter and a feature's own entries (the
@@ -2030,8 +2041,8 @@ app that resolves people through `identity`.
   of what it is handed, so a check may hand it those alone. `grants` is every
   `<table>.<verb>` the database can carry (vex's `scopeGrants(tables)`, and
   `<view>.read` for each view the app lists). `views`, `{ name, reads }[]` with
-  `reads` vex's `view.reads`, is what the warning on a view over an ungranted
-  table reads; without it nothing is said of views. The
+  `reads` vex's `view.reads`, is what the boot's lines on views read (with
+  `behaviors`, for the row rules); without it nothing is said of views. The
   report is `{ errors, said, charter }`: `errors` is `{ check, detail }[]`,
   `check` one of `'actions'` (a definition nova's schema does not read),
   `'charter'`, `'reach'` and `'variants'`; `said` is what a boot only says (a

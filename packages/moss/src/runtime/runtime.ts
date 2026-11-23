@@ -9,7 +9,7 @@ export type NiscRuntime = {
   pool: PgPool;
   db: MutationClient;
   cache?: CacheBackend;
-  vexConfig?: QueryEngineConfig['config'];
+  vexConfig?: Omit<NonNullable<QueryEngineConfig['config']>, 'views'>;
   answerReadableRows?: boolean;
   checkMovedRows?: boolean;
   session: SessionVerifier | 'sessions' | 'dev-open';

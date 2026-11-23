@@ -5,7 +5,7 @@ import type { ActionDefinition, ActionFragment, LayoutNode } from '@niscorp/nova
 import { chainCycles, isRecord, walkNodes } from '@niscorp/nova/reflect';
 import { depthRefusal, exceedsDepth } from '@niscorp/strata';
 import { scopeProfiles } from '@niscorp/vex';
-import type { SeedEntry, SeedMutation } from '@niscorp/vex';
+import type { ScopeBehaviors, SeedEntry, SeedMutation } from '@niscorp/vex';
 import { z } from 'zod';
 import { isBinding } from '@niscorp/nova/i18n';
 import { GENERATED_ID_PREFIX, entriesOf, keptLayoutNameRefusal, wearableOf } from './app';
@@ -27,9 +27,22 @@ export type ManifestCandidate = {
   entries: readonly (SeedEntry | SeedMutation)[];
   profiles: ReadonlySet<string>;
   views?: readonly ViewReads[];
+  rowRuled?: ReadonlySet<string>;
 };
 
 export type ShippedManifest = Pick<NiscApp, 'charter' | 'actions' | 'layouts' | 'wearable' | 'assignments' | 'entries' | 'behaviors' | 'shell' | 'pages'>;
+
+const RULE_KEYS = ['read', 'write', 'insert', 'update', 'delete'] as const;
+
+// Named variants narrow a principal's reads by their profile, and with no `default` an unprofiled one reads nothing.
+const rowRuledTables = (behaviors: ScopeBehaviors): ReadonlySet<string> =>
+  new Set(
+    Object.entries(behaviors).flatMap(([table, entry]) => {
+      if (!RULE_KEYS.some((key) => key in entry)) return [table];
+      const read = 'read' in entry ? entry.read : undefined;
+      return Array.isArray(read) && read.length > 0 ? [table] : [];
+    }),
+  );
 
 export const candidateOf = (
   shipped: ShippedManifest,
@@ -48,7 +61,7 @@ export const candidateOf = (
   grants,
   entries: inForce.entries,
   profiles: scopeProfiles(shipped.behaviors ?? {}),
-  ...(views.length > 0 ? { views } : {}),
+  ...(views.length > 0 ? { views, rowRuled: rowRuledTables(shipped.behaviors ?? {}) } : {}),
 });
 
 // Fragments in force beside the ones the shells ship: what is published for everybody.
@@ -170,9 +183,10 @@ const everyFunctionGranted = (charter: Charter): string[] =>
       : [],
   );
 
-// A view is a way to a table's rows that the table's own grant does not show: a review reads it here.
-const viewsOverUngranted = (candidate: Pick<ManifestCandidate, 'charter' | 'grants' | 'views'>): string[] => {
+// A view is a way to a table's rows that the table's own grant and row rules do not show: a review reads it here.
+const readsWidenedByViews = (candidate: Pick<ManifestCandidate, 'charter' | 'grants' | 'views' | 'rowRuled'>): string[] => {
   const views = candidate.views ?? [];
+  const rowRuled = candidate.rowRuled ?? new Set<string>();
   if (views.length === 0) return [];
   return Object.keys(candidate.charter).flatMap((role) => {
     let granted: ReadonlySet<string>;
@@ -184,7 +198,10 @@ const viewsOverUngranted = (candidate: Pick<ManifestCandidate, 'charter' | 'gran
     }
     return views.flatMap((view) =>
       granted.has(`${view.name}.read`)
-        ? view.reads.flatMap((table) => (granted.has(`${table}.read`) ? [] : [`${role} reads ${view.name}, a view over ${table}, which it is not granted.`]))
+        ? view.reads.flatMap((table) => {
+            if (!granted.has(`${table}.read`)) return [`${role} reads ${view.name}, a view over ${table}, which it is not granted.`];
+            return rowRuled.has(table) && !rowRuled.has(view.name) ? [`${role} reads ${view.name}, a view over ${table}, without the row rules it reads ${table} under.`] : [];
+          })
         : [],
     );
   });
@@ -223,7 +240,7 @@ export const verifyManifest = (candidate: ManifestCandidate): ManifestReport => 
     said: [
       ...endlessChains(read.actions).map((chain) => `a chain of steps that never ends: ${chain.path} — nova stops it at its budget when it runs (RUNAWAY_CHAIN)`),
       ...everyFunctionGranted(read.charter),
-      ...viewsOverUngranted(read),
+      ...readsWidenedByViews(read),
       ...charter.warnings.flatMap((warning) => (warning.rule === 'shape' ? [`charter: ${warning.detail}`] : [])),
     ],
     charter,

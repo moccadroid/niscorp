@@ -92,19 +92,31 @@ const TABLES_QUERY = `
 
 // What each view of the schema reads, one level down: a view over a view is
 // followed to its tables in code. A relation of another schema is named with
-// its schema, so it is never taken for a table of this one.
+// its schema, so it is never taken for a table of this one. A function the app
+// wrote is named with `()`: what it reads, Postgres does not record.
 const VIEW_READS_QUERY = `
-  SELECT DISTINCT v.relname AS view_name,
-    CASE WHEN tns.nspname = $1 THEN t.relname::text ELSE tns.nspname || '.' || t.relname END AS read_name
+  SELECT v.relname AS view_name, under.read_name
   FROM pg_class v
   JOIN pg_namespace ns ON ns.oid = v.relnamespace
-  JOIN pg_rewrite r ON r.ev_class = v.oid
-  JOIN pg_depend d ON d.objid = r.oid AND d.classid = 'pg_rewrite'::regclass AND d.refclassid = 'pg_class'::regclass
-  JOIN pg_class t ON t.oid = d.refobjid
-  JOIN pg_namespace tns ON tns.oid = t.relnamespace
+  LEFT JOIN LATERAL (
+    SELECT CASE WHEN tns.nspname = $1 THEN t.relname::text ELSE tns.nspname || '.' || t.relname END AS read_name
+    FROM pg_rewrite r
+    JOIN pg_depend d ON d.objid = r.oid AND d.classid = 'pg_rewrite'::regclass AND d.refclassid = 'pg_class'::regclass
+    JOIN pg_class t ON t.oid = d.refobjid
+    JOIN pg_namespace tns ON tns.oid = t.relnamespace
+    WHERE r.ev_class = v.oid AND t.oid <> v.oid
+    UNION
+    SELECT CASE WHEN pns.nspname = $1 THEN p.proname::text ELSE pns.nspname || '.' || p.proname END || '()'
+    FROM pg_rewrite r
+    JOIN pg_depend d ON d.objid = r.oid AND d.classid = 'pg_rewrite'::regclass AND d.refclassid = 'pg_proc'::regclass
+    JOIN pg_proc p ON p.oid = d.refobjid
+    JOIN pg_namespace pns ON pns.oid = p.pronamespace
+    WHERE r.ev_class = v.oid
+      AND pns.nspname NOT IN ('pg_catalog', 'information_schema')
+      AND NOT EXISTS (SELECT 1 FROM pg_depend e WHERE e.classid = 'pg_proc'::regclass AND e.objid = p.oid AND e.deptype = 'e')
+  ) under ON true
   WHERE ns.nspname = $1
     AND v.relkind = 'v'
-    AND t.oid <> v.oid
   ORDER BY view_name, read_name
 `;
 
@@ -231,7 +243,8 @@ export const introspectPostgres = async (
   const viewReads = new Map<string, string[]>();
   for (const row of viewReadsResult.rows) {
     const view = row['view_name'] as string;
-    viewReads.set(view, [...(viewReads.get(view) ?? []), row['read_name'] as string]);
+    const read = row['read_name'] as string | null;
+    viewReads.set(view, [...(viewReads.get(view) ?? []), ...(read === null ? [] : [read])]);
   }
 
   type Key = {

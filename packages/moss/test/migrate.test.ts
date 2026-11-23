@@ -162,22 +162,33 @@ describe('migrateTables — the step', () => {
     expect(String(error)).toContain('notes/learned: Field "gone" not found');
   });
 
-  it('says what a run removes and what it retypes', async () => {
+  it('says what a run removes and what it retypes, a view the app lists among them', async () => {
     const { runtimeOf } = database();
-    const app = appOf(read('notes/all', 'id', 'body'), add('body'));
-    await migrateTables(runtimeOf(tables(NOTES, TAGS)), app);
+    const app = defineApp({ ...appOf(read('notes/all', 'id', 'body'), add('body')), views: ['starred', 'bodies'] });
+    const VIEWS = {
+      description: 'views over notes',
+      steps: [sql('CREATE VIEW starred AS SELECT id, stars FROM notes'), sql('CREATE VIEW bodies AS SELECT id, body FROM notes'), sql('CREATE VIEW unlisted AS SELECT id FROM notes')],
+    };
+    await migrateTables(runtimeOf(tables(NOTES, TAGS, VIEWS)), app);
 
     const report = await migrateTables(
       runtimeOf(
-        tables(NOTES, TAGS, {
-          description: 'stars are counted wider; tags go',
-          steps: [sql('ALTER TABLE notes ALTER COLUMN stars TYPE bigint'), sql('DROP TABLE tags')],
+        tables(NOTES, TAGS, VIEWS, {
+          description: 'stars are counted wider; tags and the starred view go; bodies is made again',
+          steps: [
+            sql('DROP VIEW starred'),
+            sql('ALTER TABLE notes ALTER COLUMN stars TYPE bigint'),
+            sql('DROP TABLE tags'),
+            sql('DROP VIEW bodies'),
+            sql('CREATE VIEW bodies AS SELECT id, body FROM notes'),
+            sql('DROP VIEW unlisted'),
+          ],
         }),
       ),
       app,
       { allowRemoval: true },
     );
-    expect(report.removed).toEqual(['tags']);
+    expect(report.removed).toEqual(['starred', 'tags']);
     expect(report.retyped).toEqual(['notes.stars (integer → bigint)']);
   });
 

@@ -100,6 +100,38 @@ describe('views, read as entities where they are listed', () => {
     expect((await engineOf(db, ['public_sessions']).introspect()).entities.some((e) => e.name === 'public_sessions')).toBe(true);
   });
 
+  it('refuses a listed view that calls a function the app wrote, whatever the function returns; one of Postgres’s own is fine', async () => {
+    const db = await databaseWith(`${TABLES}${VIEWS}
+      CREATE FUNCTION staff_notes() RETURNS TABLE (id text, notes text) LANGUAGE sql AS 'SELECT id, notes FROM class_sessions';
+      CREATE FUNCTION all_teachers() RETURNS SETOF teachers LANGUAGE sql AS 'SELECT * FROM teachers';
+      CREATE VIEW via_table_function AS SELECT id, notes FROM staff_notes();
+      CREATE VIEW via_setof AS SELECT id FROM all_teachers();
+      CREATE VIEW shouting AS SELECT id, upper(studio) AS studio FROM class_sessions;
+    `);
+    const schema = await adapterOf(db).introspect({ views: ['via_table_function', 'via_setof', 'shouting'] });
+    expect(['via_table_function', 'via_setof', 'shouting'].map((name) => schema.entities.find((e) => e.name === name)?.view?.reads)).toEqual([['staff_notes()'], ['all_teachers()', 'teachers'], ['class_sessions']]);
+    await expect(engineOf(db, ['via_table_function', 'via_setof']).introspect()).rejects.toThrow(
+      '"via_table_function" calls staff_notes(), and what a function reads Postgres does not record; "via_setof" calls all_teachers(), and what a function reads Postgres does not record',
+    );
+    expect((await engineOf(db, ['shouting']).introspect()).entities.find((e) => e.name === 'shouting')?.view).toEqual({ reads: ['class_sessions'] });
+  });
+
+  it('a view over a view that reads no table reads no table', async () => {
+    const db = await databaseWith(`${TABLES}
+      CREATE VIEW studios AS SELECT * FROM (VALUES ('north'), ('south')) AS s (name);
+      CREATE VIEW studio_sessions AS SELECT s.id, s.studio FROM class_sessions s JOIN studios ON studios.name = s.studio;
+    `);
+    const schema = await engineOf(db, ['studio_sessions']).introspect();
+    expect(schema.entities.find((e) => e.name === 'studio_sessions')?.view).toEqual({ reads: ['class_sessions'] });
+  });
+
+  it('a listed view the introspection leaves out is said to be left out', async () => {
+    const db = await databaseWith(TABLES + VIEWS);
+    const engine = createQueryEngine({ adapter: adapterOf(db), cache: createMemoryCache(), config: { views: ['public_sessions'], entities: ['teachers', 'class_sessions'] } });
+    engines.push(engine);
+    await expect(engine.introspect()).rejects.toThrow('"public_sessions" is not in the database, or the introspection leaves it out (`entities`, `exclude`)');
+  });
+
   it("has the view's columns and their types, and no key, index, relation or row count", async () => {
     const db = await databaseWith(TABLES + VIEWS);
     const schema = await adapterOf(db).introspect({ views: ['public_sessions'] });

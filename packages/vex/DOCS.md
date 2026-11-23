@@ -937,12 +937,13 @@ await engine.introspect();
   types. It has no primary key, no index, no relation and no row count, and it
   carries `view: { reads }`: the tables under it, followed through any view of
   the schema it reads (`EntitySchema.view`). A relation of another schema is
-  named with its schema (`other.rooms`). The fingerprint counts `view` only
-  where there is one.
+  named with its schema (`other.rooms`), and a function the app wrote with
+  `()` (`upcoming()`). The fingerprint counts `view` only where there is one.
 - **A name that is not a view refuses.** `engine.introspect()` throws
-  `execution_error` when a listed name is a table, a materialized view or not
-  there at all. `adapter.introspect({ views })` leaves such a name out without
-  a word: a migration step compares two pictures of the schema, and a view it
+  `execution_error` when a listed name is a table, a materialized view, not
+  there at all, or left out by `entities` or `exclude` (`"nowhere" is not in the
+  database, or the introspection leaves it out`). `adapter.introspect({ views })`
+  leaves such a name out without a word: a migration step compares two pictures of the schema, and a view it
   dropped is a removal, not a fault.
 - **A view over anything but the tables vex reads refuses.** `engine.introspect()`
   throws `execution_error` when a listed view reads a table of another schema,
@@ -950,10 +951,13 @@ await engine.introspect();
   introspection leaves out (`entities`, `exclude`): no write vex sees would
   answer a reactive read of it again (`"per_studio" reads "sessions_per_studio",
   which is no table vex reads`).
-- **A table read inside a function is not seen.** Postgres records what a view
-  reads, not what a function it calls reads: a view over `SELECT * FROM
-  upcoming()` has none of the function's tables in `reads`, so a write to them
-  does not answer a reactive read of it again. Write the query in the view.
+- **A view that calls a function the app wrote refuses.** Postgres records what
+  a view reads, not what a function it calls reads: a view over `SELECT * FROM
+  upcoming()` could show any table, of any schema, and no write would answer a
+  reactive read of it again (`"site_sessions" calls upcoming(), and what a
+  function reads Postgres does not record`). Write the query in the view.
+  Postgres's own functions (`upper`, `now`) and an extension's (`similarity`)
+  are fine.
 - **Read, never written.** A simple view is one Postgres would write through;
   vex refuses every write to one — insert, `insertEach`, update, delete and
   upsert — before it runs: `"public_sessions" is a view: it is read, never
@@ -970,6 +974,11 @@ await engine.introspect();
   any of them answers it again ([Reactive reads](#reactive-reads-refresh)).
 - An index on a table under a view is not paired with the view's columns, so a
   filter on a view's column is never said to be unindexed.
+- **Upgraded columns are named under the view.** `upgradedColumns` is keyed by
+  entity: a JSON column read through a view is upgraded only where it is named
+  under the view's name, with its stamp column in the view too
+  (`{ member_cards: { card: { stamp: 'grammar', kind: 'app.members/card' } } }`).
+  Named under the table alone, the view's reads return it as it was stored.
 
 ## Upgraded columns
 
