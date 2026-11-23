@@ -40,7 +40,7 @@ export const EntitySchemaSchema = z.object({
   relations: z.array(RelationSchemaSchema),
   indexes: z.array(IndexSchemaSchema),
   rowCount: z.number().optional(),
-  view: z.object({ reads: z.array(z.string()) }).optional(),
+  view: z.object({ reads: z.array(z.string()), outside: z.array(z.string()).optional() }).optional(),
 });
 
 export const DatabaseSchemaSchema = z.object({

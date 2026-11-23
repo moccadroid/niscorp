@@ -30,6 +30,7 @@ export type DataConfig = {
   cache?: CacheBackend;
   vexConfig?: QueryEngineConfig['config'];
   views?: NiscApp['views'];
+  viewExtensions?: NiscApp['viewExtensions'];
   migrations?: 'apply' | 'verify';
   storesSessions: boolean;
   featureTables?: readonly FeatureTables[];

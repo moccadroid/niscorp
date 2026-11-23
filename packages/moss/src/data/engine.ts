@@ -72,13 +72,19 @@ export type DataLayerDeps = {
   cache?: CacheBackend;
   vexConfig?: QueryEngineConfig['config'];
   views?: readonly string[];
+  viewExtensions?: readonly string[];
   upgradedColumns?: QueryEngineConfig['upgradedColumns'];
   upgrader?: ColumnUpgrader;
 };
 
 // The app's `views` are the one list of them, and `nisc migrate` reads the same one.
-const configWithViews = (vexConfig: DataLayerDeps['vexConfig'], views: readonly string[] = []): DataLayerDeps['vexConfig'] =>
-  views.length === 0 && vexConfig?.views === undefined ? vexConfig : { ...vexConfig, views: [...views] };
+const configWithViews = (deps: Pick<DataLayerDeps, 'vexConfig' | 'views' | 'viewExtensions'>): DataLayerDeps['vexConfig'] => {
+  if (deps.vexConfig?.views !== undefined || deps.vexConfig?.viewExtensions !== undefined) {
+    throw new Error('moss: views are listed in `defineApp({ views, viewExtensions })`, where `nisc migrate` reads them too, not in `runtime.vexConfig`.');
+  }
+  const views = deps.views ?? [];
+  return views.length === 0 ? deps.vexConfig : { ...deps.vexConfig, views: [...views], viewExtensions: [...(deps.viewExtensions ?? [])] };
+};
 
 // A view is only ever read: no write to it is a grant anybody can hold.
 const dataGrants = (entities: DatabaseSchema['entities']): string[] =>
@@ -89,7 +95,7 @@ export const createDataLayer = async (deps: DataLayerDeps): Promise<DataLayer> =
   const table = deps.cache ?? createPostgresCache({ pool: deps.pool });
   await table.init?.();
   const { cache, askFirst } = createEntryCache(table);
-  const config = configWithViews(deps.vexConfig, deps.views);
+  const config = configWithViews(deps);
   const engine = createQueryEngine({
     adapter,
     cache,

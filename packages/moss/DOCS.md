@@ -56,6 +56,7 @@ type NiscApp = {
   behaviors?: ScopeBehaviors;                          // row-level scope semantics, per table or per profile
   entries?: readonly (SeedEntry | SeedMutation)[];     // the API surface: the reads and writes the app serves
   views?: readonly string[];                          // the database's views read as tables, read only
+  viewExtensions?: readonly string[];                 // extensions whose functions those views may use
   resources?: Record<string, readonly string[] | { entities: readonly string[] }>;
   shell?: ShellManifest;                              // the server shell, as data — THE APP
   pages?: Record<string, PageManifest>;               // what is drawn at a path and kept by nothing
@@ -205,16 +206,21 @@ reaction's `run` — and `features`. Absent `shell`, the app serves data only
   app's universe and the schema fingerprint are what they were.
   - **The boot is refused** where a name listed is not a view of the database: a
     table, a materialized view or nothing at all (`The views listed cannot be
-    read: "nowhere" is not in the database, …`); and where a view listed reads
-    anything but the app's tables, such as a table of another schema or a
-    materialized view, or calls a function the app wrote
-    ([Views](../vex/DOCS.md#views)).
+    read: "nowhere" is not in the database, …`); and where a view listed uses
+    anything but the app's tables and Postgres's own functions, such as a table
+    of another schema, a materialized view, or a function the app wrote or an
+    extension's ([Views](../vex/DOCS.md#views)).
+  - `viewExtensions` lists the extensions whose functions the views may use:
+    `defineApp({ views: ['nearest_sessions'], viewExtensions: ['vector'] })`
+    for pgvector's distances. It says those functions read no table, which
+    nothing checks: list only an extension that computes from its arguments.
   - **The boot says** where a role is granted a view and is not granted a table
     under it, so a review sees the new way to that table's rows: `[moss] public
     reads public_sessions, a view over class_sessions, which it is not granted.`
-    It says too where a role is granted both, the table under row rules
-    (`behaviors`, a rule set with `read` rules or named variants) and the view
-    under none: `[moss] staff reads public_sessions, a view over class_sessions,
+    It says too where a role reads both, the table under row rules and the
+    view under none, in the role's own policy as the boot compiles it (its
+    `scoping` profile, the app's `behaviors` and moss's own rules on what was
+    saved): `[moss] staff reads public_sessions, a view over class_sessions,
     without the row rules it reads class_sessions under.` Both are said, not
     refused: that is what a view is for.
   - A `deny` naming a view's write (`deny: ['public_sessions.write.*']`) matches
@@ -222,7 +228,8 @@ reaction's `run` — and `features`. Absent `shell`, the app serves data only
     (`dead-deny`), as it refuses any deny that matches nothing.
   - A JSON column read through a view is upgraded where `upgradedColumns` names
     it under the view ([Views](../vex/DOCS.md#views)).
-  - `views` is the one list of them: `runtime.vexConfig` has no `views`.
+  - `views` and `viewExtensions` are the one list of them, which `nisc
+    migrate` reads too: a `runtime.vexConfig` that has either refuses the boot.
   - `nisc migrate` reads the views the app lists, so a run that drops one is a
     removal, refused without `--allow-removal`, as a dropped table is. One
     dropped and made again in the same run is not.
@@ -852,7 +859,7 @@ type NiscRuntime = {
   pool: PgPool;                    // SQL
   db: MutationClient;              // writes
   cache?: CacheBackend;            // defaults to vex's postgres cache on `pool`
-  vexConfig?: Omit<QueryEngineConfig['config'], 'views'>;  // the query engine's settings (limits, read timeout); default vex's own
+  vexConfig?: Omit<NonNullable<QueryEngineConfig['config']>, 'views' | 'viewExtensions'>;  // the query engine's settings (limits, read timeout); default vex's own
   answerReadableRows?: boolean;    // a write on the vex surfaces answers only the rows the caller may read; default false
   checkMovedRows?: boolean;        // refuse a write that moves a row out of the caller's update rule; default true
   session: SessionVerifier | 'sessions' | 'dev-open';  // REQUIRED — no default
@@ -2042,7 +2049,8 @@ app that resolves people through `identity`.
   `<table>.<verb>` the database can carry (vex's `scopeGrants(tables)`, and
   `<view>.read` for each view the app lists). `views`, `{ name, reads }[]` with
   `reads` vex's `view.reads`, is what the boot's lines on views read (with
-  `behaviors`, for the row rules); without it nothing is said of views. The
+  `behaviors`, for the row rules; moss's own rules on what was saved are
+  added by a boot, not here); without it nothing is said of views. The
   report is `{ errors, said, charter }`: `errors` is `{ check, detail }[]`,
   `check` one of `'actions'` (a definition nova's schema does not read),
   `'charter'`, `'reach'` and `'variants'`; `said` is what a boot only says (a

@@ -52,6 +52,7 @@ const buildData = (app: NiscApp, runtime: NiscRuntime): Promise<Data> =>
     cache: runtime.cache,
     vexConfig: runtime.vexConfig,
     views: app.views,
+    viewExtensions: app.viewExtensions,
     migrations: runtime.migrations,
     storesSessions: runtime.session === 'sessions',
     featureTables: featureTablesOf(app),

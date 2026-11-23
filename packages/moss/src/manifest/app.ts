@@ -49,6 +49,7 @@ export type NiscApp = {
   features?: readonly Feature[];
   entries?: readonly (SeedEntry | SeedMutation)[];
   views?: readonly string[];
+  viewExtensions?: readonly string[];
   resources?: Record<string, readonly string[] | { entities: readonly string[] }>;
   shell?: ShellManifest;
   pages?: Record<string, PageManifest>;

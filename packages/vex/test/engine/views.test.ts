@@ -1,5 +1,6 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { PGlite } from '@electric-sql/pglite';
+import { pg_trgm } from '@electric-sql/pglite/contrib/pg_trgm';
 import { createPglitePool } from '../../src/adapters/pglite/index.js';
 import { createPostgresAdapter } from '../../src/adapters/postgres/index.js';
 import { createMemoryCache } from '../../src/cache/memory.js';
@@ -77,43 +78,92 @@ describe('views, read as entities where they are listed', () => {
     const db = await databaseWith(TABLES + VIEWS);
     await expect(engineOf(db, ['nowhere']).introspect()).rejects.toThrow('"nowhere" is not in the database');
     await expect(engineOf(db, ['teachers']).introspect()).rejects.toThrow('"teachers" is a table');
-    await expect(engineOf(db, ['sessions_per_studio']).introspect()).rejects.toThrow('a materialized view is not read');
+    await expect(engineOf(db, ['sessions_per_studio']).introspect()).rejects.toThrow('"sessions_per_studio" is not in the database');
   });
 
   it('refuses a listed view over anything but the tables it reads: another schema, a materialized view, a sequence', async () => {
     const db = await databaseWith(`${TABLES}${VIEWS}
       CREATE SCHEMA other;
       CREATE TABLE other.teachers (id TEXT PRIMARY KEY);
+      CREATE TABLE "other.teachers" (id TEXT PRIMARY KEY);
       CREATE VIEW other.hidden AS SELECT id FROM public.class_sessions;
       CREATE SEQUENCE counter;
       CREATE VIEW other_teachers AS SELECT id FROM other.teachers;
       CREATE VIEW through_other AS SELECT id FROM other.hidden;
       CREATE VIEW per_studio AS SELECT studio FROM sessions_per_studio;
       CREATE VIEW numbered AS SELECT nextval('counter') AS n;
+      CREATE VIEW dotted AS SELECT id FROM "other.teachers";
     `);
     const listed = ['other_teachers', 'through_other', 'per_studio', 'numbered'];
-    const schema = await adapterOf(db).introspect({ views: listed });
-    expect(listed.map((name) => schema.entities.find((e) => e.name === name)?.view?.reads)).toEqual([['other.teachers'], ['other.hidden'], ['sessions_per_studio'], ['counter']]);
+    const schema = await adapterOf(db).introspect({ views: [...listed, 'dotted'] });
+    expect([...listed, 'dotted'].map((name) => schema.entities.find((e) => e.name === name)?.view)).toEqual([
+      { reads: [], outside: ['table other.teachers'] },
+      { reads: [], outside: ['view other.hidden'] },
+      { reads: [], outside: ['materialized view public.sessions_per_studio'] },
+      { reads: [], outside: ['sequence public.counter'] },
+      { reads: ['other.teachers'] },
+    ]);
     await expect(engineOf(db, listed).introspect()).rejects.toThrow(
-      '"other_teachers" reads "other.teachers", which is no table vex reads; "through_other" reads "other.hidden", which is no table vex reads; "per_studio" reads "sessions_per_studio", which is no table vex reads; "numbered" reads "counter", which is no table vex reads',
+      '"other_teachers" uses table other.teachers, which vex does not follow; "through_other" uses view other.hidden, which vex does not follow; "per_studio" uses materialized view public.sessions_per_studio, which vex does not follow; "numbered" uses sequence public.counter, which vex does not follow',
     );
-    expect((await engineOf(db, ['public_sessions']).introspect()).entities.some((e) => e.name === 'public_sessions')).toBe(true);
+    expect((await engineOf(db, ['dotted']).introspect()).entities.find((e) => e.name === 'dotted')?.view).toEqual({ reads: ['other.teachers'] });
   });
 
-  it('refuses a listed view that calls a function the app wrote, whatever the function returns; one of Postgres’s own is fine', async () => {
+  it('refuses a listed view that uses a function but Postgres’s own, called or behind an operator, through a view it reads too', async () => {
     const db = await databaseWith(`${TABLES}${VIEWS}
       CREATE FUNCTION staff_notes() RETURNS TABLE (id text, notes text) LANGUAGE sql AS 'SELECT id, notes FROM class_sessions';
       CREATE FUNCTION all_teachers() RETURNS SETOF teachers LANGUAGE sql AS 'SELECT * FROM teachers';
+      CREATE FUNCTION has_notes(text, text) RETURNS boolean LANGUAGE sql AS 'SELECT EXISTS (SELECT 1 FROM class_sessions WHERE notes IS NOT NULL)';
+      CREATE OPERATOR ### (LEFTARG = text, RIGHTARG = text, FUNCTION = has_notes);
       CREATE VIEW via_table_function AS SELECT id, notes FROM staff_notes();
       CREATE VIEW via_setof AS SELECT id FROM all_teachers();
+      CREATE VIEW via_operator AS SELECT id, studio ### 'x' AS noted FROM class_sessions;
+      CREATE VIEW over_operator AS SELECT id FROM via_operator;
       CREATE VIEW shouting AS SELECT id, upper(studio) AS studio FROM class_sessions;
     `);
-    const schema = await adapterOf(db).introspect({ views: ['via_table_function', 'via_setof', 'shouting'] });
-    expect(['via_table_function', 'via_setof', 'shouting'].map((name) => schema.entities.find((e) => e.name === name)?.view?.reads)).toEqual([['staff_notes()'], ['all_teachers()', 'teachers'], ['class_sessions']]);
-    await expect(engineOf(db, ['via_table_function', 'via_setof']).introspect()).rejects.toThrow(
-      '"via_table_function" calls staff_notes(), and what a function reads Postgres does not record; "via_setof" calls all_teachers(), and what a function reads Postgres does not record',
+    const listed = ['via_table_function', 'via_setof', 'via_operator', 'over_operator'];
+    const schema = await adapterOf(db).introspect({ views: [...listed, 'shouting'] });
+    expect([...listed, 'shouting'].map((name) => schema.entities.find((e) => e.name === name)?.view)).toEqual([
+      { reads: [], outside: ['function staff_notes()'] },
+      { reads: ['teachers'], outside: ['function all_teachers()'] },
+      { reads: ['class_sessions'], outside: ['function has_notes(text,text)'] },
+      { reads: ['class_sessions'], outside: ['function has_notes(text,text)'] },
+      { reads: ['class_sessions'] },
+    ]);
+    await expect(engineOf(db, listed).introspect()).rejects.toThrow(
+      '"via_table_function" uses function staff_notes(), which vex does not follow; "via_setof" uses function all_teachers(), which vex does not follow; "via_operator" uses function has_notes(text,text), which vex does not follow; "over_operator" uses function has_notes(text,text), which vex does not follow',
     );
     expect((await engineOf(db, ['shouting']).introspect()).entities.find((e) => e.name === 'shouting')?.view).toEqual({ reads: ['class_sessions'] });
+  });
+
+  it('a function of an extension is used only where `viewExtensions` lists the extension', async () => {
+    const db = new PGlite({ extensions: { pg_trgm } });
+    await db.exec(`${TABLES}
+      CREATE EXTENSION pg_trgm;
+      CREATE VIEW fuzzy_teachers AS SELECT id, similarity(name, 'Ada') AS likeness FROM teachers;
+    `);
+    expect((await adapterOf(db).introspect({ views: ['fuzzy_teachers'] })).entities.find((e) => e.name === 'fuzzy_teachers')?.view).toEqual({
+      reads: ['teachers'],
+      outside: ['function similarity(text,text) of extension pg_trgm'],
+    });
+    await expect(engineOf(db, ['fuzzy_teachers']).introspect()).rejects.toThrow('"fuzzy_teachers" uses function similarity(text,text) of extension pg_trgm, which vex does not follow');
+    const engine = createQueryEngine({ adapter: adapterOf(db), cache: createMemoryCache(), config: { views: ['fuzzy_teachers'], viewExtensions: ['pg_trgm'] } });
+    engines.push(engine);
+    expect((await engine.introspect()).entities.find((e) => e.name === 'fuzzy_teachers')?.view).toEqual({ reads: ['teachers'] });
+  });
+
+  it('a field of a composite column is no relation, and a write rule on a view is not what it reads', async () => {
+    const db = await databaseWith(`${TABLES}
+      CREATE TYPE address AS (street text, city text);
+      CREATE TABLE places (id TEXT PRIMARY KEY, addr address);
+      CREATE TABLE audit (at timestamptz, studio text);
+      CREATE FUNCTION who() RETURNS text LANGUAGE sql AS 'SELECT current_user::text';
+      CREATE VIEW cities AS SELECT id, (addr).city AS city FROM places;
+      CREATE VIEW studios AS SELECT DISTINCT studio FROM class_sessions;
+      CREATE RULE studios_insert AS ON INSERT TO studios DO INSTEAD INSERT INTO audit VALUES (now(), who());
+    `);
+    const schema = await engineOf(db, ['cities', 'studios']).introspect();
+    expect(['cities', 'studios'].map((name) => schema.entities.find((e) => e.name === name)?.view)).toEqual([{ reads: ['places'] }, { reads: ['class_sessions'] }]);
   });
 
   it('a view over a view that reads no table reads no table', async () => {

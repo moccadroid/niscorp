@@ -122,12 +122,12 @@ const removalsRefused = (found: { removed: readonly string[]; retyped: readonly 
 
 export const migrateTables = async (
   runtime: TablesRuntime,
-  app: Pick<NiscApp, 'entries' | 'features' | 'views'>,
+  app: Pick<NiscApp, 'entries' | 'features' | 'views' | 'viewExtensions'>,
   options: { dryRun?: boolean; allowRemoval?: boolean } = {},
 ): Promise<TablesReport> => {
   const entries = entriesOf(app);
   // A listed view the database lacks is not refused here: dropping one is a removal, and the run is what creates one.
-  const listed = app.views === undefined || app.views.length === 0 ? undefined : { views: app.views };
+  const listed = app.views === undefined || app.views.length === 0 ? undefined : { views: app.views, viewExtensions: app.viewExtensions ?? [] };
   const cache = runtime.cache ?? createPostgresCache({ pool: runtime.pool });
 
   // Read before the run, on the pool: a single-connection database (PGlite)

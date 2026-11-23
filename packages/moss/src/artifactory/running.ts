@@ -34,7 +34,7 @@ import type { Defaults, DefaultsChecks } from './published';
 import type { LayoutChecks } from './layouts';
 import { actionsWithStoredLayouts, createRoleMemo, narrowedBy } from './roles';
 import type { Catalog, CatalogFilter, StoredLayouts } from './roles';
-import type { SavedRows, SavedVersion } from './saves';
+import { SAVE_ROW_RULES, type SavedRows, type SavedVersion } from './saves';
 import { savedArtifacts } from './session';
 import type { SaveChecks, SavedArtifactsDeps, Written } from './session';
 import { createSetOwners } from './sets';
@@ -141,7 +141,7 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
   const usage = createUsage(config.touchEveryMs ?? TOUCH_EVERY_MS);
   let functionIds: ReadonlySet<string> | undefined;
   const candidate = (actions: Actions, listed = entries.list(), fragments = defaults.fragments): ManifestCandidate =>
-    withFragments({ ...candidateOf(shipped, { actions, entries: listed }, config.grants, config.views), ...(functionIds === undefined ? {} : { functionIds }) }, fragments);
+    withFragments({ ...candidateOf(shipped, { actions, entries: listed }, config.grants, config.views, SAVE_ROW_RULES), ...(functionIds === undefined ? {} : { functionIds }) }, fragments);
 
   const own: Actions = shipped.actions;
   const loaders = new Map<string, ActionLoader>();

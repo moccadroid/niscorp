@@ -90,48 +90,61 @@ const TABLES_QUERY = `
   ORDER BY t.table_name
 `;
 
-// What each view of the schema reads, one level down: a view over a view is
-// followed to its tables in code. A relation of another schema is named with
-// its schema, so it is never taken for a table of this one. A function the app
-// wrote is named with `()`: what it reads, Postgres does not record.
+// What each view of the schema reads, from its SELECT rule, one level down: a
+// view of the schema is followed in code. What vex cannot follow is `outside`,
+// as Postgres names it: a relation of another schema or of a kind vex does not
+// read, and any function but Postgres's own (an id below 16384, its first for
+// objects made after initdb), called or behind an operator, since what a
+// function reads Postgres does not record. An extension the caller lists is
+// trusted to read no table. A composite type is a shape, not rows.
 const VIEW_READS_QUERY = `
-  SELECT v.relname AS view_name, under.read_name
+  SELECT v.relname AS view_name, under.kind, under.name
   FROM pg_class v
   JOIN pg_namespace ns ON ns.oid = v.relnamespace
   LEFT JOIN LATERAL (
-    SELECT CASE WHEN tns.nspname = $1 THEN t.relname::text ELSE tns.nspname || '.' || t.relname END AS read_name
+    SELECT
+      CASE WHEN tns.nspname <> $1 OR t.relkind NOT IN ('r', 'p', 'v') THEN 'outside' WHEN t.relkind = 'v' THEN 'view' ELSE 'table' END AS kind,
+      CASE WHEN tns.nspname = $1 AND t.relkind IN ('r', 'p', 'v') THEN t.relname::text
+        ELSE (CASE t.relkind WHEN 'r' THEN 'table' WHEN 'p' THEN 'table' WHEN 'v' THEN 'view' WHEN 'm' THEN 'materialized view'
+          WHEN 'S' THEN 'sequence' WHEN 'f' THEN 'foreign table' ELSE 'relation' END) || ' ' || quote_ident(tns.nspname) || '.' || quote_ident(t.relname)
+      END AS name
     FROM pg_rewrite r
     JOIN pg_depend d ON d.objid = r.oid AND d.classid = 'pg_rewrite'::regclass AND d.refclassid = 'pg_class'::regclass
     JOIN pg_class t ON t.oid = d.refobjid
     JOIN pg_namespace tns ON tns.oid = t.relnamespace
-    WHERE r.ev_class = v.oid AND t.oid <> v.oid
+    WHERE r.ev_class = v.oid AND r.ev_type = '1' AND t.oid <> v.oid AND t.relkind <> 'c'
     UNION
-    SELECT CASE WHEN pns.nspname = $1 THEN p.proname::text ELSE pns.nspname || '.' || p.proname END || '()'
+    SELECT 'outside', 'function ' || p.oid::regprocedure::text || COALESCE(' of extension ' || x.extname, '')
     FROM pg_rewrite r
-    JOIN pg_depend d ON d.objid = r.oid AND d.classid = 'pg_rewrite'::regclass AND d.refclassid = 'pg_proc'::regclass
-    JOIN pg_proc p ON p.oid = d.refobjid
-    JOIN pg_namespace pns ON pns.oid = p.pronamespace
-    WHERE r.ev_class = v.oid
-      AND pns.nspname NOT IN ('pg_catalog', 'information_schema')
-      AND NOT EXISTS (SELECT 1 FROM pg_depend e WHERE e.classid = 'pg_proc'::regclass AND e.objid = p.oid AND e.deptype = 'e')
+    JOIN pg_depend d ON d.objid = r.oid AND d.classid = 'pg_rewrite'::regclass
+    LEFT JOIN pg_operator o ON d.refclassid = 'pg_operator'::regclass AND o.oid = d.refobjid
+    JOIN pg_proc p ON p.oid = CASE WHEN d.refclassid = 'pg_proc'::regclass THEN d.refobjid ELSE o.oprcode::oid END
+    LEFT JOIN pg_depend xd ON xd.classid = 'pg_proc'::regclass AND xd.objid = p.oid AND xd.deptype = 'e'
+    LEFT JOIN pg_extension x ON x.oid = xd.refobjid
+    WHERE r.ev_class = v.oid AND r.ev_type = '1' AND p.oid >= 16384
+      AND (x.extname IS NULL OR NOT x.extname = ANY($2::text[]))
   ) under ON true
   WHERE ns.nspname = $1
     AND v.relkind = 'v'
-  ORDER BY view_name, read_name
+  ORDER BY view_name, under.kind, under.name
 `;
 
-const tablesUnder = (view: string, reads: ReadonlyMap<string, readonly string[]>): string[] => {
-  const tables = new Set<string>();
+type ViewUnder = { kind: 'table' | 'view' | 'outside'; name: string };
+
+const underView = (view: string, direct: ReadonlyMap<string, readonly ViewUnder[]>): { reads: string[]; outside?: string[] } => {
+  const reads = new Set<string>();
+  const outside = new Set<string>();
   const seen = new Set<string>([view]);
-  const pending = [...(reads.get(view) ?? [])];
+  const pending = [...(direct.get(view) ?? [])];
   for (let next = pending.pop(); next !== undefined; next = pending.pop()) {
-    if (seen.has(next)) continue;
-    seen.add(next);
-    const under = reads.get(next);
-    if (under === undefined) tables.add(next);
-    else pending.push(...under);
+    if (next.kind === 'table') reads.add(next.name);
+    else if (next.kind === 'outside') outside.add(next.name);
+    else if (!seen.has(next.name)) {
+      seen.add(next.name);
+      pending.push(...(direct.get(next.name) ?? []));
+    }
   }
-  return [...tables].sort();
+  return { reads: [...reads].sort(), ...(outside.size > 0 ? { outside: [...outside].sort() } : {}) };
 };
 
 const COLUMNS_QUERY = `
@@ -230,6 +243,7 @@ export const introspectPostgres = async (
 ): Promise<DatabaseSchema> => {
   const schemaName = options?.schema ?? 'public';
   const views = [...(options?.views ?? [])];
+  const viewExtensions = [...(options?.viewExtensions ?? [])];
 
   const [tablesResult, columnsResult, keysResult, indexesResult, rowCountsResult, viewReadsResult] = await Promise.all([
     pool.query(TABLES_QUERY, [schemaName, views]),
@@ -237,14 +251,14 @@ export const introspectPostgres = async (
     pool.query(CONSTRAINTS_QUERY, [schemaName]),
     pool.query(INDEXES_QUERY, [schemaName]),
     pool.query(ROW_COUNTS_QUERY, [schemaName]),
-    views.length === 0 ? { rows: [] } : pool.query(VIEW_READS_QUERY, [schemaName]),
+    views.length === 0 ? { rows: [] } : pool.query(VIEW_READS_QUERY, [schemaName, viewExtensions]),
   ]);
 
-  const viewReads = new Map<string, string[]>();
+  const viewReads = new Map<string, ViewUnder[]>();
   for (const row of viewReadsResult.rows) {
     const view = row['view_name'] as string;
-    const read = row['read_name'] as string | null;
-    viewReads.set(view, [...(viewReads.get(view) ?? []), ...(read === null ? [] : [read])]);
+    const kind = row['kind'] as ViewUnder['kind'] | null;
+    viewReads.set(view, [...(viewReads.get(view) ?? []), ...(kind === null ? [] : [{ kind, name: row['name'] as string }])]);
   }
 
   type Key = {
@@ -408,7 +422,7 @@ export const introspectPostgres = async (
       relations: relationsByTable.get(tableName) ?? [],
       indexes: indexesByTable.get(tableName) ?? [],
       rowCount: rowCountMap.get(tableName),
-      ...(row['table_type'] === 'VIEW' ? { view: { reads: tablesUnder(tableName, viewReads) } } : {}),
+      ...(row['table_type'] === 'VIEW' ? { view: underView(tableName, viewReads) } : {}),
     };
   });
 

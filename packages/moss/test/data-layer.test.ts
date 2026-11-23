@@ -40,7 +40,8 @@ describe('the data layer — runtime.vexConfig', () => {
     expect(layer.grants.filter((grant) => grant.startsWith('member_cards.'))).toEqual([]);
     expect(layer.views).toEqual([]);
     const cards = { kind: 'ok' as const, dsl: { from: ['member_cards'], fields: ['member_cards.card', 'member_cards.grammar'] }, requestHash: 'written-here', createdAt: 0 };
-    const viewing = await createDataLayer({ pool: layer.pool, cache: createMemoryCache(), views: ['member_cards'], vexConfig: { views: ['nowhere'] }, upgradedColumns: { members: { card: { stamp: 'grammar', kind: 'app.members/card' } } }, upgrader });
+    await expect(createDataLayer({ pool: layer.pool, cache: createMemoryCache(), vexConfig: { views: ['member_cards'] } })).rejects.toThrow('moss: views are listed in `defineApp({ views, viewExtensions })`');
+    const viewing = await createDataLayer({ pool: layer.pool, cache: createMemoryCache(), views: ['member_cards'], upgradedColumns: { members: { card: { stamp: 'grammar', kind: 'app.members/card' } } }, upgrader });
     expect(viewing.grants.filter((grant) => grant.startsWith('member_cards.'))).toEqual(['member_cards.read']);
     expect(viewing.views).toEqual([{ name: 'member_cards', reads: ['members'] }]);
     await viewing.engine.cache.set('members/site-cards', cards);

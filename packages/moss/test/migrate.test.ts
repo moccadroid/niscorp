@@ -61,21 +61,28 @@ const quietly = async <T>(run: () => Promise<T>): Promise<T> => {
 };
 
 describe('migrateTables — the step', () => {
-  it("runs every owner's tables, the app's own with them — and a verifying boot then starts", async () => {
+  it("runs every owner's tables, the app's own with them — and a verifying boot then starts, with the views the app lists", async () => {
     const { runtimeOf } = database();
-    const app = appOf(read('notes/all', 'id', 'body'), add('body'));
+    const app = defineApp({ ...appOf(read('notes/all', 'id', 'body'), add('body')), charter: { public: { actions: [], data: ['note_bodies.read'] } }, views: ['note_bodies'] });
+    const BODIES = { description: 'the bodies anybody may read', steps: [sql('CREATE VIEW note_bodies AS SELECT id, body FROM notes')] };
 
-    const unmigrated = await quietly(() => createServer(app, runtimeOf(tables(NOTES), 'verify'))).catch((error: unknown) => error);
+    const unmigrated = await quietly(() => createServer(app, runtimeOf(tables(NOTES, BODIES), 'verify'))).catch((error: unknown) => error);
     expect(unmigrated).toMatchObject({ code: 'PENDING' });
     expect(String(unmigrated)).toContain('walk.app/1');
 
-    const report = await migrateTables(runtimeOf(tables(NOTES)), app);
+    const report = await migrateTables(runtimeOf(tables(NOTES, BODIES)), app);
     const applied = report.applied.map((migration) => migration.ref);
     expect(applied).toEqual(expect.arrayContaining(['nisc.moss/1', 'nisc.moss.sessions/1', 'nisc.vex.cache/1']));
-    expect(applied.at(-1)).toBe('walk.app/1');
+    expect(applied.at(-1)).toBe('walk.app/2');
 
-    const server = await quietly(() => createServer(app, runtimeOf(tables(NOTES), 'verify')));
-    server.close();
+    const said = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      const server = await quietly(() => createServer(app, runtimeOf(tables(NOTES, BODIES), 'verify')));
+      server.close();
+      expect(said.mock.calls.map((call) => String(call[0]))).toContain('[moss] public reads note_bodies, a view over notes, which it is not granted.');
+    } finally {
+      said.mockRestore();
+    }
   });
 
   it('applies a migration that leaves every entry fitting', async () => {

@@ -176,6 +176,7 @@ type QueryEngineConfig = {
     rejectUnindexedFilters?: boolean;        // default: false
     entities?: string[];                     // whitelist for introspection
     views?: readonly string[];               // the views read as entities, read only (see Views)
+    viewExtensions?: readonly string[];      // extensions whose functions a listed view may use (see Views)
     unsatisfiableTtlMs?: number;             // negative-cache TTL, default 300_000 (5 min)
     statementTimeoutMs?: number;             // how long one read may run, default 10_000 (0: unbounded)
     maxPresenceVariants?: number;            // optional-key combinations per entry before a warning, default 32
@@ -927,6 +928,14 @@ themselves. A view is read only where it is listed, by name, in
 empty one, `introspect()` answers exactly what it did before, and the schema
 fingerprint is the same. A materialized view is never read.
 
+vex has to know which tables a view reads. Nobody writes a view, so a reactive
+read of one is answered again only when a table under it is written; and moss
+says, at boot, where a role reaches a table's rows through a view. Postgres
+records exactly the tables and views a view's own SQL names, and nothing of
+what a function does: so a listed view may name tables and views of the schema,
+and use no function but Postgres's own and those of an extension the app vouches
+for.
+
 ```typescript
 const engine = createQueryEngine({ adapter, config: { views: ['public_sessions'] } });
 await engine.introspect();
@@ -935,29 +944,45 @@ await engine.introspect();
 
 - **What it is.** An entity like a table, with the view's columns and their
   types. It has no primary key, no index, no relation and no row count, and it
-  carries `view: { reads }`: the tables under it, followed through any view of
-  the schema it reads (`EntitySchema.view`). A relation of another schema is
-  named with its schema (`other.rooms`), and a function the app wrote with
-  `()` (`upcoming()`). The fingerprint counts `view` only where there is one.
+  carries `view: { reads, outside? }` (`EntitySchema.view`). `reads` is the
+  tables of the schema under it, by entity name, followed through any view of
+  the schema it reads. `outside` is what else it uses that vex does not follow,
+  each with its kind and as Postgres names it: `table other.rooms`,
+  `materialized view public.mat`, `sequence public.counter`, `function
+  upcoming()`, `function l2_distance(vector,vector) of extension vector`. It
+  is absent where there is nothing. Only the view's SELECT is read: a rule
+  that writes elsewhere on an insert is not what it reads, and a composite
+  type is a shape, not rows. The fingerprint counts `view` only where there is
+  one.
 - **A name that is not a view refuses.** `engine.introspect()` throws
   `execution_error` when a listed name is a table, a materialized view, not
   there at all, or left out by `entities` or `exclude` (`"nowhere" is not in the
   database, or the introspection leaves it out`). `adapter.introspect({ views })`
-  leaves such a name out without a word: a migration step compares two pictures of the schema, and a view it
-  dropped is a removal, not a fault.
-- **A view over anything but the tables vex reads refuses.** `engine.introspect()`
-  throws `execution_error` when a listed view reads a table of another schema,
-  a view of another schema, a materialized view, a sequence, or a table the
-  introspection leaves out (`entities`, `exclude`): no write vex sees would
-  answer a reactive read of it again (`"per_studio" reads "sessions_per_studio",
-  which is no table vex reads`).
-- **A view that calls a function the app wrote refuses.** Postgres records what
-  a view reads, not what a function it calls reads: a view over `SELECT * FROM
-  upcoming()` could show any table, of any schema, and no write would answer a
-  reactive read of it again (`"site_sessions" calls upcoming(), and what a
-  function reads Postgres does not record`). Write the query in the view.
-  Postgres's own functions (`upper`, `now`) and an extension's (`similarity`)
-  are fine.
+  leaves such a name out without a word: a migration step compares two
+  pictures of the schema, and a view it dropped is a removal, not a fault.
+- **A view that uses what vex does not follow refuses.** `engine.introspect()`
+  throws `execution_error` when a listed view has an `outside` (`"per_studio"
+  uses materialized view public.sessions_per_studio, which vex does not
+  follow`), or reads a table the introspection leaves out (`entities`,
+  `exclude`). Either way no write vex sees would answer a reactive read of it
+  again, and moss could not say what it shows.
+- **Functions: Postgres's own, and extensions listed.** A function is
+  Postgres's own when it was there before the database was made (an object id
+  below 16384), whatever schema it is in: `upper`, `now`, `coalesce`. Every
+  other one is `outside`, called or behind an operator: one the app wrote
+  (`SELECT * FROM upcoming()`, `studio ### 'x'`), and an extension's. Write the
+  query in the view.
+- **`viewExtensions` lists the extensions the app vouches for.** A function of
+  an extension listed there is not `outside`, so pgvector's distances and
+  pg_trgm's `similarity` are used as Postgres's own are:
+  `config: { views: ['nearest_sessions'], viewExtensions: ['vector'] }`. vex
+  cannot see what such a function reads: listing an extension says it reads no
+  table. Do not list one that runs SQL it is handed (`dblink`, `tablefunc`'s
+  `crosstab`).
+- **One hole is left: SQL handed to Postgres's own function as text.**
+  `query_to_xml('select … from secrets', …)` and its kin are Postgres's own,
+  and what the text reads is recorded nowhere. A view that hands SQL to a
+  function reads nothing vex can follow.
 - **Read, never written.** A simple view is one Postgres would write through;
   vex refuses every write to one — insert, `insertEach`, update, delete and
   upsert — before it runs: `"public_sessions" is a view: it is read, never

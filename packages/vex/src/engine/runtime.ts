@@ -71,10 +71,11 @@ const viewMisfits = (views: readonly string[], schema: DatabaseSchema): string[]
     const entity = schema.entities.find((e) => e.name === name);
     if (entity === undefined) return [`"${name}" is not in the database, or the introspection leaves it out (\`entities\`, \`exclude\`)`];
     if (entity.view === undefined) return [`"${name}" is a table`];
-    return entity.view.reads.flatMap((read) => {
-      if (tables.has(read)) return [];
-      return read.endsWith('()') ? [`"${name}" calls ${read}, and what a function reads Postgres does not record`] : [`"${name}" reads "${read}", which is no table vex reads`];
-    });
+    const unread = entity.view.reads.filter((read) => !tables.has(read));
+    return [
+      ...(unread.length > 0 ? [`"${name}" reads ${unread.map((read) => `"${read}"`).join(', ')}, which vex does not read`] : []),
+      ...(entity.view.outside !== undefined ? [`"${name}" uses ${entity.view.outside.join(', ')}, which vex does not follow`] : []),
+    ];
   });
 };
 
@@ -152,13 +153,14 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
   const introspect = async (): Promise<DatabaseSchema> => {
     const entities = engineConfig.config?.entities;
     const views = engineConfig.config?.views ?? [];
+    const viewExtensions = engineConfig.config?.viewExtensions ?? [];
     const options = entities === undefined && views.length === 0
       ? undefined
-      : { ...(entities !== undefined ? { entities } : {}), ...(views.length > 0 ? { views } : {}) };
+      : { ...(entities !== undefined ? { entities } : {}), ...(views.length > 0 ? { views, viewExtensions } : {}) };
     const schema = await adapter.introspect(options);
     const notViews = viewMisfits(views, schema);
     if (notViews.length > 0) {
-      throw new VexError('execution_error', `The views listed cannot be read: ${notViews.join('; ')}. List the views the migrations create, over tables of the schema vex reads; a materialized view is not read, nor a view that calls a function the app wrote.`);
+      throw new VexError('execution_error', `The views listed cannot be read: ${notViews.join('; ')}. A listed view reads tables of the schema vex reads, through views of it, and calls no function but Postgres's own or one of an extension in \`viewExtensions\`.`);
     }
     const readLimit = engineConfig.config?.statementTimeoutMs ?? DEFAULT_STATEMENT_TIMEOUT_MS;
     if (adapter.limitReads !== undefined && (await adapter.limitReads(readLimit)) === 'unenforced' && readLimit > 0) {

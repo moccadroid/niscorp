@@ -91,6 +91,7 @@ const fields = {
   features: z.array(FeatureSchema).readonly().optional(),
   entries: EntriesSchema.readonly().optional(),
   views: strings.optional(),
+  viewExtensions: strings.optional(),
   resources: z.record(z.string(), z.union([strings, z.looseObject({ entities: strings })])).optional(),
   shell: ShellManifestSchema.optional(),
   pages: z.record(z.string(), PageManifestSchema).optional(),

@@ -1,11 +1,11 @@
-import { normalizeRole, resolvePrincipal, verifyCharter } from '@niscorp/charter';
+import { normalizeRole, resolvePrincipal, resolveScoping, verifyCharter } from '@niscorp/charter';
 import type { Charter, ClosureAuditor, VerifyReport } from '@niscorp/charter';
 import { ActionDefinitionSchema, auditAction, collectChannels } from '@niscorp/nova';
 import type { ActionDefinition, ActionFragment, LayoutNode } from '@niscorp/nova';
 import { chainCycles, isRecord, walkNodes } from '@niscorp/nova/reflect';
 import { depthRefusal, exceedsDepth } from '@niscorp/strata';
-import { scopeProfiles } from '@niscorp/vex';
-import type { ScopeBehaviors, SeedEntry, SeedMutation } from '@niscorp/vex';
+import { createScopePolicy, scopeProfiles } from '@niscorp/vex';
+import type { ScopeBehaviors, ScopePolicy, SeedEntry, SeedMutation } from '@niscorp/vex';
 import { z } from 'zod';
 import { isBinding } from '@niscorp/nova/i18n';
 import { GENERATED_ID_PREFIX, entriesOf, keptLayoutNameRefusal, wearableOf } from './app';
@@ -27,28 +27,17 @@ export type ManifestCandidate = {
   entries: readonly (SeedEntry | SeedMutation)[];
   profiles: ReadonlySet<string>;
   views?: readonly ViewReads[];
-  rowRuled?: ReadonlySet<string>;
+  behaviors?: ScopeBehaviors;
 };
 
 export type ShippedManifest = Pick<NiscApp, 'charter' | 'actions' | 'layouts' | 'wearable' | 'assignments' | 'entries' | 'behaviors' | 'shell' | 'pages'>;
-
-const RULE_KEYS = ['read', 'write', 'insert', 'update', 'delete'] as const;
-
-// Named variants narrow a principal's reads by their profile, and with no `default` an unprofiled one reads nothing.
-const rowRuledTables = (behaviors: ScopeBehaviors): ReadonlySet<string> =>
-  new Set(
-    Object.entries(behaviors).flatMap(([table, entry]) => {
-      if (!RULE_KEYS.some((key) => key in entry)) return [table];
-      const read = 'read' in entry ? entry.read : undefined;
-      return Array.isArray(read) && read.length > 0 ? [table] : [];
-    }),
-  );
 
 export const candidateOf = (
   shipped: ShippedManifest,
   inForce: Pick<ManifestCandidate, 'actions' | 'entries'>,
   grants: readonly string[],
   views: readonly ViewReads[] = [],
+  rowRules: ScopeBehaviors = {},
 ): ManifestCandidate => ({
   charter: shipped.charter,
   actions: inForce.actions,
@@ -61,7 +50,7 @@ export const candidateOf = (
   grants,
   entries: inForce.entries,
   profiles: scopeProfiles(shipped.behaviors ?? {}),
-  ...(views.length > 0 ? { views, rowRuled: rowRuledTables(shipped.behaviors ?? {}) } : {}),
+  ...(views.length > 0 ? { views, behaviors: { ...shipped.behaviors, ...rowRules } } : {}),
 });
 
 // Fragments in force beside the ones the shells ship: what is published for everybody.
@@ -183,27 +172,33 @@ const everyFunctionGranted = (charter: Charter): string[] =>
       : [],
   );
 
-// A view is a way to a table's rows that the table's own grant and row rules do not show: a review reads it here.
-const readsWidenedByViews = (candidate: Pick<ManifestCandidate, 'charter' | 'grants' | 'views' | 'rowRuled'>): string[] => {
+const readRulesOf = (policy: ScopePolicy, entity: string): readonly unknown[] | undefined => {
+  const rule = policy.entities[entity];
+  return rule !== undefined && 'read' in rule ? rule.read : undefined;
+};
+
+// A view is a way to a table's rows that the table's own grant and row rules do
+// not show: a review reads it here, in each role's policy as the boot compiles it.
+const readsWidenedByViews = (candidate: Pick<ManifestCandidate, 'charter' | 'grants' | 'views' | 'behaviors'>): string[] => {
   const views = candidate.views ?? [];
-  const rowRuled = candidate.rowRuled ?? new Set<string>();
   if (views.length === 0) return [];
   return Object.keys(candidate.charter).flatMap((role) => {
-    let granted: ReadonlySet<string>;
+    let policy: ScopePolicy;
     try {
-      granted = resolvePrincipal(candidate.charter, candidate.grants, [role], 'data');
+      policy = createScopePolicy(resolvePrincipal(candidate.charter, candidate.grants, [role], 'data'), candidate.behaviors, resolveScoping(candidate.charter, role));
     } catch {
       // An unknown or cyclic role is the charter verifier's finding.
       return [];
     }
-    return views.flatMap((view) =>
-      granted.has(`${view.name}.read`)
-        ? view.reads.flatMap((table) => {
-            if (!granted.has(`${table}.read`)) return [`${role} reads ${view.name}, a view over ${table}, which it is not granted.`];
-            return rowRuled.has(table) && !rowRuled.has(view.name) ? [`${role} reads ${view.name}, a view over ${table}, without the row rules it reads ${table} under.`] : [];
-          })
-        : [],
-    );
+    return views.flatMap((view) => {
+      const throughView = readRulesOf(policy, view.name);
+      if (throughView === undefined) return [];
+      return view.reads.flatMap((table) => {
+        const ofTable = readRulesOf(policy, table);
+        if (ofTable === undefined) return [`${role} reads ${view.name}, a view over ${table}, which it is not granted.`];
+        return ofTable.length > 0 && throughView.length === 0 ? [`${role} reads ${view.name}, a view over ${table}, without the row rules it reads ${table} under.`] : [];
+      });
+    });
   });
 };
 

@@ -34,6 +34,7 @@ export type IntrospectOptions = {
   exclude?: string[];
   schema?: string;
   views?: readonly string[];
+  viewExtensions?: readonly string[];
 };
 
 export type DatabaseAdapter = {

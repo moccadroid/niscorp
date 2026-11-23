@@ -16,10 +16,10 @@ const site = (more: Partial<ShippedManifest> = {}): ShippedManifest => ({
   ...more,
 });
 
-const saidAtBoot = (shipped: ShippedManifest, views: readonly ViewReads[] = [PUBLIC_SESSIONS]): string[] => {
+const saidAtBoot = (shipped: ShippedManifest, views: readonly ViewReads[] = [PUBLIC_SESSIONS], grants: readonly string[] = GRANTS): string[] => {
   const said = vi.spyOn(console, 'error').mockImplementation(() => undefined);
   try {
-    createRunningManifest({ shipped, grants: GRANTS, views, shells: [] });
+    createRunningManifest({ shipped, grants, views, shells: [] });
     return said.mock.calls.map((call) => String(call[0]));
   } finally {
     said.mockRestore();
@@ -49,18 +49,40 @@ describe('what the boot says of a view', () => {
     ]);
   });
 
-  it('a role granted a table under row rules and a view over it without any is said', () => {
+  it('a role that reads a table under row rules and a view over it without any is said, by the role’s own policy', () => {
     const studioOnly: ScopeBehaviors = { class_sessions: { read: [{ match: 'studio', to: 'studio' }] } };
     const staff = { actions: [], data: ['class_sessions.read', 'teachers.read', 'public_sessions.read'] };
-    expect(saidAtBoot(site({ charter: { public: [], staff }, behaviors: studioOnly }))).toEqual([
-      '[moss] staff reads public_sessions, a view over class_sessions, without the row rules it reads class_sessions under.',
-    ]);
-    const byProfile: ScopeBehaviors = { class_sessions: { personal: { read: [{ match: 'teacher_id', to: 'teacherId' }] } } };
-    expect(saidAtBoot(site({ charter: { public: [], staff }, behaviors: byProfile }))).toHaveLength(1);
+    const widened = '[moss] staff reads public_sessions, a view over class_sessions, without the row rules it reads class_sessions under.';
+    expect(saidAtBoot(site({ charter: { public: [], staff }, behaviors: studioOnly }))).toEqual([widened]);
     const viewRuled: ScopeBehaviors = { ...studioOnly, public_sessions: { read: [{ match: 'studio', to: 'studio' }] } };
     expect(saidAtBoot(site({ charter: { public: [], staff }, behaviors: viewRuled }))).toEqual([]);
     const writesOnly: ScopeBehaviors = { class_sessions: { write: [{ match: 'studio', to: 'studio' }] } };
     expect(saidAtBoot(site({ charter: { public: [], staff }, behaviors: writesOnly }))).toEqual([]);
+  });
+
+  it('profiles are read as the role is scoped: a profile that reads every row says nothing, a view whose profile does says it', () => {
+    const admin = { actions: [], data: ['class_sessions.read', 'teachers.read', 'public_sessions.read'], scoping: 'admin' };
+    const staff = { actions: [], data: ['class_sessions.read', 'teachers.read', 'public_sessions.read'] };
+    const byProfile: ScopeBehaviors = { class_sessions: { default: { read: [{ match: 'studio', to: 'studio' }] }, admin: { read: [] } } };
+    expect(saidAtBoot(site({ charter: { public: [], admin, staff }, behaviors: byProfile }))).toEqual([
+      '[moss] staff reads public_sessions, a view over class_sessions, without the row rules it reads class_sessions under.',
+    ]);
+    const viewByProfile: ScopeBehaviors = { ...byProfile, public_sessions: { default: {}, admin: { read: [{ match: 'studio', to: 'studio' }] } } };
+    expect(saidAtBoot(site({ charter: { public: [], admin, staff }, behaviors: viewByProfile }))).toEqual([
+      '[moss] staff reads public_sessions, a view over class_sessions, without the row rules it reads class_sessions under.',
+    ]);
+    const onlyProfiled: ScopeBehaviors = { class_sessions: { admin: { read: [] } } };
+    expect(saidAtBoot(site({ charter: { public: [], admin, staff }, behaviors: onlyProfiled }))).toEqual([
+      '[moss] staff reads public_sessions, a view over class_sessions, which it is not granted.',
+    ]);
+  });
+
+  it('moss’s own row rules count: a view over what was saved is said for a role that reads it', () => {
+    const saved: ViewReads = { name: 'saved_names', reads: ['artifacts'] };
+    const member = { actions: [], data: ['artifacts.read', 'saved_names.read'] };
+    expect(saidAtBoot(site({ charter: { public: [], member } }), [saved], [...scopeGrants(['artifacts']), 'saved_names.read'])).toEqual([
+      '[moss] member reads saved_names, a view over artifacts, without the row rules it reads artifacts under.',
+    ]);
   });
 
   it('nothing is said of views where the app lists none, or no role is granted one', () => {
