@@ -136,43 +136,6 @@ describe('a scope value written into a column', () => {
     }
   });
 
-  it('is refused when a $lookup finds its row by a key the policy binds, or a $returned copies a column the policy writes', async () => {
-    const lookup: MutationDefinition = {
-      op: 'update',
-      table: 'products',
-      set: { name: { $lookup: { from: 'products', field: 'owner_id', where: { eq: ['products.owner_id', { $scope: 'userId' }] } } } },
-      where: { eq: ['products.id', 'p1'] },
-    };
-    const returned: MutationDefinition = [
-      { op: 'insert', table: 'products', values: { id: 'p1' } },
-      { op: 'update', table: 'products', set: { name: { $returned: 'products.owner_id' } }, where: { eq: ['products.id', 'p2'] } },
-    ];
-    for (const [def, from] of [
-      [lookup, 'a $lookup that finds its row by the scope\'s "userId"'],
-      [returned, '"products.owner_id", which the policy writes'],
-    ] as const) {
-      const { client, calls } = recording();
-      await expect(executeMutation(client, def, { context: {}, scope: { userId: 'u1' }, policy, schema })).rejects.toMatchObject({
-        code: 'invalid_dsl',
-        message: expect.stringContaining(`"products.name" is written from ${from}`),
-      });
-      expect(calls).toHaveLength(0);
-    }
-  });
-
-  it('a $lookup by context and a $returned of a generated id still run', async () => {
-    const { client, calls } = recording();
-    await executeMutation(
-      client,
-      [
-        { op: 'insert', table: 'products', values: { name: { $lookup: { from: 'products', field: 'name', where: { eq: ['products.id', { $context: 'from' }] } } } } },
-        { op: 'update', table: 'products', set: { name: { $returned: 'products.id' } }, where: { eq: ['products.id', 'p2'] } },
-      ],
-      { context: { from: 'p0' }, scope: { userId: 'u1' }, policy: { default: 'deny', entities: { products: { read: [], write: [{ set: 'owner_id', to: 'userId' }] } } }, schema },
-    );
-    expect(calls).toHaveLength(2);
-  });
-
   it('naming a key the policy binds is still allowed in a WHERE, which only reads it', async () => {
     const { client, calls } = recording();
     await executeMutation(client, { op: 'update', table: 'products', set: { archived_at: { $scope: 'now' } }, where: { eq: ['products.owner_id', { $scope: 'userId' }] } }, {

@@ -104,28 +104,7 @@ describe('verifyManifest — may this be served', () => {
     expect(verifyManifest({ ...coherent, entries: writing('now'), behaviors }).errors).toEqual([]);
     const unparsed = [{ fingerprint: 'deals/broken', mutation: { op: 'update', table: 'deals' } }] as unknown as ManifestCandidate['entries'];
     expect(verifyManifest({ ...coherent, entries: unparsed }).errors).toEqual([]);
-    expect(refusalOf(verifyManifest({ ...coherent, entries: writing('userId') }), 'boot')).toMatch(/^Entries write a column from a value the policy binds — refusing to serve:\n {2}deals\/archive: /);
-  });
-
-  it('refuses a $lookup that finds its row by userId, and a $returned of a column a write rule fills, but not one bound only for reading', () => {
-    const behaviors = { deals: { write: [{ set: 'owner_id', to: 'userId' }] }, kiosks: { door: { read: [{ match: 'id', to: 'userId' }] } } };
-    const copying = (from: string): ManifestCandidate['entries'] => [
-      {
-        fingerprint: 'notes/add',
-        mutation: [
-          { op: 'insert', table: from.split('.')[0]!, values: { name: 'x' } },
-          { op: 'insert', table: 'notes', values: { owner: { $returned: from } } },
-        ],
-      },
-    ];
-    const finding: ManifestCandidate['entries'] = [
-      { fingerprint: 'notes/mine', mutation: { op: 'insert', table: 'notes', values: { owner: { $lookup: { from: 'people', field: 'id', where: { eq: ['people.id', { $scope: 'userId' }] } } } } } },
-    ];
-    expect(verifyManifest({ ...coherent, entries: finding }).errors.map((error) => error.detail)).toEqual([
-      'notes/mine: "notes.owner" is written from a $lookup that finds its row by the scope\'s "userId", which the policy binds: who a row belongs to is written by a set rule, never by an entry',
-    ]);
-    expect(verifyManifest({ ...coherent, entries: copying('deals.owner_id'), behaviors }).errors.map((error) => error.check)).toEqual(['identity']);
-    expect(verifyManifest({ ...coherent, entries: copying('kiosks.id'), behaviors }).errors).toEqual([]);
+    expect(refusalOf(verifyManifest({ ...coherent, entries: writing('userId') }), 'boot')).toMatch(/^Entries write a column from a scope value the policy binds — refusing to serve:\n {2}deals\/archive: /);
   });
 
   it('refuses layout variants no principal could be served', () => {

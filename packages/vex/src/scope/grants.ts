@@ -58,27 +58,8 @@ export const scopeBindings = (behaviors: ScopeBehaviors, tables: readonly string
   return [...seen.values()].sort((a, b) => `${a.entity}.${a.field}:${a.key}`.localeCompare(`${b.entity}.${b.field}:${b.key}`));
 };
 
-// `keys`: the scope keys any rule names. `written`: each `table.column` a
-// write-phase rule fills from scope or pins to it.
-export type ScopeBound = { keys: ReadonlySet<string>; written: ReadonlySet<string> };
-
-const WRITE_PHASES: ReadonlySet<string> = new Set(['write', 'insert', 'update']);
-
-export const boundByBehaviors = (behaviors: ScopeBehaviors): ScopeBound => {
-  const keys = new Set<string>();
-  const written = new Set<string>();
-  for (const [table, entry] of Object.entries(behaviors)) {
-    for (const rules of isRuleSet(entry) ? [entry] : Object.values(entry)) {
-      for (const phase of RULE_KEYS) {
-        for (const rule of (rules[phase] ?? []) as ScopeRule[]) {
-          keys.add('set' in rule ? rule.to : isSetMatch(rule) ? rule.in : rule.to);
-          if (WRITE_PHASES.has(phase)) written.add(`${table}.${'set' in rule ? rule.set : rule.match}`);
-        }
-      }
-    }
-  }
-  return { keys, written };
-};
+export const scopeKeysOf = (behaviors: ScopeBehaviors): Set<string> =>
+  new Set(Object.values(behaviors).flatMap((entry) => bindingsOf(entry).map(({ key }) => key)));
 
 export const behaviorColumns = (behaviors: ScopeBehaviors): { entity: string; field: string }[] =>
   Object.entries(behaviors).flatMap(([table, entry]) => bindingsOf(entry).map(({ field }) => ({ entity: table, field })));

@@ -1114,31 +1114,33 @@ Five ops, closed and strict. Values are literals, `{ $context: "key" }`,
 a field path. `update`/`delete` REQUIRE a `where` (a real vex `Filter`, which
 takes `$context` and `$scope` as a read's does).
 
-A `$scope` value is the host's, never the caller's. Who a row belongs to is
-written by a `set` rule, never by an entry, so a column value may not carry a
-value the policy binds, and such a write is refused with `invalid_dsl` before
-anything runs:
+**Who a row belongs to is the charter's, column by column.** A column a `set`
+rule names is written by the engine after the entry is parsed, over anything
+the entry wrote there, whatever its source: a literal, `$context`, `$scope`,
+`$lookup` or `$returned`. On an insert, a column a scalar `match` rule names is
+written the same way, and a set-valued one (`in`) refuses the insert. On an
+update, a value written into a `match` column must be one the rule allows, or
+the write is refused (the moved-row check, unless the host turns it off with
+`checkMovedRows: false`).
 
-- a `$scope` value naming a key a `set` or `match` rule of any table names
-  (`userId`, a tenant's id);
-- a `$lookup` whose `where` compares with such a key — it would copy the
-  caller's own row's value in;
-- a `$returned` copying a column a `write`, `insert` or `update` rule fills or
-  pins (`deals.owner_id` under `{ set: 'owner_id', to: 'userId' }`). A
-  generated id, or a column a rule names only for reading, is copied as before.
+A column no rule names is the entry's to write, from whatever it is given:
+`{ $context: 'who' }` writes any id the client sends. vex cannot tell which
+column records an owner: `deals.owner_id` and `bookings.teacher` both hold a
+person's id, and a teacher is assigned by someone else. So a column that
+records who owns a row, or which tenant it is in, must be named by a `set` rule
+(`{ set: 'owner_id', to: 'userId' }`). That rule is what keeps an entry from
+writing it, and nothing else does.
 
-A `where`, the statement's own or a lookup's that writes nothing, may still
-compare with such a key, since it only reads it; a `$lookup` that finds its row
-by context runs as before, inside the read rules. Under moss the boot, a
-publish and a refresh refuse such an entry, and `userId` counts whether or not
-a rule names it.
+A `$scope` value is the host's, never the caller's. A column value may not be a
+`$scope` value naming a key the request's policy binds (a key one of its `set`
+or `match` rules names, such as `userId` or a tenant's id): the write is
+refused with `invalid_dsl` before anything runs, saying to write that column
+with a `set` rule instead. Under moss, the boot, a publish and a refresh refuse
+such an entry against all of the app's behaviors, and `userId` counts whether
+or not a rule names it. This refusal is guidance, not the guarantee: it stops
+`owner_id: { $scope: 'userId' }` standing in for the rule it should be. A
+`where` may still compare with such a key, since it only reads it.
 
-Any other scope value gets past the policy no more than a
-`$context` value does: a column a `set` rule names, and on an insert a column a
-scalar `match` rule names, is written by the engine after the entry is parsed,
-over anything the entry wrote there; on an update, a value written into a
-`match` column must be one the rule allows, or the write is refused (the
-moved-row check, unless the host turns it off with `checkMovedRows: false`).
 What the author does own is where a value lands: a scope value stored in a
 column is read by everyone who can read the row, so write there only what they
 may see.

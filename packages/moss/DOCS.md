@@ -1174,8 +1174,10 @@ Stands up the data layer, **refuses to boot** on an incoherent charter
 (`verifyCharter`'s errors), memoizes per-principal policy,
 catalogs, and ring-2 variant bindings, mounts the vex surfaces and `/catalog`, and — when the manifest
 declares a shell — the shell host behind the socket. Also refused at boot: an
-entry whose `reach` names no profile the behaviors declare, and two pages that
-could answer one path. A broken closure is not among them: the closure audit's
+entry whose `reach` names no profile the behaviors declare, an entry that
+writes a column from a `$scope` value naming a key the behaviors bind (or
+`userId`, always: who a row belongs to is written by a `set` rule, vex DOCS
+"The grammar"), and two pages that could answer one path. A broken closure is not among them: the closure audit's
 findings land in the report's `perRole[].issues`, which boot does not read. A
 role granted an action that pushes one it is not granted boots, and the press
 does nothing. Returns a Hono app extended with the `MossServer` members below.
@@ -2056,7 +2058,10 @@ app that resolves people through `identity`.
   added by a boot, not here); without it nothing is said of views. The
   report is `{ errors, said, charter }`: `errors` is `{ check, detail }[]`,
   `check` one of `'actions'` (a definition nova's schema does not read),
-  `'charter'`, `'reach'` and `'variants'`; `said` is what a boot only says (a
+  `'charter'`, `'functions'` (an action calls a function the app does not
+  have, or its holders' charter does not grant), `'identity'` (an entry writes
+  a column from a `$scope` value naming a key the behaviors bind, or
+  `userId`), `'reach'` and `'variants'`; `said` is what a boot only says (a
   chain of steps that never ends, a role that allows every function, and the
   charter's `shape` warnings), and `charter` is the charter engine's whole
   report. A boot refuses on `errors`. A running server answers for what is in
