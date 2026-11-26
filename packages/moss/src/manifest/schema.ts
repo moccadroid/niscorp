@@ -3,6 +3,7 @@ import { ActionDefinitionSchema, ActionFragmentSchema, LayoutNodeSchema } from '
 import { ConfigSchema } from '@niscorp/prism';
 import { SequenceSchema, depthRefusal, exceedsDepth } from '@niscorp/strata';
 import { MutationDefinitionSchema, QuerySchema, REFRESH_MODES, UpgradedColumnsSchema } from '@niscorp/vex';
+import { CREDENTIAL_HEADERS, isHeaderName } from '../identity';
 import { GENERATED_ID_PREFIX, keptLayoutNameRefusal } from './app';
 import type { NiscApp } from './app';
 
@@ -75,6 +76,12 @@ const FeatureSchema = z.looseObject({
   start: seam,
 });
 
+const KeptHeaderSchema = z.string().superRefine((name, ctx) => {
+  if (!isHeaderName(name)) ctx.addIssue({ code: 'custom', message: `"${name}" is not a header name` });
+  else if (CREDENTIAL_HEADERS.includes(name.toLowerCase())) ctx.addIssue({ code: 'custom', message: `"${name}" says who sent a request, and is never kept for a function` });
+});
+const VisitorSchema = z.object({ headers: z.array(KeptHeaderSchema).readonly() }).strict();
+
 const ReactionSchema = z.object({ table: z.string(), op: z.enum(['insert', 'update', 'delete']).optional(), run: seam }).strict();
 
 const fields = {
@@ -98,6 +105,7 @@ const fields = {
   grammars: z.array(SequenceSchema).readonly().optional(),
   upgradedColumns: UpgradedColumnsSchema.optional(),
   functions: seam.optional(),
+  visitor: VisitorSchema.optional(),
   onSession: seam.optional(),
   runs: seam.optional(),
   reconcilers: z.record(z.string(), seam).optional(),

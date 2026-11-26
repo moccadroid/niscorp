@@ -1,14 +1,23 @@
 import { headOf, placeHead } from '@niscorp/nova/document';
 import type { ScreenHead } from '@niscorp/nova/document';
-import type { ShellHost, ShellSnapshot } from '../shells';
+import type { ShellHost, ShellOpening, ShellSnapshot } from '../shells';
 import { sessionTokenOf } from '../identity';
 import { DEFAULT_TOKEN_KEY, SNAPSHOT_ELEMENT_ID } from '../protocol';
 import type { DocumentSnapshot } from '../protocol';
 
 export type DocumentHost = Pick<ShellHost, 'snapshot'>;
 
+type DrawnRequest = {
+  path: string;
+  cookie?: string | null;
+  host?: string | null;
+  peer?: string | null;
+  headers?: Readonly<Record<string, string | readonly string[] | undefined>>;
+};
+
 export type DocumentSource = {
   principalOf: (token: string) => Promise<string | null>;
+  visitorOf?: (request: DrawnRequest) => ShellOpening['visitor'];
   page: (path: string) => { name: string; host: DocumentHost; inputs: Record<string, Record<string, unknown>> } | undefined;
   shells?: DocumentHost;
 };
@@ -17,7 +26,7 @@ export type DocumentConfig = {
   server: DocumentSource;
   template: string;
   // `host` is the Host header: without it a page on a port is drawn for nobody.
-  request: { path: string; cookie?: string | null; host?: string | null };
+  request: DrawnRequest;
   draw: (snapshot: ShellSnapshot) => string | Promise<string>;
   htmlAttributes?: (snapshot: ShellSnapshot) => Record<string, string>;
   site?: string;
@@ -88,6 +97,7 @@ export const renderDocument = async (config: DocumentConfig): Promise<DrawnDocum
     if (host === undefined) return undrawn;
 
     const snapshot = await host.snapshot(principal === null ? null : token, principal, {
+      visitor: server.visitorOf?.(request) ?? null,
       ...(config.waitMs !== undefined ? { waitMs: config.waitMs } : {}),
       ...(route !== undefined ? { inputs: route.inputs } : {}),
     });

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { DefinitionValidationError } from '@niscorp/nova';
-import { createSocket } from '../src/socket';
+import { createSocket, visitorReader } from '../src/socket';
 import { DEFAULT_ANONYMOUS_SHELL_MAX } from '../src/socket/socket';
 import type { Connection } from '../src/socket';
 import type { SocketConfig } from '../src/socket/socket';
@@ -8,7 +8,7 @@ import { CLOSE_AT_CAPACITY, CLOSE_INVALID_TOKEN, CLOSE_SIGNED_OUT, CLOSE_SHELL_F
 import type { ServerMessage } from '../src/protocol';
 import type { ShellHost, ShellSession } from '../src/shells';
 import { sealSession } from '../src/identity';
-import type { NiscApp } from '../src/manifest';
+import type { FunctionSession, NiscApp } from '../src/manifest';
 import { hostConfig, standHost } from './shell-host-double';
 import { turn } from './turn';
 
@@ -1432,6 +1432,99 @@ describe('socket — shells for nobody alive at once', () => {
     for (const conn of arriving) await accept(SOCKET, conn);
     expect(arriving.every((conn) => conn.closed === undefined)).toBe(true);
   });
+
+  describe('for each IP', () => {
+    const from = (peer: string | null): FakeConnection => {
+      const conn = new FakeConnection();
+      conn.upgrade = { offered: offerToken(null), peer, headers: {} };
+      return conn;
+    };
+    const codes = (conn: FakeConnection): string[] => conn.sent.map((message) => (message.type === 'error' ? message.code : message.type));
+
+    it('one IP takes as many places as it is allowed, and is told it is that IP that is full; another IP is served', async () => {
+      const host = counting();
+      const accept = createSocket(ctxWith({ shells: host.shells, anonymousShellMaxPerIp: 1 }));
+      await accept(SOCKET, from('203.0.113.7'));
+      const over = from('203.0.113.7');
+      await accept(SOCKET, over);
+      expect(codes(over)).toEqual(['at_capacity']);
+      expect(over.first('error')?.message).toBe('This server is serving as many terminals with nobody signed in from this IP as it is set to. Close one, or try again in a moment.');
+      expect(over.closed?.code).toBe(CLOSE_AT_CAPACITY);
+      const other = from('198.51.100.2');
+      await accept(SOCKET, other);
+      expect(other.closed).toBeUndefined();
+      expect(host.asked).toEqual([null, null]);
+    });
+
+    it('a close gives the IP its place back', async () => {
+      const accept = createSocket(ctxWith({ shells: counting().shells, anonymousShellMaxPerIp: 1 }));
+      const first = from('203.0.113.7');
+      await accept(SOCKET, first);
+      first.close();
+      const next = from('203.0.113.7');
+      await accept(SOCKET, next);
+      expect(next.closed).toBeUndefined();
+    });
+
+    it('a refused connection’s close, and a second close, give back nothing that was not taken', async () => {
+      const accept = createSocket(ctxWith({ shells: counting().shells, anonymousShellMaxPerIp: 1 }));
+      const taken = from('203.0.113.7');
+      await accept(SOCKET, taken);
+      const refused = from('203.0.113.7');
+      await accept(SOCKET, refused);
+      expect(refused.closed?.code).toBe(CLOSE_AT_CAPACITY);
+      const still = from('203.0.113.7');
+      await accept(SOCKET, still);
+      expect(still.closed?.code).toBe(CLOSE_AT_CAPACITY);
+
+      taken.close();
+      taken.close();
+      const one = from('203.0.113.7');
+      const two = from('203.0.113.7');
+      await accept(SOCKET, one);
+      await accept(SOCKET, two);
+      expect([one.closed?.code, two.closed?.code]).toEqual([undefined, CLOSE_AT_CAPACITY]);
+    });
+
+    it.each([
+      ['2001:db8:1:2::1', '2001:db8:1:2:ffff:ffff:ffff:9', '2001:db8:1:3::1'],
+      ['2001:db8::1', '2001:0db8:0000:0000:1::2', '2001:db8:0:1::1'],
+      ['::1', '0:0:0:0:0:0:0:1', '0:0:0:1::1'],
+      ['64:ff9b::198.51.100.2', '64:ff9b::1', '64:ff9b:0:1::1'],
+      ['fe80::1%eth0', 'fe80::2', 'fe80:0:0:1::1'],
+    ])('IPv6 addresses in one /64 are one IP: %s and %s, not %s', async (first, sameBlock, otherBlock) => {
+      const accept = createSocket(ctxWith({ shells: counting().shells, anonymousShellMaxPerIp: 1 }));
+      await accept(SOCKET, from(first));
+      const same = from(sameBlock);
+      const other = from(otherBlock);
+      await accept(SOCKET, same);
+      await accept(SOCKET, other);
+      expect([same.closed?.code, other.closed?.code]).toEqual([CLOSE_AT_CAPACITY, undefined]);
+    });
+
+    it('a connection with no IP is not counted for one', async () => {
+      const accept = createSocket(ctxWith({ shells: counting().shells, anonymousShellMaxPerIp: 1 }));
+      const arriving = [from(null), from(null), new FakeConnection(), new FakeConnection()];
+      for (const conn of arriving) await accept(SOCKET, conn);
+      expect(arriving.every((conn) => conn.closed === undefined)).toBe(true);
+    });
+
+    it('the limit for everybody still comes first', async () => {
+      const accept = createSocket(ctxWith({ shells: counting().shells, anonymousShellMax: 1, anonymousShellMaxPerIp: 5 }));
+      await accept(SOCKET, from('203.0.113.7'));
+      const over = from('198.51.100.2');
+      await accept(SOCKET, over);
+      expect(over.first('error')?.message).toBe('This server is serving as many terminals with nobody signed in as it is set to. Try again in a moment.');
+    });
+
+    it('somebody signed in is served whatever their IP has taken', async () => {
+      const accept = createSocket(ctxWith({ shells: counting().shells, anonymousShellMaxPerIp: 1, revalidateMs: 0 }));
+      await accept(SOCKET, from('203.0.113.7'));
+      const signedIn = from('203.0.113.7').offering('good');
+      await accept(SOCKET, signedIn);
+      expect(signedIn.closed).toBeUndefined();
+    });
+  });
 });
 
 describe('socket — a burst of resets', () => {
@@ -1468,6 +1561,100 @@ describe('socket — a burst of resets', () => {
 
     expect(builds.count).toBe(3);
     expect(conn.first('error')).toBeUndefined();
+    host.stop();
+  });
+});
+
+describe('socket — what a function is told of the visitor', () => {
+  const counter = { id: 'counter', data: { n: 0 } };
+  const standing = (kept?: boolean): { host: ReturnType<typeof standHost>; seen: FunctionSession['visitor'][]; heard: FunctionSession['visitor'][] } => {
+    const seen: FunctionSession['visitor'][] = [];
+    const heard: FunctionSession['visitor'][] = [];
+    const app = {
+      charter: { public: ['counter'] },
+      assignments: {},
+      actions: { counter },
+      shell: { canvases: [{ id: 'main', initial: 'counter' }] },
+      functions: (session: FunctionSession) => (seen.push(session.visitor), []),
+      onSession: (session: FunctionSession) => void heard.push(session.visitor),
+    } as unknown as NiscApp;
+    const host = standHost(
+      hostConfig({
+        app,
+        resolve: async () => ({ roles: ['public'], scope: {}, catalog: { ids: ['counter'], hash: 'h' }, variants: new Map() }),
+        wire: () => async () => ({ ok: true, status: 200, json: async () => ({}), text: async () => '{}' }),
+        idleMs: 0,
+        ...(kept === undefined ? {} : { kept }),
+      }),
+    );
+    return { host, seen, heard };
+  };
+  const from = (peer: string, headers: Record<string, string> = {}): FakeConnection => {
+    const conn = new FakeConnection();
+    conn.upgrade = { offered: offerToken(null), peer, headers };
+    return conn;
+  };
+
+  it('a shell for nobody is told the IP and the headers the app keeps, from the request that opened it', async () => {
+    const { host, seen } = standing();
+    const accept = createSocket(ctxWith({ shells: host, readVisitor: visitorReader({ ipHeader: 'x-real-ip', headers: ['accept-language'] }), revalidateMs: 0 }));
+    await accept(SOCKET, from('10.0.0.1', { 'x-real-ip': '198.51.100.2', 'accept-language': 'de', 'user-agent': 'Firefox' }));
+    expect(seen).toEqual([{ ip: '198.51.100.2', headers: { 'accept-language': 'de' } }]);
+    host.stop();
+  });
+
+  it('a socket handed no reader reads the address at the other end of the socket', async () => {
+    const { host, seen } = standing();
+    const accept = createSocket(ctxWith({ shells: host, revalidateMs: 0 }));
+    await accept(SOCKET, from('203.0.113.7', { 'x-real-ip': '198.51.100.2' }));
+    expect(seen).toEqual([{ ip: '203.0.113.7', headers: {} }]);
+    host.stop();
+  });
+
+  it('a connection whose transport handed over no request is told nothing', async () => {
+    const { host, seen } = standing();
+    const accept = createSocket(ctxWith({ shells: host, revalidateMs: 0 }));
+    await accept(SOCKET, new FakeConnection());
+    expect(seen).toEqual([null]);
+    host.stop();
+  });
+
+  it('the shell kept for somebody signed in serves every connection they open, and is told no visitor', async () => {
+    const { host, seen } = standing();
+    const accept = createSocket(ctxWith({ shells: host, revalidateMs: 0 }));
+    await accept(SOCKET, from('203.0.113.7').offering('good'));
+    await accept(SOCKET, from('198.51.100.2').offering('good'));
+    expect(seen).toEqual([null]);
+    host.stop();
+  });
+
+  it('`onSession` hears the visitor of a shell for nobody, and none on the shell kept for somebody signed in', async () => {
+    const { host, heard } = standing();
+    const accept = createSocket(ctxWith({ shells: host, revalidateMs: 0 }));
+    await accept(SOCKET, from('203.0.113.7'));
+    await accept(SOCKET, from('198.51.100.2').offering('good'));
+    expect(heard).toEqual([{ ip: '203.0.113.7', headers: {} }, null]);
+    host.stop();
+  });
+
+  it('a page’s shell for somebody signed in is built for one connection, and is told its visitor', async () => {
+    const app = standing();
+    const page = standing(false);
+    const accept = createSocket(ctxWith({ shells: app.host, page: (path) => (path === '/buy' ? { host: page.host, inputs: {} } : undefined), revalidateMs: 0 }));
+    await accept(`${SOCKET}&path=/buy`, from('203.0.113.7').offering('good'));
+    expect(page.seen).toEqual([{ ip: '203.0.113.7', headers: {} }]);
+    app.host.stop();
+    page.host.stop();
+  });
+
+  it('a shell built again on a reset is told the same visitor', async () => {
+    const { host, seen } = standing();
+    const accept = createSocket(ctxWith({ shells: host, revalidateMs: 0 }));
+    const conn = from('203.0.113.7');
+    await accept(SOCKET, conn);
+    conn.emit({ type: 'reset' });
+    await vi.waitFor(() => expect(seen).toHaveLength(2));
+    expect(seen[1]).toBe(seen[0]);
     host.stop();
   });
 });

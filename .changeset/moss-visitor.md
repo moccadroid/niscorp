@@ -1,0 +1,6 @@
+---
+"@niscorp/moss": patch
+"@niscorp/nisc": patch
+---
+
+A function is told who is connecting: `session.visitor` is `{ ip, headers }`, read once from the request that opened its shell, so an app can limit what nobody signed in does for each IP. The IP is the address at the other end of the socket, or, with `runtime.ipHeader` set (Railway: `x-real-ip`), that header's value and nothing else (anything but one IP is `null`). `headers` are the ones the manifest lists in `visitor: { headers }`; the manifest's check refuses a header that says who sent a request (`authorization`, `cookie`, `proxy-authorization`, `x-operator-key`, `sec-websocket-protocol`). `visitor` is `null` on the app's shell for somebody signed in, which serves every connection they open, and for a page the server fetches of itself. `runtime.anonymousShellMaxPerIp` limits how many shells for nobody signed in one IP may have (an IPv6 address counts as its /64); a connection over it is sent `at_capacity` and closed `4503`, as over `anonymousShellMax`. A transport hands moss `connection.upgrade.peer` and `.headers`; `MossServer.visitorOf` reads a request as the socket does. With none of the new settings, an app is served as before; the new members of `FunctionSession` (`visitor`) and `MossServer` (`visitorOf`) are optional, so code that builds either by hand goes on compiling.

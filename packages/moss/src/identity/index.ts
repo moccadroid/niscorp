@@ -5,3 +5,4 @@ export type { Identity, ResolvedIdentity } from './resolution';
 export { newSeal, openSealed, ownOriginOf, sealCookie, sealOf, sealSession, sessionCookies, sessionTokenOf } from './session-cookie';
 export { SESSIONS_SEQUENCE, mintSession, revokeAllFor, sessionRemainingMs } from './sessions';
 export { mintDevToken, sessionRevokerOf, sessionVerifierOf } from './sessions';
+export { CREDENTIAL_HEADERS, isHeaderName } from './headers';

@@ -787,7 +787,13 @@ over the living shell, who is calling (the principal, their roles, what they
 are granted), the server's own surfaces as that session (`wire`), and `grant`/`revoke`.
 A session says who is calling and has no key: it carries no database pool, no
 operator key and no policy object, and what app code needs of those has a call
-(DOCS.md, `FunctionSession`). Agents live here (their reads run under the
+(DOCS.md, `FunctionSession`). A shell built for one connection or one page
+request also keeps what was read from that request (`visitor`: the IP, by the
+header the deployment names, and the headers the manifest lists), so an app can
+limit what nobody signed in does for each IP. Moss limits only how many shells
+for nobody one IP may have (`runtime.anonymousShellMaxPerIp`); what a function
+allows each IP is the app's.
+Agents live here (their reads run under the
 caller's policy — they see what the caller sees); keys are `.env`. This is deliberately the *side-
 effect-ful, session-bound* half. The canonical, side-effect-free function — an
 independently deployable endpoint under `/fns` — is specified and pending.

@@ -1,4 +1,5 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { IncomingMessage } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Hono } from 'hono';
@@ -7,10 +8,11 @@ import type { ActionDefinition } from '@niscorp/nova';
 import type { ShellSnapshot } from '../src/shells';
 import { hostConfig, standHost } from './shell-host-double';
 import type { HostSetup } from './shell-host-double';
-import type { NiscApp, PageManifest } from '../src/manifest';
+import type { FunctionSession, NiscApp, PageManifest } from '../src/manifest';
 import type { MossServer } from '../src/server';
 import { createPageRouter } from '../src/documents';
 import { mountSite } from '../src/node';
+import { visitorReader } from '../src/socket';
 
 const words: ActionDefinition = { id: 'words', data: { title: 'Hello', slug: '' }, layout: { component: 'Text', children: '$.title' } };
 const counter: ActionDefinition = { id: 'counter', data: { n: 0 }, layout: { component: 'Text', children: '$.n' } };
@@ -104,5 +106,44 @@ describe('mountSite', () => {
     mountSite(other, { dist, draw, owned: /^\/private(\/|$)/ });
     expect(await (await other.request('/api/built.txt')).text()).toBe('a file, where the server’s routes are\n');
     expect((await other.request('/private/thing')).status).toBe(404);
+  });
+});
+
+describe('mountSite — what a page’s functions are told of the visitor', () => {
+  const drawing = (): { server: MossServer; seen: FunctionSession['visitor'][] } => {
+    const seen: FunctionSession['visitor'][] = [];
+    const telling = { ...app, functions: (session: FunctionSession) => (seen.push(session.visitor), []) } as unknown as NiscApp;
+    const shells = standHost(
+      hostConfig({
+        app: telling,
+        resolve: async () => ({ roles: ['public'], scope: {}, catalog: { ids: ['words', 'counter'], hash: 'h' }, variants: new Map() }),
+        wire: () => async () => ({ ok: true, status: 200, json: async () => ({}), text: async () => '{}' }),
+        entries: new Map(),
+      }),
+    );
+    const server = Object.assign(new Hono(), {
+      shells,
+      principalOf: async () => null,
+      page: () => undefined,
+      visitorOf: visitorReader({ ipHeader: 'x-real-ip', headers: ['accept-language'] }),
+    }) as unknown as MossServer;
+    mountSite(server, { dist, draw });
+    return { server, seen };
+  };
+
+  it('a page asked for over the server’s own socket is drawn for the visitor that request names', async () => {
+    const { server, seen } = drawing();
+    const incoming: unknown = Object.assign(Object.create(IncomingMessage.prototype), {
+      headers: { 'x-real-ip': '198.51.100.2', 'accept-language': 'de' },
+      socket: { remoteAddress: '10.0.0.1' },
+    });
+    expect((await server.request('/', {}, { incoming })).status).toBe(200);
+    expect(seen).toEqual([{ ip: '198.51.100.2', headers: { 'accept-language': 'de' } }]);
+  });
+
+  it('a page the server fetched of itself (an action’s endpoint) is drawn for no visitor, whatever headers it carries', async () => {
+    const { server, seen } = drawing();
+    expect((await server.request('/', { headers: { 'x-real-ip': '198.51.100.2', 'accept-language': 'de' } })).status).toBe(200);
+    expect(seen).toEqual([null]);
   });
 });

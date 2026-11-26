@@ -53,6 +53,26 @@ describe('the manifest’s schema', () => {
     expect(() => receiveManifest(whole())).not.toThrow();
   });
 
+  it('keeps the headers of a visitor the app lists, and never one that says who sent a request', () => {
+    expect(manifestMisfits({ charter: {}, actions: {}, visitor: { headers: ['accept-language', 'User-Agent', 'x-real-ip'] } })).toEqual([]);
+    expect(
+      manifestMisfits({
+        charter: {},
+        actions: {},
+        visitor: { headers: ['Cookie', 'authorization', 'proxy-authorization', 'x-operator-key', 'sec-websocket-protocol', 'accept language', ''] },
+      }),
+    ).toEqual([
+      'visitor.headers.0: "Cookie" says who sent a request, and is never kept for a function',
+      'visitor.headers.1: "authorization" says who sent a request, and is never kept for a function',
+      'visitor.headers.2: "proxy-authorization" says who sent a request, and is never kept for a function',
+      'visitor.headers.3: "x-operator-key" says who sent a request, and is never kept for a function',
+      'visitor.headers.4: "sec-websocket-protocol" says who sent a request, and is never kept for a function',
+      'visitor.headers.5: "accept language" is not a header name',
+      'visitor.headers.6: "" is not a header name',
+    ]);
+    expect(manifestMisfits({ charter: {}, actions: {}, visitor: { headers: [], ip: 'x-real-ip' } })).toEqual(['visitor: Unrecognized key: "ip"']);
+  });
+
   it('reads the smallest manifest there is', () => {
     expect(manifestMisfits({ charter: {}, actions: {} })).toEqual([]);
   });
@@ -335,5 +355,18 @@ describe('a boot — a manifest that does not parse', () => {
     } finally {
       said.mockRestore();
     }
+  });
+
+  it('a runtime whose `ipHeader` is not a header name is refused before the data module is brought up', async () => {
+    const reached: string[] = [];
+    const pool: PgPool = { query: async () => ({ rows: [] }) };
+    for (const ipHeader of ['', 'x real ip']) {
+      const booting = createServerWith({ charter: { public: ['home'] }, actions: { home, panel } }, { pool, db: pool, session: 'dev-open', ipHeader }, async () => {
+        reached.push('the data module was brought up');
+        throw new Error('and that is as far as this goes');
+      });
+      await expect(booting).rejects.toThrow(`moss: \`runtime.ipHeader\` is the name of the header the proxy in front of this server writes the visitor’s IP into`);
+    }
+    expect(reached).toEqual([]);
   });
 });

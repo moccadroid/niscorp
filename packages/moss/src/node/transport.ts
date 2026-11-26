@@ -85,6 +85,8 @@ export const createTransport = (accept: SocketAccept, told?: TransportSettings):
         origin: req.headers.origin ?? null,
         host: req.headers.host ?? null,
         cookie: req.headers.cookie ?? null,
+        peer: req.socket.remoteAddress ?? null,
+        headers: req.headers,
         answer: (given) => void (cookies = given),
       },
     }).catch((error: unknown) => {

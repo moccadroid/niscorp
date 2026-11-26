@@ -11,6 +11,8 @@ import type { UpgradeParameters, WarnedOnce } from './handshake';
 import { createRevalidation } from './revalidation';
 import type { Revalidation } from './revalidation';
 import { messageHandler } from './routing';
+import { limitKeyOf, visitorReader } from './visitor';
+import type { ReadVisitor, Visitor } from './visitor';
 
 export type SessionSource = Pick<ShellHost, 'session'>;
 
@@ -22,6 +24,8 @@ export type SocketConfig = {
   shells?: SessionSource;
   page?: (path: string) => { host: SessionSource; inputs: Record<string, Record<string, unknown>> } | undefined;
   anonymousShellMax?: number;
+  anonymousShellMaxPerIp?: number;
+  readVisitor?: ReadVisitor;
   // `0` or `Infinity` disables it.
   revalidateMs?: number;
   telemetry?: Telemetry;
@@ -42,6 +46,8 @@ export type Connection = {
     host?: string | null;
     cookie?: string | null;
     answer?: (cookies: readonly string[]) => void;
+    peer?: string | null;
+    headers?: Readonly<Record<string, string | readonly string[] | undefined>>;
   };
   // Set by the socket, never by a transport.
   seal?: (token: string) => Promise<string>;
@@ -78,22 +84,30 @@ const closeOf = (connection: Connection): ConnectionClose => {
 export const DEFAULT_ANONYMOUS_SHELL_MAX = 1000;
 
 type AnonymousShellLimit = {
-  acquire: (connection: Connection) => boolean;
+  acquire: (connection: Connection, ip: string | null) => 'taken' | 'full' | 'full for this ip';
   release: (connection: Connection) => void;
 };
 
-const createAnonymousShellLimit = (max: number): AnonymousShellLimit => {
-  // A set, not a count: a place given back twice (a refusal, then the close it
-  // causes) is given back once.
-  const taken = new Set<Connection>();
+const createAnonymousShellLimit = (max: number, maxPerIp: number): AnonymousShellLimit => {
+  // Kept by connection, not counted: a place given back twice (a refusal, then
+  // the close it causes), or by a connection that never took one, changes nothing.
+  const taken = new Map<Connection, string | null>();
+  const perIp = new Map<string, number>();
   return {
-    acquire: (connection) => {
-      if (taken.size >= max) return false;
-      taken.add(connection);
-      return true;
+    acquire: (connection, ip) => {
+      if (taken.size >= max) return 'full';
+      const key = ip === null ? null : limitKeyOf(ip);
+      if (key !== null && (perIp.get(key) ?? 0) >= maxPerIp) return 'full for this ip';
+      taken.set(connection, key);
+      if (key !== null) perIp.set(key, (perIp.get(key) ?? 0) + 1);
+      return 'taken';
     },
     release: (connection) => {
-      taken.delete(connection);
+      const key = taken.get(connection);
+      if (!taken.delete(connection) || key === null || key === undefined) return;
+      const left = (perIp.get(key) ?? 1) - 1;
+      if (left > 0) perIp.set(key, left);
+      else perIp.delete(key);
     },
   };
 };
@@ -124,15 +138,20 @@ const spanOf = (emit: Emit | undefined): Span | undefined => {
 };
 
 type Opening = (token: string | null, principal: string | null) => Promise<ShellSession>;
-const openingOf = (config: Pick<SocketConfig, 'shells' | 'page'>, { seed, path }: UpgradeParameters): Opening | undefined => {
+const openingOf = (config: Pick<SocketConfig, 'shells' | 'page'>, { seed, path }: UpgradeParameters, visitor: Visitor | null): Opening | undefined => {
   const route = path === undefined ? undefined : config.page?.(path);
   const host = route?.host ?? config.shells;
   if (host === undefined) return undefined;
 
-  return (token, principal) => host.session(token, principal, { ...(seed === undefined ? {} : { seed }), ...(route === undefined ? {} : { inputs: route.inputs }) });
+  return (token, principal) => host.session(token, principal, { ...(seed === undefined ? {} : { seed }), ...(route === undefined ? {} : { inputs: route.inputs }), visitor });
 };
 
 const AT_CAPACITY: ServerMessage = { type: 'error', code: 'at_capacity', message: 'This server is serving as many terminals with nobody signed in as it is set to. Try again in a moment.' };
+const AT_CAPACITY_FOR_IP: ServerMessage = {
+  type: 'error',
+  code: 'at_capacity',
+  message: 'This server is serving as many terminals with nobody signed in from this IP as it is set to. Close one, or try again in a moment.',
+};
 
 const served = async (
   config: Pick<SocketConfig, 'catalog'>,
@@ -159,10 +178,10 @@ const served = async (
   return session;
 };
 
-type SocketState = { config: SocketConfig; foreignPageWarning: WarnedOnce; revalidation: Revalidation; anonymousShells: AnonymousShellLimit };
+type SocketState = { config: SocketConfig; foreignPageWarning: WarnedOnce; revalidation: Revalidation; anonymousShells: AnonymousShellLimit; readVisitor: ReadVisitor };
 
 const open = async (state: SocketState, url: string, connection: Connection, send: (message: ServerMessage) => void, span: Span | undefined, found: { principal: boolean }): Promise<void> => {
-  const { config, foreignPageWarning, revalidation, anonymousShells } = state;
+  const { config, foreignPageWarning, revalidation, anonymousShells, readVisitor } = state;
   const params = parametersOf(url);
   const mismatch = protocolRefusal(params);
   if (mismatch !== undefined) {
@@ -187,10 +206,12 @@ const open = async (state: SocketState, url: string, connection: Connection, sen
 
   // The place is taken before anything is awaited for the shell: arrivals in
   // one moment each find the count the one before left.
-  const session = openingOf(config, params);
-  if (principal === null && session !== undefined && !anonymousShells.acquire(connection)) {
+  const visitor = readVisitor(connection.upgrade);
+  const session = openingOf(config, params, visitor);
+  const place = principal === null && session !== undefined ? anonymousShells.acquire(connection, visitor?.ip ?? null) : 'taken';
+  if (place !== 'taken') {
     span?.('socket.upgrade', 'refused', false);
-    send(AT_CAPACITY);
+    send(place === 'full' ? AT_CAPACITY : AT_CAPACITY_FOR_IP);
     connection.close(CLOSE_AT_CAPACITY, 'at capacity');
     return;
   }
@@ -212,8 +233,8 @@ const open = async (state: SocketState, url: string, connection: Connection, sen
 export const createSocket = (config: SocketConfig): SocketAccept => {
   const emit = emitterOf(config.telemetry);
   const revalidation = createRevalidation(config);
-  const anonymousShells = createAnonymousShellLimit(config.anonymousShellMax ?? DEFAULT_ANONYMOUS_SHELL_MAX);
-  const state: SocketState = { config, foreignPageWarning: { warned: false }, revalidation, anonymousShells };
+  const anonymousShells = createAnonymousShellLimit(config.anonymousShellMax ?? DEFAULT_ANONYMOUS_SHELL_MAX, config.anonymousShellMaxPerIp ?? Infinity);
+  const state: SocketState = { config, foreignPageWarning: { warned: false }, revalidation, anonymousShells, readVisitor: config.readVisitor ?? visitorReader({}) };
 
   // `accept` never rejects: a transport calls it without awaiting, and an
   // unhandled rejection ends the process for every session on it.

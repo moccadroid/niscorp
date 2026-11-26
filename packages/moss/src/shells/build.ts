@@ -149,7 +149,7 @@ export const buildShell = async (host: HostState, asked: BuildRequest): Promise<
   for (const [name, contract] of Object.entries(made.components)) registry.register(name, contract);
 
   const shellRef: ShellRef = {};
-  const session = functionSessionFor(host, { principal, roles: made.roles, scope: made.scope, actions: ids }, wire, shellRef);
+  const session = functionSessionFor(host, { principal, roles: made.roles, scope: made.scope, actions: ids, visitor: opening?.visitor ?? null }, wire, shellRef);
 
   const phrases = (await hooks.phrases?.({ principal, identity: made.scope, wire: config.wire(token) })) ?? {};
   if (!wanted()) return undefined;

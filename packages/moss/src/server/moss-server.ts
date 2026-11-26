@@ -7,12 +7,13 @@ import type { IdentityRecord, IdentityReport, ResolvedIdentity } from '../identi
 import type { Catalog } from '../artifactory';
 import type { SessionArtifacts } from '../manifest';
 import type { ShellHost } from '../shells';
-import type { SocketAccept } from '../socket';
+import type { ReadVisitor, SocketAccept } from '../socket';
 
 export type Env = { Variables: { principal: string | null; resolved: ResolvedIdentity } };
 
 export type MossServer = Hono<Env> & {
   socket: SocketAccept;
+  visitorOf?: ReadVisitor;
   shells?: ShellHost;
   principalOf: (token: string) => Promise<string | null>;
   page: (path: string) => { name: string; host: ShellHost; inputs: Record<string, Record<string, unknown>> } | undefined;
