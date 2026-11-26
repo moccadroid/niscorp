@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { extname, join, relative } from 'node:path';
 import { serve as listen } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
+import { IncomingMessage } from 'node:http';
 import type { Context } from 'hono';
 import { renderDocument } from '../documents';
 import type { DocumentConfig } from '../documents';
@@ -34,6 +35,15 @@ export type SiteConfig = Pick<DocumentConfig, 'draw' | 'htmlAttributes' | 'site'
 // cannot say what it owns.
 export const MOSS_PATHS = /^\/(api|catalog|socket|operator|integrations)(\/|$)/;
 
+// A request the server's own fetch made (an action's endpoint) carries no
+// `incoming`: whatever headers it has, it says nothing of a visitor.
+const visitorRequestOf = (c: Context<Env, string>): { peer?: string | null; headers?: IncomingMessage['headers'] } => {
+  const env: unknown = c.env;
+  const incoming = env !== null && typeof env === 'object' && 'incoming' in env ? env.incoming : undefined;
+  if (!(incoming instanceof IncomingMessage)) return {};
+  return { peer: incoming.socket.remoteAddress ?? null, headers: incoming.headers };
+};
+
 export const mountSite = (server: MossServer, config: SiteConfig): void => {
   const { dist, owned = MOSS_PATHS, ...drawing } = config;
   // `serveStatic` resolves `root` against the working directory.
@@ -55,7 +65,12 @@ export const mountSite = (server: MossServer, config: SiteConfig): void => {
       ...drawing,
       server,
       template,
-      request: { path: c.req.path === '/index.html' ? '/' : c.req.path, cookie: c.req.header('cookie') ?? null, host: c.req.header('host') ?? null },
+      request: {
+        path: c.req.path === '/index.html' ? '/' : c.req.path,
+        cookie: c.req.header('cookie') ?? null,
+        host: c.req.header('host') ?? null,
+        ...visitorRequestOf(c),
+      },
     });
     return c.html(page.html, 200, page.headers);
   });

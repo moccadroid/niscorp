@@ -1,6 +1,6 @@
 import { NovaEventSchema } from '@niscorp/nova';
 import type { FetchFn, FunctionHandler, Shell } from '@niscorp/nova';
-import type { FunctionSession } from '../manifest';
+import type { FunctionSession, Visitor } from '../manifest';
 import { CLOSE_SIGNED_OUT } from '../protocol';
 import type { ServerMessage } from '../protocol';
 import { spanClock } from '../runtime';
@@ -73,7 +73,7 @@ const revoke = (host: HostState, shellRef: ShellRef, principal: string | null): 
 
 export const functionSessionFor = (
   host: HostState,
-  who: { principal: string | null; roles: readonly string[]; scope: Record<string, unknown>; actions: readonly string[] },
+  who: { principal: string | null; roles: readonly string[]; scope: Record<string, unknown>; actions: readonly string[]; visitor: Visitor | null },
   wire: FetchFn,
   shellRef: ShellRef,
 ): FunctionSession => {
@@ -90,6 +90,7 @@ export const functionSessionFor = (
     roles: who.roles,
     identity: who.scope,
     actions: who.actions,
+    visitor: who.visitor,
     wire,
     get shell(): Shell {
       if (shellRef.sessionShell === undefined) throw new Error('moss: a function touched the shell before the session finished building.');

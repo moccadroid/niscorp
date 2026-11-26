@@ -151,7 +151,13 @@ const devMiddleware =
         const page = await renderDocument({
           server: app.server,
           template,
-          request: { path: path === '/index.html' ? '/' : path, cookie: req.headers.cookie ?? null, host: req.headers.host ?? null },
+          request: {
+            path: path === '/index.html' ? '/' : path,
+            cookie: req.headers.cookie ?? null,
+            host: req.headers.host ?? null,
+            peer: req.socket.remoteAddress ?? null,
+            headers: req.headers,
+          },
           draw: app.draw,
           ...(app.htmlAttributes !== undefined ? { htmlAttributes: app.htmlAttributes } : {}),
           ...(app.site !== undefined ? { site: app.site } : {}),

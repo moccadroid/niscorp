@@ -20,6 +20,8 @@ export type NiscRuntime = {
   artifactsUnusedMs?: number;
   artifactsUnusedSinceStart?: boolean;
   anonymousShellMax?: number;
+  anonymousShellMaxPerIp?: number;
+  ipHeader?: string;
   endpointTimeoutMs?: number;
   sessionRevalidateMs?: number;
   identityMax?: number;
