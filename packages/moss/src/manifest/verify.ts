@@ -4,7 +4,7 @@ import { ActionDefinitionSchema, auditAction, collectChannels } from '@niscorp/n
 import type { ActionDefinition, ActionFragment, LayoutNode } from '@niscorp/nova';
 import { chainCycles, isRecord, walkNodes } from '@niscorp/nova/reflect';
 import { depthRefusal, exceedsDepth } from '@niscorp/strata';
-import { createScopePolicy, identityValueMisfits, scopeKeysOf, scopeProfiles } from '@niscorp/vex';
+import { createScopePolicy, identityValueMisfits, MutationDefinitionSchema, scopeKeysOf, scopeProfiles } from '@niscorp/vex';
 import type { ScopeBehaviors, ScopePolicy, SeedEntry, SeedMutation } from '@niscorp/vex';
 import { z } from 'zod';
 import { isBinding } from '@niscorp/nova/i18n';
@@ -124,7 +124,10 @@ const reachErrors = (entries: ManifestCandidate['entries'], profiles: ReadonlySe
 // `userId` is the principal moss injects, whether or not a rule names it.
 const identityErrors = (entries: ManifestCandidate['entries'], behaviors: ScopeBehaviors = {}): string[] => {
   const keys = new Set([...scopeKeysOf(behaviors), 'userId']);
-  return entries.flatMap((entry) => ('mutation' in entry ? identityValueMisfits(entry.mutation, keys).map((misfit) => `${entry.fingerprint}: ${misfit}`) : []));
+  return entries.flatMap((entry) => {
+    const parsed = 'mutation' in entry ? MutationDefinitionSchema.safeParse(entry.mutation) : undefined;
+    return parsed?.success === true ? identityValueMisfits(parsed.data, keys).map((misfit) => `${entry.fingerprint}: ${misfit}`) : [];
+  });
 };
 
 // A name with a template in it is worked out when it is called, from the action's data.

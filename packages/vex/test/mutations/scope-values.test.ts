@@ -123,6 +123,8 @@ describe('a scope value written into a column', () => {
       { op: 'insert', table: 'products', values: { id: 'p1' }, onConflict: { target: ['id'], set: { name: { $scope: 'studioIds' } } } },
       { op: 'update', table: 'products', set: { name: { $scope: 'userId' } }, where: { eq: ['products.id', 'p1'] } },
       { op: 'upsert', table: 'products', key: 'id', columns: { archived_at: { $scope: 'now' } }, insert: { name: { $scope: 'userId' } } },
+      { op: 'upsert', table: 'products', key: 'id', columns: { name: { $scope: 'userId' } } },
+      { op: 'insertEach', table: 'products', items: { $context: 'rows' }, values: { id: { $item: 'id' }, name: { $scope: 'userId' } } },
     ];
     for (const def of defs) {
       const { client, calls } = recording();

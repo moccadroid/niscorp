@@ -1119,8 +1119,10 @@ policy binds (a key a `set` or `match` rule of any table names, such as
 `userId` or a tenant's id): who a row belongs to is written by a `set` rule,
 never by an entry, and such a write is refused with `invalid_dsl` before
 anything runs. A `where` may still compare with one, since it only reads it.
-Under moss the boot refuses such an entry, and `userId` counts whether or not a
-rule names it. Any other scope value gets past the policy no more than a
+Under moss the boot, a publish and a refresh refuse such an entry, and `userId`
+counts whether or not a rule names it. Only a `$scope` value is checked: a
+`$lookup` whose `where` compares with such a key, or a `$returned` value, can
+still copy a bound value into a column. Any other scope value gets past the policy no more than a
 `$context` value does: a column a `set` rule names, and on an insert a column a
 scalar `match` rule names, is written by the engine after the entry is parsed,
 over anything the entry wrote there; on an update, a value written into a

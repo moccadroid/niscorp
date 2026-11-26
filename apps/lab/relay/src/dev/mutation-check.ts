@@ -1,7 +1,7 @@
 import { evaluate } from '@niscorp/prism';
 import { shell } from './check-shell';
 import { getVexRuntime } from './engine';
-import { executeMutation, MutationDefinitionSchema } from '@niscorp/vex';
+import { executeMutation, identityValueMisfits, MutationDefinitionSchema } from '@niscorp/vex';
 import { systemPolicy } from './engine';
 import { companyUpsert } from '@relay/app/vex/companies.entries';
 import { contactUpsert } from '@relay/app/vex/contacts.entries';
@@ -41,13 +41,8 @@ const main = async (): Promise<void> => {
   // would reassign the owner on each edit.
   checks.push([`owner is not writer-derived (got ${String(row['owner_id'])})`, row['owner_id'] == null]);
 
-  let scopeInDslRejected = false;
-  try {
-    MutationDefinitionSchema.parse({ op: 'insert', table: 'companies', values: { owner_id: { $scope: 'userId' } } });
-  } catch {
-    scopeInDslRejected = true;
-  }
-  checks.push(['`$scope` cannot be authored in a mutation (rejected at parse)', scopeInDslRejected]);
+  const identityWrite = identityValueMisfits({ op: 'insert', table: 'companies', values: { owner_id: { $scope: 'userId' } } }, new Set(['userId']));
+  checks.push(['an entry cannot write `userId` into a column from scope', identityWrite.length === 1]);
 
   const ctx = (evaluate(upsertContactPrism, {
     id: '', // the form always carries an id; '' makes the upsert insert

@@ -102,6 +102,8 @@ describe('verifyManifest — may this be served', () => {
     ]);
     expect(verifyManifest({ ...coherent, entries: writing('studioId'), behaviors }).errors.map((error) => error.check)).toEqual(['identity']);
     expect(verifyManifest({ ...coherent, entries: writing('now'), behaviors }).errors).toEqual([]);
+    const unparsed = [{ fingerprint: 'deals/broken', mutation: { op: 'update', table: 'deals' } }] as unknown as ManifestCandidate['entries'];
+    expect(verifyManifest({ ...coherent, entries: unparsed }).errors).toEqual([]);
     expect(refusalOf(verifyManifest({ ...coherent, entries: writing('userId') }), 'boot')).toMatch(/^Entries write a column from a scope value the policy binds — refusing to serve:\n {2}deals\/archive: /);
   });
 
