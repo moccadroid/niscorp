@@ -89,6 +89,22 @@ describe('verifyManifest — may this be served', () => {
     expect(verifyManifest({ ...coherent, entries: [{ fingerprint: 'deals/all', dsl: { from: ['deals'], fields: ['deals.id'] } }], profiles: new Set() }).errors).toEqual([]);
   });
 
+  it('refuses an entry that writes a column from a scope value the policy binds, userId always', () => {
+    const writing = (key: string): ManifestCandidate['entries'] => [
+      { fingerprint: 'deals/archive', mutation: { op: 'update', table: 'deals', set: { owner_id: { $scope: key } }, where: { eq: ['deals.id', { $context: 'id' }] } } },
+    ];
+    const behaviors = { deals: { own: { read: [{ match: 'studio_id', to: 'studioId' }] } } };
+    expect(verifyManifest({ ...coherent, entries: writing('userId') }).errors).toEqual([
+      {
+        check: 'identity',
+        detail: 'deals/archive: "deals.owner_id" is written from the scope\'s "userId", which the policy binds: who a row belongs to is written by a set rule, never by an entry',
+      },
+    ]);
+    expect(verifyManifest({ ...coherent, entries: writing('studioId'), behaviors }).errors.map((error) => error.check)).toEqual(['identity']);
+    expect(verifyManifest({ ...coherent, entries: writing('now'), behaviors }).errors).toEqual([]);
+    expect(refusalOf(verifyManifest({ ...coherent, entries: writing('userId') }), 'boot')).toMatch(/^Entries write a column from a scope value the policy binds — refusing to serve:\n {2}deals\/archive: /);
+  });
+
   it('refuses layout variants no principal could be served', () => {
     const ghost = verifyManifest({ ...coherent, layouts: { 'ghost.dense': { action: 'ghost', layout: plain } } });
     expect(ghost.errors).toEqual([{ check: 'variants', detail: 'layout variant "ghost.dense" reshapes unknown action "ghost"' }]);

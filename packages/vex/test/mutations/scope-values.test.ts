@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { executeMutation } from '../../src/mutations/engine.js';
 import type { MutationClient } from '../../src/mutations/engine.js';
 import { MutationDefinitionSchema } from '../../src/mutations/schema.js';
-import type { Mutation } from '../../src/mutations/schema.js';
+import type { Mutation, MutationDefinition } from '../../src/mutations/schema.js';
 import type { DatabaseSchema } from '../../src/schemas/database.schema.js';
 import type { ScopePolicy } from '../../src/scope/scope.types.js';
 
@@ -87,6 +87,15 @@ describe('a scope value written into a column', () => {
     });
     expect(calls[0]!.params).toContain('u1');
     expect(calls[0]!.params).not.toContain('u2');
+
+    await executeMutation(client, { op: 'update', table: 'products', set: { owner_id: { $scope: 'other' } }, where: { eq: ['products.id', 'p1'] } }, {
+      context: {},
+      scope: { userId: 'u1', other: 'u2' },
+      policy,
+      schema,
+    });
+    expect(calls[1]!.params).toContain('u1');
+    expect(calls[1]!.params).not.toContain('u2');
   });
 
   it('written into a match column on an update, must be a value the rule allows', async () => {
@@ -102,6 +111,38 @@ describe('a scope value written into a column', () => {
     ).rejects.toMatchObject({ code: 'scope_denied' });
     expect(calls).toHaveLength(1);
     expect(calls[0]!.sql).toMatch(/^SELECT/);
+  });
+
+  it('is refused when it names a key the policy binds, wherever the write takes a value, and nothing runs', async () => {
+    const bound: ScopePolicy = {
+      default: 'deny',
+      entities: { products: { write: [{ set: 'owner_id', to: 'userId' }] }, studios: { read: [{ match: 'id', in: 'studioIds' }] } },
+    };
+    const defs: MutationDefinition[] = [
+      { op: 'insert', table: 'products', values: { id: 'p1', name: { $scope: 'userId' } } },
+      { op: 'insert', table: 'products', values: { id: 'p1' }, onConflict: { target: ['id'], set: { name: { $scope: 'studioIds' } } } },
+      { op: 'update', table: 'products', set: { name: { $scope: 'userId' } }, where: { eq: ['products.id', 'p1'] } },
+      { op: 'upsert', table: 'products', key: 'id', columns: { archived_at: { $scope: 'now' } }, insert: { name: { $scope: 'userId' } } },
+    ];
+    for (const def of defs) {
+      const { client, calls } = recording();
+      await expect(executeMutation(client, def, { context: {}, scope: { userId: 'u1', studioIds: ['s1'], now: NOW }, policy: bound, schema })).rejects.toMatchObject({
+        code: 'invalid_dsl',
+        message: expect.stringMatching(/which the policy binds: who a row belongs to is written by a set rule, never by an entry/),
+      });
+      expect(calls).toHaveLength(0);
+    }
+  });
+
+  it('naming a key the policy binds is still allowed in a WHERE, which only reads it', async () => {
+    const { client, calls } = recording();
+    await executeMutation(client, { op: 'update', table: 'products', set: { archived_at: { $scope: 'now' } }, where: { eq: ['products.owner_id', { $scope: 'userId' }] } }, {
+      context: {},
+      scope: { userId: 'u1', now: NOW },
+      policy,
+      schema,
+    });
+    expect(calls).toHaveLength(1);
   });
 
   it('is the same instant in every statement of a batch', async () => {

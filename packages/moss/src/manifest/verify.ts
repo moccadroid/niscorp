@@ -4,7 +4,7 @@ import { ActionDefinitionSchema, auditAction, collectChannels } from '@niscorp/n
 import type { ActionDefinition, ActionFragment, LayoutNode } from '@niscorp/nova';
 import { chainCycles, isRecord, walkNodes } from '@niscorp/nova/reflect';
 import { depthRefusal, exceedsDepth } from '@niscorp/strata';
-import { createScopePolicy, scopeProfiles } from '@niscorp/vex';
+import { createScopePolicy, identityValueMisfits, scopeKeysOf, scopeProfiles } from '@niscorp/vex';
 import type { ScopeBehaviors, ScopePolicy, SeedEntry, SeedMutation } from '@niscorp/vex';
 import { z } from 'zod';
 import { isBinding } from '@niscorp/nova/i18n';
@@ -50,7 +50,8 @@ export const candidateOf = (
   grants,
   entries: inForce.entries,
   profiles: scopeProfiles(shipped.behaviors ?? {}),
-  ...(views.length > 0 ? { views, behaviors: { ...shipped.behaviors, ...rowRules } } : {}),
+  behaviors: { ...shipped.behaviors, ...rowRules },
+  ...(views.length > 0 ? { views } : {}),
 });
 
 // Fragments in force beside the ones the shells ship: what is published for everybody.
@@ -60,7 +61,7 @@ export const withFragments = (candidate: ManifestCandidate, fragments: Readonly<
   fragmentCalls: [...candidate.fragmentCalls, ...Object.entries(fragments).map(([id, fragment]) => ({ id, calls: functionsCalledBy(fragment) }))],
 });
 
-export type ManifestCheck = 'actions' | 'charter' | 'functions' | 'reach' | 'variants';
+export type ManifestCheck = 'actions' | 'charter' | 'functions' | 'identity' | 'reach' | 'variants';
 
 export type ManifestReport = {
   errors: readonly { check: ManifestCheck; detail: string }[];
@@ -118,6 +119,12 @@ const fragmentIdErrors = (actions: ManifestCandidate['actions'], fragmentIds: Ma
 const reachErrors = (entries: ManifestCandidate['entries'], profiles: ReadonlySet<string>): string[] => {
   const unknown = entries.flatMap((entry) => (entry.reach !== undefined && !profiles.has(entry.reach) ? [`${entry.fingerprint} declares reach "${entry.reach}"`] : []));
   return unknown.length === 0 ? [] : [...unknown, `known profiles: ${[...profiles].join(', ') || '(none)'}`];
+};
+
+// `userId` is the principal moss injects, whether or not a rule names it.
+const identityErrors = (entries: ManifestCandidate['entries'], behaviors: ScopeBehaviors = {}): string[] => {
+  const keys = new Set([...scopeKeysOf(behaviors), 'userId']);
+  return entries.flatMap((entry) => ('mutation' in entry ? identityValueMisfits(entry.mutation, keys).map((misfit) => `${entry.fingerprint}: ${misfit}`) : []));
 };
 
 // A name with a template in it is worked out when it is called, from the action's data.
@@ -229,6 +236,7 @@ export const verifyManifest = (candidate: ManifestCandidate): ManifestReport => 
       ...found('actions', fragmentIdErrors(read.actions, read.fragmentIds)),
       ...found('charter', charter.errors.map((error) => `${error.rule}: ${error.detail}`)),
       ...found('functions', [...unknownFunctionErrors(read), ...functionGrantErrors(read)]),
+      ...found('identity', identityErrors(read.entries, read.behaviors)),
       ...found('reach', reachErrors(read.entries, read.profiles)),
       ...found('variants', verifyVariants(read)),
     ],
@@ -273,6 +281,7 @@ const HEADLINES = {
     actions: 'Actions are not ones nova reads — refusing to serve:',
     charter: 'Charter is incoherent — refusing to serve:',
     functions: 'Actions call functions the app does not have, or that their holders’ charter does not grant — refusing to serve:',
+    identity: 'Entries write a column from a scope value the policy binds — refusing to serve:',
     reach: 'Entries declare a reach no table offers — refusing to serve:',
     variants: 'Layout variants are incoherent — refusing to serve:',
   },
@@ -280,6 +289,7 @@ const HEADLINES = {
     actions: 'Publish refused — actions nova does not read:',
     charter: 'Publish refused — charter incoherent over what is published:',
     functions: 'Publish refused — actions call functions the app does not have, or that their holders’ charter does not grant:',
+    identity: 'Publish refused — entries write a column from a scope value the policy binds:',
     reach: 'Publish refused — entries declare a reach no table offers:',
     variants: 'Publish refused — layout variants incoherent:',
   },
@@ -287,6 +297,7 @@ const HEADLINES = {
     actions: 'Refresh refused — actions nova does not read:',
     charter: 'Refresh refused — charter incoherent over the new artifacts:',
     functions: 'Refresh refused — actions call functions the app does not have, or that their holders’ charter does not grant:',
+    identity: 'Refresh refused — entries write a column from a scope value the policy binds:',
     reach: 'Refresh refused — entries declare a reach no table offers:',
     variants: 'Refresh refused — layout variants incoherent:',
   },

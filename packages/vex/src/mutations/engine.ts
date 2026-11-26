@@ -494,6 +494,36 @@ export const mutationMisfits = (def: MutationDefinition, schema: DatabaseSchema)
   return reasons;
 };
 
+const isScopeRef = (v: unknown): v is { $scope: string } =>
+  v !== null && typeof v === 'object' && !Array.isArray(v) && '$scope' in v;
+
+const writtenColumns = (m: Mutation): Record<string, unknown>[] => {
+  if (m.op === 'insert' || m.op === 'insertEach') return [m.values, m.onConflict?.set ?? {}];
+  if (m.op === 'update') return [m.set];
+  if (m.op === 'upsert') return [m.columns, m.insert ?? {}];
+  return [];
+};
+
+export const identityValueMisfits = (def: MutationDefinition, keys: ReadonlySet<string>): string[] =>
+  (Array.isArray(def) ? def : [def]).flatMap((m) =>
+    writtenColumns(m).flatMap((columns) =>
+      Object.entries(columns).flatMap(([column, v]) =>
+        isScopeRef(v) && keys.has(v.$scope)
+          ? [`"${m.table}.${column}" is written from the scope's "${v.$scope}", which the policy binds: who a row belongs to is written by a set rule, never by an entry`]
+          : [],
+      ),
+    ),
+  );
+
+const policyKeys = (policy: ScopePolicy): Set<string> =>
+  new Set(
+    Object.values(policy.entities).flatMap((rule) =>
+      'public' in rule || 'deny' in rule
+        ? []
+        : [rule.read, rule.write, rule.insert, rule.update, rule.delete].flatMap((rules) => (rules ?? []).map((r) => ('in' in r ? r.in : r.to))),
+    ),
+  );
+
 export type MutationContext = {
   context: Record<string, unknown>;
   scope: ScopeValues;
@@ -523,6 +553,8 @@ const readableRules = (m: ResolvedMutation, policy: ScopePolicy): Readable => {
 
 export const executeWrites = async (client: MutationClient, def: MutationDefinition, mctx: MutationContext): Promise<WriteResult[]> => {
   const parsed = MutationDefinitionSchema.parse(def);
+  const misfits = identityValueMisfits(parsed, policyKeys(mctx.policy));
+  if (misfits.length > 0) throw new VexError('invalid_dsl', `${misfits.join('; ')}.`);
   const entries = Array.isArray(parsed) ? parsed : [parsed];
   const cores = entries.map((entry) => desugarMutation(entry, mctx.context, mctx.schema));
   const compiled = cores.map((core, at) => {

@@ -1114,13 +1114,18 @@ Five ops, closed and strict. Values are literals, `{ $context: "key" }`,
 a field path. `update`/`delete` REQUIRE a `where` (a real vex `Filter`, which
 takes `$context` and `$scope` as a read's does).
 
-A `$scope` value is the host's, never the caller's, and it gets past the policy
-no more than a `$context` value does. A column a `set` rule names, and on an
-insert a column a `match` rule names, is written by the engine after the entry
-is parsed, over anything the entry wrote there. On an update, a value written
-into a `match` column must be one the rule allows, or the write is refused
-(the moved-row check, unless the host turns it off with `checkMovedRows:
-false`).
+A `$scope` value is the host's, never the caller's. It may not name a key the
+policy binds (a key a `set` or `match` rule of any table names, such as
+`userId` or a tenant's id): who a row belongs to is written by a `set` rule,
+never by an entry, and such a write is refused with `invalid_dsl` before
+anything runs. A `where` may still compare with one, since it only reads it.
+Under moss the boot refuses such an entry, and `userId` counts whether or not a
+rule names it. Any other scope value gets past the policy no more than a
+`$context` value does: a column a `set` rule names, and on an insert a column a
+scalar `match` rule names, is written by the engine after the entry is parsed,
+over anything the entry wrote there; on an update, a value written into a
+`match` column must be one the rule allows, or the write is refused (the
+moved-row check, unless the host turns it off with `checkMovedRows: false`).
 What the author does own is where a value lands: a scope value stored in a
 column is read by everyone who can read the row, so write there only what they
 may see.
@@ -1161,6 +1166,7 @@ supplies per request, the same one its reads compare with. Under moss that is
 the app's `scope` seam:
 
 ```ts
+// `clock` is the app's own (a test passes a fake one); `dayOf` is the app's too
 scope: () => ({ today: dayOf(clock()), now: clock().toISOString() }),
 
 { op: 'update', table: 'products', set: { archived_at: { $scope: 'now' } },
@@ -1176,8 +1182,9 @@ so every statement of a batch writes the same instant. A host that supplies no
 - A reactive read refetches with the values it was first asked with, so it
   compares with a day (`today`), never `now`.
 - A replay the server runs on its own passes the scope itself: moss's
-  `server.executeAs(role, fingerprint, context, { now })`. A moss feature's own
-  entries run with no scope, so an entry that reads `$scope` is refused there.
+  `server.executeAs(role, fingerprint, context, { now })`. The replay a moss
+  feature is handed for its own entries takes no scope, so a feature's entry
+  that reads `$scope` is refused there.
 
 ### `onConflict` — the database arbitrates
 

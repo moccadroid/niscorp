@@ -58,6 +58,9 @@ export const scopeBindings = (behaviors: ScopeBehaviors, tables: readonly string
   return [...seen.values()].sort((a, b) => `${a.entity}.${a.field}:${a.key}`.localeCompare(`${b.entity}.${b.field}:${b.key}`));
 };
 
+export const scopeKeysOf = (behaviors: ScopeBehaviors): Set<string> =>
+  new Set(Object.values(behaviors).flatMap((entry) => bindingsOf(entry).map(({ key }) => key)));
+
 export const behaviorColumns = (behaviors: ScopeBehaviors): { entity: string; field: string }[] =>
   Object.entries(behaviors).flatMap(([table, entry]) => bindingsOf(entry).map(({ field }) => ({ entity: table, field })));
 

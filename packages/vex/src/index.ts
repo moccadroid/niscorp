@@ -21,7 +21,7 @@ export { discoverEntities } from './scope/discover.js';
 export { checkScope, scopeResolved, applyScope, VexScopeError } from './scope/apply.js';
 export { SCOPE_VERBS, scopeGrants, createScopePolicy } from './scope/grants.js';
 export type { ScopeBehaviors, NamedScopeBehaviors, ScopeRules } from './scope/grants.js';
-export { scopeProfiles, mergeScopePolicies, scopeBindings } from './scope/grants.js';
+export { scopeProfiles, mergeScopePolicies, scopeBindings, scopeKeysOf } from './scope/grants.js';
 
 export { createMemoryCache } from './cache/memory.js';
 export { createPostgresCache } from './cache/postgres.js';
@@ -37,7 +37,7 @@ export { UNREADABLE_MODES, UpgradedColumnsSchema } from './engine/upgraded-colum
 export type { ColumnUpgrader, UpgradedColumn, UpgradedColumns } from './engine/upgraded-columns.js';
 export type { LiveRowsConfig, LiveRowsStats } from './engine/live.js';
 
-export { MutationSchema, MutationDefinitionSchema, executeMutation, executeWrites, mutationMisfits, collectMutationContext, collectQueryContext, mutationEffect, requiredContextKeys, lintMutation } from './mutations/index.js';
+export { MutationSchema, MutationDefinitionSchema, executeMutation, executeWrites, mutationMisfits, identityValueMisfits, collectMutationContext, collectQueryContext, mutationEffect, requiredContextKeys, lintMutation } from './mutations/index.js';
 export type { Mutation, MutationDefinition, CoreMutation, ResolvedMutation, ResolvedOnConflict, MutationValue, LookupValue, ReturnedRef, ItemRef, MutationClient, MutationTx, MutationContext, ContextField, ContextSignature, MutationEffect, WriteResult } from './mutations/index.js';
 
 export { buildValidationContext, resolveParams } from './utils/context.js';

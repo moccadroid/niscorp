@@ -217,7 +217,8 @@ Pick per need; every piece works standalone. Nova is the only mandatory one for 
 **8.** Writes are endpoints fired by triggers, never inline mutations (D4).
 
 - Identity and tenancy are stamped server-side from the session, never client-supplied: a form never carries `owner_id`.
-- The moment a write is stamped with is the server's too: the app's `scope` seam, asked per request, returns `now: clock().toISOString()`, and the entry writes `archived_at: { $scope: 'now' }`. Never a time from context, and never a function only to stamp the clock.
+- Identity and tenancy columns are written by the behaviors' `set` rules, never by an entry: an entry that writes `{ $scope: 'userId' }`, or any key a rule binds, into a column refuses the boot.
+- The moment a write is stamped with is the server's too: the app's `scope` seam, asked per request, returns `now` from the app's own clock (`clock().toISOString()`, a fake one in tests), and the entry writes `archived_at: { $scope: 'now' }`. Never a time from context, and never a function only to stamp the clock.
 - What a principal *is* beyond its id — a tenant, an org, a region — is the manifest's `scope(principal)` seam. Moss always injects `{ userId }`, `scope` contributes the rest, and the merged set is what a behavior's `to:` resolves against at execute.
 - The mapping is application knowledge, so the app supplies it; the values are injected server-side and unreferenceable by a request.
 

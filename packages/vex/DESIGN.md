@@ -416,8 +416,9 @@ Replay-only holds under every posture (`locked` only ever governed query
 generation); the query engine refuses a mutation fingerprint explicitly.
 
 The pipeline: validate (closed grammar — update/delete require a WHERE; a
-`$scope` value may be written, and it gets past the scope step below no more
-than a `$context` value does) → desugar
+`$scope` value may be written, unless it names a key the policy binds — who a
+row belongs to is the policy's alone — and it gets past the scope step below no
+more than a `$context` value does) → desugar
 (upsert → insert/update by key presence) →
 require context (a write never executes with holes; the `missing_context`
 error carries the FULL derived signature) → scope (the same `ScopePolicy`
