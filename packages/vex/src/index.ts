@@ -20,8 +20,8 @@ export { QueryRequestSchema } from './schemas/request.schema.js';
 export { discoverEntities } from './scope/discover.js';
 export { checkScope, scopeResolved, applyScope, VexScopeError } from './scope/apply.js';
 export { SCOPE_VERBS, scopeGrants, createScopePolicy } from './scope/grants.js';
-export type { ScopeBehaviors, NamedScopeBehaviors, ScopeRules } from './scope/grants.js';
-export { scopeProfiles, mergeScopePolicies, scopeBindings, scopeKeysOf } from './scope/grants.js';
+export type { ScopeBehaviors, NamedScopeBehaviors, ScopeRules, ScopeBound } from './scope/grants.js';
+export { scopeProfiles, mergeScopePolicies, scopeBindings, boundByBehaviors } from './scope/grants.js';
 
 export { createMemoryCache } from './cache/memory.js';
 export { createPostgresCache } from './cache/postgres.js';

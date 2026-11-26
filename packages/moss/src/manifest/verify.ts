@@ -4,7 +4,7 @@ import { ActionDefinitionSchema, auditAction, collectChannels } from '@niscorp/n
 import type { ActionDefinition, ActionFragment, LayoutNode } from '@niscorp/nova';
 import { chainCycles, isRecord, walkNodes } from '@niscorp/nova/reflect';
 import { depthRefusal, exceedsDepth } from '@niscorp/strata';
-import { createScopePolicy, identityValueMisfits, MutationDefinitionSchema, scopeKeysOf, scopeProfiles } from '@niscorp/vex';
+import { createScopePolicy, boundByBehaviors, identityValueMisfits, MutationDefinitionSchema, scopeProfiles } from '@niscorp/vex';
 import type { ScopeBehaviors, ScopePolicy, SeedEntry, SeedMutation } from '@niscorp/vex';
 import { z } from 'zod';
 import { isBinding } from '@niscorp/nova/i18n';
@@ -123,10 +123,11 @@ const reachErrors = (entries: ManifestCandidate['entries'], profiles: ReadonlySe
 
 // `userId` is the principal moss injects, whether or not a rule names it.
 const identityErrors = (entries: ManifestCandidate['entries'], behaviors: ScopeBehaviors = {}): string[] => {
-  const keys = new Set([...scopeKeysOf(behaviors), 'userId']);
+  const bound = boundByBehaviors(behaviors);
+  const withUser = { keys: new Set([...bound.keys, 'userId']), written: bound.written };
   return entries.flatMap((entry) => {
     const parsed = 'mutation' in entry ? MutationDefinitionSchema.safeParse(entry.mutation) : undefined;
-    return parsed?.success === true ? identityValueMisfits(parsed.data, keys).map((misfit) => `${entry.fingerprint}: ${misfit}`) : [];
+    return parsed?.success === true ? identityValueMisfits(parsed.data, withUser).map((misfit) => `${entry.fingerprint}: ${misfit}`) : [];
   });
 };
 
@@ -284,7 +285,7 @@ const HEADLINES = {
     actions: 'Actions are not ones nova reads — refusing to serve:',
     charter: 'Charter is incoherent — refusing to serve:',
     functions: 'Actions call functions the app does not have, or that their holders’ charter does not grant — refusing to serve:',
-    identity: 'Entries write a column from a scope value the policy binds — refusing to serve:',
+    identity: 'Entries write a column from a value the policy binds — refusing to serve:',
     reach: 'Entries declare a reach no table offers — refusing to serve:',
     variants: 'Layout variants are incoherent — refusing to serve:',
   },
@@ -292,7 +293,7 @@ const HEADLINES = {
     actions: 'Publish refused — actions nova does not read:',
     charter: 'Publish refused — charter incoherent over what is published:',
     functions: 'Publish refused — actions call functions the app does not have, or that their holders’ charter does not grant:',
-    identity: 'Publish refused — entries write a column from a scope value the policy binds:',
+    identity: 'Publish refused — entries write a column from a value the policy binds:',
     reach: 'Publish refused — entries declare a reach no table offers:',
     variants: 'Publish refused — layout variants incoherent:',
   },
@@ -300,7 +301,7 @@ const HEADLINES = {
     actions: 'Refresh refused — actions nova does not read:',
     charter: 'Refresh refused — charter incoherent over the new artifacts:',
     functions: 'Refresh refused — actions call functions the app does not have, or that their holders’ charter does not grant:',
-    identity: 'Refresh refused — entries write a column from a scope value the policy binds:',
+    identity: 'Refresh refused — entries write a column from a value the policy binds:',
     reach: 'Refresh refused — entries declare a reach no table offers:',
     variants: 'Refresh refused — layout variants incoherent:',
   },

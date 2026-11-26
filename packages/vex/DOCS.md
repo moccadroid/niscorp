@@ -1114,15 +1114,26 @@ Five ops, closed and strict. Values are literals, `{ $context: "key" }`,
 a field path. `update`/`delete` REQUIRE a `where` (a real vex `Filter`, which
 takes `$context` and `$scope` as a read's does).
 
-A `$scope` value is the host's, never the caller's. It may not name a key the
-policy binds (a key a `set` or `match` rule of any table names, such as
-`userId` or a tenant's id): who a row belongs to is written by a `set` rule,
-never by an entry, and such a write is refused with `invalid_dsl` before
-anything runs. A `where` may still compare with one, since it only reads it.
-Under moss the boot, a publish and a refresh refuse such an entry, and `userId`
-counts whether or not a rule names it. Only a `$scope` value is checked: a
-`$lookup` whose `where` compares with such a key, or a `$returned` value, can
-still copy a bound value into a column. Any other scope value gets past the policy no more than a
+A `$scope` value is the host's, never the caller's. Who a row belongs to is
+written by a `set` rule, never by an entry, so a column value may not carry a
+value the policy binds, and such a write is refused with `invalid_dsl` before
+anything runs:
+
+- a `$scope` value naming a key a `set` or `match` rule of any table names
+  (`userId`, a tenant's id);
+- a `$lookup` whose `where` compares with such a key — it would copy the
+  caller's own row's value in;
+- a `$returned` copying a column a `write`, `insert` or `update` rule fills or
+  pins (`deals.owner_id` under `{ set: 'owner_id', to: 'userId' }`). A
+  generated id, or a column a rule names only for reading, is copied as before.
+
+A `where`, the statement's own or a lookup's that writes nothing, may still
+compare with such a key, since it only reads it; a `$lookup` that finds its row
+by context runs as before, inside the read rules. Under moss the boot, a
+publish and a refresh refuse such an entry, and `userId` counts whether or not
+a rule names it.
+
+Any other scope value gets past the policy no more than a
 `$context` value does: a column a `set` rule names, and on an insert a column a
 scalar `match` rule names, is written by the engine after the entry is parsed,
 over anything the entry wrote there; on an update, a value written into a

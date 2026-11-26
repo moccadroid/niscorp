@@ -41,7 +41,7 @@ const main = async (): Promise<void> => {
   // would reassign the owner on each edit.
   checks.push([`owner is not writer-derived (got ${String(row['owner_id'])})`, row['owner_id'] == null]);
 
-  const identityWrite = identityValueMisfits({ op: 'insert', table: 'companies', values: { owner_id: { $scope: 'userId' } } }, new Set(['userId']));
+  const identityWrite = identityValueMisfits({ op: 'insert', table: 'companies', values: { owner_id: { $scope: 'userId' } } }, { keys: new Set(['userId']), written: new Set() });
   checks.push(['an entry cannot write `userId` into a column from scope', identityWrite.length === 1]);
 
   const ctx = (evaluate(upsertContactPrism, {
