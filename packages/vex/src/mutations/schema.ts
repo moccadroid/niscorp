@@ -31,8 +31,8 @@ const ReturnedSchema = z
     'A column of the one row an earlier statement of this batch (an insert, update, upsert or delete) returned — how a later row gets an id the database generated. That statement must return exactly one row; none (its `where` matched no row, or scope kept the row back) or several fails the whole batch and nothing is written. Allowed only as the value of a column a statement sets; never inside a `where`, a `$lookup` or `items`, and never naming an `insertEach` or an `insert` whose `onConflict` has no `set`.',
   );
 
-// An authored `$scope` cannot stand in for the policy's: its `set` and `match`
-// columns are written after the parse and win over any value here.
+// An authored `$scope` gets past the policy no more than a `$context` does:
+// the scope step after the parse writes or checks the columns its rules name.
 const ValueSchema = z.union([
   z.string(),
   z.number(),

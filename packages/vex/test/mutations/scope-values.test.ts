@@ -89,6 +89,21 @@ describe('a scope value written into a column', () => {
     expect(calls[0]!.params).not.toContain('u2');
   });
 
+  it('written into a match column on an update, must be a value the rule allows', async () => {
+    const { client, calls } = recording();
+    const pinned: ScopePolicy = { default: 'deny', entities: { products: { write: [{ match: 'owner_id', to: 'userId' }] } } };
+    await expect(
+      executeMutation(client, { op: 'update', table: 'products', set: { owner_id: { $scope: 'other' } }, where: { eq: ['products.id', 'p1'] } }, {
+        context: {},
+        scope: { userId: 'u1', other: 'u2' },
+        policy: pinned,
+        schema,
+      }),
+    ).rejects.toMatchObject({ code: 'scope_denied' });
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.sql).toMatch(/^SELECT/);
+  });
+
   it('is the same instant in every statement of a batch', async () => {
     const { client, calls } = recording();
     const archive = (id: string): Mutation => ({ op: 'update', table: 'products', set: { archived_at: { $scope: 'now' } }, where: { eq: ['products.id', id] } });

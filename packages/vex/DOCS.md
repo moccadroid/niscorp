@@ -1114,9 +1114,13 @@ Five ops, closed and strict. Values are literals, `{ $context: "key" }`,
 a field path. `update`/`delete` REQUIRE a `where` (a real vex `Filter`, which
 takes `$context` and `$scope` as a read's does).
 
-A `$scope` value is the host's, never the caller's, and it cannot stand in for
-the policy: the columns a `set` or `match` rule names are written by the engine
-after the entry is parsed, and they win over anything the entry wrote there.
+A `$scope` value is the host's, never the caller's, and it gets past the policy
+no more than a `$context` value does. A column a `set` rule names, and on an
+insert a column a `match` rule names, is written by the engine after the entry
+is parsed, over anything the entry wrote there. On an update, a value written
+into a `match` column must be one the rule allows, or the write is refused
+(the moved-row check, unless the host turns it off with `checkMovedRows:
+false`).
 What the author does own is where a value lands: a scope value stored in a
 column is read by everyone who can read the row, so write there only what they
 may see.
