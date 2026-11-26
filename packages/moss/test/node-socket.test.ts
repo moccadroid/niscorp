@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import { WebSocket, WebSocketServer } from 'ws';
 import { attachSocket } from '../src/node';
 import { buildSocket } from '../src/server/server';
-import { createSocket } from '../src/socket';
+import { createSocket, visitorReader } from '../src/socket';
 import { offerToken, PROTOCOL } from '../src/protocol';
 import type { SocketAccept } from '../src/socket';
 import { createWire } from '../src/client';
@@ -152,6 +152,7 @@ describe('the ws transport — a server’s socket says how it is to be attached
       identity: { resolve: async () => ({ roles: ['public'], scope: {}, installed: undefined, memoKey: 'public' }) },
       running: { catalogFor: () => ({ ids: [], hash: 'h' }) },
       hosts: { shells: undefined, pageAt: () => undefined },
+      visitorOf: visitorReader({}),
     });
     const httpServer = createHttp((_req, res) => res.end('ok'));
     attachSocket(httpServer, socket);
@@ -406,5 +407,33 @@ describe('the ws transport — a connection that stops answering', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe('the ws transport — the upgrade says where it came from', () => {
+  it('hands moss the address at the other end of the socket and the request’s headers, by lowercase name', async () => {
+    const handed: { peer?: string | null; headers?: Readonly<Record<string, unknown>> }[] = [];
+    const accept: SocketAccept = Object.assign(
+      async (_url: string, connection: Parameters<SocketAccept>[1]): Promise<void> => {
+        handed.push({ peer: connection.upgrade?.peer, headers: connection.upgrade?.headers });
+        connection.send('seen');
+      },
+      { stop: (): void => {} },
+    );
+    const httpServer = createHttp((_req, res) => res.end('ok'));
+    attachSocket(httpServer, accept);
+    await new Promise<void>((resolve) => httpServer.listen(0, '127.0.0.1', resolve));
+    servers.push(httpServer);
+    const address = httpServer.address();
+    if (address === null || typeof address === 'string') throw new Error('no port');
+    const client = new WebSocket(`ws://127.0.0.1:${address.port}/socket`, { headers: { 'Accept-Language': 'de-AT', 'X-Real-IP': '198.51.100.2' } });
+    await new Promise<void>((resolve, reject) => {
+      client.once('message', () => resolve());
+      client.once('error', reject);
+    });
+    client.close();
+    expect(handed).toHaveLength(1);
+    expect(handed[0]?.peer).toMatch(/^(::ffff:)?127\.0\.0\.1$/);
+    expect(handed[0]?.headers).toMatchObject({ 'accept-language': 'de-AT', 'x-real-ip': '198.51.100.2' });
   });
 });

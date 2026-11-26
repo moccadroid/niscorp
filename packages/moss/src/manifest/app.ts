@@ -57,6 +57,7 @@ export type NiscApp = {
   upgradedColumns?: UpgradedColumns;
   // A map of handlers is deprecated: return a list of `{ id, description, execute }`.
   functions?: (session: FunctionSession) => WrittenFunctions;
+  visitor?: { headers: readonly string[] };
   // Like `functions`, it runs before the shell finishes building: defer
   // anything that touches `session.shell`.
   onSession?: (session: FunctionSession) => void;
@@ -139,6 +140,11 @@ export type SessionDraft = {
   save: () => Promise<{ save: string; artifacts: readonly { kind: ArtifactKind; id: string }[] }>;
 };
 
+export type Visitor = {
+  readonly ip: string | null;
+  readonly headers: Readonly<Record<string, string>>;
+};
+
 export type FunctionSession = {
   // The members that change what a shell is made of (`registerAction`,
   // `setLayout`, `addCanvas` and their kin) throw on this one.
@@ -160,6 +166,7 @@ export type FunctionSession = {
   recordRun: (run: Omit<RunRecord, 'at' | 'principal' | 'shellId'>) => void;
   // The app's functions this session may call: those its roles' `functions` grant.
   functions: () => readonly { id: string; description?: string }[];
+  visitor?: Visitor | null;
 };
 
 export type CanvasSeed = string | { action: string; input?: Record<string, unknown>; with?: string[] };

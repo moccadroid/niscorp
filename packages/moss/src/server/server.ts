@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { createIdentity, sessionRemainingMs, sessionRevokerOf, sessionVerifierOf } from '../identity';
+import { createIdentity, isHeaderName, sessionRemainingMs, sessionRevokerOf, sessionVerifierOf } from '../identity';
 import type { Identity } from '../identity';
 import { createData, featureTablesOf, startAging } from '../data';
 import type { Data } from '../data';
@@ -8,8 +8,8 @@ import type { RunningManifest, SavedRowsOf } from '../artifactory';
 import { receiveManifest } from '../manifest';
 import type { NiscApp } from '../manifest';
 import type { NiscRuntime, SessionVerifier } from '../runtime';
-import { DEFAULT_REVALIDATE_MS, createSocket } from '../socket';
-import type { SocketAccept } from '../socket';
+import { DEFAULT_REVALIDATE_MS, createSocket, visitorReader } from '../socket';
+import type { ReadVisitor, SocketAccept } from '../socket';
 import type { Env, MossServer } from './moss-server';
 import { composeWireWraps, emptyRegister, startFeatures } from './features';
 import { buildShellHosts, createInternalWire } from './hosts';
@@ -20,6 +20,12 @@ import { buildSignals } from './signals';
 export const createServerWith = async (app: NiscApp, runtime: NiscRuntime, dataOf: (app: NiscApp, runtime: NiscRuntime) => Promise<Data>): Promise<MossServer> => {
   // This and the verifier below refuse before a table is created.
   receiveManifest(app);
+  if (runtime.ipHeader !== undefined && (typeof runtime.ipHeader !== 'string' || !isHeaderName(runtime.ipHeader))) {
+    throw new Error(
+      'moss: `runtime.ipHeader` is the name of the header the proxy in front of this server writes the visitor’s IP into, such as "x-real-ip". ' +
+        `${JSON.stringify(runtime.ipHeader)} is not a header name. Left out, the IP is the address at the other end of the socket.`,
+    );
+  }
 
   const session = sessionVerifierOf(runtime);
   const revokeSessions = sessionRevokerOf(runtime);
@@ -135,11 +141,13 @@ const assemble = async ({ app, runtime, session, revokeSessions, data }: ServerD
   // made while the features started would be neither read nor followed.
   await running.readPublished();
 
-  const socket = buildSocket({ runtime, session, identity, running, hosts });
+  const visitorOf = visitorReader({ ipHeader: runtime.ipHeader, headers: app.visitor?.headers });
+  const socket = buildSocket({ runtime, session, identity, running, hosts, visitorOf });
   stops.push(socket.stop);
 
   return Object.assign(server, {
     socket,
+    visitorOf,
     principalOf: async (token: string) => session(token),
     page: hosts.pageAt,
     pages: hosts.pages,
@@ -220,14 +228,15 @@ const buildIdentity = (
   });
 
 export type SocketDeps = {
-  runtime: Pick<NiscRuntime, 'pool' | 'session' | 'sessionRevalidateMs' | 'anonymousShellMax' | 'telemetry' | 'origins' | 'socketCompression' | 'socketMaxMessageBytes'>;
+  runtime: Pick<NiscRuntime, 'pool' | 'session' | 'sessionRevalidateMs' | 'anonymousShellMax' | 'anonymousShellMaxPerIp' | 'telemetry' | 'origins' | 'socketCompression' | 'socketMaxMessageBytes'>;
   session: SessionVerifier;
   identity: Pick<Identity, 'resolve'>;
   running: Pick<RunningManifest, 'catalogFor'>;
   hosts: Pick<Hosts, 'shells' | 'pageAt'>;
+  visitorOf: ReadVisitor;
 };
 
-export const buildSocket = ({ runtime, session, identity, running, hosts }: SocketDeps): SocketAccept => {
+export const buildSocket = ({ runtime, session, identity, running, hosts, visitorOf }: SocketDeps): SocketAccept => {
   const socket = createSocket({
     session,
     catalog: async (principal) => {
@@ -238,6 +247,8 @@ export const buildSocket = ({ runtime, session, identity, running, hosts }: Sock
     page: hosts.pageAt,
     ...(runtime.sessionRevalidateMs !== undefined ? { revalidateMs: runtime.sessionRevalidateMs } : {}),
     ...(runtime.anonymousShellMax !== undefined ? { anonymousShellMax: runtime.anonymousShellMax } : {}),
+    ...(runtime.anonymousShellMaxPerIp !== undefined ? { anonymousShellMaxPerIp: runtime.anonymousShellMaxPerIp } : {}),
+    readVisitor: visitorOf,
     ...(runtime.telemetry !== undefined ? { telemetry: runtime.telemetry } : {}),
     ...(runtime.origins !== undefined ? { origins: runtime.origins } : {}),
     ...(runtime.session === 'sessions' ? { sessionLastsMs: (token: string) => sessionRemainingMs(runtime.pool, token) } : {}),

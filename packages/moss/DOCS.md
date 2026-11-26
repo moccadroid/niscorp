@@ -62,6 +62,7 @@ type NiscApp = {
   pages?: Record<string, PageManifest>;               // what is drawn at a path and kept by nothing
   grammars?: readonly Sequence[];                     // the app's own strata grammar sequences
   upgradedColumns?: UpgradedColumns;                  // JSON columns every vex read returns upgraded
+  visitor?: { headers: readonly string[] };           // the request headers a function is told (see "Who is connecting")
   // the code seams
   scope?: (principal: string | null, identity?: IdentityRecord) => Record<string, unknown>;
   identity?: { as?: string; resolve: (principal, read) => Promise<IdentityRecord> };
@@ -394,7 +395,22 @@ type FunctionSession = {
   ) => Promise<QueryResponse>;
   recordRun: (run: Omit<RunRecord, 'at' | 'principal' | 'shellId'>) => void;
   functions: () => readonly { id: string; description?: string }[]; // the app's functions this session may call, what its roles' `functions` grant
+  visitor?: { ip: string | null; headers: Readonly<Record<string, string>> } | null; // what was read from the request that opened this shell; moss always sets it
 };
+```
+
+`visitor` is the IP and the headers the manifest lists, read once from the
+request that opened the shell ([Who is connecting](#who-is-connecting)). It is
+`null` on the app's shell for somebody signed in, which serves every connection
+they open: a limit for them is keyed on `principal`. A function that limits
+what nobody signed in may do keys on `visitor.ip`:
+
+```typescript
+functions: (session) => [{
+  id: 'store.buy',
+  description: 'Buys one thing for nobody signed in',
+  execute: async (data) => buy(data, session.principal ?? session.visitor?.ip ?? null),
+}],
 ```
 
 `revoke` settles when the credential is gone: under `session: 'sessions'` it
@@ -873,6 +889,8 @@ type NiscRuntime = {
   artifactsUnusedMs?: number;      // delete what a person generated once nobody has loaded it for this long; default never
   artifactsUnusedSinceStart?: boolean; // count that time only since this server started; default false: time the app was down counts
   anonymousShellMax?: number;      // shells for nobody signed in alive at once; default 1,000, `Infinity` is no limit
+  anonymousShellMaxPerIp?: number; // of those, how many one IP may have; default no limit
+  ipHeader?: string;               // the header the proxy in front writes the visitor's IP into; default none: the address at the other end of the socket
   endpointTimeoutMs?: number;      // a server shell's endpoint call, and the build of a shell; default nova's, 30s
   sessionRevalidateMs?: number;    // live-socket re-verify; default 60s, `0` disables
   identityMax?: number;            // resident identity records; default 10,000; 0 or less refuses the boot
@@ -979,16 +997,26 @@ it does nothing else:
   disposed, and a signed-in person's shell starts its idle time.
 - It is counted by the process that takes the connection. A deployment of N
   processes allows up to N times the limit.
-- Moss builds no limit for each address, because the address is not moss's
-  to know: behind a proxy every connection comes from the proxy, and which
-  header says where the visitor is, is the proxy's to say.
 
-**A deployment that faces the internet** limits how many connections one
-address may keep open where the address is known: at its proxy or load balancer,
-on the socket's path (`/socket`). With that in place, `anonymousShellMax` is
-what it is sized for here, memory. What an app can do on its own: a first
-screen for nobody that is a page which is not live opens no socket and takes
-no place (`nisc build` says which pages are live, and why).
+`anonymousShellMaxPerIp` — of those places, how many one IP may take. Unset,
+there is no limit for each IP. With it, a connection for nobody from an IP that
+has that many is sent `at_capacity` and closed with `4503`, as above, with a
+message that says it is that IP that is full; a connection from another IP is
+served. An IPv6 address counts as its /64, since one machine is usually handed a
+whole /64. A connection moss has no IP for (see [Who is
+connecting](#who-is-connecting)) is not counted for one. The IP is what
+`ipHeader` names, so behind a proxy the two are set together: with no
+`ipHeader` behind a proxy, every connection has the proxy's IP, and a limit of
+20 lets 20 visitors in for the whole site. Many people can share one IP (a
+mobile carrier, an office, a school), so a low number turns real visitors away.
+
+**A deployment that faces the internet** sets `ipHeader` and
+`anonymousShellMaxPerIp`, or limits how many connections one IP may keep open
+at its proxy or load balancer, on the socket's path (`/socket`). With that in
+place, `anonymousShellMax` is what it is sized for here, memory. What an app
+can do on its own: a first screen for nobody that is a page which is not live
+opens no socket and takes no place (`nisc build` says which pages are live, and
+why).
 
 The default is from a measurement (2026-10-10, Node 24): lyceum's real boot,
 2,000 connections for nobody opened through `server.socket` and kept open, the heap
@@ -1007,6 +1035,91 @@ transport's compression: the largest round number that still fits a process
 given 512 MB. A deployment with a public screen and more visitors at once than
 that raises it from those numbers and its own memory, and turns compression off
 or down first.
+
+#### Who is connecting
+
+**Behind a proxy, set `ipHeader`.** Without it, the IP moss tells a function
+is the address at the other end of the socket, which behind a proxy is the
+proxy's, the same for every visitor: a limit an app keys on it is one limit for
+the whole site.
+
+A shell built for one connection, or for one page request, keeps what moss read
+from the request that opened it, and every function of that shell is told it
+as [`session.visitor`](#functionsession):
+
+```typescript
+session.visitor: { ip: string | null; headers: Readonly<Record<string, string>> } | null
+```
+
+It is frozen. The app says which headers it keeps, in its manifest, the
+same everywhere it runs; the deployment says which header its proxy writes the
+IP into, in its runtime, since that differs from host to host:
+
+```typescript
+defineApp({ ...app, visitor: { headers: ['accept-language', 'user-agent'] } });
+createServer(app, { ...runtime, ipHeader: 'x-real-ip' });   // only where a proxy writes it
+```
+
+- **Which request.** The socket's upgrade, for a shell a connection opens; the
+  page request, for the shell a page is drawn with. They are two requests, and
+  need not carry the same headers. The shell that answers what is pressed is
+  the socket's.
+- **Which shells.** A shell built for one connection or one page request: every
+  shell for nobody signed in, and every page's shell, signed in or not. The
+  app's shell for somebody signed in serves every connection they open, on
+  every device, so it has no single request, and its `visitor` is `null`: a
+  limit for them is keyed on `principal`. A reset builds the shell again with
+  the visitor it had. `onSession` runs for every app shell: on one for nobody
+  signed in it is told that shell's visitor, on the kept shell of somebody
+  signed in `null`. It does not run for a page.
+- **Only from a request of the server's own.** Moss reads a visitor only from
+  what a transport hands over (moss's Node transport, under `serve`,
+  `nisc start`, the dev plugin and `attachSocket`) and from a page request
+  `mountSite` or the dev plugin served off a Node request. A page the server
+  fetches of itself, as an action's endpoint does through the server's own
+  surfaces, is drawn for no visitor, whatever headers the action wrote. A
+  transport of the app's own that hands over no `headers` gives `null`.
+- **The IP.** With `ipHeader` unset, it is the address at the other end of the
+  socket. With it set, it is that header's value and nothing else: missing, or
+  anything but one IP (a list, a name), it is `null`, and the address at the
+  other end of the socket is not used in its place. An IPv4 address written as IPv6
+  (`::ffff:203.0.113.7`) is told as `203.0.113.7`; IPv6 is told whole, and one
+  machine usually has a whole /64 to move about in. `ipHeader` that is not a
+  header name refuses the boot.
+- **What a header is worth.** Every header in `headers` is what the browser, or
+  whatever pretends to be one, wrote. The IP is what the deployment vouches for,
+  and only when the app can be reached through its proxy alone, and that proxy
+  writes the header over whatever arrived. Naming `x-forwarded-for` or
+  `forwarded` gives `null` for every request that came through more than one
+  proxy, since that is a list.
+- **What a manifest may list.** Names a header may have. Never one that says who
+  sent a request: `authorization`, `cookie`, `proxy-authorization`,
+  `x-operator-key`, and `sec-websocket-protocol`, which carries the session
+  token on the socket. The manifest's check refuses them, with the place. A
+  header the request did not carry is not in `headers`. One that came twice is
+  told as Node joins it, `a, b`.
+- **Where it is kept.** With the shell, in memory, and nowhere else: moss writes
+  it to no table and no log. A request's headers are at most 16 KB together
+  under Node's own limit, so a shell keeps at most that much more, and a
+  transport of the app's own sets its own.
+
+The header a proxy writes the IP into:
+
+| Where | `ipHeader` |
+| --- | --- |
+| Railway | `x-real-ip` |
+| Fly.io | `fly-client-ip` |
+| Cloudflare in front | `cf-connecting-ip` |
+| nginx, with `proxy_set_header X-Real-IP $remote_addr;` | `x-real-ip` |
+
+On Railway, a request over its private network (`*.railway.internal`) or through
+a TCP proxy does not pass the edge, and carries whatever header its sender
+wrote.
+
+Headers an app might keep, and who writes them: `accept-language` and
+`user-agent` (the browser); a country, on hosts whose edge adds one
+(`cf-ipcountry` on Cloudflare); `sec-gpc` and `dnt`, the browser's privacy
+signals; a host's request id, to find a request in the host's own log.
 
 #### `mintSession(pool, principal, ttlMs)` / `revokeAllFor(pool, principal)`
 
@@ -1341,7 +1454,7 @@ and does not throw.
 
 #### `MossServer`
 
-`Hono<Env> & { socket; shells?: ShellHost; principalOf; page; pages;
+`Hono<Env> & { socket; visitorOf?; shells?: ShellHost; principalOf; page; pages;
 refresh; replaceActions; replaceEntries; actions; defaults; catalogOf;
 policyForRoles; charterReport; invalidateIdentity; invalidateTag; identity;
 executeAs; nudge; close; identities? }`.
@@ -1352,6 +1465,12 @@ It's a Hono app — mount it, extend it, or hand it to a listener.
   handed a token some other way than a Bearer header (a link it is redeeming,
   a terminal that is not a page). `null` is a refusal. It is what
   `renderDocument` asks for the session a page request carries.
+- `visitorOf({ peer, headers }): { ip: string | null; headers: Readonly<Record<string, string>> } | null` — what a function is told of
+  whoever sent a request, read as the socket reads it, by the manifest's
+  `visitor.headers` and the runtime's `ipHeader` ([Who is
+  connecting](#who-is-connecting)). `renderDocument` asks it for a page
+  request; a host of the app's own that draws pages passes it what it was
+  handed. No `headers` is no visitor.
 - `pages: readonly { name, path }[]` — every page the manifest declares, with
   the path it is drawn at: what a build walks to know which paths exist besides
   the app's own.
@@ -1637,7 +1756,7 @@ opens no socket.
 const page = await renderDocument({
   server,                                   // the MossServer, or anything with its `principalOf`, `page` and `shells`
   template,                                 // the app's index.html, as it would go out undrawn
-  request: { path, cookie },                // what the request named and carried
+  request: { path, cookie, host, peer, headers },  // what the request named and carried; `peer` and `headers` only from a request of the server's own
   draw: (snapshot) => renderSnapshot({ snapshot, registry, slotWrapper }),
   htmlAttributes: (snapshot) => ({ 'data-accent': … }),   // optional
   site: 'https://example.com',                            // optional
@@ -1654,6 +1773,11 @@ What it is handed is `DocumentConfig`, and what it answers is `DrawnDocument`.
   is how a page on a port finds it; `mountSite` and the vite plugin pass it.
   Behind a proxy that rewrites `Host` to its upstream, the port `site` names
   is tried too.
+  `request.peer` and `request.headers` are what the page's functions are told
+  of the visitor, read through `server.visitorOf` ([Who is
+  connecting](#who-is-connecting)); `mountSite` and the vite plugin pass them
+  only for a request that came in over a Node socket, so a page the server
+  fetches of itself is drawn for no visitor.
   A cookie that no longer resolves is nobody. Nothing is written here — the
   upgrade is where the cookie is set and taken back. A verifier that *throws*
   is a fault, not a sign-out: the page goes out undrawn.
@@ -2404,6 +2528,12 @@ server.nudge('usr_ada', 'notes-changed');
   — and, when it has not answered the request yet, `answer(cookies)`: moss
   calls it once who is asking is decided, with the `Set-Cookie` values to
   answer with. A transport without `answer` reads cookies and writes none.
+  Beside those it passes `peer`, the address at the other end of the request's
+  socket, and `headers`, the request's headers by lowercase name: what a
+  function is told of the visitor is read from them ([Who is
+  connecting](#who-is-connecting)). A transport that passes no `headers`
+  serves every connection with `visitor: null`, and the size of what it keeps
+  is bounded by its own header limit.
 - **A sign-in is handed to such a page sealed.** A terminal whose browser can
   keep a session says so (`?sealed=1`; `browserEnv` does), and the answer to
   its first upgrade gives the browser a *seal*: a key in a second cookie no

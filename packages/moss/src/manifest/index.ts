@@ -16,6 +16,7 @@ export type {
   SessionDraft,
   ShellCanvas,
   ShellManifest,
+  Visitor,
   WrittenFunctions,
 } from './app';
 export { entryMisfits, freezeDeep, receiveManifest } from './schema';

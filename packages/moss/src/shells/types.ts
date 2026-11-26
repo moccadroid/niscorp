@@ -2,7 +2,7 @@ import type { ActionDefinition, ActionFragment, FetchFn, LayoutNode, RenderNode,
 import type { PhraseKeys } from '@niscorp/nova/i18n';
 import type { QueryResponse, SeedEntry, SeedMutation } from '@niscorp/vex';
 import type { ExistingQuery, Intent, QueryWriters } from '../data';
-import type { ArtifactKind, DraftArtifact, NiscApp, SessionArtifacts, ShellCanvas, ShellManifest } from '../manifest';
+import type { ArtifactKind, DraftArtifact, NiscApp, SessionArtifacts, ShellCanvas, ShellManifest, Visitor } from '../manifest';
 import type { Telemetry } from '../runtime';
 
 export type ShellComposition = {
@@ -103,11 +103,12 @@ export type ShellSnapshot = {
 export type ShellOpening = {
   seed?: string;
   inputs?: Record<string, Record<string, unknown>>;
+  visitor?: Visitor | null;
 };
 
 export type ShellHost = {
   session: (token: string | null, principal: string | null, options?: ShellOpening) => Promise<ShellSession>;
-  snapshot: (token: string | null, principal: string | null, options?: { waitMs?: number; inputs?: ShellOpening['inputs'] }) => Promise<ShellSnapshot>;
+  snapshot: (token: string | null, principal: string | null, options?: { waitMs?: number; inputs?: ShellOpening['inputs']; visitor?: ShellOpening['visitor'] }) => Promise<ShellSnapshot>;
   deliver: (principal: string, channel: string, payload?: unknown) => boolean;
   list: () => ShellReport[];
   reset: (principal: string) => boolean;

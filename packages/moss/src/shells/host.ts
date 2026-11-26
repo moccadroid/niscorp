@@ -286,7 +286,7 @@ const snapshotOf =
       return { ...read(cell.live), settled, ...needOf(cell.live, principal, kept) };
     }
     const seed = randomBytes(9).toString('hex');
-    const opening = { seed, ...(options?.inputs !== undefined ? { inputs: options.inputs } : {}) };
+    const opening = { seed, ...(options?.inputs !== undefined ? { inputs: options.inputs } : {}), ...(options?.visitor !== undefined ? { visitor: options.visitor } : {}) };
     const { live } = builtOrThrow(await build(host, { token, principal, opening, reset: false }));
     try {
       const settled = await settle(live, waitMs);

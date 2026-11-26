@@ -4,6 +4,7 @@ import { CLOSE_AT_CAPACITY, CLOSE_INVALID_TOKEN, PROTOCOL, ServerMessageSchema, 
 import type { ServerMessage } from '../src/protocol';
 import type { NiscRuntime } from '../src/runtime';
 import { buildSocket } from '../src/server/server';
+import { visitorReader } from '../src/socket';
 import type { Connection } from '../src/socket';
 
 const SOCKET = `/socket?protocol=${PROTOCOL}`;
@@ -35,6 +36,7 @@ const socketOf = (runtime: Partial<NiscRuntime>, tokens: Map<string, string> = n
       shells: { session: async () => ({ ...session, shell: Object.create(null) }), snapshot: () => Promise.reject(new Error('not asked here')), deliver: () => false, list: () => [], reset: () => false },
       pageAt: () => undefined,
     },
+    visitorOf: visitorReader({}),
   });
 };
 
