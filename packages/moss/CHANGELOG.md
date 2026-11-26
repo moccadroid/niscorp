@@ -1,5 +1,12 @@
 # @niscorp/moss
 
+## 0.10.2
+
+### Patch Changes
+
+- Updated dependencies [5dbcc9e]
+  - @niscorp/vex@0.6.0
+
 ## 0.10.1
 
 ### Patch Changes
