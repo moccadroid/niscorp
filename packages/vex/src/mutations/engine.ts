@@ -320,7 +320,7 @@ const compileColumnValue = (table: string, column: string, v: MutationValue, ctx
   const before = ctx.paramSlots.length;
   const sql = compileValue(v, ctx);
   const json = findEntity(table, schema)?.fields.find((f) => f.name === column)?.normalizedType === 'json';
-  if (json && typeof v === 'object' && v !== null && ('$context' in v || '$returned' in v)) {
+  if (json && typeof v === 'object' && v !== null && ('$context' in v || '$scope' in v || '$returned' in v)) {
     const slot = ctx.paramSlots[before];
     if (slot !== undefined) ctx.paramSlots[before] = { ...slot, encode: 'json' };
   }
@@ -433,7 +433,7 @@ const compileMutation = (m: ResolvedMutation, schema: DatabaseSchema, pinned: re
         itemColumns.push(`${sqlName(col)} ${String(types.get(col))}`);
         return `item.${sqlName(col)}`;
       }
-      return isReturned(v) ? compileColumnValue(m.table, col, v, ctx, schema) : compileValue(v, ctx);
+      return compileColumnValue(m.table, col, v, ctx, schema);
     });
     ctx.paramCounter.value += 1;
     ctx.paramSlots.push({ key: m.items.$context, kind: 'context', type: 'json' });

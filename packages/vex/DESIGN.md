@@ -415,8 +415,10 @@ both kinds — `POST { fingerprint, context }`, dispatched by the entry's kind.
 Replay-only holds under every posture (`locked` only ever governed query
 generation); the query engine refuses a mutation fingerprint explicitly.
 
-The pipeline: validate (closed grammar — `$scope` unauthorable, update/delete
-require a WHERE) → desugar (upsert → insert/update by key presence) →
+The pipeline: validate (closed grammar — update/delete require a WHERE; a
+`$scope` value may be written, and identity is still the policy's, because the
+scope step below writes its columns after the parse and wins) → desugar
+(upsert → insert/update by key presence) →
 require context (a write never executes with holes; the `missing_context`
 error carries the FULL derived signature) → scope (the same `ScopePolicy`
 reads use: `set` writes identity on insert and update, `match` pins rows) → column

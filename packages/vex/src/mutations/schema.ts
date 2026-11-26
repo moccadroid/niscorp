@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { FilterSchema } from '../schemas/filter.schema.js';
 import { FieldPathSchema } from '../schemas/identifier.schema.js';
+import { ScopeRefSchema } from '../schemas/value.schema.js';
 import type { Filter } from '../schemas/filter.schema.js';
 import type { FieldOrValue } from '../schemas/value.schema.js';
 
@@ -30,14 +31,15 @@ const ReturnedSchema = z
     'A column of the one row an earlier statement of this batch (an insert, update, upsert or delete) returned — how a later row gets an id the database generated. That statement must return exactly one row; none (its `where` matched no row, or scope kept the row back) or several fails the whole batch and nothing is written. Allowed only as the value of a column a statement sets; never inside a `where`, a `$lookup` or `items`, and never naming an `insertEach` or an `insert` whose `onConflict` has no `set`.',
   );
 
-// No `$scope`: the engine injects it after the parse, so a stored or injected
-// mutation cannot place, omit or redirect it.
+// An authored `$scope` cannot stand in for the policy's: its `set` and `match`
+// columns are written after the parse and win over any value here.
 const ValueSchema = z.union([
   z.string(),
   z.number(),
   z.boolean(),
   z.null(),
   z.object({ $context: z.string() }).strict(),
+  ScopeRefSchema,
   LookupSchema,
   ReturnedSchema,
 ]);

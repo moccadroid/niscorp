@@ -330,7 +330,7 @@ Two more roots sit beside `$.result` for the mapping to read:
 `$.scope` is what lets a mapping produce words in the **reader's** language:
 a mapping is where a row becomes `"Active"`, `"Fri 14 Mar"`, `"€45"`, and words
 have a language. Reading it here widens nothing a caller can reach — scope
-values are injected by the host per session and are unauthorable by a request.
+values are injected by the host per request and are unauthorable by a request.
 
 None of this touches the cache. Vex caches the query **plan** (`dsl` +
 `prismIr`), never rows, and a compiled mapping holds the *lookup*, not the
@@ -1108,11 +1108,18 @@ as a `kind: 'mutation'` entry under a named fingerprint (normally
 
 ### The grammar
 
-Five ops, closed and strict. Values are literals, `{ $context: "key" }`, a
-`{ $lookup }` scalar subquery, or — in a batch — a `{ $returned }` read of the
-row an earlier statement wrote (both below) — **never `$scope`** (identity is
-engine-injected, unforgeable) and never a field path. `update`/`delete`
-REQUIRE a `where` (a real vex `Filter`).
+Five ops, closed and strict. Values are literals, `{ $context: "key" }`,
+`{ $scope: "key" }`, a `{ $lookup }` scalar subquery, or — in a batch — a
+`{ $returned }` read of the row an earlier statement wrote (both below) — never
+a field path. `update`/`delete` REQUIRE a `where` (a real vex `Filter`, which
+takes `$context` and `$scope` as a read's does).
+
+A `$scope` value is the host's, never the caller's, and it cannot stand in for
+the policy: the columns a `set` or `match` rule names are written by the engine
+after the entry is parsed, and they win over anything the entry wrote there.
+What the author does own is where a value lands: a scope value stored in a
+column is read by everyone who can read the row, so write there only what they
+may see.
 
 ```ts
 { op: 'insert', table: 'tasks', values: { title: { $context: 'title' } } }
@@ -1142,6 +1149,31 @@ IDENTITY`.
 
 An array of ops is a batch and runs in ONE transaction (the client must
 expose `transaction`; a batch on a non-transactional client is refused).
+
+### The server's time
+
+vex has no clock. The moment a write is stamped with is a scope value the host
+supplies per request, the same one its reads compare with. Under moss that is
+the app's `scope` seam:
+
+```ts
+scope: () => ({ today: dayOf(clock()), now: clock().toISOString() }),
+
+{ op: 'update', table: 'products', set: { archived_at: { $scope: 'now' } },
+  where: { eq: ['products.id', { $context: 'id' }] } }
+{ from: ['coupons'], filter: { gt: ['coupons.ends_at', { $scope: 'now' }] } }
+```
+
+A stamp the client sends in `$context` is the client's to choose; this one is
+not. A test's clock reaches it through the same seam. One request is one scope,
+so every statement of a batch writes the same instant. A host that supplies no
+`now` gets `missing_scope` for the entry, and nothing is written.
+
+- A reactive read refetches with the values it was first asked with, so it
+  compares with a day (`today`), never `now`.
+- A replay the server runs on its own passes the scope itself: moss's
+  `server.executeAs(role, fingerprint, context, { now })`. A moss feature's own
+  entries run with no scope, so an entry that reads `$scope` is refused there.
 
 ### `onConflict` — the database arbitrates
 
@@ -1268,7 +1300,7 @@ Two things to know when using it:
 
 `items` names a context key holding an array of objects; `{ $item: "key" }`
 values read from the current element; every other value — literal,
-`$context`, `$lookup`, `$returned`, engine-injected `$scope` — is constant
+`$context`, `$scope`, `$lookup`, `$returned` — is constant
 across rows. vex binds each element under the column names its `$item`s fill
 (a key no `$item` names is dropped) and compiles to a single
 `INSERT … SELECT … FROM jsonb_to_recordset($items) AS item(<column> <type>, …)`,

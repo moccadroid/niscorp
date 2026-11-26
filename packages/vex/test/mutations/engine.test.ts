@@ -82,10 +82,6 @@ const upsertTask = {
 };
 
 describe('mutation grammar', () => {
-  it('rejects $scope in authored values', () => {
-    expect(() => MutationDefinitionSchema.parse({ op: 'insert', table: 'companies', values: { owner_id: { $scope: 'userId' } } })).toThrow();
-  });
-
   it('rejects an update with an empty WHERE', () => {
     expect(() => MutationDefinitionSchema.parse({ op: 'update', table: 'companies', set: { name: 'x' }, where: {} })).toThrow();
   });

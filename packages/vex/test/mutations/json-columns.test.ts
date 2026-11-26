@@ -71,4 +71,25 @@ describe('writing into a json column', () => {
     });
     expect(params()).toEqual([null, 't1']);
   });
+
+  it('a scope value binds as JSON text too', async () => {
+    const { client, params } = capture();
+    await executeMutation(client, { op: 'insert', table: 'turns', values: { id: 't1', opened: { $scope: 'kinds' } } }, {
+      context: {},
+      scope: { kinds: ['door', 'desk'] },
+      policy,
+      schema,
+    });
+    expect(params()).toEqual(['["door","desk"]']);
+  });
+
+  it('in an insertEach, a value the same for every row binds as JSON text', async () => {
+    const { client, params } = capture();
+    await executeMutation(
+      client,
+      { op: 'insertEach', table: 'turns', items: { $context: 'ids' }, values: { id: { $item: 'id' }, opened: { $context: 'opened' }, note: { $scope: 'kind' } } },
+      { context: { ids: [{ id: 't1' }], opened: [] }, scope: { kind: 'door' }, policy, schema },
+    );
+    expect(params()).toEqual(['[]', 'door', '[{"id":"t1"}]']);
+  });
 });

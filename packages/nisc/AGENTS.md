@@ -217,6 +217,7 @@ Pick per need; every piece works standalone. Nova is the only mandatory one for 
 **8.** Writes are endpoints fired by triggers, never inline mutations (D4).
 
 - Identity and tenancy are stamped server-side from the session, never client-supplied: a form never carries `owner_id`.
+- So is the moment: the app's `scope` puts `now` beside `today`, and the entry writes `archived_at: { $scope: 'now' }`. Never a time from context, and never a function only to stamp the clock.
 - What a principal *is* beyond its id — a tenant, an org, a region — is the manifest's `scope(principal)` seam. Moss always injects `{ userId }`, `scope` contributes the rest, and the merged set is what a behavior's `to:` resolves against at execute.
 - The mapping is application knowledge, so the app supplies it; the values are injected server-side and unreferenceable by a request.
 
@@ -470,7 +471,7 @@ export const todosOpen: SeedEntry = {
   Formatting (money, dates) lives here, in shared helpers.
 - **App reads are replay-only.** Moss serves its endpoints locked; a client-degrade app passes `{ locked: true }` itself. An unknown fingerprint (a missed prewarm, a discipline break) is a 500, never a silent LLM call. With no AI features, also wire no hooks: warm-only, enforced twice.
 - **Live queries are the opt-in LLM path.** Wire `createQueryDsl` / `createShapeMapper` (`@niscorp/vex/agent`) as the engine's `generateDsl` / `mapToShape` hooks. A request without a fingerprint generates, caches, and mints one (`meta.cache.fingerprint`) — embed that to replay the proven query. App reads stay locked and never depend on this path; agents and ad-hoc features do.
-- **Freshness is the entry's.** `refresh: 'snapshot'` (the default) answers once; `refresh: 'reactive'` answers again when a write lands on a table the query reads. Declare it on reads that are on screen while others write — a roster, a count, a board. A reactive entry sorts, and reads time from `$scope`, never context.
+- **Freshness is the entry's.** `refresh: 'snapshot'` (the default) answers once; `refresh: 'reactive'` answers again when a write lands on a table the query reads. Declare it on reads that are on screen while others write — a roster, a count, a board. A reactive entry sorts, and reads time from `$scope`, never context: a day (`today`), never `now`, which stays at the moment it was first asked.
 - **Staleness is handled through the slot.** When an entry must change, send its fingerprint with the changed request — the slot regenerates and replaces (protected entries 409 until unprotected). Don't edit cache rows by hand.
 - **Scope is engine-side.** Access policy lives in the engine's `ScopePolicy` — compiled from the charter under moss — invisible to and unforgeable by query authors, human or LLM.
 
